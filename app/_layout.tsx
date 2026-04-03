@@ -23,9 +23,15 @@ export default function RootLayout() {
               <Stack.Screen name="index" options={{ headerShown: false }} />
               <Stack.Screen name="(auth)" options={{ headerShown: false }} />
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen name="forgot-password" options={{ headerShown: false }} />
+              <Stack.Screen name="reset-password" options={{ headerShown: false }} />
               <Stack.Screen name="settings" options={{ headerShown: false }} />
               <Stack.Screen name="create-trip" options={{ headerShown: false }} />
               <Stack.Screen name="trip/[id]" options={{ headerShown: false }} />
+              <Stack.Screen name="trip/[id]/settings" options={{ headerShown: false }} />
+              <Stack.Screen name="trip/[id]/sidequest/new" options={{ headerShown: false }} />
+              <Stack.Screen name="trip/[id]/sidequest/[sidequestId]" options={{ headerShown: false }} />
+              <Stack.Screen name="trip/[id]/sidequest/[sidequestId]/edit" options={{ headerShown: false }} />
               <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
             </Stack>
             <StatusBar style="dark" />

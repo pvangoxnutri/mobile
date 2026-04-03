@@ -1,12 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
-import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import * as Clipboard from 'expo-clipboard';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { useMemo, useState } from 'react';
 import {
   Image,
-  Platform,
   Pressable,
   ScrollView,
   Share,
@@ -17,6 +15,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import RangeDatePicker, { formatRangeDisplay } from '@/components/range-date-picker';
 import { apiFetch, apiJson } from '@/lib/api';
 import type { Quest } from '@/lib/types';
 
@@ -30,7 +29,7 @@ export default function CreateTripScreen() {
   const [endDate, setEndDate] = useState(getDefaultEndDate());
   const [coverImage, setCoverImage] = useState<string | null>(null);
   const [inviteCode] = useState(() => createInviteCode());
-  const [activePicker, setActivePicker] = useState<'start' | 'end' | null>(null);
+  const [rangePickerOpen, setRangePickerOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [pendingInvites, setPendingInvites] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -92,30 +91,6 @@ export default function CreateTripScreen() {
       title: 'Join my SideQuest',
       url: coverImage ?? undefined,
     });
-  }
-
-  function handleDateChange(event: DateTimePickerEvent, selectedDate?: Date) {
-    if (Platform.OS !== 'ios') {
-      setActivePicker(null);
-    }
-
-    if (event.type !== 'set' || !selectedDate || !activePicker) {
-      return;
-    }
-
-    const formatted = toDateInput(selectedDate);
-
-    if (activePicker === 'start') {
-      setStartDate(formatted);
-
-      const currentEnd = new Date(`${endDate}T12:00:00`);
-      if (selectedDate.getTime() > currentEnd.getTime()) {
-        setEndDate(formatted);
-      }
-      return;
-    }
-
-    setEndDate(formatted);
   }
 
   async function handleCreateTrip() {
@@ -196,7 +171,7 @@ export default function CreateTripScreen() {
           <TouchableOpacity style={styles.backButton} activeOpacity={0.8} onPress={() => router.back()}>
             <Ionicons name="arrow-back" size={28} color="#ff4f74" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>New Quest</Text>
+          <Text style={styles.headerTitle}>New Adventure</Text>
         </View>
 
         <Pressable style={styles.coverCard} onPress={() => void handlePickCover()}>
@@ -246,33 +221,16 @@ export default function CreateTripScreen() {
             <Text style={styles.sectionTitle}>When are you going?</Text>
           </View>
 
-          <View style={styles.dateCard}>
-            <Pressable style={styles.dateColumn} onPress={() => setActivePicker('start')}>
-              <Text style={styles.dateLabel}>START</Text>
-              <Text style={styles.dateInput}>{formatDisplayDate(startDate)}</Text>
-            </Pressable>
-            <View style={styles.dateDivider} />
-            <Pressable style={styles.dateColumn} onPress={() => setActivePicker('end')}>
-              <Text style={styles.dateLabel}>END</Text>
-              <Text style={styles.dateInput}>{formatDisplayDate(endDate)}</Text>
-            </Pressable>
-          </View>
-          {activePicker ? (
-            <View style={styles.pickerWrap}>
-              <DateTimePicker
-                value={new Date(`${(activePicker === 'start' ? startDate : endDate)}T12:00:00`)}
-                mode="date"
-                display={Platform.OS === 'ios' ? 'inline' : 'default'}
-                minimumDate={activePicker === 'end' ? new Date(`${startDate}T12:00:00`) : undefined}
-                onChange={handleDateChange}
-              />
-              {Platform.OS === 'ios' ? (
-                <TouchableOpacity activeOpacity={0.86} style={styles.pickerDoneButton} onPress={() => setActivePicker(null)}>
-                  <Text style={styles.pickerDoneButtonText}>Done</Text>
-                </TouchableOpacity>
-              ) : null}
+          <Pressable style={styles.dateRangeCard} onPress={() => setRangePickerOpen(true)}>
+            <View style={styles.dateRangeCopy}>
+              <Text style={styles.dateRangeEyebrow}>SELECT DATES</Text>
+              <Text style={styles.dateRangeValue}>{formatRangeDisplay(startDate, endDate)}</Text>
+              <Text style={styles.dateRangeHint}>Tap once, pick start and end in one calendar.</Text>
             </View>
-          ) : null}
+            <View style={styles.dateRangeIcon}>
+              <Ionicons name="calendar-outline" size={22} color="#ff4f74" />
+            </View>
+          </Pressable>
         </View>
 
         <View style={styles.section}>
@@ -365,6 +323,21 @@ export default function CreateTripScreen() {
           <BottomTab icon="person" label="Profile" onPress={() => router.replace('/(tabs)/profile')} />
         </View>
       </View>
+
+      <RangeDatePicker
+        visible={rangePickerOpen}
+        title="Choose adventure dates"
+        subtitle="Tap a start date, then tap an end date. The whole trip range will highlight."
+        startDate={startDate}
+        endDate={endDate}
+        minDate={getDefaultStartDate()}
+        confirmLabel="Use these dates"
+        onChange={(nextStartDate, nextEndDate) => {
+          setStartDate(nextStartDate);
+          setEndDate(nextEndDate);
+        }}
+        onClose={() => setRangePickerOpen(false)}
+      />
     </View>
   );
 }
@@ -425,15 +398,6 @@ function isDateInputValid(value: string) {
 
 function createInviteCode() {
   return Math.random().toString(36).slice(2, 8).toUpperCase();
-}
-
-function toDateInput(date: Date) {
-  return date.toISOString().slice(0, 10);
-}
-
-function formatDisplayDate(value: string) {
-  const date = new Date(`${value}T12:00:00`);
-  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(date);
 }
 
 function getDefaultStartDate() {
@@ -608,66 +572,56 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: -0.5,
   },
-  dateCard: {
+  dateRangeCard: {
     marginTop: 16,
-    minHeight: 108,
+    minHeight: 118,
     borderRadius: 30,
     borderWidth: 1,
     borderColor: '#eceef2',
     backgroundColor: '#fff',
     paddingHorizontal: 22,
+    paddingVertical: 18,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.04,
     shadowRadius: 18,
     elevation: 4,
   },
-  dateColumn: {
+  dateRangeCopy: {
     flex: 1,
   },
-  dateLabel: {
+  dateRangeEyebrow: {
     color: '#7f848f',
     fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 1.1,
+    fontWeight: '800',
+    letterSpacing: 1.2,
   },
-  dateInput: {
+  dateRangeValue: {
     marginTop: 8,
     color: '#14161d',
-    fontSize: 18,
-    fontWeight: '700',
-    letterSpacing: -0.4,
-    paddingVertical: 6,
-  },
-  dateDivider: {
-    width: 1,
-    alignSelf: 'stretch',
-    backgroundColor: '#e3e5ea',
-    marginHorizontal: 18,
-  },
-  pickerWrap: {
-    marginTop: 14,
-    borderRadius: 24,
-    overflow: 'hidden',
-    backgroundColor: '#fbfbfc',
-    borderWidth: 1,
-    borderColor: '#eceef2',
-  },
-  pickerDoneButton: {
-    alignSelf: 'flex-end',
-    marginRight: 14,
-    marginBottom: 14,
-    borderRadius: 999,
-    backgroundColor: '#ff4f74',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-  },
-  pickerDoneButtonText: {
-    color: '#fff',
-    fontSize: 14,
+    fontSize: 21,
     fontWeight: '800',
+    letterSpacing: -0.7,
+  },
+  dateRangeHint: {
+    marginTop: 8,
+    color: '#7a818d',
+    fontSize: 14,
+    lineHeight: 21,
+  },
+  dateRangeIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff1f5',
+    borderWidth: 1,
+    borderColor: '#ffd8e2',
+    marginLeft: 14,
   },
   codeCard: {
     marginTop: 16,

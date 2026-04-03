@@ -16,7 +16,7 @@ export default function TabLayout() {
         tabBarShowLabel: false,
         tabBarStyle: [styles.tabBar, { bottom: tabBarBottom, height: tabBarHeight }],
         tabBarItemStyle: styles.tabItem,
-        tabBarButton: (props) => <Pressable {...props} hitSlop={14} pressRetentionOffset={14} />,
+        tabBarButton: (props) => <Pressable {...(props as React.ComponentProps<typeof Pressable>)} hitSlop={14} pressRetentionOffset={14} />,
       }}>
       <Tabs.Screen
         name="index"

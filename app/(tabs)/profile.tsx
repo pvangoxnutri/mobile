@@ -243,7 +243,7 @@ export default function ProfileScreen() {
       <SectionCard
         title="Edit Profile"
         items={[
-          { icon: 'badge-outline', label: editingName ? 'Close name editor' : 'Change name', accent: '#ef2d63', onPress: () => setEditingName((current) => !current) },
+          { icon: 'person-circle-outline', label: editingName ? 'Close name editor' : 'Change name', accent: '#ef2d63', onPress: () => setEditingName((current) => !current) },
           { icon: 'camera-outline', label: busy === 'avatar' ? 'Uploading image...' : 'Change profile image', accent: '#ef2d63', onPress: () => void handleAvatarPick() },
         ]}
       />

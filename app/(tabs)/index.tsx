@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
-import { Image, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BrandMark from '@/components/brand-mark';
 import { useAuth } from '@/components/auth-provider';
@@ -12,12 +12,14 @@ import type { Quest } from '@/lib/types';
 export default function HomeScreen() {
   const { user, signOut } = useAuth();
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
   const [quests, setQuests] = useState<Quest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [fabOpen, setFabOpen] = useState(false);
   const upcomingQuest = useMemo(() => quests[0] ?? null, [quests]);
   const floatingBottom = Math.max(insets.bottom, 14) + 78;
+  const upcomingCardWidth = Math.min(width - 56, 320);
 
   const loadQuests = useCallback(() => {
     let active = true;
@@ -86,11 +88,11 @@ export default function HomeScreen() {
             <View style={styles.emptyRocketCircle}>
               <Ionicons name="rocket-outline" size={46} color="#c8c7ca" />
             </View>
-            <Text style={styles.emptyUpcomingTitle}>No sidequests yet</Text>
-            <Text style={styles.emptyUpcomingCopy}>Create your first one and surprise your friends</Text>
+            <Text style={styles.emptyUpcomingTitle}>No adventures yet</Text>
+            <Text style={styles.emptyUpcomingCopy}>Create your first trip and start building SideQuests together</Text>
           </View>
 
-          <Text style={styles.emptyHint}>Tap + to create your first SideQuest</Text>
+          <Text style={styles.emptyHint}>Tap + to create your first adventure</Text>
         </ScrollView>
 
         <FloatingFab
@@ -143,19 +145,26 @@ export default function HomeScreen() {
           <View style={styles.sectionLine} />
         </View>
 
-        <View style={styles.cardRow}>
-          {quests.slice(0, 2).map((quest, index) => (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          decelerationRate="fast"
+          snapToInterval={upcomingCardWidth + 14}
+          snapToAlignment="start"
+          contentContainerStyle={styles.carouselContent}
+          style={styles.carousel}>
+          {quests.map((quest, index) => (
             <QuestCard
               key={quest.id}
               id={quest.id}
               title={quest.title ?? 'Untitled quest'}
               badge={getCountdownLabel(quest)}
-              badgeTone={index === 0 ? 'pink' : 'cyan'}
+              badgeTone={index % 2 === 0 ? 'pink' : 'cyan'}
               imageUrl={quest.imageUrl}
-              compact={index === 1}
+              cardWidth={upcomingCardWidth}
             />
           ))}
-        </View>
+        </ScrollView>
 
         <View style={styles.bottomArea}>
           <TouchableOpacity style={styles.activeQuestCard} activeOpacity={0.85} onPress={() => upcomingQuest && router.push(`/trip/${upcomingQuest.id}`)}>
@@ -165,12 +174,6 @@ export default function HomeScreen() {
               <Text style={styles.activeQuestTitle}>{upcomingQuest?.title ?? 'Your next SideQuest'}</Text>
             </View>
           </TouchableOpacity>
-        </View>
-
-        <View style={styles.pagination}>
-          <View style={[styles.paginationDot, styles.paginationDotActive]} />
-          <View style={styles.paginationDot} />
-          <View style={styles.paginationDot} />
         </View>
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
       </ScrollView>
@@ -209,14 +212,14 @@ function FloatingFab({
                 onDismiss();
                 router.push('/create-trip');
               }}>
-              <Text style={styles.fabMenuButtonPrimaryText}>Create SideQuest</Text>
+              <Text style={styles.fabMenuButtonPrimaryText}>Create Adventure</Text>
               <View style={styles.fabMenuIconCircle}>
                 <Ionicons name="add" size={14} color="#fff" />
               </View>
             </TouchableOpacity>
 
             <TouchableOpacity activeOpacity={0.9} style={styles.fabMenuButton} onPress={onDismiss}>
-              <Text style={styles.fabMenuButtonText}>Join SideQuest</Text>
+              <Text style={styles.fabMenuButtonText}>Join Adventure</Text>
               <Ionicons name="person-add-outline" size={15} color="#ff4f74" />
             </TouchableOpacity>
 
@@ -257,22 +260,22 @@ function QuestCard({
   badge,
   badgeTone,
   imageUrl,
-  compact,
+  cardWidth,
 }: {
   id: string;
   title: string;
   badge: string;
   badgeTone: 'cyan' | 'pink';
   imageUrl?: string | null;
-  compact?: boolean;
+  cardWidth: number;
 }) {
   return (
     <TouchableOpacity
       activeOpacity={0.86}
       onPress={() => router.push(`/trip/${id}`)}
-      style={[styles.questCard, compact ? styles.questCardCompact : null, compact ? styles.questCardSky : styles.questCardLava]}>
+      style={[styles.questCard, { width: cardWidth }, badgeTone === 'cyan' ? styles.questCardSky : styles.questCardLava]}>
       {imageUrl ? <Image source={{ uri: imageUrl }} style={styles.questCardImage} /> : null}
-      <View style={[styles.questCardOverlay, compact ? styles.questCardOverlaySky : styles.questCardOverlayLava]} />
+      <View style={[styles.questCardOverlay, badgeTone === 'cyan' ? styles.questCardOverlaySky : styles.questCardOverlayLava]} />
       <View style={[styles.questCardBadge, badgeTone === 'cyan' ? styles.questCardBadgeCyan : styles.questCardBadgePink]}>
         <Text style={[styles.questCardBadgeText, badgeTone === 'cyan' ? styles.questCardBadgeTextDark : null]}>{badge}</Text>
       </View>
@@ -524,24 +527,23 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: '#e8ebef',
   },
-  cardRow: {
+  carousel: {
     marginTop: 16,
-    flexDirection: 'row',
-    gap: 12,
+    marginRight: -22,
+  },
+  carouselContent: {
+    paddingRight: 22,
+    gap: 14,
   },
   questCard: {
-    width: 198,
-    height: 158,
+    height: 220,
     borderRadius: 34,
-    paddingHorizontal: 16,
-    paddingTop: 108,
+    paddingHorizontal: 20,
+    paddingTop: 154,
     overflow: 'hidden',
   },
   questCardImage: {
     ...StyleSheet.absoluteFillObject,
-  },
-  questCardCompact: {
-    width: 126,
   },
   questCardLava: {
     backgroundColor: '#2a2430',
@@ -560,11 +562,11 @@ const styles = StyleSheet.create({
   },
   questCardBadge: {
     position: 'absolute',
-    left: 14,
-    top: 54,
+    left: 18,
+    top: 22,
     borderRadius: 999,
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 7,
   },
   questCardBadgePink: {
     backgroundColor: '#ff8ca0',
@@ -583,9 +585,9 @@ const styles = StyleSheet.create({
   },
   questCardTitle: {
     color: '#fff',
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: -0.5,
+    fontSize: 24,
+    fontWeight: '800',
+    letterSpacing: -0.9,
   },
   bottomArea: {
     marginTop: 72,
@@ -630,25 +632,8 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     letterSpacing: -0.4,
   },
-  pagination: {
-    marginTop: 14,
-    marginBottom: 92,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 6,
-  },
-  paginationDot: {
-    width: 12,
-    height: 5,
-    borderRadius: 999,
-    backgroundColor: '#d6d8dd',
-  },
-  paginationDotActive: {
-    width: 42,
-    backgroundColor: '#111',
-  },
   errorText: {
-    marginTop: 14,
+    marginTop: 22,
     color: '#d53d18',
     textAlign: 'center',
   },

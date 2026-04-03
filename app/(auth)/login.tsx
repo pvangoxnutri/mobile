@@ -1,5 +1,5 @@
-import { router } from 'expo-router';
-import { useState } from 'react';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useEffect, useState } from 'react';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import {
@@ -23,18 +23,38 @@ WebBrowser.maybeCompleteAuthSession();
 export default function LoginScreen() {
   const { signIn, signUp, refreshProfile } = useAuth();
   const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams<{ reset?: string }>();
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
   const [googleBusy, setGoogleBusy] = useState(false);
+  const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
+
+  const cooldownSeconds = cooldownUntil ? Math.max(0, Math.ceil((cooldownUntil - Date.now()) / 1000)) : 0;
+
+  useEffect(() => {
+    if (!cooldownUntil || cooldownSeconds <= 0) {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      if (cooldownUntil <= Date.now()) {
+        setCooldownUntil(null);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [cooldownSeconds, cooldownUntil]);
 
   async function handleSubmit() {
     try {
       setBusy(true);
       setError('');
+      setNotice('');
 
       if (mode === 'signin') {
         await signIn(email.trim(), password);
@@ -42,20 +62,35 @@ export default function LoginScreen() {
         return;
       }
 
+      if (cooldownSeconds > 0) {
+        setError(`Please wait ${cooldownSeconds}s before requesting another verification email.`);
+        return;
+      }
+
       await signUp(name.trim(), email.trim(), password);
-      setError('Check your email to verify your account, then sign in.');
+      setCooldownUntil(Date.now() + 60_000);
+      setNotice('Check your email to verify your account, then sign in.');
       setMode('signin');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong.');
+      const message = err instanceof Error ? err.message : 'Something went wrong.';
+      if (mode === 'signup' && isRateLimitError(message)) {
+        setCooldownUntil(Date.now() + 60_000);
+        setError('Too many email attempts right now. Wait a moment before trying again.');
+      } else {
+        setError(message);
+      }
     } finally {
       setBusy(false);
     }
   }
 
+  const resetMessage = params.reset === '1' ? 'Your password was changed. Sign in with the new one.' : '';
+
   async function handleGoogleLogin() {
     try {
       setGoogleBusy(true);
       setError('');
+      setNotice('');
 
       const redirectTo = Linking.createURL('/auth-callback');
       const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
@@ -133,28 +168,58 @@ export default function LoginScreen() {
 
       <View style={styles.card}>
         <Text style={styles.heading}>{mode === 'signin' ? 'Welcome back' : 'Create account'}</Text>
-        {mode === 'signup' ? <TextInput style={styles.input} placeholder="Name" value={name} onChangeText={setName} /> : null}
-        <TextInput
-          style={styles.input}
-          placeholder="Email"
-          keyboardType="email-address"
-          autoCapitalize="none"
-          value={email}
-          onChangeText={setEmail}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Password"
-          secureTextEntry
-          value={password}
-          onChangeText={setPassword}
-        />
+        <Text style={styles.formIntro}>
+          {mode === 'signin'
+            ? 'Sign in with your email and password to continue your adventure.'
+            : 'Create your account with your name, email, and a secure password.'}
+        </Text>
+        {mode === 'signup' ? (
+          <View style={styles.fieldBlock}>
+            <Text style={styles.fieldLabel}>Full name</Text>
+            <TextInput style={styles.input} placeholder="Your full name" value={name} onChangeText={setName} />
+          </View>
+        ) : null}
+        <View style={styles.fieldBlock}>
+          <Text style={styles.fieldLabel}>Email address</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="you@example.com"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            value={email}
+            onChangeText={setEmail}
+          />
+        </View>
+        <View style={styles.fieldBlock}>
+          <Text style={styles.fieldLabel}>Password</Text>
+          <TextInput
+            style={styles.input}
+            placeholder={mode === 'signin' ? 'Enter your password' : 'Choose a password'}
+            secureTextEntry
+            value={password}
+            onChangeText={setPassword}
+          />
+        </View>
 
+        {resetMessage ? <Text style={styles.success}>{resetMessage}</Text> : null}
+        {notice ? <Text style={styles.success}>{notice}</Text> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
+        {mode === 'signup' && cooldownSeconds > 0 ? (
+          <Text style={styles.cooldownText}>You can request a new verification email in {cooldownSeconds}s.</Text>
+        ) : null}
 
-        <Pressable style={styles.primaryButton} onPress={() => void handleSubmit()} disabled={busy}>
+        <Pressable
+          style={[styles.primaryButton, busy || (mode === 'signup' && cooldownSeconds > 0) ? styles.primaryButtonDisabled : null]}
+          onPress={() => void handleSubmit()}
+          disabled={busy || (mode === 'signup' && cooldownSeconds > 0)}>
           {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>{mode === 'signin' ? 'Sign In' : 'Create Account'}</Text>}
         </Pressable>
+
+        {mode === 'signin' ? (
+          <Pressable style={styles.secondaryButton} onPress={() => router.push('/forgot-password')}>
+            <Text style={styles.forgotButtonText}>Forgot password?</Text>
+          </Pressable>
+        ) : null}
 
         <Pressable style={styles.secondaryButton} onPress={() => setMode((current) => (current === 'signin' ? 'signup' : 'signin'))}>
           <Text style={styles.secondaryButtonText}>
@@ -205,6 +270,11 @@ function GoogleGlyph() {
   );
 }
 
+function isRateLimitError(message: string) {
+  const normalized = message.toLowerCase();
+  return normalized.includes('rate limit') || normalized.includes('too many requests') || normalized.includes('email rate limit');
+}
+
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
@@ -243,7 +313,23 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#14161d',
     letterSpacing: -0.7,
-    marginBottom: 14,
+    marginBottom: 10,
+  },
+  formIntro: {
+    color: '#7d8491',
+    fontSize: 14,
+    lineHeight: 21,
+    marginBottom: 16,
+  },
+  fieldBlock: {
+    marginBottom: 12,
+  },
+  fieldLabel: {
+    color: '#4b515d',
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+    marginBottom: 8,
   },
   input: {
     height: 52,
@@ -253,10 +339,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#f9fafc',
     paddingHorizontal: 16,
     fontSize: 16,
-    marginBottom: 12,
+    color: '#14161d',
   },
   error: {
     color: '#d53d18',
+    marginBottom: 10,
+    lineHeight: 20,
+  },
+  success: {
+    color: '#16734d',
     marginBottom: 10,
     lineHeight: 20,
   },
@@ -267,10 +358,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: '#ff4f74',
   },
+  primaryButtonDisabled: {
+    opacity: 0.62,
+  },
   primaryButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '800',
+  },
+  cooldownText: {
+    color: '#8e5563',
+    marginBottom: 10,
+    lineHeight: 20,
   },
   secondaryButton: {
     marginTop: 12,
@@ -282,6 +381,11 @@ const styles = StyleSheet.create({
     color: '#6c7280',
     fontSize: 14,
     fontWeight: '600',
+  },
+  forgotButtonText: {
+    color: '#ff4f74',
+    fontSize: 14,
+    fontWeight: '700',
   },
   separatorRow: {
     marginTop: 16,
