@@ -505,7 +505,7 @@ function VisibilityOption({
 }
 
 function toDateInput(date: Date) {
-  return date.toISOString().slice(0, 10);
+  return formatDateParts(date.getFullYear(), date.getMonth() + 1, date.getDate());
 }
 
 function toTimeInput(date: Date) {
@@ -523,7 +523,12 @@ function isTimeInputValid(value: string) {
 }
 
 function getDefaultDate() {
-  return new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  return formatDateParts(now.getFullYear(), now.getMonth() + 1, now.getDate());
+}
+
+function formatDateParts(year: number, month: number, day: number) {
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
 function formatLongDate(value: string) {

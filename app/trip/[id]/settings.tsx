@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
+import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect } from '@react-navigation/native';
 import { useCallback, useState } from 'react';
@@ -8,6 +9,7 @@ import {
   Alert,
   Image,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -15,6 +17,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAuth } from '@/components/auth-provider';
 import RangeDatePicker, { formatRangeDisplay } from '@/components/range-date-picker';
 import { apiFetch, apiJson } from '@/lib/api';
 import type { Quest, TripInvite } from '@/lib/types';
@@ -32,6 +35,7 @@ type MessageState = { type: 'success' | 'error'; text: string } | null;
 export default function TripSettingsScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [trip, setTrip] = useState<Quest | null>(null);
@@ -44,6 +48,11 @@ export default function TripSettingsScreen() {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [rangePickerOpen, setRangePickerOpen] = useState(false);
   const [message, setMessage] = useState<MessageState>(null);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteMessage, setInviteMessage] = useState('');
+  const [inviteSubmitting, setInviteSubmitting] = useState(false);
+
+  const canManageTrip = Boolean(user?.id && trip?.ownerIds?.includes(user.id));
 
   const loadTrip = useCallback(() => {
     let active = true;
@@ -168,6 +177,59 @@ export default function TripSettingsScreen() {
     }
   }
 
+  async function handleAddInvite() {
+    const normalizedEmail = inviteEmail.trim().toLowerCase();
+
+    if (!normalizedEmail) {
+      setInviteMessage('Enter an email address first.');
+      return;
+    }
+
+    if (!/\S+@\S+\.\S+/.test(normalizedEmail)) {
+      setInviteMessage('That email address does not look valid.');
+      return;
+    }
+
+    if (invites.some((invite) => invite.email.toLowerCase() === normalizedEmail)) {
+      setInviteMessage('That person is already invited.');
+      return;
+    }
+
+    setInviteSubmitting(true);
+    setInviteMessage('');
+
+    try {
+      const invite = await apiJson<TripInvite>(`/api/trips/${id}/invites`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: normalizedEmail }),
+      });
+
+      setInvites((current) => [...current, invite]);
+      setInviteEmail('');
+      setInviteMessage('Invite sent.');
+    } catch (error) {
+      setInviteMessage(error instanceof Error ? error.message : 'Unable to invite right now.');
+    } finally {
+      setInviteSubmitting(false);
+    }
+  }
+
+  async function handleCopyInviteCode() {
+    if (!trip?.inviteCode) return;
+    await Clipboard.setStringAsync(trip.inviteCode);
+    setInviteMessage(`Invite code ${trip.inviteCode} copied.`);
+  }
+
+  async function handleShareInvite() {
+    if (!trip?.inviteCode) return;
+    await Share.share({
+      title: `Join ${trip.title ?? 'my adventure'}`,
+      message: `Join ${trip.title ?? 'my SideQuest adventure'} with code ${trip.inviteCode}.`,
+      url: trip.imageUrl ?? undefined,
+    });
+  }
+
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
@@ -232,6 +294,52 @@ export default function TripSettingsScreen() {
                     ) : null}
                   </View>
                 ))}
+                {canManageTrip ? (
+                  <View style={styles.inviteSection}>
+                    <View style={styles.inviteHeaderRow}>
+                      <View>
+                        <Text style={styles.inviteTitle}>Invite traveler</Text>
+                        <Text style={styles.inviteSubtitle}>Add by email or share the trip code directly from settings.</Text>
+                      </View>
+                      <View style={styles.inviteCodePill}>
+                        <Text style={styles.inviteCodePillText}>{trip?.inviteCode ?? '------'}</Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.inviteComposer}>
+                      <TextInput
+                        value={inviteEmail}
+                        onChangeText={setInviteEmail}
+                        placeholder="friend@example.com"
+                        placeholderTextColor="#afb5bf"
+                        keyboardType="email-address"
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        style={styles.inviteInput}
+                      />
+                      <TouchableOpacity
+                        activeOpacity={0.9}
+                        style={[styles.inviteAddButton, inviteSubmitting ? styles.inviteAddButtonDisabled : null]}
+                        disabled={inviteSubmitting}
+                        onPress={() => void handleAddInvite()}>
+                        <Text style={styles.inviteAddButtonText}>{inviteSubmitting ? 'Adding...' : 'Invite'}</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    <View style={styles.inviteActions}>
+                      <TouchableOpacity activeOpacity={0.9} style={styles.secondaryInviteButton} onPress={() => void handleCopyInviteCode()}>
+                        <Ionicons name="copy-outline" size={16} color="#ff4f74" />
+                        <Text style={styles.secondaryInviteButtonText}>Copy code</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity activeOpacity={0.9} style={styles.secondaryInviteButton} onPress={() => void handleShareInvite()}>
+                        <Ionicons name="share-social-outline" size={16} color="#ff4f74" />
+                        <Text style={styles.secondaryInviteButtonText}>Share</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {inviteMessage ? <Text style={styles.inviteMessage}>{inviteMessage}</Text> : null}
+                  </View>
+                ) : null}
               </View>
 
               <View style={styles.card}>
@@ -392,6 +500,105 @@ const styles = StyleSheet.create({
   listCopy: { flex: 1, paddingRight: 12 },
   listTitle: { color: '#161821', fontSize: 15, fontWeight: '700' },
   listMeta: { marginTop: 2, color: '#7d8491', fontSize: 13 },
+  inviteSection: {
+    marginTop: 14,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f2f5',
+  },
+  inviteHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  inviteTitle: {
+    color: '#161821',
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  inviteSubtitle: {
+    marginTop: 4,
+    maxWidth: 220,
+    color: '#7d8491',
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  inviteCodePill: {
+    borderRadius: 999,
+    backgroundColor: '#fff3f6',
+    borderWidth: 1,
+    borderColor: '#ffd4de',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  inviteCodePillText: {
+    color: '#ff4f74',
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
+  inviteComposer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 16,
+  },
+  inviteInput: {
+    flex: 1,
+    minHeight: 54,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#e6e9ef',
+    backgroundColor: '#f9fafc',
+    paddingHorizontal: 16,
+    color: '#161821',
+    fontSize: 15,
+  },
+  inviteAddButton: {
+    minHeight: 54,
+    borderRadius: 18,
+    backgroundColor: '#ff4f74',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+  },
+  inviteAddButtonDisabled: {
+    opacity: 0.72,
+  },
+  inviteAddButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  inviteActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 12,
+    flexWrap: 'wrap',
+  },
+  secondaryInviteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#ffd4de',
+    backgroundColor: '#fff',
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+  },
+  secondaryInviteButtonText: {
+    color: '#ff4f74',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  inviteMessage: {
+    marginTop: 12,
+    color: '#6f7683',
+    fontSize: 14,
+    fontWeight: '600',
+  },
   emptyText: { color: '#7d8491', fontSize: 14, marginTop: 6 },
   messageBanner: {
     marginTop: 4,

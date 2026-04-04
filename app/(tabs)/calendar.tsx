@@ -1,25 +1,51 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiJson } from '@/lib/api';
-import type { Quest } from '@/lib/types';
+import type { Quest, SideQuestActivity } from '@/lib/types';
+
+type CalendarItem = {
+  id: string;
+  kind: 'trip' | 'activity';
+  tripId: string;
+  title: string;
+  date: string;
+  time?: string | null;
+  meta: string;
+};
 
 export default function CalendarScreen() {
   const insets = useSafeAreaInsets();
   const [quests, setQuests] = useState<Quest[]>([]);
+  const [activities, setActivities] = useState<SideQuestActivity[]>([]);
   const [monthDate, setMonthDate] = useState(() => startOfMonth(new Date()));
+  const [selectedDate, setSelectedDate] = useState(toDateKey(new Date()));
   const [error, setError] = useState('');
 
-  const loadQuests = useCallback(() => {
+  const loadCalendar = useCallback(() => {
     let active = true;
 
     void apiJson<Quest[]>('/api/trips')
-      .then((data) => {
+      .then(async (data) => {
         if (!active) return;
-        setQuests(Array.isArray(data) ? data : []);
+        const tripList = Array.isArray(data) ? data : [];
+        setQuests(tripList);
+
+        const activityGroups = await Promise.all(
+          tripList.map(async (trip) => {
+            try {
+              return await apiJson<SideQuestActivity[]>(`/api/trips/${trip.id}/activities`);
+            } catch {
+              return [];
+            }
+          }),
+        );
+
+        if (!active) return;
+        setActivities(activityGroups.flat());
         setError('');
       })
       .catch((err: Error) => {
@@ -32,19 +58,25 @@ export default function CalendarScreen() {
     };
   }, []);
 
-  useFocusEffect(loadQuests);
+  useFocusEffect(loadCalendar);
+
+  useEffect(() => {
+    const selected = parseDateKey(selectedDate);
+    if (selected.getMonth() !== monthDate.getMonth() || selected.getFullYear() !== monthDate.getFullYear()) {
+      setSelectedDate(toDateKey(monthDate));
+    }
+  }, [monthDate, selectedDate]);
 
   const calendarDays = useMemo(() => buildCalendarDays(monthDate), [monthDate]);
-  const questMap = useMemo(() => buildQuestMap(quests), [quests]);
+  const dayItemsMap = useMemo(() => buildDayItemsMap(quests, activities), [activities, quests]);
   const monthTitle = useMemo(
     () => new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(monthDate),
     [monthDate],
   );
-
-  const monthTrips = useMemo(() => {
-    const monthKey = monthDate.toISOString().slice(0, 7);
-    return quests.filter((quest) => quest.startDate.startsWith(monthKey) || quest.endDate.startsWith(monthKey));
-  }, [monthDate, quests]);
+  const selectedItems = useMemo(() => {
+    const items = dayItemsMap.get(selectedDate) ?? [];
+    return [...items].sort(sortCalendarItems);
+  }, [dayItemsMap, selectedDate]);
 
   return (
     <ScrollView
@@ -75,56 +107,66 @@ export default function CalendarScreen() {
         <View style={styles.grid}>
           {calendarDays.map((day) => {
             const key = toDateKey(day.date);
-            const items = questMap.get(key) ?? [];
+            const items = dayItemsMap.get(key) ?? [];
             const isCurrentMonth = day.date.getMonth() === monthDate.getMonth();
             const isToday = key === toDateKey(new Date());
+            const isSelected = key === selectedDate;
 
             return (
-              <Pressable key={key} style={styles.dayCell}>
-                <View style={[styles.dayNumberWrap, isToday ? styles.dayNumberWrapToday : null]}>
+              <Pressable key={key} style={[styles.dayCell, isSelected ? styles.dayCellSelected : null]} onPress={() => setSelectedDate(key)}>
+                <View style={[styles.dayNumberWrap, isToday ? styles.dayNumberWrapToday : null, isSelected ? styles.dayNumberWrapSelected : null]}>
                   <Text
                     style={[
                       styles.dayNumber,
                       isCurrentMonth ? styles.dayNumberCurrentMonth : styles.dayNumberOutsideMonth,
-                      isToday ? styles.dayNumberToday : null,
+                      isToday || isSelected ? styles.dayNumberToday : null,
                     ]}>
                     {day.date.getDate()}
                   </Text>
                 </View>
-                {items.slice(0, 2).map((quest) => (
-                  <Pressable key={`${key}-${quest.id}`} onPress={() => router.push(`/trip/${quest.id}`)} style={styles.dayQuestPill}>
-                    <Text numberOfLines={1} style={styles.dayQuestText}>
-                      {quest.title ?? quest.destination ?? 'SideQuest'}
-                    </Text>
-                  </Pressable>
-                ))}
-                {items.length > 2 ? <Text style={styles.moreText}>+{items.length - 2} more</Text> : null}
+                {items.length > 0 ? (
+                  <View style={styles.dayMarkers}>
+                    {items.slice(0, 3).map((item) => (
+                      <View key={`${key}-${item.id}`} style={[styles.dayMarker, item.kind === 'activity' ? styles.dayMarkerActivity : styles.dayMarkerTrip]} />
+                    ))}
+                  </View>
+                ) : (
+                  <View style={styles.dayMarkersEmpty} />
+                )}
+                {items.length > 0 ? <Text style={styles.dayCount}>{items.length}</Text> : null}
               </Pressable>
             );
           })}
         </View>
       </View>
 
-      <View style={styles.listCard}>
-        <Text style={styles.listTitle}>This month</Text>
-        {monthTrips.length > 0 ? (
-          monthTrips.map((quest) => (
-            <TouchableOpacity key={quest.id} activeOpacity={0.86} style={styles.tripRow} onPress={() => router.push(`/trip/${quest.id}`)}>
-              <View style={styles.tripRowDate}>
-                <Text style={styles.tripRowDay}>{new Date(`${quest.startDate}T12:00:00`).getDate()}</Text>
-                <Text style={styles.tripRowMonth}>
-                  {new Intl.DateTimeFormat('en-US', { month: 'short' }).format(new Date(`${quest.startDate}T12:00:00`))}
-                </Text>
-              </View>
-              <View style={styles.tripRowCopy}>
-                <Text style={styles.tripRowTitle}>{quest.title ?? 'Untitled adventure'}</Text>
-                <Text style={styles.tripRowMeta}>{formatDateRange(quest.startDate, quest.endDate)}</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color="#8a919d" />
-            </TouchableOpacity>
-          ))
+      <View style={styles.planCard}>
+        <Text style={styles.planEyebrow}>SELECTED DAY</Text>
+        <Text style={styles.planTitle}>{formatSelectedDate(selectedDate)}</Text>
+        <Text style={styles.planCopy}>Tap any day above to see exactly what is planned, including adventure spans and timed items like flights.</Text>
+
+        {selectedItems.length > 0 ? (
+          <View style={styles.planList}>
+            {selectedItems.map((item) => (
+              <TouchableOpacity key={item.id} activeOpacity={0.86} style={styles.planRow} onPress={() => router.push(`/trip/${item.tripId}`)}>
+                <View style={[styles.planTimePill, item.kind === 'activity' ? styles.planTimePillActivity : styles.planTimePillTrip]}>
+                  <Text style={[styles.planTimeText, item.kind === 'activity' ? styles.planTimeTextActivity : null]}>
+                    {item.time?.trim() ? item.time : item.kind === 'activity' ? 'Anytime' : 'All day'}
+                  </Text>
+                </View>
+                <View style={styles.planCopyWrap}>
+                  <Text style={styles.planRowTitle}>{item.title}</Text>
+                  <Text style={styles.planRowMeta}>{item.meta}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color="#8a919d" />
+              </TouchableOpacity>
+            ))}
+          </View>
         ) : (
-          <Text style={styles.emptyText}>No adventures in this month yet.</Text>
+          <View style={styles.emptyDayState}>
+            <Ionicons name="calendar-clear-outline" size={28} color="#b1b7c2" />
+            <Text style={styles.emptyDayText}>Nothing planned for this day yet.</Text>
+          </View>
         )}
       </View>
 
@@ -146,8 +188,8 @@ function buildCalendarDays(monthDate: Date) {
   });
 }
 
-function buildQuestMap(quests: Quest[]) {
-  const map = new Map<string, Quest[]>();
+function buildDayItemsMap(quests: Quest[], activities: SideQuestActivity[]) {
+  const map = new Map<string, CalendarItem[]>();
 
   for (const quest of quests) {
     const current = new Date(`${quest.startDate}T12:00:00`);
@@ -155,14 +197,50 @@ function buildQuestMap(quests: Quest[]) {
 
     while (current.getTime() <= end.getTime()) {
       const key = toDateKey(current);
-      const existing = map.get(key) ?? [];
-      existing.push(quest);
-      map.set(key, existing);
+      const items = map.get(key) ?? [];
+      items.push({
+        id: `trip-${quest.id}-${key}`,
+        kind: 'trip',
+        tripId: quest.id,
+        title: quest.title ?? 'Untitled adventure',
+        date: key,
+        meta: quest.destination?.trim() || 'Adventure day',
+      });
+      map.set(key, items);
       current.setDate(current.getDate() + 1);
     }
   }
 
+  for (const activity of activities) {
+    const items = map.get(activity.date) ?? [];
+    items.push({
+      id: activity.id,
+      kind: 'activity',
+      tripId: activity.tripId,
+      title: activity.title ?? 'Untitled plan',
+      date: activity.date,
+      time: activity.time,
+      meta: activity.category?.trim() || (activity.visibility === 'hidden' ? 'Hidden SideQuest' : 'SideQuest'),
+    });
+    map.set(activity.date, items);
+  }
+
   return map;
+}
+
+function sortCalendarItems(left: CalendarItem, right: CalendarItem) {
+  if (left.kind !== right.kind) {
+    return left.kind === 'activity' ? -1 : 1;
+  }
+
+  if (left.time && right.time) {
+    return left.time.localeCompare(right.time);
+  }
+
+  if (left.time) return -1;
+  if (right.time) return 1;
+
+  return left.title.localeCompare(right.title);
 }
 
 function startOfMonth(date: Date) {
@@ -174,13 +252,18 @@ function addMonths(date: Date, offset: number) {
 }
 
 function toDateKey(date: Date) {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).toISOString().slice(0, 10);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
-function formatDateRange(startDate?: string, endDate?: string) {
-  if (!startDate || !endDate) return 'Dates coming soon';
-  const formatter = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
-  return `${formatter.format(new Date(`${startDate}T12:00:00`))} - ${formatter.format(new Date(`${endDate}T12:00:00`))}`;
+function parseDateKey(value: string) {
+  return new Date(`${value}T12:00:00`);
+}
+
+function formatSelectedDate(value: string) {
+  return new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric' }).format(parseDateKey(value));
 }
 
 const styles = StyleSheet.create({
@@ -249,20 +332,28 @@ const styles = StyleSheet.create({
   },
   dayCell: {
     width: '14.2857%',
-    minHeight: 88,
+    minHeight: 78,
     paddingHorizontal: 3,
-    paddingVertical: 4,
+    paddingVertical: 6,
+    borderRadius: 18,
+    alignItems: 'center',
+  },
+  dayCellSelected: {
+    backgroundColor: '#fff4f7',
   },
   dayNumberWrap: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 6,
   },
   dayNumberWrapToday: {
     backgroundColor: '#ff4f74',
+  },
+  dayNumberWrapSelected: {
+    backgroundColor: '#ff9db0',
   },
   dayNumber: {
     fontSize: 12,
@@ -277,24 +368,33 @@ const styles = StyleSheet.create({
   dayNumberToday: {
     color: '#fff',
   },
-  dayQuestPill: {
+  dayMarkers: {
+    flexDirection: 'row',
+    gap: 4,
+    minHeight: 8,
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  dayMarkersEmpty: {
+    minHeight: 14,
+  },
+  dayMarker: {
+    width: 7,
+    height: 7,
     borderRadius: 999,
-    backgroundColor: '#ffe5ec',
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    marginBottom: 4,
   },
-  dayQuestText: {
-    color: '#d82d62',
-    fontSize: 9,
-    fontWeight: '700',
+  dayMarkerTrip: {
+    backgroundColor: '#10c7e8',
   },
-  moreText: {
-    color: '#8b92a0',
-    fontSize: 9,
-    fontWeight: '700',
+  dayMarkerActivity: {
+    backgroundColor: '#ff4f74',
   },
-  listCard: {
+  dayCount: {
+    color: '#69707c',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  planCard: {
     marginTop: 18,
     borderRadius: 28,
     borderWidth: 1,
@@ -302,53 +402,88 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     padding: 18,
   },
-  listTitle: {
-    color: '#171821',
-    fontSize: 18,
+  planEyebrow: {
+    color: '#97a0ad',
+    fontSize: 11,
     fontWeight: '800',
-    marginBottom: 12,
+    letterSpacing: 1.4,
   },
-  tripRow: {
+  planTitle: {
+    marginTop: 8,
+    color: '#171821',
+    fontSize: 24,
+    fontWeight: '900',
+    letterSpacing: -0.7,
+  },
+  planCopy: {
+    marginTop: 8,
+    color: '#7c8290',
+    fontSize: 14,
+    lineHeight: 21,
+  },
+  planList: {
+    marginTop: 14,
+    gap: 10,
+  },
+  planRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: '#edf0f4',
+    backgroundColor: '#fcfcfd',
+    padding: 14,
   },
-  tripRowDate: {
-    width: 54,
-    height: 54,
-    borderRadius: 18,
-    backgroundColor: '#fff2f6',
+  planTimePill: {
+    minWidth: 66,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
   },
-  tripRowDay: {
-    color: '#ff4f74',
-    fontSize: 18,
-    fontWeight: '900',
+  planTimePillTrip: {
+    backgroundColor: '#eefbff',
   },
-  tripRowMonth: {
-    color: '#ff4f74',
+  planTimePillActivity: {
+    backgroundColor: '#fff1f5',
+  },
+  planTimeText: {
+    color: '#0d7187',
     fontSize: 11,
-    fontWeight: '700',
-    marginTop: -2,
+    fontWeight: '800',
   },
-  tripRowCopy: {
+  planTimeTextActivity: {
+    color: '#cf295f',
+  },
+  planCopyWrap: {
     flex: 1,
   },
-  tripRowTitle: {
+  planRowTitle: {
     color: '#171821',
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '800',
   },
-  tripRowMeta: {
-    marginTop: 2,
+  planRowMeta: {
+    marginTop: 3,
     color: '#7c8290',
     fontSize: 13,
   },
-  emptyText: {
+  emptyDayState: {
+    marginTop: 16,
+    borderRadius: 22,
+    backgroundColor: '#f9fafc',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 26,
+    paddingHorizontal: 18,
+  },
+  emptyDayText: {
+    marginTop: 10,
     color: '#7c8290',
-    fontSize: 15,
+    fontSize: 14,
+    textAlign: 'center',
   },
   errorText: {
     marginTop: 14,

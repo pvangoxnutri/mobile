@@ -7,6 +7,7 @@ import { Image, Modal, ScrollView, Share, StyleSheet, Text, TextInput, Touchable
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/components/auth-provider';
 import { apiJson } from '@/lib/api';
+import { loadNotificationPreferences, loadTripChat, sendTripChatMessage, type ChatMessage, type NotificationPreferences } from '@/lib/social';
 import type { Quest, SideQuestActivity, TripInvite } from '@/lib/types';
 
 type TripMember = {
@@ -29,6 +30,10 @@ export default function TripDetailsScreen() {
   const [inviteSubmitting, setInviteSubmitting] = useState(false);
   const [peopleSheetOpen, setPeopleSheetOpen] = useState(false);
   const [inviteComposerOpen, setInviteComposerOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatDraft, setChatDraft] = useState('');
+  const [chatPreferences, setChatPreferences] = useState<NotificationPreferences | null>(null);
   const [error, setError] = useState('');
 
   useFocusEffect(
@@ -49,6 +54,13 @@ export default function TripDetailsScreen() {
           setMembers(memberData);
           setInvites(inviteData);
           setActivities(activityData);
+          const [prefs, chatState] = await Promise.all([
+            loadNotificationPreferences(),
+            loadTripChat(id, tripData.title ?? 'this adventure'),
+          ]);
+          if (!active) return;
+          setChatPreferences(prefs);
+          setChatMessages(chatState.messages);
           setError('');
         } catch (err) {
           if (!active) return;
@@ -132,6 +144,21 @@ export default function TripDetailsScreen() {
     });
   }
 
+  async function handleSendChat() {
+    if (!trip || !user || !chatPreferences) return;
+
+    const nextState = await sendTripChatMessage({
+      tripId: id,
+      tripTitle: trip.title ?? 'this adventure',
+      user: { id: user.id, name: user.name || 'Traveler' },
+      text: chatDraft,
+      preferences: chatPreferences,
+    });
+
+    setChatMessages(nextState.messages);
+    setChatDraft('');
+  }
+
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
@@ -191,6 +218,12 @@ export default function TripDetailsScreen() {
 
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
         </ScrollView>
+
+        <View pointerEvents="box-none" style={[styles.chatBubbleWrap, { bottom: Math.max(insets.bottom, 16) + 6 }]}>
+          <TouchableOpacity activeOpacity={0.92} style={styles.chatBubble} onPress={() => setChatOpen(true)}>
+            <Ionicons name="chatbubble-ellipses-outline" size={20} color="#fff" />
+          </TouchableOpacity>
+        </View>
 
         <View pointerEvents="box-none" style={[styles.floatingWrap, { bottom: Math.max(insets.bottom, 16) + 6 }]}>
           <TouchableOpacity activeOpacity={0.92} style={styles.floatingButton} onPress={() => router.push(`/trip/${id}/sidequest/new`)}>
@@ -314,6 +347,71 @@ export default function TripDetailsScreen() {
             </View>
           </View>
         </Modal>
+
+        <Modal visible={chatOpen} transparent animationType="fade" onRequestClose={() => setChatOpen(false)}>
+          <View style={styles.chatModalBackdrop}>
+            <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setChatOpen(false)} />
+            <View style={[styles.chatPanel, { paddingTop: Math.max(insets.top, 18) + 14, paddingBottom: Math.max(insets.bottom, 18) + 14 }]}>
+              <View style={styles.chatPanelHeader}>
+                <View>
+                  <Text style={styles.chatPanelEyebrow}>GROUP CHAT</Text>
+                  <Text style={styles.chatPanelTitle}>{trip?.title ?? 'Adventure chat'}</Text>
+                </View>
+                <TouchableOpacity style={styles.chatPanelClose} activeOpacity={0.88} onPress={() => setChatOpen(false)}>
+                  <Ionicons name="close" size={20} color="#161821" />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.chatList}>
+                {chatMessages.map((message) => {
+                  const ownMessage = message.authorId === user?.id;
+                  const systemMessage = message.kind === 'system';
+
+                  return (
+                    <View
+                      key={message.id}
+                      style={[
+                        styles.chatMessageWrap,
+                        ownMessage ? styles.chatMessageWrapOwn : null,
+                        systemMessage ? styles.chatMessageWrapSystem : null,
+                      ]}>
+                      {!ownMessage && !systemMessage ? <Text style={styles.chatAuthor}>{message.authorName}</Text> : null}
+                      <View
+                        style={[
+                          styles.chatBubbleCard,
+                          ownMessage ? styles.chatBubbleCardOwn : null,
+                          systemMessage ? styles.chatBubbleCardSystem : null,
+                        ]}>
+                        <Text
+                          style={[
+                            styles.chatBubbleText,
+                            ownMessage ? styles.chatBubbleTextOwn : null,
+                            systemMessage ? styles.chatBubbleTextSystem : null,
+                          ]}>
+                          {message.text}
+                        </Text>
+                      </View>
+                      <Text style={styles.chatMeta}>{formatChatTimestamp(message.createdAt)}</Text>
+                    </View>
+                  );
+                })}
+              </ScrollView>
+
+              <View style={styles.chatComposer}>
+                <TextInput
+                  value={chatDraft}
+                  onChangeText={setChatDraft}
+                  placeholder="Send a message to the group"
+                  placeholderTextColor="#afb5bf"
+                  style={styles.chatInput}
+                />
+                <TouchableOpacity activeOpacity={0.9} style={styles.chatSendButton} onPress={() => void handleSendChat()}>
+                  <Ionicons name="send" size={16} color="#fff" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </View>
     </>
   );
@@ -340,7 +438,7 @@ function SideQuestFeedCard({
         ) : null}
         <View style={[styles.feedImageOverlay, hidden ? styles.feedImageOverlayHidden : null]} />
         <View style={styles.feedBadgeRow}>
-          <FeedBadge label={hidden ? 'Hidden' : 'Visible'} tone={hidden ? 'dark' : 'pink'} />
+          <FeedBadge label={hidden ? 'Hidden' : activity.ownerName || 'Visible'} tone={hidden ? 'dark' : 'pink'} />
           {activity.revealAt && !activity.isRevealed ? <FeedBadge label={formatRevealChip(activity.revealAt)} tone="light" /> : null}
         </View>
       </View>
@@ -356,12 +454,6 @@ function SideQuestFeedCard({
             : activity.description || 'A new surprise is waiting for the group.'}
         </Text>
         <View style={styles.feedFooter}>
-          <View style={styles.feedOwner}>
-            <View style={styles.feedOwnerAvatar}>
-              <Text style={styles.feedOwnerInitial}>{getInitial(activity.ownerName)}</Text>
-            </View>
-            <Text style={styles.feedOwnerName}>{activity.ownerName || 'Unknown creator'}</Text>
-          </View>
           <Ionicons name="chevron-forward" size={18} color="#9298a4" />
         </View>
       </View>
@@ -408,9 +500,8 @@ function formatRevealChip(value: string) {
   return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric' }).format(new Date(value));
 }
 
-function getInitial(name?: string | null) {
-  if (!name) return 'S';
-  return name.trim()[0]?.toUpperCase() ?? 'S';
+function formatChatTimestamp(value: string) {
+  return new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(new Date(value));
 }
 
 const styles = StyleSheet.create({
@@ -884,32 +975,7 @@ const styles = StyleSheet.create({
   },
   feedFooter: {
     marginTop: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  feedOwner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  feedOwnerAvatar: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#1d212a',
-    marginRight: 10,
-  },
-  feedOwnerInitial: {
-    color: '#fff',
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  feedOwnerName: {
-    color: '#1e222c',
-    fontSize: 14,
-    fontWeight: '700',
+    alignItems: 'flex-end',
   },
   emptyState: {
     marginTop: 18,
@@ -952,6 +1018,65 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 22,
   },
+  chatBubbleWrap: {
+    position: 'absolute',
+    left: 22,
+  },
+  chatBubble: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0d90a8',
+    shadowColor: '#0d90a8',
+    shadowOffset: { width: 0, height: 14 },
+    shadowOpacity: 0.22,
+    shadowRadius: 24,
+    elevation: 8,
+  },
+  chatModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(9,11,17,0.42)',
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+  },
+  chatPanel: {
+    flex: 1,
+    borderRadius: 30,
+    backgroundColor: '#fff',
+    paddingHorizontal: 16,
+  },
+  chatPanelHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eef1f5',
+  },
+  chatPanelEyebrow: {
+    color: '#9aa2ae',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.4,
+  },
+  chatPanelTitle: {
+    marginTop: 6,
+    color: '#161821',
+    fontSize: 26,
+    fontWeight: '900',
+    letterSpacing: -0.8,
+  },
+  chatPanelClose: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f5f6f8',
+  },
   floatingButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -970,5 +1095,82 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 15,
     fontWeight: '800',
+  },
+  chatList: {
+    paddingTop: 18,
+    paddingBottom: 10,
+    gap: 12,
+  },
+  chatMessageWrap: {
+    alignItems: 'flex-start',
+  },
+  chatMessageWrapOwn: {
+    alignItems: 'flex-end',
+  },
+  chatMessageWrapSystem: {
+    alignItems: 'center',
+  },
+  chatAuthor: {
+    marginBottom: 4,
+    marginLeft: 4,
+    color: '#7b828e',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  chatBubbleCard: {
+    maxWidth: '82%',
+    borderRadius: 20,
+    backgroundColor: '#f3f5f8',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  chatBubbleCardOwn: {
+    backgroundColor: '#ff4f74',
+  },
+  chatBubbleCardSystem: {
+    backgroundColor: '#eef7fa',
+  },
+  chatBubbleText: {
+    color: '#161821',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  chatBubbleTextOwn: {
+    color: '#fff',
+  },
+  chatBubbleTextSystem: {
+    color: '#0d7187',
+    fontWeight: '700',
+  },
+  chatMeta: {
+    marginTop: 4,
+    color: '#9aa2ae',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  chatComposer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 8,
+  },
+  chatInput: {
+    flex: 1,
+    minHeight: 54,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#e6e9ef',
+    backgroundColor: '#f9fafc',
+    paddingHorizontal: 16,
+    color: '#161821',
+    fontSize: 15,
+  },
+  chatSendButton: {
+    width: 54,
+    height: 54,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ff4f74',
   },
 });

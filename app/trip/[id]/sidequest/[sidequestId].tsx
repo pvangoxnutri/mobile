@@ -79,15 +79,21 @@ export default function SideQuestDetailScreen() {
                 </View>
               )}
               <View style={[styles.heroOverlay, activity.isHiddenForViewer ? styles.heroOverlayHidden : null]} />
+              {activity.canEdit ? (
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  style={styles.editButtonFloating}
+                  onPress={() => router.push(`/trip/${id}/sidequest/${sidequestId}/edit`)}>
+                  <Ionicons name="create-outline" size={16} color="#fff" />
+                  <Text style={styles.editButtonText}>Edit</Text>
+                </TouchableOpacity>
+              ) : null}
               <View style={styles.heroContent}>
                 <View style={styles.statusRow}>
-                  <StatusChip label={activity.visibility === 'hidden' && !activity.isRevealed ? 'Hidden' : 'Visible'} tone={activity.visibility === 'hidden' && !activity.isRevealed ? 'dark' : 'pink'} />
-                  {activity.canEdit ? (
-                    <TouchableOpacity activeOpacity={0.9} style={styles.editButton} onPress={() => router.push(`/trip/${id}/sidequest/${sidequestId}/edit`)}>
-                      <Ionicons name="create-outline" size={15} color="#fff" />
-                      <Text style={styles.editButtonText}>Edit</Text>
-                    </TouchableOpacity>
-                  ) : null}
+                  <StatusChip
+                    label={activity.visibility === 'hidden' && !activity.isRevealed ? 'Hidden' : activity.ownerName || 'Visible'}
+                    tone={activity.visibility === 'hidden' && !activity.isRevealed ? 'dark' : 'pink'}
+                  />
                 </View>
                 <Text style={styles.heroTitle}>{hiddenTitle}</Text>
                 <Text style={styles.heroSubtitle}>
@@ -105,7 +111,6 @@ export default function SideQuestDetailScreen() {
               {activity.visibility === 'hidden' && activity.revealAt ? (
                 <MetaRow icon="sparkles-outline" label="Reveal" value={formatReveal(activity.revealAt)} />
               ) : null}
-              <MetaRow icon="person-circle-outline" label="Creator" value={activity.ownerName || 'Unknown'} />
               <MetaRow icon="eye-outline" label="Visibility" value={activity.visibility === 'hidden' ? 'Hidden until reveal' : 'Public'} />
               {activity.canEdit && activity.teaser ? (
                 <MetaRow icon="chatbubble-ellipses-outline" label="Teaser" value={activity.teaser} />
@@ -216,7 +221,6 @@ const styles = StyleSheet.create({
   },
   statusRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 16,
   },
@@ -240,14 +244,20 @@ const styles = StyleSheet.create({
   statusChipTextLight: {
     color: '#fff',
   },
-  editButton: {
+  editButtonFloating: {
+    position: 'absolute',
+    top: 18,
+    right: 18,
+    zIndex: 2,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     borderRadius: 999,
-    backgroundColor: 'rgba(17,19,25,0.56)',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    backgroundColor: 'rgba(17,19,25,0.6)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.22)',
+    paddingHorizontal: 13,
+    paddingVertical: 9,
   },
   editButtonText: {
     color: '#fff',
