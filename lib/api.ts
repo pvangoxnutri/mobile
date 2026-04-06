@@ -1,6 +1,8 @@
 import Constants from 'expo-constants';
 import { supabase } from '@/lib/supabase';
 
+const remoteDevApiUrl = 'https://massachusetts-shine-broad-publicity.trycloudflare.com';
+
 function inferApiBaseUrl() {
   const configuredUrl = process.env.EXPO_PUBLIC_API_URL;
   if (configuredUrl) {
@@ -14,10 +16,14 @@ function inferApiBaseUrl() {
 
   const host = hostUri?.split(':')[0];
   if (host) {
+    if (host.includes('exp.direct')) {
+      return remoteDevApiUrl;
+    }
+
     return `http://${host}:5079`;
   }
 
-  return 'http://localhost:5079';
+  return remoteDevApiUrl;
 }
 
 export const API_URL = inferApiBaseUrl();

@@ -1,9 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import TopAlertsButton from '@/components/top-alerts-button';
 import { apiJson } from '@/lib/api';
 import type { Quest, SideQuestActivity } from '@/lib/types';
 
@@ -11,14 +12,24 @@ type CalendarItem = {
   id: string;
   kind: 'trip' | 'activity';
   tripId: string;
+  activityId?: string;
   title: string;
   date: string;
   time?: string | null;
   meta: string;
+  hidden?: boolean;
+  imageUrl?: string | null;
+  description?: string | null;
+  teaser?: string | null;
+  teaserVisible?: boolean;
+  revealAt?: string | null;
+  isRevealed?: boolean;
+  ownerName?: string | null;
 };
 
 export default function CalendarScreen() {
   const insets = useSafeAreaInsets();
+  const scrollRef = useRef<ScrollView | null>(null);
   const [quests, setQuests] = useState<Quest[]>([]);
   const [activities, setActivities] = useState<SideQuestActivity[]>([]);
   const [monthDate, setMonthDate] = useState(() => startOfMonth(new Date()));
@@ -60,31 +71,54 @@ export default function CalendarScreen() {
 
   useFocusEffect(loadCalendar);
 
-  useEffect(() => {
-    const selected = parseDateKey(selectedDate);
-    if (selected.getMonth() !== monthDate.getMonth() || selected.getFullYear() !== monthDate.getFullYear()) {
-      setSelectedDate(toDateKey(monthDate));
-    }
-  }, [monthDate, selectedDate]);
-
-  const calendarDays = useMemo(() => buildCalendarDays(monthDate), [monthDate]);
   const dayItemsMap = useMemo(() => buildDayItemsMap(quests, activities), [activities, quests]);
   const monthTitle = useMemo(
     () => new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(monthDate),
     [monthDate],
+  );
+  const visibleDates = useMemo(
+    () =>
+      Array.from(dayItemsMap.keys())
+        .filter((key) => {
+          const date = parseDateKey(key);
+          return date.getMonth() === monthDate.getMonth() && date.getFullYear() === monthDate.getFullYear();
+        })
+        .sort((left, right) => parseDateKey(left).getTime() - parseDateKey(right).getTime()),
+    [dayItemsMap, monthDate],
   );
   const selectedItems = useMemo(() => {
     const items = dayItemsMap.get(selectedDate) ?? [];
     return [...items].sort(sortCalendarItems);
   }, [dayItemsMap, selectedDate]);
 
+  useEffect(() => {
+    if (visibleDates.length === 0) return;
+    if (!visibleDates.includes(selectedDate)) {
+      setSelectedDate(visibleDates[0]);
+    }
+  }, [selectedDate, visibleDates]);
+
+  function jumpToSelectedDay(dateKey: string) {
+    setSelectedDate(dateKey);
+    setTimeout(() => {
+      scrollRef.current?.scrollToEnd({ animated: true });
+    }, 10);
+  }
+
   return (
     <ScrollView
-      contentContainerStyle={[styles.screen, { paddingTop: Math.max(insets.top, 18) + 12, paddingBottom: Math.max(insets.bottom, 20) + 30 }]}
+      ref={scrollRef}
+      contentContainerStyle={[styles.screen, { paddingTop: Math.max(insets.top, 18) + 12, paddingBottom: Math.max(insets.bottom, 20) + 140 }]}
       showsVerticalScrollIndicator={false}>
       <View style={styles.headerRow}>
-        <Text style={styles.title}>Calendar</Text>
-        <View style={styles.monthSwitch}>
+        <View style={styles.headerTopRow}>
+          <View>
+            <Text style={styles.title}>Calendar</Text>
+            <Text style={styles.titleCopy}>Everything planned across your trips, including hidden moments.</Text>
+          </View>
+          <TopAlertsButton />
+        </View>
+        <View style={styles.monthSwitchRow}>
           <TouchableOpacity activeOpacity={0.84} style={styles.monthSwitchButton} onPress={() => setMonthDate((current) => addMonths(current, -1))}>
             <Ionicons name="chevron-back" size={18} color="#4f5562" />
           </TouchableOpacity>
@@ -96,71 +130,94 @@ export default function CalendarScreen() {
       </View>
 
       <View style={styles.calendarCard}>
-        <View style={styles.weekdayRow}>
-          {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => (
-            <Text key={day} style={styles.weekdayLabel}>
-              {day}
-            </Text>
-          ))}
-        </View>
+        <Text style={styles.calendarCardTitle}>Event dates this month</Text>
+        <Text style={styles.calendarCardCopy}>Only dates with plans are shown here, so selected day is easier to reach.</Text>
 
-        <View style={styles.grid}>
-          {calendarDays.map((day) => {
-            const key = toDateKey(day.date);
-            const items = dayItemsMap.get(key) ?? [];
-            const isCurrentMonth = day.date.getMonth() === monthDate.getMonth();
-            const isToday = key === toDateKey(new Date());
-            const isSelected = key === selectedDate;
+        {visibleDates.length > 0 ? (
+          <View style={styles.dateChipGrid}>
+            {visibleDates.map((dateKey) => {
+              const items = dayItemsMap.get(dateKey) ?? [];
+              const isSelected = dateKey === selectedDate;
+              const date = parseDateKey(dateKey);
 
-            return (
-              <Pressable key={key} style={[styles.dayCell, isSelected ? styles.dayCellSelected : null]} onPress={() => setSelectedDate(key)}>
-                <View style={[styles.dayNumberWrap, isToday ? styles.dayNumberWrapToday : null, isSelected ? styles.dayNumberWrapSelected : null]}>
-                  <Text
-                    style={[
-                      styles.dayNumber,
-                      isCurrentMonth ? styles.dayNumberCurrentMonth : styles.dayNumberOutsideMonth,
-                      isToday || isSelected ? styles.dayNumberToday : null,
-                    ]}>
-                    {day.date.getDate()}
+              return (
+                <Pressable key={dateKey} style={[styles.dateChip, isSelected ? styles.dateChipSelected : null]} onPress={() => jumpToSelectedDay(dateKey)}>
+                  <Text style={[styles.dateChipWeekday, isSelected ? styles.dateChipWeekdaySelected : null]}>
+                    {new Intl.DateTimeFormat('en-US', { weekday: 'short' }).format(date)}
                   </Text>
-                </View>
-                {items.length > 0 ? (
-                  <View style={styles.dayMarkers}>
-                    {items.slice(0, 3).map((item) => (
-                      <View key={`${key}-${item.id}`} style={[styles.dayMarker, item.kind === 'activity' ? styles.dayMarkerActivity : styles.dayMarkerTrip]} />
+                  <Text style={[styles.dateChipDay, isSelected ? styles.dateChipDaySelected : null]}>{date.getDate()}</Text>
+                  <View style={styles.dateChipDots}>
+                    {getCalendarDots(items).map((tone, index) => (
+                      <View
+                        key={`${dateKey}-${tone}-${index}`}
+                        style={[
+                          styles.dateChipDot,
+                          tone === 'trip' ? styles.dateChipDotTrip : tone === 'hidden' ? styles.dateChipDotHidden : styles.dateChipDotActivity,
+                          isSelected ? styles.dateChipDotSelected : null,
+                        ]}
+                      />
                     ))}
                   </View>
-                ) : (
-                  <View style={styles.dayMarkersEmpty} />
-                )}
-                {items.length > 0 ? <Text style={styles.dayCount}>{items.length}</Text> : null}
-              </Pressable>
-            );
-          })}
-        </View>
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : (
+          <View style={styles.emptyMonthState}>
+            <Ionicons name="calendar-clear-outline" size={28} color="#b1b7c2" />
+            <Text style={styles.emptyMonthText}>No event dates in this month yet.</Text>
+          </View>
+        )}
       </View>
 
       <View style={styles.planCard}>
         <Text style={styles.planEyebrow}>SELECTED DAY</Text>
         <Text style={styles.planTitle}>{formatSelectedDate(selectedDate)}</Text>
-        <Text style={styles.planCopy}>Tap any day above to see exactly what is planned, including adventure spans and timed items like flights.</Text>
+        <Text style={styles.planCopy}>Tap any event date above and we jump straight down here.</Text>
 
         {selectedItems.length > 0 ? (
           <View style={styles.planList}>
-            {selectedItems.map((item) => (
-              <TouchableOpacity key={item.id} activeOpacity={0.86} style={styles.planRow} onPress={() => router.push(`/trip/${item.tripId}`)}>
-                <View style={[styles.planTimePill, item.kind === 'activity' ? styles.planTimePillActivity : styles.planTimePillTrip]}>
-                  <Text style={[styles.planTimeText, item.kind === 'activity' ? styles.planTimeTextActivity : null]}>
-                    {item.time?.trim() ? item.time : item.kind === 'activity' ? 'Anytime' : 'All day'}
+            {selectedItems.map((item) =>
+              item.kind === 'activity' ? (
+                <TouchableOpacity
+                  key={item.id}
+                  activeOpacity={0.92}
+                  style={styles.activityCard}
+                  onPress={() => router.push(`/trip/${item.tripId}/sidequest/${item.activityId ?? item.id}`)}>
+                  <View style={styles.activityHeader}>
+                    <View style={[styles.planTimePill, styles.planTimePillActivity]}>
+                      <Text style={[styles.planTimeText, styles.planTimeTextActivity]}>{item.time?.trim() ? item.time : 'Anytime'}</Text>
+                    </View>
+                    <Text style={styles.activityOwner}>{item.hidden ? 'Hidden' : item.ownerName || 'SideQuest'}</Text>
+                  </View>
+                  <Text style={styles.activityTitle}>{item.hidden ? 'Hidden' : item.title}</Text>
+                  <Text numberOfLines={2} style={styles.activityDescription}>
+                    {item.hidden
+                      ? item.teaserVisible && item.teaser
+                        ? item.teaser
+                        : 'Locked until reveal. Tap in to see when it opens up.'
+                      : item.description || item.meta}
                   </Text>
-                </View>
-                <View style={styles.planCopyWrap}>
-                  <Text style={styles.planRowTitle}>{item.title}</Text>
-                  <Text style={styles.planRowMeta}>{item.meta}</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color="#8a919d" />
-              </TouchableOpacity>
-            ))}
+                  <View style={styles.activityFooter}>
+                    <Text style={styles.activityFooterText}>
+                      {item.revealAt && !item.isRevealed ? `Reveals ${formatRevealChip(item.revealAt)}` : item.meta}
+                    </Text>
+                    <Ionicons name="chevron-forward" size={18} color="#9298a4" />
+                  </View>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity key={item.id} activeOpacity={0.86} style={styles.planRow} onPress={() => router.push(`/trip/${item.tripId}`)}>
+                  <View style={[styles.planTimePill, styles.planTimePillTrip]}>
+                    <Text style={styles.planTimeText}>{item.time?.trim() ? item.time : 'All day'}</Text>
+                  </View>
+                  <View style={styles.planCopyWrap}>
+                    <Text style={styles.planRowTitle}>{item.title}</Text>
+                    <Text style={styles.planRowMeta}>{item.meta}</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color="#8a919d" />
+                </TouchableOpacity>
+              ),
+            )}
           </View>
         ) : (
           <View style={styles.emptyDayState}>
@@ -173,19 +230,6 @@ export default function CalendarScreen() {
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
     </ScrollView>
   );
-}
-
-function buildCalendarDays(monthDate: Date) {
-  const firstDay = startOfMonth(monthDate);
-  const mondayOffset = (firstDay.getDay() + 6) % 7;
-  const start = new Date(firstDay);
-  start.setDate(firstDay.getDate() - mondayOffset);
-
-  return Array.from({ length: 42 }, (_, index) => {
-    const date = new Date(start);
-    date.setDate(start.getDate() + index);
-    return { date };
-  });
 }
 
 function buildDayItemsMap(quests: Quest[], activities: SideQuestActivity[]) {
@@ -217,10 +261,19 @@ function buildDayItemsMap(quests: Quest[], activities: SideQuestActivity[]) {
       id: activity.id,
       kind: 'activity',
       tripId: activity.tripId,
-      title: activity.title ?? 'Untitled plan',
+      activityId: activity.id,
+      title: activity.visibility === 'hidden' ? 'Hidden' : activity.title ?? 'Untitled plan',
       date: activity.date,
       time: activity.time,
       meta: activity.category?.trim() || (activity.visibility === 'hidden' ? 'Hidden SideQuest' : 'SideQuest'),
+      hidden: activity.visibility === 'hidden',
+      imageUrl: activity.imageUrl,
+      description: activity.description,
+      teaser: activity.teaser,
+      teaserVisible: activity.teaserVisible,
+      revealAt: activity.revealAt,
+      isRevealed: activity.isRevealed,
+      ownerName: activity.ownerName,
     });
     map.set(activity.date, items);
   }
@@ -266,16 +319,31 @@ function formatSelectedDate(value: string) {
   return new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric' }).format(parseDateKey(value));
 }
 
+function formatRevealChip(value: string) {
+  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric' }).format(new Date(value));
+}
+
+function getCalendarDots(items: CalendarItem[]) {
+  return items.slice(0, 3).map((item) => {
+    if (item.kind === 'trip') return 'trip' as const;
+    if (item.hidden) return 'hidden' as const;
+    return 'activity' as const;
+  });
+}
+
 const styles = StyleSheet.create({
   screen: {
     backgroundColor: '#fff',
     paddingHorizontal: 20,
   },
   headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     marginBottom: 18,
+    gap: 14,
+  },
+  headerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
   },
   title: {
     fontSize: 34,
@@ -283,9 +351,17 @@ const styles = StyleSheet.create({
     color: '#121317',
     letterSpacing: -1.2,
   },
-  monthSwitch: {
+  titleCopy: {
+    marginTop: 8,
+    color: '#737883',
+    fontSize: 14,
+    lineHeight: 20,
+    maxWidth: 220,
+  },
+  monthSwitchRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     gap: 10,
   },
   monthSwitchButton: {
@@ -297,10 +373,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#f4f5f7',
   },
   monthTitle: {
+    flex: 1,
     color: '#21242d',
     fontSize: 15,
     fontWeight: '700',
-    minWidth: 120,
     textAlign: 'center',
   },
   calendarCard: {
@@ -315,84 +391,94 @@ const styles = StyleSheet.create({
     shadowRadius: 18,
     elevation: 3,
   },
-  weekdayRow: {
-    flexDirection: 'row',
-    marginBottom: 12,
+  calendarCardTitle: {
+    color: '#171821',
+    fontSize: 18,
+    fontWeight: '800',
   },
-  weekdayLabel: {
-    flex: 1,
-    textAlign: 'center',
-    color: '#8a909b',
-    fontSize: 12,
-    fontWeight: '700',
+  calendarCardCopy: {
+    marginTop: 6,
+    color: '#7c8290',
+    fontSize: 14,
+    lineHeight: 20,
   },
-  grid: {
+  dateChipGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 16,
   },
-  dayCell: {
-    width: '14.2857%',
-    minHeight: 78,
-    paddingHorizontal: 3,
-    paddingVertical: 6,
-    borderRadius: 18,
-    alignItems: 'center',
+  dateChip: {
+    width: '31%',
+    minWidth: 94,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: '#edf0f4',
+    backgroundColor: '#fcfcfd',
+    paddingHorizontal: 12,
+    paddingVertical: 14,
   },
-  dayCellSelected: {
-    backgroundColor: '#fff4f7',
+  dateChipSelected: {
+    backgroundColor: '#fff1f5',
+    borderColor: '#ffc7d7',
   },
-  dayNumberWrap: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 6,
-  },
-  dayNumberWrapToday: {
-    backgroundColor: '#ff4f74',
-  },
-  dayNumberWrapSelected: {
-    backgroundColor: '#ff9db0',
-  },
-  dayNumber: {
+  dateChipWeekday: {
+    color: '#8a919d',
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '800',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
   },
-  dayNumberCurrentMonth: {
-    color: '#252833',
+  dateChipWeekdaySelected: {
+    color: '#cf295f',
   },
-  dayNumberOutsideMonth: {
-    color: '#a6acb8',
+  dateChipDay: {
+    marginTop: 6,
+    color: '#171821',
+    fontSize: 24,
+    fontWeight: '900',
   },
-  dayNumberToday: {
-    color: '#fff',
+  dateChipDaySelected: {
+    color: '#cf295f',
   },
-  dayMarkers: {
+  dateChipDots: {
+    marginTop: 8,
+    minHeight: 10,
     flexDirection: 'row',
-    gap: 4,
-    minHeight: 8,
     alignItems: 'center',
-    marginBottom: 6,
+    gap: 5,
   },
-  dayMarkersEmpty: {
-    minHeight: 14,
-  },
-  dayMarker: {
-    width: 7,
-    height: 7,
+  dateChipDot: {
+    width: 8,
+    height: 8,
     borderRadius: 999,
   },
-  dayMarkerTrip: {
+  dateChipDotTrip: {
     backgroundColor: '#10c7e8',
   },
-  dayMarkerActivity: {
+  dateChipDotActivity: {
     backgroundColor: '#ff4f74',
   },
-  dayCount: {
-    color: '#69707c',
-    fontSize: 10,
-    fontWeight: '800',
+  dateChipDotHidden: {
+    backgroundColor: '#47505d',
+  },
+  dateChipDotSelected: {
+    transform: [{ scale: 1.05 }],
+  },
+  emptyMonthState: {
+    marginTop: 16,
+    borderRadius: 22,
+    backgroundColor: '#f9fafc',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 26,
+    paddingHorizontal: 18,
+  },
+  emptyMonthText: {
+    marginTop: 10,
+    color: '#7c8290',
+    fontSize: 14,
+    textAlign: 'center',
   },
   planCard: {
     marginTop: 18,
@@ -433,6 +519,59 @@ const styles = StyleSheet.create({
     borderColor: '#edf0f4',
     backgroundColor: '#fcfcfd',
     padding: 14,
+  },
+  activityCard: {
+    borderRadius: 26,
+    borderWidth: 1,
+    borderColor: '#ebedf2',
+    backgroundColor: '#fff',
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.05,
+    shadowRadius: 22,
+    elevation: 4,
+  },
+  activityHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  activityOwner: {
+    flex: 1,
+    textAlign: 'right',
+    color: '#868d99',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  activityTitle: {
+    marginTop: 14,
+    color: '#161821',
+    fontSize: 20,
+    fontWeight: '900',
+    letterSpacing: -0.6,
+  },
+  activityDescription: {
+    marginTop: 8,
+    color: '#6f7683',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  activityFooter: {
+    marginTop: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  activityFooterText: {
+    flex: 1,
+    color: '#7c8290',
+    fontSize: 13,
+    fontWeight: '700',
   },
   planTimePill: {
     minWidth: 66,

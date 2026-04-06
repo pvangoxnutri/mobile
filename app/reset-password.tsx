@@ -161,7 +161,8 @@ function buildUrlFromParams(params: Record<string, string | string[]>) {
   }
 
   const queryString = query.toString();
-  return queryString ? `sidequest://reset-password?${queryString}` : 'sidequest://reset-password';
+  const baseUrl = Linking.createURL('/reset-password');
+  return queryString ? `${baseUrl}?${queryString}` : baseUrl;
 }
 
 function readAuthParams(url: string | null) {

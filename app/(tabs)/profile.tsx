@@ -2,10 +2,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/components/auth-provider';
+import TopAlertsButton from '@/components/top-alerts-button';
 import { apiFetch, apiJson } from '@/lib/api';
+import { getDefaultNotificationPreferences, loadNotificationPreferences, saveNotificationPreferences, type NotificationPreferences } from '@/lib/social';
 import { supabase } from '@/lib/supabase';
 import type { Quest } from '@/lib/types';
 
@@ -18,6 +20,8 @@ export default function ProfileScreen() {
   const [newPassword, setNewPassword] = useState('');
   const [editingName, setEditingName] = useState(false);
   const [editingPassword, setEditingPassword] = useState(false);
+  const [editingNotifications, setEditingNotifications] = useState(false);
+  const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferences>(getDefaultNotificationPreferences());
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [busy, setBusy] = useState<'name' | 'password' | 'avatar' | null>(null);
 
@@ -47,7 +51,26 @@ export default function ProfileScreen() {
     };
   }, [user?.id]);
 
+  useEffect(() => {
+    let active = true;
+
+    void loadNotificationPreferences().then((prefs) => {
+      if (!active) return;
+      setNotificationPreferences(prefs);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const initials = useMemo(() => getInitials(user?.name), [user?.name]);
+
+  async function updateNotificationPreference<K extends keyof NotificationPreferences>(key: K, value: NotificationPreferences[K]) {
+    const next = { ...notificationPreferences, [key]: value };
+    setNotificationPreferences(next);
+    await saveNotificationPreferences(next);
+  }
 
   async function handleNameSave() {
     try {
@@ -201,7 +224,7 @@ export default function ProfileScreen() {
           <Ionicons name="arrow-back" size={28} color="#6d7380" />
         </TouchableOpacity>
         <Text style={styles.title}>Profile</Text>
-        <View style={styles.topSpacer} />
+        <TopAlertsButton />
       </View>
 
       <View style={styles.avatarSection}>
@@ -286,11 +309,77 @@ export default function ProfileScreen() {
         </View>
       ) : null}
 
+      <SectionCard
+        title="Notifications"
+        items={[
+          {
+            icon: 'notifications-outline',
+            label: editingNotifications ? 'Close notification settings' : 'Notification settings',
+            accent: '#ef2d63',
+            onPress: () => setEditingNotifications((current) => !current),
+          },
+        ]}
+      />
+      {editingNotifications ? (
+        <View style={styles.editorCard}>
+          <NotificationSettingRow
+            icon="phone-portrait-outline"
+            title="Push notifications"
+            subtitle="Prepare alerts when someone sends a message."
+            value={notificationPreferences.pushEnabled}
+            onValueChange={(value) => void updateNotificationPreference('pushEnabled', value)}
+          />
+          <View style={styles.rowDivider} />
+          <NotificationSettingRow
+            icon="chatbubble-ellipses-outline"
+            title="Chat messages"
+            subtitle="Create in-app alerts for new group chat messages."
+            value={notificationPreferences.chatMessages}
+            onValueChange={(value) => void updateNotificationPreference('chatMessages', value)}
+          />
+          <View style={styles.rowDivider} />
+          <NotificationSettingRow
+            icon="people-outline"
+            title="Chat joins"
+            subtitle="Alert when someone joins a group chat."
+            value={notificationPreferences.chatJoins}
+            onValueChange={(value) => void updateNotificationPreference('chatJoins', value)}
+          />
+        </View>
+      ) : null}
+
       <View style={styles.brandBlock}>
         <Text style={styles.brandWord}>BEYOND</Text>
         <Text style={styles.brandTagline}>THE MAP IS ONLY THE BEGINNING</Text>
       </View>
     </ScrollView>
+  );
+}
+
+function NotificationSettingRow({
+  icon,
+  title,
+  subtitle,
+  value,
+  onValueChange,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  title: string;
+  subtitle: string;
+  value: boolean;
+  onValueChange: (value: boolean) => void;
+}) {
+  return (
+    <View style={styles.notificationRow}>
+      <View style={styles.notificationIcon}>
+        <Ionicons name={icon} size={18} color="#ff4f74" />
+      </View>
+      <View style={styles.notificationCopy}>
+        <Text style={styles.notificationTitle}>{title}</Text>
+        <Text style={styles.notificationSubtitle}>{subtitle}</Text>
+      </View>
+      <Switch value={value} onValueChange={onValueChange} trackColor={{ false: '#d8dde6', true: '#ffbdd0' }} thumbColor={value ? '#ff4f74' : '#fff'} />
+    </View>
   );
 }
 
@@ -361,10 +450,6 @@ const styles = StyleSheet.create({
     height: 42,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  topSpacer: {
-    width: 42,
-    height: 42,
   },
   title: {
     fontSize: 24,
@@ -574,6 +659,36 @@ const styles = StyleSheet.create({
     color: '#1b1e28',
     fontSize: 17,
     letterSpacing: -0.4,
+  },
+  notificationRow: {
+    minHeight: 66,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  notificationIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff1f5',
+    marginRight: 12,
+  },
+  notificationCopy: {
+    flex: 1,
+    paddingRight: 12,
+  },
+  notificationTitle: {
+    color: '#171821',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  notificationSubtitle: {
+    marginTop: 2,
+    color: '#7c8290',
+    fontSize: 13,
+    lineHeight: 18,
   },
   brandBlock: {
     marginTop: 22,

@@ -4,6 +4,7 @@ import type { UserInfo } from '@/lib/types';
 const NOTIFICATION_PREFS_KEY = 'sidequest.notification-prefs';
 const NOTIFICATIONS_KEY = 'sidequest.notifications';
 const CHAT_KEY_PREFIX = 'sidequest.trip-chat.';
+const memoryStorage = new Map<string, string>();
 
 export type NotificationPreferences = {
   pushEnabled: boolean;
@@ -18,6 +19,7 @@ export type AppNotification = {
   body: string;
   createdAt: string;
   tripId?: string;
+  sideQuestId?: string;
   tripTitle?: string;
   pushReady?: boolean;
 };
@@ -45,7 +47,7 @@ export function getDefaultNotificationPreferences(): NotificationPreferences {
 }
 
 export async function loadNotificationPreferences() {
-  const raw = await AsyncStorage.getItem(NOTIFICATION_PREFS_KEY);
+  const raw = await safeGetItem(NOTIFICATION_PREFS_KEY);
   if (!raw) return getDefaultNotificationPreferences();
 
   try {
@@ -56,11 +58,11 @@ export async function loadNotificationPreferences() {
 }
 
 export async function saveNotificationPreferences(preferences: NotificationPreferences) {
-  await AsyncStorage.setItem(NOTIFICATION_PREFS_KEY, JSON.stringify(preferences));
+  await safeSetItem(NOTIFICATION_PREFS_KEY, JSON.stringify(preferences));
 }
 
 export async function loadNotifications() {
-  const raw = await AsyncStorage.getItem(NOTIFICATIONS_KEY);
+  const raw = await safeGetItem(NOTIFICATIONS_KEY);
   if (!raw) return [] as AppNotification[];
 
   try {
@@ -73,12 +75,12 @@ export async function loadNotifications() {
 export async function prependNotification(notification: AppNotification) {
   const current = await loadNotifications();
   const next = [notification, ...current].slice(0, 50);
-  await AsyncStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(next));
+  await safeSetItem(NOTIFICATIONS_KEY, JSON.stringify(next));
 }
 
 export async function loadTripChat(tripId: string, tripTitle: string) {
   const key = `${CHAT_KEY_PREFIX}${tripId}`;
-  const raw = await AsyncStorage.getItem(key);
+  const raw = await safeGetItem(key);
 
   if (!raw) {
     const initialState: TripChatState = {
@@ -95,7 +97,7 @@ export async function loadTripChat(tripId: string, tripTitle: string) {
       ],
     };
 
-    await AsyncStorage.setItem(key, JSON.stringify(initialState));
+    await safeSetItem(key, JSON.stringify(initialState));
     return initialState;
   }
 
@@ -187,10 +189,26 @@ export async function sendTripChatMessage({
     messages: nextMessages.slice(-80),
   };
 
-  await AsyncStorage.setItem(key, JSON.stringify(nextState));
+  await safeSetItem(key, JSON.stringify(nextState));
   return nextState;
 }
 
 function createId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+async function safeGetItem(key: string) {
+  try {
+    return await AsyncStorage.getItem(key);
+  } catch {
+    return memoryStorage.get(key) ?? null;
+  }
+}
+
+async function safeSetItem(key: string, value: string) {
+  try {
+    await AsyncStorage.setItem(key, value);
+  } catch {
+    memoryStorage.set(key, value);
+  }
 }

@@ -1,11 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BrandMark from '@/components/brand-mark';
 import { useAuth } from '@/components/auth-provider';
+import TopAlertsButton from '@/components/top-alerts-button';
 import { apiJson } from '@/lib/api';
 import type { Quest, SideQuestActivity } from '@/lib/types';
 
@@ -20,6 +21,7 @@ type TripWithEvent = {
   quest: Quest;
   nextEventDate: Date;
   nextEventLabel: string;
+  upcomingEvents: { label: string; date: Date }[];
 };
 
 export default function HomeScreen() {
@@ -35,6 +37,8 @@ export default function HomeScreen() {
   const [membersOpen, setMembersOpen] = useState(false);
   const [featuredMembers, setFeaturedMembers] = useState<TripMember[]>([]);
   const [membersLoading, setMembersLoading] = useState(false);
+  const [featuredEventIndex, setFeaturedEventIndex] = useState(0);
+  const eventFade = useRef(new Animated.Value(1)).current;
   const floatingBottom = Math.max(insets.bottom, 14) + 78;
   const upcomingCardWidth = Math.min(width - 56, 320);
 
@@ -92,6 +96,34 @@ export default function HomeScreen() {
   const sortedTrips = useMemo(() => sortTripsByUpcomingEvent(quests, activities, now), [activities, now, quests]);
   const featuredTrip = sortedTrips[0] ?? null;
   const countdownParts = useMemo(() => getCountdownParts(featuredTrip?.nextEventDate, now), [featuredTrip?.nextEventDate, now]);
+  const featuredEvent = featuredTrip?.upcomingEvents[featuredEventIndex] ?? null;
+
+  useEffect(() => {
+    setFeaturedEventIndex(0);
+  }, [featuredTrip?.quest.id]);
+
+  useEffect(() => {
+    if (!featuredTrip || featuredTrip.upcomingEvents.length <= 1) return;
+
+    const interval = setInterval(() => {
+      Animated.sequence([
+        Animated.timing(eventFade, {
+          toValue: 0,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+        Animated.timing(eventFade, {
+          toValue: 1,
+          duration: 220,
+          useNativeDriver: true,
+        }),
+      ]).start();
+
+      setFeaturedEventIndex((current) => (current + 1) % featuredTrip.upcomingEvents.length);
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [eventFade, featuredTrip]);
 
   async function openMembers() {
     if (!featuredTrip) return;
@@ -119,15 +151,18 @@ export default function HomeScreen() {
           showsVerticalScrollIndicator={false}>
           <View style={styles.topRow}>
             <BrandMark size="sm" />
-            <TouchableOpacity style={styles.avatarShell} activeOpacity={0.8} onPress={() => router.push('/(tabs)/profile')}>
-              {user?.avatarUrl ? (
-                <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
-              ) : (
-                <View style={styles.avatarCore}>
-                  <Text style={styles.avatarText}>{getInitials(user?.name)}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
+            <View style={styles.topActions}>
+              <TopAlertsButton />
+              <TouchableOpacity style={styles.avatarShell} activeOpacity={0.8} onPress={() => router.push('/(tabs)/profile')}>
+                {user?.avatarUrl ? (
+                  <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
+                ) : (
+                  <View style={styles.avatarCore}>
+                    <Text style={styles.avatarText}>{getInitials(user?.name)}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
 
           <Text style={styles.emptySectionHeading}>UPCOMING</Text>
@@ -162,15 +197,18 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}>
         <View style={styles.topRow}>
           <BrandMark size="sm" />
-          <TouchableOpacity style={styles.avatarShell} activeOpacity={0.8} onPress={() => router.push('/(tabs)/profile')}>
-            {user?.avatarUrl ? (
-              <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
-            ) : (
-              <View style={styles.avatarCore}>
-                <Text style={styles.avatarText}>{getInitials(user?.name)}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
+          <View style={styles.topActions}>
+            <TopAlertsButton />
+            <TouchableOpacity style={styles.avatarShell} activeOpacity={0.8} onPress={() => router.push('/(tabs)/profile')}>
+              {user?.avatarUrl ? (
+                <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
+              ) : (
+                <View style={styles.avatarCore}>
+                  <Text style={styles.avatarText}>{getInitials(user?.name)}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
 
         {loading ? (
@@ -184,7 +222,9 @@ export default function HomeScreen() {
 
               <View style={styles.dateRow}>
                 <Ionicons name="calendar-clear-outline" size={25} color="#4f5461" />
-                <Text style={styles.dateText}>{featuredTrip?.nextEventLabel ?? 'Dates coming soon'}</Text>
+                <Animated.Text style={[styles.dateText, { opacity: eventFade }]}>
+                  {featuredEvent?.label ?? featuredTrip?.nextEventLabel ?? 'Dates coming soon'}
+                </Animated.Text>
               </View>
 
               <View style={styles.badgeRow}>
@@ -406,7 +446,7 @@ function getTripWithEvent(quest: Quest, activities: SideQuestActivity[], now: Da
   const tripActivities = activities
     .filter((activity) => activity.tripId === quest.id)
     .map((activity) => ({
-      label: activity.title?.trim() || 'Upcoming event',
+      label: activity.visibility === 'hidden' ? 'Hidden' : activity.title?.trim() || 'Upcoming event',
       date: new Date(`${activity.date}T12:00:00`),
     }))
     .filter((item) => item.date.getTime() >= today.getTime())
@@ -417,6 +457,7 @@ function getTripWithEvent(quest: Quest, activities: SideQuestActivity[], now: Da
       quest,
       nextEventDate: tripActivities[0].date,
       nextEventLabel: tripActivities[0].label,
+      upcomingEvents: tripActivities,
     };
   }
 
@@ -429,6 +470,7 @@ function getTripWithEvent(quest: Quest, activities: SideQuestActivity[], now: Da
     quest,
     nextEventDate: tripStart,
     nextEventLabel: quest.title?.trim() || 'Upcoming adventure',
+    upcomingEvents: [{ label: quest.title?.trim() || 'Upcoming adventure', date: tripStart }],
   };
 }
 
@@ -536,6 +578,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+  },
+  topActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
   avatarShell: {
     width: 56,

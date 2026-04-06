@@ -16,10 +16,30 @@ const webStorage =
       }
     : null;
 
+const memoryStorage = new Map<string, string>();
+
 const secureStorage = {
-  getItem: (key: string) => SecureStore.getItemAsync(key),
-  setItem: (key: string, value: string) => SecureStore.setItemAsync(key, value),
-  removeItem: (key: string) => SecureStore.deleteItemAsync(key),
+  getItem: async (key: string) => {
+    try {
+      return await SecureStore.getItemAsync(key);
+    } catch {
+      return memoryStorage.get(key) ?? null;
+    }
+  },
+  setItem: async (key: string, value: string) => {
+    try {
+      await SecureStore.setItemAsync(key, value);
+    } catch {
+      memoryStorage.set(key, value);
+    }
+  },
+  removeItem: async (key: string) => {
+    try {
+      await SecureStore.deleteItemAsync(key);
+    } catch {
+      memoryStorage.delete(key);
+    }
+  },
 };
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {

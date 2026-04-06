@@ -14,6 +14,7 @@ export interface Quest {
   startDate: string;
   endDate: string;
   imageUrl?: string | null;
+  spotifyUrl?: string | null;
   ownerId: string;
   ownerIds: string[];
   visibility: 'public' | 'hidden';
@@ -39,6 +40,7 @@ export interface SideQuestActivity {
   time?: string | null;
   category?: string | null;
   imageUrl?: string | null;
+  spotifyUrl?: string | null;
   visibility: 'public' | 'hidden';
   revealAt?: string | null;
   isRevealed: boolean;

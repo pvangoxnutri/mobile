@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { API_URL } from '@/lib/api';
+import { getEmailAuthRedirectUrl } from '@/lib/auth-redirect';
 import { supabase } from '@/lib/supabase';
 import type { UserInfo } from '@/lib/types';
 
@@ -97,6 +98,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       password,
       options: {
         data: { name },
+        emailRedirectTo: getEmailAuthRedirectUrl(),
       },
     });
 

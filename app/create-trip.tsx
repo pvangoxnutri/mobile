@@ -319,7 +319,7 @@ export default function CreateTripScreen() {
         <View style={styles.bottomBar}>
           <BottomTab icon="compass" label="Home" onPress={() => router.replace('/(tabs)')} />
           <BottomTab icon="calendar-clear" label="Calendar" active />
-          <BottomTab icon="notifications" label="Alerts" onPress={() => router.replace('/(tabs)/alerts')} />
+          <BottomTab icon="notifications" label="Alerts" onPress={() => router.push('/TMP_Navbar')} />
           <BottomTab icon="person" label="Profile" onPress={() => router.replace('/(tabs)/profile')} />
         </View>
       </View>

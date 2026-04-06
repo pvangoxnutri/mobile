@@ -18,3 +18,13 @@ export function getPasswordResetRedirectUrl() {
 
   return Linking.createURL('/reset-password');
 }
+
+export function getEmailAuthRedirectUrl() {
+  const configuredWebUrl = process.env.EXPO_PUBLIC_WEB_URL;
+
+  if (isExpoGo() && configuredWebUrl) {
+    return `${normalizeBaseUrl(configuredWebUrl)}/auth-callback`;
+  }
+
+  return Linking.createURL('/auth-callback');
+}

@@ -1,13 +1,14 @@
-import { Ionicons } from '@expo/vector-icons';
+import { FontAwesome, Ionicons } from '@expo/vector-icons';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
+import * as Linking from 'expo-linking';
 import { useFocusEffect } from '@react-navigation/native';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { Image, Modal, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/components/auth-provider';
-import { apiJson } from '@/lib/api';
-import { loadNotificationPreferences, loadTripChat, sendTripChatMessage, type ChatMessage, type NotificationPreferences } from '@/lib/social';
+import { apiFetch, apiJson } from '@/lib/api';
+import { getDefaultNotificationPreferences, loadNotificationPreferences, loadTripChat, sendTripChatMessage, type ChatMessage, type NotificationPreferences } from '@/lib/social';
 import type { Quest, SideQuestActivity, TripInvite } from '@/lib/types';
 
 type TripMember = {
@@ -19,6 +20,8 @@ type TripMember = {
 
 export default function TripDetailsScreen() {
   const insets = useSafeAreaInsets();
+  const scrollRef = useRef<ScrollView | null>(null);
+  const feedOffsets = useRef<Record<string, number>>({});
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuth();
   const [trip, setTrip] = useState<Quest | null>(null);
@@ -34,6 +37,11 @@ export default function TripDetailsScreen() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatDraft, setChatDraft] = useState('');
   const [chatPreferences, setChatPreferences] = useState<NotificationPreferences | null>(null);
+  const [chatSending, setChatSending] = useState(false);
+  const [spotifyModalOpen, setSpotifyModalOpen] = useState(false);
+  const [spotifyUrlDraft, setSpotifyUrlDraft] = useState('');
+  const [spotifySaving, setSpotifySaving] = useState(false);
+  const [spotifyMessage, setSpotifyMessage] = useState('');
   const [error, setError] = useState('');
 
   useFocusEffect(
@@ -51,6 +59,7 @@ export default function TripDetailsScreen() {
 
           if (!active) return;
           setTrip(tripData);
+          setSpotifyUrlDraft(tripData.spotifyUrl ?? '');
           setMembers(memberData);
           setInvites(inviteData);
           setActivities(activityData);
@@ -89,6 +98,15 @@ export default function TripDetailsScreen() {
     () => Boolean(user?.id && trip?.ownerIds?.includes(user.id)),
     [trip?.ownerIds, user?.id],
   );
+  const activityGroups = useMemo(() => {
+    const groups = new Map<string, SideQuestActivity[]>();
+    for (const activity of sortedActivities) {
+      const current = groups.get(activity.date) ?? [];
+      current.push(activity);
+      groups.set(activity.date, current);
+    }
+    return Array.from(groups.entries()).map(([date, items]) => ({ date, items }));
+  }, [sortedActivities]);
 
   async function handleAddInvite() {
     const normalizedEmail = inviteEmail.trim().toLowerCase();
@@ -145,18 +163,58 @@ export default function TripDetailsScreen() {
   }
 
   async function handleSendChat() {
-    if (!trip || !user || !chatPreferences) return;
+    if (!trip || !user) return;
 
-    const nextState = await sendTripChatMessage({
-      tripId: id,
-      tripTitle: trip.title ?? 'this adventure',
-      user: { id: user.id, name: user.name || 'Traveler' },
-      text: chatDraft,
-      preferences: chatPreferences,
-    });
+    const trimmed = chatDraft.trim();
+    if (!trimmed || chatSending) return;
 
-    setChatMessages(nextState.messages);
-    setChatDraft('');
+    setChatSending(true);
+
+    try {
+      const nextState = await sendTripChatMessage({
+        tripId: id,
+        tripTitle: trip.title ?? 'this adventure',
+        user: { id: user.id, name: user.name || 'Traveler' },
+        text: trimmed,
+        preferences: chatPreferences ?? getDefaultNotificationPreferences(),
+      });
+
+      setChatMessages(nextState.messages);
+      setChatDraft('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to send message right now.');
+    } finally {
+      setChatSending(false);
+    }
+  }
+
+  async function handleSaveTripSpotify(value: string | null) {
+    if (!trip) return;
+
+    try {
+      setSpotifySaving(true);
+      setSpotifyMessage('');
+
+      const response = await apiFetch(`/api/trips/${id}/spotify`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(value && value.trim() ? { spotifyUrl: value.trim() } : { clearSpotifyUrl: true }),
+      });
+
+      if (!response.ok) {
+        throw new Error((await response.text()) || 'Unable to save the Spotify link right now.');
+      }
+
+      const updated = (await response.json()) as Quest;
+      setTrip(updated);
+      setSpotifyUrlDraft(updated.spotifyUrl ?? '');
+      setSpotifyModalOpen(false);
+      setSpotifyMessage(updated.spotifyUrl ? 'Shared Spotify link updated.' : 'Shared Spotify link removed.');
+    } catch (err) {
+      setSpotifyMessage(err instanceof Error ? err.message : 'Unable to save the Spotify link right now.');
+    } finally {
+      setSpotifySaving(false);
+    }
   }
 
   return (
@@ -164,6 +222,7 @@ export default function TripDetailsScreen() {
       <Stack.Screen options={{ headerShown: false }} />
       <View style={styles.screen}>
         <ScrollView
+          ref={scrollRef}
           contentContainerStyle={[styles.content, { paddingTop: Math.max(insets.top, 18) + 4, paddingBottom: Math.max(insets.bottom, 24) + 120 }]}
           showsVerticalScrollIndicator={false}>
           <View style={styles.header}>
@@ -190,20 +249,106 @@ export default function TripDetailsScreen() {
             </View>
           </View>
 
+          <View style={styles.spotifyCard}>
+            <View style={styles.spotifyHeader}>
+              <View style={styles.spotifyIconWrap}>
+                <FontAwesome name="spotify" size={22} color="#1db954" />
+              </View>
+              <View style={styles.spotifyCopy}>
+                <Text style={styles.spotifyLabel}>Shared Spotify</Text>
+                <Text style={styles.spotifyHint}>A shared playlist, album, or track for everyone in this event.</Text>
+              </View>
+            </View>
+
+            {trip?.spotifyUrl ? (
+              <>
+                <Text style={styles.spotifyUrlText}>{trip.spotifyUrl}</Text>
+                <View style={styles.spotifyActions}>
+                  <TouchableOpacity activeOpacity={0.9} style={styles.spotifyPrimaryButton} onPress={() => void openSpotifyLink(trip.spotifyUrl!)}>
+                    <Ionicons name="play-circle-outline" size={18} color="#fff" />
+                    <Text style={styles.spotifyPrimaryButtonText}>Open Spotify</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    activeOpacity={0.88}
+                    style={styles.spotifyGhostButton}
+                    onPress={() => {
+                      setSpotifyUrlDraft(trip.spotifyUrl ?? '');
+                      setSpotifyMessage('');
+                      setSpotifyModalOpen(true);
+                    }}>
+                    <Ionicons name="create-outline" size={16} color="#1d232e" />
+                    <Text style={styles.spotifyGhostButtonText}>Edit</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : (
+              <TouchableOpacity
+                activeOpacity={0.9}
+                style={styles.spotifyEmptyButton}
+                onPress={() => {
+                  setSpotifyUrlDraft('');
+                  setSpotifyMessage('');
+                  setSpotifyModalOpen(true);
+                }}>
+                <Ionicons name="add-circle-outline" size={18} color="#1db954" />
+                <Text style={styles.spotifyEmptyButtonText}>Add shared Spotify link</Text>
+              </TouchableOpacity>
+            )}
+
+            {spotifyMessage ? <Text style={styles.spotifyMessage}>{spotifyMessage}</Text> : null}
+          </View>
+
+          {activityGroups.length > 0 ? (
+            <View style={styles.miniCalendarWrap}>
+              <Text style={styles.miniCalendarEyebrow}>TRIP CALENDAR</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.miniCalendarRow}>
+                {activityGroups.map((group) => {
+                  const date = new Date(`${group.date}T12:00:00`);
+                  return (
+                    <TouchableOpacity
+                      key={group.date}
+                      activeOpacity={0.88}
+                      style={styles.miniCalendarChip}
+                      onPress={() => {
+                        const y = feedOffsets.current[group.date];
+                        if (typeof y === 'number') {
+                          scrollRef.current?.scrollTo({ y: Math.max(y - 18, 0), animated: true });
+                        }
+                      }}>
+                      <Text style={styles.miniCalendarWeekday}>{new Intl.DateTimeFormat('en-US', { weekday: 'short' }).format(date)}</Text>
+                      <Text style={styles.miniCalendarDay}>{date.getDate()}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          ) : null}
+
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionEyebrow}>SIDEQUEST FEED</Text>
             <Text style={styles.sectionTitle}>What the group will discover</Text>
             <Text style={styles.sectionCopy}>A playful stream of hidden and public moments for this trip.</Text>
           </View>
 
-          {sortedActivities.length > 0 ? (
+          {activityGroups.length > 0 ? (
             <View style={styles.feed}>
-              {sortedActivities.map((activity) => (
-                <SideQuestFeedCard
-                  key={activity.id}
-                  activity={activity}
-                  onPress={() => router.push(`/trip/${id}/sidequest/${activity.id}`)}
-                />
+              {activityGroups.map((group) => (
+                <View
+                  key={group.date}
+                  onLayout={(event) => {
+                    feedOffsets.current[group.date] = event.nativeEvent.layout.y;
+                  }}>
+                  <Text style={styles.feedDayLabel}>{formatActivityDate(group.date)}</Text>
+                  <View style={styles.feedDayGroup}>
+                    {group.items.map((activity) => (
+                      <SideQuestFeedCard
+                        key={activity.id}
+                        activity={activity}
+                        onPress={() => router.push(`/trip/${id}/sidequest/${activity.id}`)}
+                      />
+                    ))}
+                  </View>
+                </View>
               ))}
             </View>
           ) : (
@@ -253,7 +398,7 @@ export default function TripDetailsScreen() {
                   {members.map((member) => (
                     <View key={member.id} style={styles.personRow}>
                       <View style={styles.personAvatar}>
-                        <Text style={styles.personAvatarText}>{getInitial(member.name)}</Text>
+                        <Text style={styles.personAvatarText}>{getInitials(member.name)}</Text>
                       </View>
                       <View style={styles.personCopy}>
                         <Text style={styles.personName}>{member.name}</Text>
@@ -405,9 +550,57 @@ export default function TripDetailsScreen() {
                   placeholderTextColor="#afb5bf"
                   style={styles.chatInput}
                 />
-                <TouchableOpacity activeOpacity={0.9} style={styles.chatSendButton} onPress={() => void handleSendChat()}>
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  style={[styles.chatSendButton, !chatDraft.trim() || chatSending ? styles.chatSendButtonDisabled : null]}
+                  disabled={!chatDraft.trim() || chatSending}
+                  onPress={() => void handleSendChat()}>
                   <Ionicons name="send" size={16} color="#fff" />
                 </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        <Modal visible={spotifyModalOpen} transparent animationType="fade" onRequestClose={() => setSpotifyModalOpen(false)}>
+          <View style={styles.sheetBackdrop}>
+            <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setSpotifyModalOpen(false)} />
+            <View style={[styles.sheetCard, { paddingBottom: Math.max(insets.bottom, 18) + 12 }]}>
+              <View style={styles.sheetHandle} />
+              <View style={styles.sheetHeader}>
+                <View>
+                  <Text style={styles.sheetEyebrow}>SHARED SPOTIFY</Text>
+                  <Text style={styles.sheetTitle}>Spotify for this event</Text>
+                </View>
+                <TouchableOpacity style={styles.sheetCloseButton} activeOpacity={0.88} onPress={() => setSpotifyModalOpen(false)}>
+                  <Ionicons name="close" size={20} color="#161821" />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.spotifySheetBody}>
+                <Text style={styles.spotifySheetCopy}>Paste a public Spotify playlist, album, or track link that everyone can use.</Text>
+                <TextInput
+                  value={spotifyUrlDraft}
+                  onChangeText={setSpotifyUrlDraft}
+                  placeholder="https://open.spotify.com/..."
+                  placeholderTextColor="#a3a9b4"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="url"
+                  style={styles.spotifyInput}
+                />
+                <View style={styles.spotifySheetButtons}>
+                  <TouchableOpacity activeOpacity={0.88} style={styles.spotifySheetSecondaryButton} onPress={() => void handleSaveTripSpotify(null)}>
+                    <Text style={styles.spotifySheetSecondaryButtonText}>Remove</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    activeOpacity={0.9}
+                    style={[styles.spotifySheetPrimaryButton, spotifySaving ? styles.spotifySheetPrimaryButtonDisabled : null]}
+                    disabled={spotifySaving}
+                    onPress={() => void handleSaveTripSpotify(spotifyUrlDraft)}>
+                    <Text style={styles.spotifySheetPrimaryButtonText}>{spotifySaving ? 'Saving...' : 'Save link'}</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
           </View>
@@ -415,6 +608,13 @@ export default function TripDetailsScreen() {
       </View>
     </>
   );
+}
+
+async function openSpotifyLink(url: string) {
+  const canOpen = await Linking.canOpenURL(url);
+  if (canOpen) {
+    await Linking.openURL(url);
+  }
 }
 
 function SideQuestFeedCard({
@@ -502,6 +702,20 @@ function formatRevealChip(value: string) {
 
 function formatChatTimestamp(value: string) {
   return new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(new Date(value));
+}
+
+function getInitials(name?: string | null) {
+  const parts = (name ?? '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (parts.length === 0) return '?';
+
+  return parts
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? '')
+    .join('');
 }
 
 const styles = StyleSheet.create({
@@ -595,6 +809,164 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 13,
     fontWeight: '700',
+  },
+  spotifyCard: {
+    marginTop: 18,
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: '#e4f3e8',
+    backgroundColor: '#f8fffa',
+    padding: 18,
+  },
+  spotifyHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  spotifyIconWrap: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#e8f8ed',
+    marginRight: 12,
+  },
+  spotifyCopy: {
+    flex: 1,
+  },
+  spotifyLabel: {
+    color: '#10151e',
+    fontSize: 18,
+    fontWeight: '900',
+    letterSpacing: -0.4,
+  },
+  spotifyHint: {
+    marginTop: 6,
+    color: '#5e6a75',
+    fontSize: 14,
+    lineHeight: 21,
+  },
+  spotifyUrlText: {
+    marginTop: 16,
+    color: '#1e2a24',
+    fontSize: 14,
+    lineHeight: 21,
+  },
+  spotifyActions: {
+    marginTop: 16,
+    flexDirection: 'row',
+    gap: 10,
+  },
+  spotifyPrimaryButton: {
+    flex: 1,
+    minHeight: 48,
+    borderRadius: 18,
+    backgroundColor: '#1db954',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  spotifyPrimaryButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  spotifyGhostButton: {
+    minWidth: 92,
+    minHeight: 48,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#d7e6db',
+    backgroundColor: '#fff',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+  },
+  spotifyGhostButtonText: {
+    color: '#1d232e',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  spotifyEmptyButton: {
+    marginTop: 16,
+    minHeight: 52,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#cbe8d3',
+    backgroundColor: '#fff',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  spotifyEmptyButtonText: {
+    color: '#1b7f40',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  spotifyMessage: {
+    marginTop: 12,
+    color: '#496454',
+    fontSize: 13,
+    lineHeight: 20,
+  },
+  spotifySheetBody: {
+    paddingTop: 18,
+    gap: 14,
+  },
+  spotifySheetCopy: {
+    color: '#6c7480',
+    fontSize: 14,
+    lineHeight: 21,
+  },
+  spotifyInput: {
+    minHeight: 56,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#e5e8ee',
+    backgroundColor: '#f9fbfc',
+    paddingHorizontal: 16,
+    color: '#141821',
+    fontSize: 16,
+  },
+  spotifySheetButtons: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  spotifySheetSecondaryButton: {
+    minHeight: 52,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#e4e8ef',
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+  },
+  spotifySheetSecondaryButtonText: {
+    color: '#525a67',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  spotifySheetPrimaryButton: {
+    flex: 1,
+    minHeight: 52,
+    borderRadius: 18,
+    backgroundColor: '#1db954',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+  },
+  spotifySheetPrimaryButtonDisabled: {
+    opacity: 0.7,
+  },
+  spotifySheetPrimaryButtonText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '800',
   },
   sheetBackdrop: {
     flex: 1,
@@ -862,6 +1234,43 @@ const styles = StyleSheet.create({
   sectionHeader: {
     marginTop: 28,
   },
+  miniCalendarWrap: {
+    marginTop: 18,
+  },
+  miniCalendarEyebrow: {
+    color: '#9aa2ae',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.4,
+  },
+  miniCalendarRow: {
+    paddingTop: 12,
+    gap: 10,
+  },
+  miniCalendarChip: {
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff6f8',
+    borderWidth: 1,
+    borderColor: '#ffd8e2',
+  },
+  miniCalendarWeekday: {
+    color: '#cf295f',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.9,
+    textTransform: 'uppercase',
+  },
+  miniCalendarDay: {
+    marginTop: 4,
+    color: '#161821',
+    fontSize: 20,
+    fontWeight: '900',
+    letterSpacing: -0.5,
+  },
   sectionEyebrow: {
     color: '#a7adb8',
     fontSize: 12,
@@ -883,6 +1292,17 @@ const styles = StyleSheet.create({
   },
   feed: {
     marginTop: 16,
+    gap: 14,
+  },
+  feedDayLabel: {
+    marginBottom: 10,
+    color: '#8a919d',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+  },
+  feedDayGroup: {
     gap: 14,
   },
   feedCard: {
@@ -1172,5 +1592,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#ff4f74',
+  },
+  chatSendButtonDisabled: {
+    opacity: 0.55,
   },
 });
