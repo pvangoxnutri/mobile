@@ -27,6 +27,7 @@ yarn-debug.*
 yarn-error.*
 .mobile.out.log
 .mobile.err.log
+expo-*.log
 
 # macOS
 .DS_Store

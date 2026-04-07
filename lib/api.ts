@@ -1,4 +1,5 @@
 import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 import { supabase } from '@/lib/supabase';
 
 const remoteDevApiUrl = 'https://massachusetts-shine-broad-publicity.trycloudflare.com';
@@ -7,6 +8,10 @@ function inferApiBaseUrl() {
   const configuredUrl = process.env.EXPO_PUBLIC_API_URL;
   if (configuredUrl) {
     return configuredUrl;
+  }
+
+  if (Platform.OS === 'web') {
+    return 'http://localhost:5079';
   }
 
   const hostUri =

@@ -53,9 +53,10 @@ export default function ForgotPasswordScreen() {
       }
 
       const redirectTo = getPasswordResetRedirectUrl();
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-        redirectTo,
-      });
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(
+        email.trim(),
+        redirectTo ? { redirectTo } : undefined
+      );
 
       if (resetError) {
         throw resetError;
