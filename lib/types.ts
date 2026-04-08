@@ -4,6 +4,7 @@ export interface UserInfo {
   email: string;
   avatarUrl?: string | null;
   role?: string | null;
+  language?: 'en' | 'sv';
 }
 
 export interface Quest {

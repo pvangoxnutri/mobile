@@ -16,6 +16,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiFetch, apiJson } from '@/lib/api';
+import { fetchPlaceSuggestions, type PlaceAutocompleteSuggestion } from '@/lib/maps-api';
+import { type StoredMapPlace, withLocationMarker } from '@/lib/sidequest-location';
 import type { SideQuestActivity } from '@/lib/types';
 import { uploadImageIfNeeded } from '@/lib/uploads';
 
@@ -25,6 +27,8 @@ type MessageState = { type: 'success' | 'error'; text: string } | null;
 export type SideQuestFormValues = {
   title: string;
   description: string;
+  locationQuery: string;
+  locationPlace: StoredMapPlace | null;
   date: string;
   visibility: 'public' | 'hidden';
   revealDate: string;
@@ -62,6 +66,11 @@ export default function SideQuestForm({
   const insets = useSafeAreaInsets();
   const [title, setTitle] = useState(initialValues?.title ?? '');
   const [description, setDescription] = useState(initialValues?.description ?? '');
+  const [locationQuery, setLocationQuery] = useState(initialValues?.locationQuery ?? '');
+  const [locationPlace, setLocationPlace] = useState<StoredMapPlace | null>(initialValues?.locationPlace ?? null);
+  const [locationSuggestions, setLocationSuggestions] = useState<PlaceAutocompleteSuggestion[]>([]);
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [locationError, setLocationError] = useState('');
   const [date, setDate] = useState(initialValues?.date ?? getDefaultDate());
   const [visibility, setVisibility] = useState<'public' | 'hidden'>(initialValues?.visibility ?? 'public');
   const [revealDate, setRevealDate] = useState(initialValues?.revealDate ?? getDefaultDate());
@@ -98,6 +107,39 @@ export default function SideQuestForm({
     }
   }, [revealDate, revealRange.max, revealRange.min, visibility]);
 
+  useEffect(() => {
+    const query = locationQuery.trim();
+    if (query.length < 2) {
+      setLocationSuggestions([]);
+      setLocationLoading(false);
+      setLocationError('');
+      return;
+    }
+
+    if (locationPlace && buildPlaceDisplay(locationPlace) === query) {
+      setLocationSuggestions([]);
+      setLocationLoading(false);
+      setLocationError('');
+      return;
+    }
+
+    setLocationLoading(true);
+    const handle = setTimeout(() => {
+      void fetchPlaceSuggestions(query)
+        .then((items) => {
+          setLocationSuggestions(items);
+          setLocationError('');
+        })
+        .catch((err) => {
+          setLocationSuggestions([]);
+          setLocationError(err instanceof Error ? err.message : 'Could not load map suggestions.');
+        })
+        .finally(() => setLocationLoading(false));
+    }, 260);
+
+    return () => clearTimeout(handle);
+  }, [locationPlace, locationQuery]);
+
   async function handlePickImage() {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
@@ -115,6 +157,27 @@ export default function SideQuestForm({
     if (!result.canceled && result.assets[0]) {
       setImageUrl(result.assets[0].uri);
       setMessage(null);
+    }
+  }
+
+  async function handlePickPlace(suggestion: PlaceAutocompleteSuggestion) {
+    try {
+      const place: StoredMapPlace = {
+        placeId: suggestion.placeId,
+        name: suggestion.primaryText,
+        address: suggestion.secondaryText ?? null,
+        latitude: suggestion.latitude ?? null,
+        longitude: suggestion.longitude ?? null,
+        googleMapsUri: suggestion.googleMapsUri ?? null,
+      };
+      const label = buildPlaceDisplay(place);
+      setLocationPlace(place);
+      setLocationQuery(label);
+      setLocationSuggestions([]);
+      setLocationError('');
+      setMessage(null);
+    } catch {
+      setLocationError('Could not load details for that place.');
     }
   }
 
@@ -190,9 +253,15 @@ export default function SideQuestForm({
       const uploadedImageUrl = await uploadImageIfNeeded(imageUrl, 'sidequest');
       const revealAt = visibility === 'hidden' ? combineDateAndTime(revealDate, revealTime) : null;
 
+      if (locationQuery.trim() && !locationPlace?.placeId) {
+        setMessage({ type: 'error', text: 'Choose a valid place from the map suggestions.' });
+        setSubmitting(false);
+        return;
+      }
+
       const payload = {
         title: normalizedTitle,
-        description: description.trim() || null,
+        description: withLocationMarker(description.trim() || null, locationQuery.trim() || null, locationPlace),
         date,
         visibility,
         revealAt,
@@ -303,6 +372,42 @@ export default function SideQuestForm({
           textAlignVertical="top"
           style={styles.textArea}
         />
+      </View>
+
+      <View style={styles.block}>
+        <Text style={styles.label}>Place</Text>
+        <TextInput
+          value={locationQuery}
+          onChangeText={(value) => {
+            setLocationQuery(value);
+            if (locationPlace && buildPlaceDisplay(locationPlace) !== value.trim()) {
+              setLocationPlace(null);
+            }
+          }}
+          placeholder="e.g. Sagrada Familia, Barcelona"
+          placeholderTextColor="#b7bcc7"
+          style={styles.input}
+        />
+        <Text style={styles.helperText}>Search and choose a real Google Maps place.</Text>
+        {locationLoading ? <Text style={styles.locationStatus}>Searching places...</Text> : null}
+        {locationError ? <Text style={styles.locationError}>{locationError}</Text> : null}
+        {locationSuggestions.length > 0 ? (
+          <View style={styles.locationSuggestions}>
+            {locationSuggestions.map((item) => (
+              <TouchableOpacity
+                key={item.placeId}
+                activeOpacity={0.9}
+                style={styles.locationSuggestionRow}
+                onPress={() => void handlePickPlace(item)}>
+                <Ionicons name="location-outline" size={16} color="#0d90a8" />
+                <View style={styles.locationSuggestionCopy}>
+                  <Text style={styles.locationSuggestionTitle}>{item.primaryText}</Text>
+                  {item.secondaryText ? <Text style={styles.locationSuggestionSubtitle}>{item.secondaryText}</Text> : null}
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        ) : null}
       </View>
 
       <View style={styles.block}>
@@ -572,6 +677,15 @@ function getRevealRange(tripStartDate?: string | null, tripEndDate?: string | nu
   const tripMax = tripEndDate && isDateInputValid(tripEndDate) ? tripEndDate : maxCandidate;
   const max = maxCandidate <= tripMax ? maxCandidate : tripMax;
   return { min, max };
+}
+
+function buildPlaceDisplay(place: StoredMapPlace) {
+  const name = place.name?.trim();
+  const address = place.address?.trim();
+  if (name && address && !address.toLowerCase().includes(name.toLowerCase())) {
+    return `${name}, ${address}`;
+  }
+  return name || address || '';
 }
 
 const styles = StyleSheet.create({
@@ -847,6 +961,50 @@ const styles = StyleSheet.create({
     color: '#7d8491',
     fontSize: 14,
     lineHeight: 21,
+  },
+  locationStatus: {
+    marginTop: 8,
+    color: '#7f8894',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  locationError: {
+    marginTop: 8,
+    color: '#b6321f',
+    fontSize: 12,
+    fontWeight: '600',
+    lineHeight: 17,
+  },
+  locationSuggestions: {
+    marginTop: 10,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#e4e8ef',
+    backgroundColor: '#fff',
+    overflow: 'hidden',
+  },
+  locationSuggestionRow: {
+    minHeight: 52,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eef1f5',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  locationSuggestionCopy: {
+    flex: 1,
+  },
+  locationSuggestionTitle: {
+    color: '#151a22',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  locationSuggestionSubtitle: {
+    marginTop: 2,
+    color: '#7f8793',
+    fontSize: 12,
   },
   messageBanner: {
     marginTop: 22,

@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
+import * as Linking from 'expo-linking';
 import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -13,6 +14,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiJson } from '@/lib/api';
+import { buildGoogleMapsSearchUrl, extractLocationQuery, extractStoredMapPlace, stripLocationMarker } from '@/lib/sidequest-location';
 import type { SideQuestActivity } from '@/lib/types';
 
 export default function SideQuestDetailScreen() {
@@ -53,6 +55,9 @@ export default function SideQuestDetailScreen() {
     if (!activity) return 'Hidden SideQuest';
     return activity.title ?? 'Hidden SideQuest';
   }, [activity]);
+  const locationQuery = useMemo(() => extractLocationQuery(activity?.description), [activity?.description]);
+  const locationPlace = useMemo(() => extractStoredMapPlace(activity?.description), [activity?.description]);
+  const cleanDescription = useMemo(() => stripLocationMarker(activity?.description), [activity?.description]);
 
   return (
     <>
@@ -109,7 +114,7 @@ export default function SideQuestDetailScreen() {
                     ? activity.teaserVisible && activity.teaser
                       ? activity.teaser
                       : 'This SideQuest is still under wraps.'
-                    : activity.description || 'No extra description yet.'}
+                    : cleanDescription || 'No extra description yet.'}
                 </Text>
               </View>
             </View>
@@ -120,6 +125,15 @@ export default function SideQuestDetailScreen() {
                 <MetaRow icon="sparkles-outline" label="Reveal" value={formatReveal(activity.revealAt)} />
               ) : null}
               <MetaRow icon="eye-outline" label="Visibility" value={activity.visibility === 'hidden' ? 'Hidden until reveal' : 'Public'} />
+              {locationQuery ? (
+                <TouchableOpacity
+                  activeOpacity={0.88}
+                  style={styles.mapButton}
+                  onPress={() => void Linking.openURL(buildGoogleMapsSearchUrl(locationQuery, locationPlace))}>
+                  <Ionicons name="map-outline" size={17} color="#0d90a8" />
+                  <Text style={styles.mapButtonText}>Open map: {locationQuery}</Text>
+                </TouchableOpacity>
+              ) : null}
               {activity.canEdit && activity.teaser ? (
                 <MetaRow icon="chatbubble-ellipses-outline" label="Teaser" value={activity.teaser} />
               ) : null}
@@ -292,6 +306,23 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     padding: 18,
     gap: 16,
+  },
+  mapButton: {
+    minHeight: 44,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#d6edf3',
+    backgroundColor: '#f3fafc',
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  mapButtonText: {
+    flex: 1,
+    color: '#0f6f82',
+    fontSize: 13,
+    fontWeight: '700',
   },
   metaRow: {
     flexDirection: 'row',

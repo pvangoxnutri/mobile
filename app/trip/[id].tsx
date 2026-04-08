@@ -8,6 +8,7 @@ import { Image, Modal, ScrollView, Share, StyleSheet, Text, TextInput, Touchable
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/components/auth-provider';
 import { apiFetch, apiJson } from '@/lib/api';
+import { stripLocationMarker } from '@/lib/sidequest-location';
 import { getDefaultNotificationPreferences, loadNotificationPreferences, loadTripChat, sendTripChatMessage, type ChatMessage, type NotificationPreferences } from '@/lib/social';
 import type { Quest, SideQuestActivity, TripInvite } from '@/lib/types';
 
@@ -252,21 +253,23 @@ export default function TripDetailsScreen() {
           <View style={styles.spotifyCard}>
             <View style={styles.spotifyHeader}>
               <View style={styles.spotifyIconWrap}>
-                <FontAwesome name="spotify" size={22} color="#1db954" />
+                <FontAwesome name="spotify" size={16} color="#1db954" />
               </View>
               <View style={styles.spotifyCopy}>
-                <Text style={styles.spotifyLabel}>Shared Spotify</Text>
-                <Text style={styles.spotifyHint}>A shared playlist, album, or track for everyone in this event.</Text>
+                <Text style={styles.spotifyLabel}>Spotify</Text>
+                <Text style={styles.spotifyHint}>{trip?.spotifyUrl ? 'Linked for this trip' : 'Not linked'}</Text>
               </View>
             </View>
 
             {trip?.spotifyUrl ? (
               <>
-                <Text style={styles.spotifyUrlText}>{trip.spotifyUrl}</Text>
+                <Text numberOfLines={1} ellipsizeMode="middle" style={styles.spotifyUrlText}>
+                  {formatSpotifyDisplayUrl(trip.spotifyUrl)}
+                </Text>
                 <View style={styles.spotifyActions}>
                   <TouchableOpacity activeOpacity={0.9} style={styles.spotifyPrimaryButton} onPress={() => void openSpotifyLink(trip.spotifyUrl!)}>
-                    <Ionicons name="play-circle-outline" size={18} color="#fff" />
-                    <Text style={styles.spotifyPrimaryButtonText}>Open Spotify</Text>
+                    <Ionicons name="play-circle-outline" size={16} color="#167a3a" />
+                    <Text style={styles.spotifyPrimaryButtonText}>Open</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     activeOpacity={0.88}
@@ -277,7 +280,7 @@ export default function TripDetailsScreen() {
                       setSpotifyModalOpen(true);
                     }}>
                     <Ionicons name="create-outline" size={16} color="#1d232e" />
-                    <Text style={styles.spotifyGhostButtonText}>Edit</Text>
+                    <Text style={styles.spotifyGhostButtonText}>Change</Text>
                   </TouchableOpacity>
                 </View>
               </>
@@ -291,7 +294,7 @@ export default function TripDetailsScreen() {
                   setSpotifyModalOpen(true);
                 }}>
                 <Ionicons name="add-circle-outline" size={18} color="#1db954" />
-                <Text style={styles.spotifyEmptyButtonText}>Add shared Spotify link</Text>
+                <Text style={styles.spotifyEmptyButtonText}>Add Spotify link</Text>
               </TouchableOpacity>
             )}
 
@@ -651,7 +654,7 @@ function SideQuestFeedCard({
             ? activity.teaserVisible && activity.teaser
               ? activity.teaser
               : 'Locked until reveal. Tap in to see when this one opens up.'
-            : activity.description || 'A new surprise is waiting for the group.'}
+            : stripLocationMarker(activity.description) || 'A new surprise is waiting for the group.'}
         </Text>
         <View style={styles.feedFooter}>
           <Ionicons name="chevron-forward" size={18} color="#9298a4" />
@@ -698,6 +701,18 @@ function formatActivityDate(date: string) {
 
 function formatRevealChip(value: string) {
   return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric' }).format(new Date(value));
+}
+
+function formatSpotifyDisplayUrl(url?: string | null) {
+  if (!url) return '';
+
+  try {
+    const parsed = new URL(url);
+    const path = parsed.pathname.replace(/\/$/, '');
+    return `${parsed.host}${path}`;
+  } catch {
+    return url.replace(/^https?:\/\//, '');
+  }
 }
 
 function formatChatTimestamp(value: string) {
@@ -811,107 +826,110 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   spotifyCard: {
-    marginTop: 18,
-    borderRadius: 28,
+    marginTop: 14,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#e4f3e8',
-    backgroundColor: '#f8fffa',
-    padding: 18,
+    borderColor: '#eaedf2',
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
   spotifyHeader: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
   },
   spotifyIconWrap: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#e8f8ed',
-    marginRight: 12,
+    backgroundColor: '#f3f6f4',
+    marginRight: 8,
   },
   spotifyCopy: {
     flex: 1,
   },
   spotifyLabel: {
-    color: '#10151e',
-    fontSize: 18,
-    fontWeight: '900',
-    letterSpacing: -0.4,
+    color: '#1b2029',
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: -0.2,
   },
   spotifyHint: {
-    marginTop: 6,
-    color: '#5e6a75',
-    fontSize: 14,
-    lineHeight: 21,
+    marginTop: 1,
+    color: '#8a92a0',
+    fontSize: 11,
+    lineHeight: 15,
   },
   spotifyUrlText: {
-    marginTop: 16,
-    color: '#1e2a24',
-    fontSize: 14,
-    lineHeight: 21,
+    marginTop: 8,
+    color: '#4f5866',
+    fontSize: 12,
+    lineHeight: 17,
   },
   spotifyActions: {
-    marginTop: 16,
+    marginTop: 8,
     flexDirection: 'row',
-    gap: 10,
+    gap: 8,
   },
   spotifyPrimaryButton: {
     flex: 1,
-    minHeight: 48,
-    borderRadius: 18,
-    backgroundColor: '#1db954',
+    minHeight: 34,
+    borderRadius: 10,
+    backgroundColor: '#eef8f1',
+    borderWidth: 1,
+    borderColor: '#d3e9da',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: 6,
   },
   spotifyPrimaryButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '800',
+    color: '#167a3a',
+    fontSize: 12,
+    fontWeight: '700',
   },
   spotifyGhostButton: {
-    minWidth: 92,
-    minHeight: 48,
-    borderRadius: 18,
+    minWidth: 76,
+    minHeight: 34,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#d7e6db',
+    borderColor: '#e0e5ec',
     backgroundColor: '#fff',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingHorizontal: 14,
+    paddingHorizontal: 10,
   },
   spotifyGhostButtonText: {
-    color: '#1d232e',
-    fontSize: 14,
+    color: '#4e5664',
+    fontSize: 12,
     fontWeight: '700',
   },
   spotifyEmptyButton: {
-    marginTop: 16,
-    minHeight: 52,
-    borderRadius: 18,
+    marginTop: 8,
+    minHeight: 34,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#cbe8d3',
+    borderColor: '#dde4e8',
     backgroundColor: '#fff',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: 6,
   },
   spotifyEmptyButtonText: {
-    color: '#1b7f40',
-    fontSize: 15,
-    fontWeight: '800',
+    color: '#4e5664',
+    fontSize: 12,
+    fontWeight: '700',
   },
   spotifyMessage: {
-    marginTop: 12,
-    color: '#496454',
-    fontSize: 13,
-    lineHeight: 20,
+    marginTop: 6,
+    color: '#79838f',
+    fontSize: 11,
+    lineHeight: 15,
   },
   spotifySheetBody: {
     paddingTop: 18,

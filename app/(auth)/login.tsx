@@ -16,12 +16,14 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BrandMark from '@/components/brand-mark';
 import { useAuth } from '@/components/auth-provider';
+import { useI18n, type AppLanguage } from '@/components/i18n-provider';
 import { supabase } from '@/lib/supabase';
 
 WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen() {
   const { signIn, signUp, refreshProfile } = useAuth();
+  const { language, setLanguage, t } = useI18n();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ reset?: string }>();
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
@@ -33,6 +35,11 @@ export default function LoginScreen() {
   const [busy, setBusy] = useState(false);
   const [googleBusy, setGoogleBusy] = useState(false);
   const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
+  const [selectedLanguage, setSelectedLanguage] = useState<AppLanguage>(language);
+
+  useEffect(() => {
+    setSelectedLanguage(language);
+  }, [language]);
 
   const cooldownSeconds = cooldownUntil ? Math.max(0, Math.ceil((cooldownUntil - Date.now()) / 1000)) : 0;
 
@@ -63,19 +70,20 @@ export default function LoginScreen() {
       }
 
       if (cooldownSeconds > 0) {
-        setError(`Please wait ${cooldownSeconds}s before requesting another verification email.`);
+        setError(t('auth.wait_before_retry', { seconds: cooldownSeconds }));
         return;
       }
 
-      await signUp(name.trim(), email.trim(), password);
+      await signUp(name.trim(), email.trim(), password, selectedLanguage);
+      await setLanguage(selectedLanguage);
       setCooldownUntil(Date.now() + 60_000);
-      setNotice('Check your email to verify your account, then sign in.');
+      setNotice(t('auth.notice_check_email'));
       setMode('signin');
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Something went wrong.';
+      const message = err instanceof Error ? err.message : t('auth.generic_error');
       if (mode === 'signup' && isRateLimitError(message)) {
         setCooldownUntil(Date.now() + 60_000);
-        setError('Too many email attempts right now. Wait a moment before trying again.');
+        setError(t('auth.rate_limit'));
       } else {
         setError(message);
       }
@@ -84,7 +92,7 @@ export default function LoginScreen() {
     }
   }
 
-  const resetMessage = params.reset === '1' ? 'Your password was changed. Sign in with the new one.' : '';
+  const resetMessage = params.reset === '1' ? t('auth.reset_done') : '';
 
   async function handleGoogleLogin() {
     try {
@@ -106,7 +114,7 @@ export default function LoginScreen() {
       }
 
       if (!data?.url) {
-        throw new Error('Could not start Google sign-in.');
+        throw new Error(t('auth.google_start_failed'));
       }
 
       const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
@@ -116,7 +124,7 @@ export default function LoginScreen() {
       }
 
       if (result.type !== 'success') {
-        throw new Error('Google sign-in did not complete.');
+        throw new Error(t('auth.google_incomplete'));
       }
 
       const params = readAuthParams(result.url);
@@ -140,13 +148,13 @@ export default function LoginScreen() {
           throw exchangeError;
         }
       } else {
-        throw new Error('Google sign-in returned an incomplete session.');
+        throw new Error(t('auth.google_session_incomplete'));
       }
 
       await refreshProfile();
       router.replace('/(tabs)');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Google sign-in failed.');
+      setError(err instanceof Error ? err.message : t('auth.google_failed'));
     } finally {
       setGoogleBusy(false);
     }
@@ -164,26 +172,43 @@ export default function LoginScreen() {
       <View style={styles.logoRow}>
         <BrandMark size="md" />
       </View>
-      <Text style={styles.tagline}>The journey begins here</Text>
+      <Text style={styles.tagline}>{t('auth.tagline')}</Text>
 
       <View style={styles.card}>
-        <Text style={styles.heading}>{mode === 'signin' ? 'Welcome back' : 'Create account'}</Text>
+        <Text style={styles.heading}>{mode === 'signin' ? t('auth.welcome') : t('auth.create_account')}</Text>
         <Text style={styles.formIntro}>
           {mode === 'signin'
-            ? 'Sign in with your email and password to continue your adventure.'
-            : 'Create your account with your name, email, and a secure password.'}
+            ? t('auth.intro_signin')
+            : t('auth.intro_signup')}
         </Text>
         {mode === 'signup' ? (
           <View style={styles.fieldBlock}>
-            <Text style={styles.fieldLabel}>Full name</Text>
-            <TextInput style={styles.input} placeholder="Your full name" value={name} onChangeText={setName} />
+            <Text style={styles.fieldLabel}>{t('auth.full_name')}</Text>
+            <TextInput style={styles.input} placeholder={t('auth.full_name_placeholder')} value={name} onChangeText={setName} />
+          </View>
+        ) : null}
+        {mode === 'signup' ? (
+          <View style={styles.fieldBlock}>
+            <Text style={styles.fieldLabel}>{t('auth.language')}</Text>
+            <View style={styles.langRow}>
+              <Pressable
+                style={[styles.langOption, selectedLanguage === 'en' ? styles.langOptionActive : null]}
+                onPress={() => setSelectedLanguage('en')}>
+                <Text style={[styles.langOptionText, selectedLanguage === 'en' ? styles.langOptionTextActive : null]}>{t('auth.language_en')}</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.langOption, selectedLanguage === 'sv' ? styles.langOptionActive : null]}
+                onPress={() => setSelectedLanguage('sv')}>
+                <Text style={[styles.langOptionText, selectedLanguage === 'sv' ? styles.langOptionTextActive : null]}>{t('auth.language_sv')}</Text>
+              </Pressable>
+            </View>
           </View>
         ) : null}
         <View style={styles.fieldBlock}>
-          <Text style={styles.fieldLabel}>Email address</Text>
+          <Text style={styles.fieldLabel}>{t('auth.email')}</Text>
           <TextInput
             style={styles.input}
-            placeholder="you@example.com"
+            placeholder={t('auth.email_placeholder')}
             keyboardType="email-address"
             autoCapitalize="none"
             value={email}
@@ -191,10 +216,10 @@ export default function LoginScreen() {
           />
         </View>
         <View style={styles.fieldBlock}>
-          <Text style={styles.fieldLabel}>Password</Text>
+          <Text style={styles.fieldLabel}>{t('auth.password')}</Text>
           <TextInput
             style={styles.input}
-            placeholder={mode === 'signin' ? 'Enter your password' : 'Choose a password'}
+            placeholder={mode === 'signin' ? t('auth.password_signin_placeholder') : t('auth.password_signup_placeholder')}
             secureTextEntry
             value={password}
             onChangeText={setPassword}
@@ -205,25 +230,25 @@ export default function LoginScreen() {
         {notice ? <Text style={styles.success}>{notice}</Text> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
         {mode === 'signup' && cooldownSeconds > 0 ? (
-          <Text style={styles.cooldownText}>You can request a new verification email in {cooldownSeconds}s.</Text>
+          <Text style={styles.cooldownText}>{t('auth.cooldown', { seconds: cooldownSeconds })}</Text>
         ) : null}
 
         <Pressable
           style={[styles.primaryButton, busy || (mode === 'signup' && cooldownSeconds > 0) ? styles.primaryButtonDisabled : null]}
           onPress={() => void handleSubmit()}
           disabled={busy || (mode === 'signup' && cooldownSeconds > 0)}>
-          {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>{mode === 'signin' ? 'Sign In' : 'Create Account'}</Text>}
+          {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>{mode === 'signin' ? t('auth.btn_signin') : t('auth.btn_signup')}</Text>}
         </Pressable>
 
         {mode === 'signin' ? (
           <Pressable style={styles.secondaryButton} onPress={() => router.push('/forgot-password')}>
-            <Text style={styles.forgotButtonText}>Forgot password?</Text>
+            <Text style={styles.forgotButtonText}>{t('auth.forgot_password')}</Text>
           </Pressable>
         ) : null}
 
         <Pressable style={styles.secondaryButton} onPress={() => setMode((current) => (current === 'signin' ? 'signup' : 'signin'))}>
           <Text style={styles.secondaryButtonText}>
-            {mode === 'signin' ? 'Need an account? Sign up' : 'Already have an account? Sign in'}
+            {mode === 'signin' ? t('auth.need_account') : t('auth.have_account')}
           </Text>
         </Pressable>
 
@@ -239,7 +264,7 @@ export default function LoginScreen() {
           ) : (
             <>
               <GoogleGlyph />
-              <Text style={styles.googleButtonText}>Continue with Google</Text>
+              <Text style={styles.googleButtonText}>{t('auth.continue_google')}</Text>
             </>
           )}
         </Pressable>
@@ -340,6 +365,32 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     fontSize: 16,
     color: '#14161d',
+  },
+  langRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  langOption: {
+    flex: 1,
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e4e7ee',
+    backgroundColor: '#f9fafc',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  langOptionActive: {
+    borderColor: '#ff9db0',
+    backgroundColor: '#fff3f6',
+  },
+  langOptionText: {
+    color: '#4b515d',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  langOptionTextActive: {
+    color: '#cf295f',
   },
   error: {
     color: '#d53d18',

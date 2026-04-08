@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { API_URL } from '@/lib/api';
+import { normalizeLanguage, useI18n, type AppLanguage } from '@/components/i18n-provider';
 import { getEmailAuthRedirectUrl } from '@/lib/auth-redirect';
 import { supabase } from '@/lib/supabase';
 import type { UserInfo } from '@/lib/types';
@@ -18,36 +19,58 @@ type AuthContextValue = {
   user: UserInfo | null;
   refreshProfile: () => Promise<UserInfo | null>;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (name: string, email: string, password: string) => Promise<void>;
+  signUp: (name: string, email: string, password: string, language: AppLanguage) => Promise<void>;
   signOut: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const { setLanguage } = useI18n();
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<UserInfo | null>(null);
   const [devLoginTried, setDevLoginTried] = useState(false);
 
+  function buildFallbackUser(rawUser: Awaited<ReturnType<typeof supabase.auth.getUser>>['data']['user']): UserInfo {
+    return {
+      id: rawUser?.id ?? '',
+      name: (rawUser?.user_metadata?.name as string | undefined) ?? rawUser?.email ?? 'User',
+      email: rawUser?.email ?? '',
+      avatarUrl: (rawUser?.user_metadata?.avatar_url as string | null | undefined) ?? null,
+      role: null,
+      language: normalizeLanguage(rawUser?.user_metadata?.language as string | undefined),
+    };
+  }
+
   async function syncProfileWithBackend(accessToken: string): Promise<UserInfo> {
     const { data: userData } = await supabase.auth.getUser();
-    const response = await fetch(`${API_URL}/api/auth/sync`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify({
-        name: userData.user?.user_metadata?.name ?? userData.user?.email ?? '',
-        avatarUrl: userData.user?.user_metadata?.avatar_url ?? null,
-      }),
-    });
+    const fallbackProfile = buildFallbackUser(userData.user);
 
-    if (!response.ok) {
-      throw new Error((await response.text()) || 'Could not sync auth session.');
+    try {
+      const response = await fetch(`${API_URL}/api/auth/sync`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          name: userData.user?.user_metadata?.name ?? userData.user?.email ?? '',
+          avatarUrl: userData.user?.user_metadata?.avatar_url ?? null,
+        }),
+      });
+
+      if (response.status === 401) {
+        throw new Error((await response.text()) || 'Could not sync auth session.');
+      }
+
+      if (!response.ok) {
+        return fallbackProfile;
+      }
+
+      return (await response.json()) as UserInfo;
+    } catch {
+      return fallbackProfile;
     }
-
-    return (await response.json()) as UserInfo;
   }
 
   const refreshProfile = useCallback(async () => {
@@ -59,9 +82,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     const profile = await syncProfileWithBackend(data.session.access_token);
+    const { data: userData } = await supabase.auth.getUser();
+    await setLanguage(normalizeLanguage(userData.user?.user_metadata?.language as string | undefined));
     setUser(profile);
     return profile;
-  }, []);
+  }, [setLanguage]);
 
   const tryDevAutoLogin = useCallback(async () => {
     if (!DEV_AUTO_LOGIN) {
@@ -131,13 +156,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await refreshProfile();
   }
 
-  async function signUp(name: string, email: string, password: string) {
+  async function signUp(name: string, email: string, password: string, language: AppLanguage) {
     const emailRedirectTo = getEmailAuthRedirectUrl();
     const { error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: { name },
+        data: { name, language },
         ...(emailRedirectTo ? { emailRedirectTo } : {}),
       },
     });

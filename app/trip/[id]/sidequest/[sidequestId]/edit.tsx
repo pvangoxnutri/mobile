@@ -6,6 +6,7 @@ import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'rea
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import SideQuestForm, { type SideQuestFormValues } from '@/components/sidequest-form';
 import { apiJson } from '@/lib/api';
+import { extractLocationQuery, extractStoredMapPlace, stripLocationMarker } from '@/lib/sidequest-location';
 import type { Quest, SideQuestActivity } from '@/lib/types';
 
 export default function EditSideQuestScreen() {
@@ -52,7 +53,9 @@ export default function EditSideQuestScreen() {
 
     return {
       title: activity.title ?? '',
-      description: activity.description ?? '',
+      description: stripLocationMarker(activity.description) ?? '',
+      locationQuery: extractLocationQuery(activity.description),
+      locationPlace: extractStoredMapPlace(activity.description),
       date: activity.date,
       visibility: activity.visibility,
       revealDate: activity.revealAt ? activity.revealAt.slice(0, 10) : activity.date,
@@ -73,7 +76,7 @@ export default function EditSideQuestScreen() {
           </TouchableOpacity>
           <View>
             <Text style={styles.title}>Edit SideQuest</Text>
-            <Text style={styles.subtitle}>Only the creator can change the hidden plan.</Text>
+            <Text style={styles.subtitle}>Trip members can update the plan together.</Text>
           </View>
         </View>
 
