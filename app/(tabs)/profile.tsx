@@ -2,9 +2,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Image, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/components/auth-provider';
+import { useI18n, type AppLanguage } from '@/components/i18n-provider';
+import LanguagePicker from '@/components/language-picker';
 import TopAlertsButton from '@/components/top-alerts-button';
 import { apiFetch, apiJson } from '@/lib/api';
 import { getDefaultNotificationPreferences, loadNotificationPreferences, saveNotificationPreferences, type NotificationPreferences } from '@/lib/social';
@@ -12,25 +14,41 @@ import { supabase } from '@/lib/supabase';
 import type { Quest } from '@/lib/types';
 
 export default function ProfileScreen() {
-  const { user, signOut, refreshProfile } = useAuth();
+  const { user, signOut, refreshProfile, deleteAccount } = useAuth();
+  const { language, setLanguage } = useI18n();
   const insets = useSafeAreaInsets();
   const [joinedTrips, setJoinedTrips] = useState(0);
   const [createdQuests, setCreatedQuests] = useState(0);
   const [name, setName] = useState(user?.name ?? '');
+  const [selectedLanguage, setSelectedLanguage] = useState<AppLanguage>(language);
   const [newPassword, setNewPassword] = useState('');
   const [editingName, setEditingName] = useState(false);
   const [editingPassword, setEditingPassword] = useState(false);
+  const [editingLanguage, setEditingLanguage] = useState(false);
   const [editingNotifications, setEditingNotifications] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferences>(getDefaultNotificationPreferences());
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [busy, setBusy] = useState<'name' | 'password' | 'avatar' | null>(null);
+  const [busy, setBusy] = useState<'name' | 'password' | 'avatar' | 'language' | 'delete' | null>(null);
 
   useEffect(() => {
     setName(user?.name ?? '');
   }, [user?.name]);
 
   useEffect(() => {
+    setSelectedLanguage(language);
+  }, [language]);
+
+  useEffect(() => {
     let active = true;
+
+    if (!user?.id) {
+      setJoinedTrips(0);
+      setCreatedQuests(0);
+      return () => {
+        active = false;
+      };
+    }
 
     void apiJson<Quest[]>('/api/trips')
       .then((quests) => {
@@ -211,6 +229,45 @@ export default function ProfileScreen() {
     }
   }
 
+  async function handleLanguageSave() {
+    try {
+      setBusy('language');
+      setMessage(null);
+
+      await setLanguage(selectedLanguage);
+      const { error } = await supabase.auth.updateUser({
+        data: { language: selectedLanguage },
+      });
+      if (error) throw error;
+
+      await refreshProfile();
+      setEditingLanguage(false);
+      setMessage({ type: 'success', text: 'Language updated.' });
+    } catch (error) {
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Could not update language.' });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  function handleDeleteAccount() {
+    setDeleteConfirmOpen(true);
+  }
+
+  async function handleDeleteAccountConfirmed() {
+    try {
+      setBusy('delete');
+      setMessage(null);
+      await deleteAccount();
+      router.replace('/(auth)/login');
+    } catch (error) {
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Could not delete account.' });
+    } finally {
+      setBusy(null);
+      setDeleteConfirmOpen(false);
+    }
+  }
+
   return (
     <ScrollView
       style={styles.screen}
@@ -283,6 +340,7 @@ export default function ProfileScreen() {
         title="Account Settings"
         items={[
           { icon: 'lock-closed-outline', label: editingPassword ? 'Close password editor' : 'Change password', accent: '#0b9db8', onPress: () => setEditingPassword((current) => !current) },
+          { icon: 'language-outline', label: editingLanguage ? 'Close language settings' : 'Change language', accent: '#0b9db8', onPress: () => setEditingLanguage((current) => !current) },
           {
             icon: 'log-out-outline',
             label: 'Logout',
@@ -290,6 +348,12 @@ export default function ProfileScreen() {
             onPress: () => {
               void signOut().then(() => router.replace('/(auth)/login'));
             },
+          },
+          {
+            icon: 'trash-outline',
+            label: busy === 'delete' ? 'Deleting account...' : 'Delete account',
+            accent: '#d53d18',
+            onPress: handleDeleteAccount,
           },
         ]}
       />
@@ -305,6 +369,19 @@ export default function ProfileScreen() {
           <Text style={styles.helperText}>Use at least 6 characters. You will stay signed in after the update.</Text>
           <Pressable style={styles.saveButton} onPress={() => void handlePasswordSave()} disabled={busy === 'password'}>
             {busy === 'password' ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>Update password</Text>}
+          </Pressable>
+        </View>
+      ) : null}
+      {editingLanguage ? (
+        <View style={styles.editorCard}>
+          <LanguagePicker
+            label="Language"
+            value={selectedLanguage}
+            onChange={setSelectedLanguage}
+            searchPlaceholder={language === 'sv' ? 'Sök språk' : 'Search language'}
+          />
+          <Pressable style={styles.saveButton} onPress={() => void handleLanguageSave()} disabled={busy === 'language'}>
+            {busy === 'language' ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>Save language</Text>}
           </Pressable>
         </View>
       ) : null}
@@ -352,6 +429,28 @@ export default function ProfileScreen() {
         <Text style={styles.brandWord}>BEYOND</Text>
         <Text style={styles.brandTagline}>THE MAP IS ONLY THE BEGINNING</Text>
       </View>
+
+      <Modal visible={deleteConfirmOpen} transparent animationType="fade" onRequestClose={() => setDeleteConfirmOpen(false)}>
+        <View style={styles.confirmBackdrop}>
+          <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setDeleteConfirmOpen(false)} />
+          <View style={styles.confirmCard}>
+            <Text style={styles.confirmTitle}>Are you sure?</Text>
+            <Text style={styles.confirmBody}>Deleting your account removes your profile and trips. This cannot be undone.</Text>
+            <View style={styles.confirmActions}>
+              <TouchableOpacity style={styles.confirmCancel} activeOpacity={0.88} onPress={() => setDeleteConfirmOpen(false)}>
+                <Text style={styles.confirmCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.confirmDelete}
+                activeOpacity={0.88}
+                onPress={() => void handleDeleteAccountConfirmed()}
+                disabled={busy === 'delete'}>
+                {busy === 'delete' ? <ActivityIndicator color="#fff" /> : <Text style={styles.confirmDeleteText}>Delete account</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -706,5 +805,63 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     letterSpacing: 2.6,
+  },
+  confirmBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(12,16,26,0.45)',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  confirmCard: {
+    borderRadius: 20,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e7eaf0',
+    padding: 18,
+  },
+  confirmTitle: {
+    color: '#14161d',
+    fontSize: 22,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+  },
+  confirmBody: {
+    marginTop: 10,
+    color: '#656d7b',
+    fontSize: 14,
+    lineHeight: 21,
+  },
+  confirmActions: {
+    marginTop: 16,
+    flexDirection: 'row',
+    gap: 10,
+  },
+  confirmCancel: {
+    flex: 1,
+    height: 46,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e4e7ee',
+    backgroundColor: '#f8f9fb',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmCancelText: {
+    color: '#2f3440',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  confirmDelete: {
+    flex: 1,
+    height: 46,
+    borderRadius: 12,
+    backgroundColor: '#d53d18',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmDeleteText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '800',
   },
 });

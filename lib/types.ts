@@ -57,4 +57,60 @@ export interface SideQuestActivity {
   assignedToUserId?: string | null;
   assignedToName?: string | null;
   createdAt: string;
+  commentCount: number;
+}
+
+export interface ActivityComment {
+  id: string;
+  activityId: string;
+  userId: string;
+  userName: string;
+  userAvatarUrl?: string | null;
+  text: string;
+  createdAt: string;
+}
+
+export interface Expense {
+  id: string;
+  tripId: string;
+  description: string;
+  totalAmount: number;
+  date: string;
+  splitMode: 'equal' | 'exact' | 'percentage' | 'shares';
+  createdAt: string;
+  createdByName: string;
+  payers: { userId: string; userName: string; amount: number }[];
+  participants: { userId: string; userName: string; amount: number }[];
+}
+
+export interface MemberBalance {
+  userId: string;
+  userName: string;
+  avatarUrl?: string | null;
+  net: number;
+}
+
+export interface Debt {
+  fromUserId: string;
+  fromUserName: string;
+  toUserId: string;
+  toUserName: string;
+  amount: number;
+}
+
+export interface BalancesResponse {
+  balances: MemberBalance[];
+  simplifiedDebts: Debt[];
+}
+
+export interface Settlement {
+  id: string;
+  tripId: string;
+  fromUserId: string;
+  fromUserName: string;
+  toUserId: string;
+  toUserName: string;
+  amount: number;
+  note?: string | null;
+  createdAt: string;
 }

@@ -2,20 +2,22 @@ import { Ionicons } from '@expo/vector-icons';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Linking from 'expo-linking';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { apiJson } from '@/lib/api';
+import { apiFetch, apiJson } from '@/lib/api';
 import { buildGoogleMapsSearchUrl, extractLocationQuery, extractStoredMapPlace, stripLocationMarker } from '@/lib/sidequest-location';
-import type { SideQuestActivity } from '@/lib/types';
+import type { ActivityComment, SideQuestActivity } from '@/lib/types';
 
 export default function SideQuestDetailScreen() {
   const insets = useSafeAreaInsets();
@@ -23,16 +25,24 @@ export default function SideQuestDetailScreen() {
   const [activity, setActivity] = useState<SideQuestActivity | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [comments, setComments] = useState<ActivityComment[]>([]);
+  const [commentText, setCommentText] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const inputRef = useRef<TextInput>(null);
 
   useFocusEffect(
     useCallback(() => {
       let active = true;
       setLoading(true);
 
-      void apiJson<SideQuestActivity>(`/api/trips/${id}/activities/${sidequestId}`)
-        .then((data) => {
+      void Promise.all([
+        apiJson<SideQuestActivity>(`/api/trips/${id}/activities/${sidequestId}`),
+        apiJson<ActivityComment[]>(`/api/trips/${id}/activities/${sidequestId}/comments`).catch(() => [] as ActivityComment[]),
+      ])
+        .then(([activityData, commentData]) => {
           if (!active) return;
-          setActivity(data);
+          setActivity(activityData);
+          setComments(commentData);
           setError('');
         })
         .catch((err: Error) => {
@@ -50,6 +60,27 @@ export default function SideQuestDetailScreen() {
       };
     }, [id, sidequestId]),
   );
+
+  const submitComment = useCallback(async () => {
+    const text = commentText.trim();
+    if (!text || submitting) return;
+    setSubmitting(true);
+    try {
+      const response = await apiFetch(`/api/trips/${id}/activities/${sidequestId}/comments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+      if (response.ok) {
+        const newComment = await response.json() as ActivityComment;
+        setComments((prev) => [...prev, newComment]);
+        setCommentText('');
+        inputRef.current?.blur();
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  }, [commentText, submitting, id, sidequestId]);
 
   const hiddenTitle = useMemo(() => {
     if (!activity) return 'Hidden SideQuest';
@@ -129,7 +160,14 @@ export default function SideQuestDetailScreen() {
                 <TouchableOpacity
                   activeOpacity={0.88}
                   style={styles.mapButton}
-                  onPress={() => void Linking.openURL(buildGoogleMapsSearchUrl(locationQuery, locationPlace))}>
+                  onPress={() => {
+                    const url = buildGoogleMapsSearchUrl(locationQuery, locationPlace);
+                    if (Platform.OS === 'web') {
+                      window.open(url, '_blank');
+                    } else {
+                      void Linking.openURL(url);
+                    }
+                  }}>
                   <Ionicons name="map-outline" size={17} color="#0d90a8" />
                   <Text style={styles.mapButtonText}>Open map: {locationQuery}</Text>
                 </TouchableOpacity>
@@ -138,6 +176,53 @@ export default function SideQuestDetailScreen() {
                 <MetaRow icon="chatbubble-ellipses-outline" label="Teaser" value={activity.teaser} />
               ) : null}
             </View>
+
+            {activity.visibility === 'public' ? (
+              <View style={styles.commentsCard}>
+                <Text style={styles.commentsTitle}>Comments</Text>
+
+                {comments.length === 0 ? (
+                  <Text style={styles.commentsEmpty}>No comments yet. Be the first!</Text>
+                ) : (
+                  comments.map((c) => (
+                    <View key={c.id} style={styles.commentItem}>
+                      <View style={styles.commentAvatar}>
+                        {c.userAvatarUrl
+                          ? <Image source={{ uri: c.userAvatarUrl }} style={styles.commentAvatarImage} />
+                          : <Text style={styles.commentAvatarText}>{c.userName.charAt(0).toUpperCase()}</Text>}
+                      </View>
+                      <View style={styles.commentBody}>
+                        <Text style={styles.commentAuthor}>{c.userName}</Text>
+                        <Text style={styles.commentText}>{c.text}</Text>
+                      </View>
+                    </View>
+                  ))
+                )}
+
+                <View style={styles.commentInputRow}>
+                  <TextInput
+                    ref={inputRef}
+                    style={styles.commentInput}
+                    placeholder="Write a comment…"
+                    placeholderTextColor="#aab0bc"
+                    value={commentText}
+                    onChangeText={setCommentText}
+                    multiline
+                    returnKeyType="send"
+                    onSubmitEditing={() => void submitComment()}
+                  />
+                  <TouchableOpacity
+                    style={[styles.commentSend, (!commentText.trim() || submitting) && styles.commentSendDisabled]}
+                    activeOpacity={0.8}
+                    onPress={() => void submitComment()}
+                    disabled={!commentText.trim() || submitting}>
+                    {submitting
+                      ? <ActivityIndicator size="small" color="#fff" />
+                      : <Ionicons name="send" size={16} color="#fff" />}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : null}
           </>
         ) : null}
       </ScrollView>
@@ -352,5 +437,92 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     lineHeight: 23,
+  },
+  commentsCard: {
+    marginTop: 18,
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: '#eaedf2',
+    backgroundColor: '#fff',
+    padding: 18,
+    gap: 14,
+  },
+  commentsTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 1.1,
+    color: '#8a909b',
+    textTransform: 'uppercase',
+  },
+  commentsEmpty: {
+    fontSize: 14,
+    color: '#aab0bc',
+  },
+  commentItem: {
+    flexDirection: 'row',
+    gap: 10,
+    alignItems: 'flex-start',
+  },
+  commentAvatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#ffe4ec',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  commentAvatarImage: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+  },
+  commentAvatarText: {
+    color: '#c82f61',
+    fontWeight: '800',
+    fontSize: 14,
+  },
+  commentBody: {
+    flex: 1,
+  },
+  commentAuthor: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#161821',
+  },
+  commentText: {
+    marginTop: 3,
+    fontSize: 14,
+    color: '#4a5060',
+    lineHeight: 20,
+  },
+  commentInputRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 10,
+    marginTop: 4,
+  },
+  commentInput: {
+    flex: 1,
+    minHeight: 42,
+    maxHeight: 100,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#eaedf2',
+    backgroundColor: '#f8f9fb',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: '#161821',
+  },
+  commentSend: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#ff4f74',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  commentSendDisabled: {
+    backgroundColor: '#f0c0cc',
   },
 });

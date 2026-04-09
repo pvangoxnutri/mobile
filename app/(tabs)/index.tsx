@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { Animated, Image, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BrandMark from '@/components/brand-mark';
 import { useAuth } from '@/components/auth-provider';
@@ -97,6 +97,7 @@ export default function HomeScreen() {
   const featuredTrip = sortedTrips[0] ?? null;
   const countdownParts = useMemo(() => getCountdownParts(featuredTrip?.nextEventDate, now), [featuredTrip?.nextEventDate, now]);
   const featuredEvent = featuredTrip?.upcomingEvents[featuredEventIndex] ?? null;
+  const allowNativeDriver = Platform.OS !== 'web';
 
   useEffect(() => {
     setFeaturedEventIndex(0);
@@ -110,12 +111,12 @@ export default function HomeScreen() {
         Animated.timing(eventFade, {
           toValue: 0,
           duration: 180,
-          useNativeDriver: true,
+          useNativeDriver: allowNativeDriver,
         }),
         Animated.timing(eventFade, {
           toValue: 1,
           duration: 220,
-          useNativeDriver: true,
+          useNativeDriver: allowNativeDriver,
         }),
       ]).start();
 
@@ -123,7 +124,7 @@ export default function HomeScreen() {
     }, 3000);
 
     return () => clearInterval(interval);
-  }, [eventFade, featuredTrip]);
+  }, [allowNativeDriver, eventFade, featuredTrip]);
 
   async function openMembers() {
     if (!featuredTrip) return;

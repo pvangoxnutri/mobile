@@ -246,6 +246,7 @@ export default function TripDetailsScreen() {
               <View style={styles.heroMetaRow}>
                 <TripMetaChip icon="people-outline" label={`${members.length || 1} travelers`} onPress={() => setPeopleSheetOpen(true)} />
                 <TripMetaChip icon="mail-outline" label={`${invites.length} pending`} onPress={() => setPeopleSheetOpen(true)} />
+                <TripMetaChip icon="wallet-outline" label="Cost Split" onPress={() => router.push(`/trip/${id}/split`)} />
               </View>
             </View>
           </View>
@@ -657,6 +658,12 @@ function SideQuestFeedCard({
             : stripLocationMarker(activity.description) || 'A new surprise is waiting for the group.'}
         </Text>
         <View style={styles.feedFooter}>
+          {activity.commentCount > 0 && !hidden ? (
+            <View style={styles.feedCommentBadge}>
+              <Ionicons name="chatbubble-outline" size={13} color="#ff4f74" />
+              <Text style={styles.feedCommentCount}>{activity.commentCount}</Text>
+            </View>
+          ) : null}
           <Ionicons name="chevron-forward" size={18} color="#9298a4" />
         </View>
       </View>
@@ -1413,7 +1420,23 @@ const styles = StyleSheet.create({
   },
   feedFooter: {
     marginTop: 12,
-    alignItems: 'flex-end',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  feedCommentBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#fff0f3',
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  feedCommentCount: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#ff4f74',
   },
   emptyState: {
     marginTop: 18,

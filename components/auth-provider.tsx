@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
-import { API_URL } from '@/lib/api';
+import { apiFetch, API_URL } from '@/lib/api';
 import { normalizeLanguage, useI18n, type AppLanguage } from '@/components/i18n-provider';
 import { getEmailAuthRedirectUrl } from '@/lib/auth-redirect';
 import { supabase } from '@/lib/supabase';
@@ -21,6 +21,7 @@ type AuthContextValue = {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (name: string, email: string, password: string, language: AppLanguage) => Promise<void>;
   signOut: () => Promise<void>;
+  deleteAccount: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -173,12 +174,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function signOut() {
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+    setUser(null);
+  }
+
+  async function deleteAccount() {
+    const response = await apiFetch('/api/auth/me', {
+      method: 'DELETE',
+    });
+
+    if (response.status === 401) {
+      throw new Error('Session expired. Please sign in again and retry.');
+    }
+
+    if (!response.ok && response.status !== 404) {
+      throw new Error('Could not delete account. Please try again.');
+    }
+
+    await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
     setUser(null);
   }
 
   return (
-    <AuthContext.Provider value={{ loading, user, refreshProfile, signIn, signUp, signOut }}>
+    <AuthContext.Provider value={{ loading, user, refreshProfile, signIn, signUp, signOut, deleteAccount }}>
       {children}
     </AuthContext.Provider>
   );

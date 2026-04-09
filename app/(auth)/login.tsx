@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BrandMark from '@/components/brand-mark';
 import { useAuth } from '@/components/auth-provider';
 import { useI18n, type AppLanguage } from '@/components/i18n-provider';
+import LanguagePicker from '@/components/language-picker';
 import { supabase } from '@/lib/supabase';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -189,19 +190,12 @@ export default function LoginScreen() {
         ) : null}
         {mode === 'signup' ? (
           <View style={styles.fieldBlock}>
-            <Text style={styles.fieldLabel}>{t('auth.language')}</Text>
-            <View style={styles.langRow}>
-              <Pressable
-                style={[styles.langOption, selectedLanguage === 'en' ? styles.langOptionActive : null]}
-                onPress={() => setSelectedLanguage('en')}>
-                <Text style={[styles.langOptionText, selectedLanguage === 'en' ? styles.langOptionTextActive : null]}>{t('auth.language_en')}</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.langOption, selectedLanguage === 'sv' ? styles.langOptionActive : null]}
-                onPress={() => setSelectedLanguage('sv')}>
-                <Text style={[styles.langOptionText, selectedLanguage === 'sv' ? styles.langOptionTextActive : null]}>{t('auth.language_sv')}</Text>
-              </Pressable>
-            </View>
+            <LanguagePicker
+              label={t('auth.language')}
+              value={selectedLanguage}
+              onChange={setSelectedLanguage}
+              searchPlaceholder={language === 'sv' ? 'Sök språk' : 'Search language'}
+            />
           </View>
         ) : null}
         <View style={styles.fieldBlock}>
@@ -365,32 +359,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     fontSize: 16,
     color: '#14161d',
-  },
-  langRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  langOption: {
-    flex: 1,
-    height: 44,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e4e7ee',
-    backgroundColor: '#f9fafc',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  langOptionActive: {
-    borderColor: '#ff9db0',
-    backgroundColor: '#fff3f6',
-  },
-  langOptionText: {
-    color: '#4b515d',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  langOptionTextActive: {
-    color: '#cf295f',
   },
   error: {
     color: '#d53d18',

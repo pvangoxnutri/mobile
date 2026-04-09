@@ -48,7 +48,7 @@ export async function apiFetch(path: string, options: RequestInit = {}) {
   });
 
   if (response.status === 401) {
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
   }
 
   return response;
