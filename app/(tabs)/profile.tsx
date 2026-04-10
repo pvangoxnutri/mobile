@@ -20,20 +20,26 @@ export default function ProfileScreen() {
   const [joinedTrips, setJoinedTrips] = useState(0);
   const [createdQuests, setCreatedQuests] = useState(0);
   const [name, setName] = useState(user?.name ?? '');
+  const [bio, setBio] = useState(user?.bio ?? '');
   const [selectedLanguage, setSelectedLanguage] = useState<AppLanguage>(language);
   const [newPassword, setNewPassword] = useState('');
   const [editingName, setEditingName] = useState(false);
+  const [editingBio, setEditingBio] = useState(false);
   const [editingPassword, setEditingPassword] = useState(false);
   const [editingLanguage, setEditingLanguage] = useState(false);
   const [editingNotifications, setEditingNotifications] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferences>(getDefaultNotificationPreferences());
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [busy, setBusy] = useState<'name' | 'password' | 'avatar' | 'language' | 'delete' | null>(null);
+  const [busy, setBusy] = useState<'name' | 'bio' | 'password' | 'avatar' | 'language' | 'delete' | null>(null);
 
   useEffect(() => {
     setName(user?.name ?? '');
   }, [user?.name]);
+
+  useEffect(() => {
+    setBio(user?.bio ?? '');
+  }, [user?.bio]);
 
   useEffect(() => {
     setSelectedLanguage(language);
@@ -123,6 +129,31 @@ export default function ProfileScreen() {
       setMessage({ type: 'success', text: 'Name updated.' });
     } catch (error) {
       setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Could not update name.' });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function handleBioSave() {
+    try {
+      setBusy('bio');
+      setMessage(null);
+
+      const response = await apiFetch('/api/auth/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bio: bio.trim() }),
+      });
+
+      if (!response.ok) {
+        throw new Error((await response.text()) || 'Could not save bio.');
+      }
+
+      await refreshProfile();
+      setEditingBio(false);
+      setMessage({ type: 'success', text: 'Bio updated.' });
+    } catch (error) {
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Could not update bio.' });
     } finally {
       setBusy(null);
     }
@@ -301,6 +332,7 @@ export default function ProfileScreen() {
 
         <Text style={styles.name}>{user?.name ?? 'SideQuest User'}</Text>
         <Text style={styles.email}>{user?.email ?? 'user@sidequest.app'}</Text>
+        {user?.bio ? <Text style={styles.bioText}>{user.bio}</Text> : null}
         {message ? (
           <View style={[styles.messageBanner, message.type === 'success' ? styles.messageBannerSuccess : styles.messageBannerError]}>
             <Ionicons
@@ -324,6 +356,7 @@ export default function ProfileScreen() {
         title="Edit Profile"
         items={[
           { icon: 'person-circle-outline', label: editingName ? 'Close name editor' : 'Change name', accent: '#ef2d63', onPress: () => setEditingName((current) => !current) },
+          { icon: 'text-outline', label: editingBio ? 'Close bio editor' : 'Edit bio', accent: '#ef2d63', onPress: () => setEditingBio((current) => !current) },
           { icon: 'camera-outline', label: busy === 'avatar' ? 'Uploading image...' : 'Change profile image', accent: '#ef2d63', onPress: () => void handleAvatarPick() },
         ]}
       />
@@ -332,6 +365,22 @@ export default function ProfileScreen() {
           <TextInput value={name} onChangeText={setName} placeholder="Display name" style={styles.input} />
           <Pressable style={styles.saveButton} onPress={() => void handleNameSave()} disabled={busy === 'name'}>
             {busy === 'name' ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>Save name</Text>}
+          </Pressable>
+        </View>
+      ) : null}
+      {editingBio ? (
+        <View style={styles.editorCard}>
+          <TextInput
+            value={bio}
+            onChangeText={setBio}
+            placeholder="Tell others a little about yourself..."
+            style={styles.bioInput}
+            multiline
+            numberOfLines={4}
+            textAlignVertical="top"
+          />
+          <Pressable style={styles.saveButton} onPress={() => void handleBioSave()} disabled={busy === 'bio'}>
+            {busy === 'bio' ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>Save bio</Text>}
           </Pressable>
         </View>
       ) : null}
@@ -614,6 +663,14 @@ const styles = StyleSheet.create({
     fontSize: 18,
     letterSpacing: -0.4,
   },
+  bioText: {
+    marginTop: 12,
+    color: '#4e5566',
+    fontSize: 15,
+    lineHeight: 22,
+    textAlign: 'center',
+    paddingHorizontal: 24,
+  },
   messageBanner: {
     marginTop: 12,
     flexDirection: 'row',
@@ -712,6 +769,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#f9fafc',
     paddingHorizontal: 16,
     fontSize: 16,
+  },
+  bioInput: {
+    minHeight: 100,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#e4e7ee',
+    backgroundColor: '#f9fafc',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 15,
+    lineHeight: 22,
   },
   helperText: {
     marginTop: 10,

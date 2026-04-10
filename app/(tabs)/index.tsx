@@ -2,13 +2,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Image, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, Animated, Image, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BrandMark from '@/components/brand-mark';
 import { useAuth } from '@/components/auth-provider';
 import TopAlertsButton from '@/components/top-alerts-button';
-import { apiJson } from '@/lib/api';
-import type { Quest, SideQuestActivity } from '@/lib/types';
+import { apiFetch, apiJson } from '@/lib/api';
+import type { PendingInvite, Quest, SideQuestActivity } from '@/lib/types';
 
 type TripMember = {
   id: string;
@@ -38,6 +38,12 @@ export default function HomeScreen() {
   const [featuredMembers, setFeaturedMembers] = useState<TripMember[]>([]);
   const [membersLoading, setMembersLoading] = useState(false);
   const [featuredEventIndex, setFeaturedEventIndex] = useState(0);
+  const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([]);
+  const [inviteActionBusy, setInviteActionBusy] = useState<string | null>(null);
+  const [joinModalOpen, setJoinModalOpen] = useState(false);
+  const [joinCode, setJoinCode] = useState('');
+  const [joinBusy, setJoinBusy] = useState(false);
+  const [joinError, setJoinError] = useState('');
   const eventFade = useRef(new Animated.Value(1)).current;
   const floatingBottom = Math.max(insets.bottom, 14) + 78;
   const upcomingCardWidth = Math.min(width - 56, 320);
@@ -91,7 +97,14 @@ export default function HomeScreen() {
     };
   }, [signOut]);
 
+  const loadInvites = useCallback(() => {
+    void apiJson<PendingInvite[]>('/api/trips/invites/me')
+      .then(setPendingInvites)
+      .catch(() => {});
+  }, []);
+
   useFocusEffect(loadQuests);
+  useFocusEffect(loadInvites);
 
   const sortedTrips = useMemo(() => sortTripsByUpcomingEvent(quests, activities, now), [activities, now, quests]);
   const featuredTrip = sortedTrips[0] ?? null;
@@ -126,6 +139,61 @@ export default function HomeScreen() {
     return () => clearInterval(interval);
   }, [allowNativeDriver, eventFade, featuredTrip]);
 
+  async function handleAcceptInvite(invite: PendingInvite) {
+    setInviteActionBusy(invite.id);
+    try {
+      const res = await apiFetch(`/api/trips/${invite.tripId}/invites/${invite.id}/accept`, { method: 'POST' });
+      if (!res.ok) return;
+      setPendingInvites((prev) => prev.filter((i) => i.id !== invite.id));
+      loadQuests();
+      loadInvites();
+    } catch {
+      // silently ignore
+    } finally {
+      setInviteActionBusy(null);
+    }
+  }
+
+  async function handleDeclineInvite(invite: PendingInvite) {
+    setInviteActionBusy(invite.id + '_decline');
+    try {
+      const res = await apiFetch(`/api/trips/${invite.tripId}/invites/${invite.id}/decline`, { method: 'POST' });
+      if (!res.ok) return;
+      setPendingInvites((prev) => prev.filter((i) => i.id !== invite.id));
+      loadInvites();
+    } catch {
+      // silently ignore
+    } finally {
+      setInviteActionBusy(null);
+    }
+  }
+
+  async function handleJoin() {
+    const code = joinCode.trim().toUpperCase();
+    if (!code) return;
+    setJoinBusy(true);
+    setJoinError('');
+    try {
+      const res = await apiFetch('/api/trips/join', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        setJoinError(text || 'Could not join adventure.');
+        return;
+      }
+      setJoinModalOpen(false);
+      setJoinCode('');
+      loadQuests();
+    } catch {
+      setJoinError('Something went wrong. Try again.');
+    } finally {
+      setJoinBusy(false);
+    }
+  }
+
   async function openMembers() {
     if (!featuredTrip) return;
     setMembersOpen(true);
@@ -153,7 +221,7 @@ export default function HomeScreen() {
           <View style={styles.topRow}>
             <BrandMark size="sm" />
             <View style={styles.topActions}>
-              <TopAlertsButton />
+              <TopAlertsButton inviteCount={pendingInvites.length} />
               <TouchableOpacity style={styles.avatarShell} activeOpacity={0.8} onPress={() => router.push('/(tabs)/profile')}>
                 {user?.avatarUrl ? (
                   <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
@@ -165,6 +233,41 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
           </View>
+
+          {pendingInvites.length > 0 ? (
+            <View style={[styles.inviteSection, { marginTop: 20 }]}>
+              <View style={styles.inviteSectionHeader}>
+                <Ionicons name="mail-unread-outline" size={16} color="#ff4f74" />
+                <Text style={styles.inviteSectionTitle}>You're invited!</Text>
+              </View>
+              {pendingInvites.map((invite) => (
+                <View key={invite.id} style={styles.inviteCard}>
+                  {invite.tripImageUrl ? (
+                    <Image source={{ uri: invite.tripImageUrl }} style={styles.inviteCardImage} />
+                  ) : (
+                    <View style={[styles.inviteCardImage, styles.inviteCardImagePlaceholder]}>
+                      <Ionicons name="map-outline" size={22} color="#b0b4be" />
+                    </View>
+                  )}
+                  <View style={styles.inviteCardBody}>
+                    <Text style={styles.inviteCardTitle} numberOfLines={1}>{invite.tripTitle ?? 'Adventure'}</Text>
+                    {invite.tripDestination ? (
+                      <Text style={styles.inviteCardMeta} numberOfLines={1}><Ionicons name="location-outline" size={11} /> {invite.tripDestination}</Text>
+                    ) : null}
+                    <Text style={styles.inviteCardFrom}>Invited by {invite.invitedByName}</Text>
+                  </View>
+                  <View style={styles.inviteCardActions}>
+                    <TouchableOpacity style={styles.inviteAcceptBtn} activeOpacity={0.82} onPress={() => void handleAcceptInvite(invite)} disabled={inviteActionBusy === invite.id}>
+                      {inviteActionBusy === invite.id ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.inviteAcceptText}>Join</Text>}
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.inviteDeclineBtn} activeOpacity={0.82} onPress={() => void handleDeclineInvite(invite)} disabled={inviteActionBusy === invite.id + '_decline'}>
+                      {inviteActionBusy === invite.id + '_decline' ? <ActivityIndicator size="small" color="#8a909e" /> : <Ionicons name="close" size={16} color="#8a909e" />}
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))}
+            </View>
+          ) : null}
 
           <Text style={styles.emptySectionHeading}>UPCOMING</Text>
           <View style={styles.emptyUpcoming}>
@@ -183,7 +286,20 @@ export default function HomeScreen() {
           bottom={floatingBottom}
           onToggle={() => setFabOpen((current) => !current)}
           onDismiss={() => setFabOpen(false)}
+          onJoin={() => { setFabOpen(false); setJoinModalOpen(true); setJoinCode(''); setJoinError(''); }}
         />
+
+        <Modal visible={joinModalOpen} transparent animationType="fade" onRequestClose={() => setJoinModalOpen(false)}>
+          <JoinModal
+            code={joinCode}
+            onChangeCode={setJoinCode}
+            onJoin={() => void handleJoin()}
+            onClose={() => setJoinModalOpen(false)}
+            busy={joinBusy}
+            error={joinError}
+            insets={insets}
+          />
+        </Modal>
       </View>
     );
   }
@@ -199,7 +315,7 @@ export default function HomeScreen() {
         <View style={styles.topRow}>
           <BrandMark size="sm" />
           <View style={styles.topActions}>
-            <TopAlertsButton />
+            <TopAlertsButton inviteCount={pendingInvites.length} />
             <TouchableOpacity style={styles.avatarShell} activeOpacity={0.8} onPress={() => router.push('/(tabs)/profile')}>
               {user?.avatarUrl ? (
                 <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
@@ -211,6 +327,61 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
         </View>
+
+        {pendingInvites.length > 0 ? (
+          <View style={styles.inviteSection}>
+            <View style={styles.inviteSectionHeader}>
+              <Ionicons name="mail-unread-outline" size={16} color="#ff4f74" />
+              <Text style={styles.inviteSectionTitle}>You're invited!</Text>
+            </View>
+            {pendingInvites.map((invite) => (
+              <View key={invite.id} style={styles.inviteCard}>
+                {invite.tripImageUrl ? (
+                  <Image source={{ uri: invite.tripImageUrl }} style={styles.inviteCardImage} />
+                ) : (
+                  <View style={[styles.inviteCardImage, styles.inviteCardImagePlaceholder]}>
+                    <Ionicons name="map-outline" size={22} color="#b0b4be" />
+                  </View>
+                )}
+                <View style={styles.inviteCardBody}>
+                  <Text style={styles.inviteCardTitle} numberOfLines={1}>
+                    {invite.tripTitle ?? 'Adventure'}
+                  </Text>
+                  {invite.tripDestination ? (
+                    <Text style={styles.inviteCardMeta} numberOfLines={1}>
+                      <Ionicons name="location-outline" size={11} /> {invite.tripDestination}
+                    </Text>
+                  ) : null}
+                  <Text style={styles.inviteCardFrom}>Invited by {invite.invitedByName}</Text>
+                </View>
+                <View style={styles.inviteCardActions}>
+                  <TouchableOpacity
+                    style={styles.inviteAcceptBtn}
+                    activeOpacity={0.82}
+                    onPress={() => void handleAcceptInvite(invite)}
+                    disabled={inviteActionBusy === invite.id}>
+                    {inviteActionBusy === invite.id ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <Text style={styles.inviteAcceptText}>Join</Text>
+                    )}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.inviteDeclineBtn}
+                    activeOpacity={0.82}
+                    onPress={() => void handleDeclineInvite(invite)}
+                    disabled={inviteActionBusy === invite.id + '_decline'}>
+                    {inviteActionBusy === invite.id + '_decline' ? (
+                      <ActivityIndicator size="small" color="#8a909e" />
+                    ) : (
+                      <Ionicons name="close" size={16} color="#8a909e" />
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))}
+          </View>
+        ) : null}
 
         {loading ? (
           <View style={styles.loadingState}>
@@ -288,7 +459,20 @@ export default function HomeScreen() {
         bottom={floatingBottom}
         onToggle={() => setFabOpen((current) => !current)}
         onDismiss={() => setFabOpen(false)}
+        onJoin={() => { setFabOpen(false); setJoinModalOpen(true); setJoinCode(''); setJoinError(''); }}
       />
+
+      <Modal visible={joinModalOpen} transparent animationType="fade" onRequestClose={() => setJoinModalOpen(false)}>
+        <JoinModal
+          code={joinCode}
+          onChangeCode={setJoinCode}
+          onJoin={() => void handleJoin()}
+          onClose={() => setJoinModalOpen(false)}
+          busy={joinBusy}
+          error={joinError}
+          insets={insets}
+        />
+      </Modal>
 
       <Modal visible={membersOpen} transparent animationType="fade" onRequestClose={() => setMembersOpen(false)}>
         <View style={styles.modalBackdrop}>
@@ -333,11 +517,13 @@ function FloatingFab({
   bottom,
   onToggle,
   onDismiss,
+  onJoin,
 }: {
   open: boolean;
   bottom: number;
   onToggle: () => void;
   onDismiss: () => void;
+  onJoin: () => void;
 }) {
   return (
     <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
@@ -358,7 +544,7 @@ function FloatingFab({
               </View>
             </TouchableOpacity>
 
-            <TouchableOpacity activeOpacity={0.9} style={styles.fabMenuButton} onPress={onDismiss}>
+            <TouchableOpacity activeOpacity={0.9} style={styles.fabMenuButton} onPress={onJoin}>
               <Text style={styles.fabMenuButtonText}>Join Adventure</Text>
               <Ionicons name="person-add-outline" size={15} color="#ff4f74" />
             </TouchableOpacity>
@@ -430,6 +616,63 @@ function QuestCard({
       </View>
       <Text style={styles.questCardTitle}>{title}</Text>
     </TouchableOpacity>
+  );
+}
+
+function JoinModal({
+  code,
+  onChangeCode,
+  onJoin,
+  onClose,
+  busy,
+  error,
+  insets,
+}: {
+  code: string;
+  onChangeCode: (v: string) => void;
+  onJoin: () => void;
+  onClose: () => void;
+  busy: boolean;
+  error: string;
+  insets: { bottom: number };
+}) {
+  return (
+    <View style={styles.modalBackdrop}>
+      <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={onClose} />
+      <View style={[styles.joinCard, { paddingBottom: Math.max(insets.bottom, 18) + 8 }]}>
+        <View style={styles.joinHeader}>
+          <View>
+            <Text style={styles.joinEyebrow}>INVITE CODE</Text>
+            <Text style={styles.joinTitle}>Join an Adventure</Text>
+          </View>
+          <TouchableOpacity style={styles.membersClose} activeOpacity={0.88} onPress={onClose}>
+            <Ionicons name="close" size={20} color="#161821" />
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.joinSubtitle}>
+          Ask the trip organiser for the 6-character code and enter it below.
+        </Text>
+        <TextInput
+          style={styles.joinInput}
+          placeholder="e.g. A3F9B2"
+          placeholderTextColor="#b0b5c0"
+          value={code}
+          onChangeText={(v) => onChangeCode(v.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+          maxLength={6}
+          autoCapitalize="characters"
+          autoCorrect={false}
+          returnKeyType="go"
+          onSubmitEditing={onJoin}
+        />
+        {error ? <Text style={styles.joinError}>{error}</Text> : null}
+        <Pressable
+          style={({ pressed }) => [styles.joinButton, pressed && { opacity: 0.88 }, (!code.trim() || busy) && styles.joinButtonDisabled]}
+          onPress={onJoin}
+          disabled={!code.trim() || busy}>
+          {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.joinButtonText}>Join Adventure</Text>}
+        </Pressable>
+      </View>
+    </View>
   );
 }
 
@@ -974,5 +1217,156 @@ const styles = StyleSheet.create({
     marginTop: 2,
     color: '#7b828e',
     fontSize: 13,
+  },
+
+  // ─ Pending invites section
+  inviteSection: {
+    marginTop: 22,
+    gap: 10,
+  },
+  inviteSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    marginBottom: 2,
+  },
+  inviteSectionTitle: {
+    color: '#ff4f74',
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+  },
+  inviteCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: '#ffd5df',
+    backgroundColor: '#fff8fa',
+    padding: 12,
+    gap: 12,
+  },
+  inviteCardImage: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+  },
+  inviteCardImagePlaceholder: {
+    backgroundColor: '#f0f1f5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inviteCardBody: {
+    flex: 1,
+  },
+  inviteCardTitle: {
+    color: '#161821',
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+  },
+  inviteCardMeta: {
+    marginTop: 2,
+    color: '#7b828e',
+    fontSize: 12,
+  },
+  inviteCardFrom: {
+    marginTop: 3,
+    color: '#a0a6b2',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  inviteCardActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  inviteAcceptBtn: {
+    height: 34,
+    paddingHorizontal: 16,
+    borderRadius: 17,
+    backgroundColor: '#ff4f74',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inviteAcceptText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  inviteDeclineBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#f3f4f7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // ─ Join modal
+  joinCard: {
+    borderRadius: 28,
+    backgroundColor: '#fff',
+    padding: 20,
+  },
+  joinHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 10,
+  },
+  joinEyebrow: {
+    color: '#97a0ad',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.4,
+  },
+  joinTitle: {
+    marginTop: 4,
+    color: '#161821',
+    fontSize: 22,
+    fontWeight: '900',
+    letterSpacing: -0.7,
+  },
+  joinSubtitle: {
+    color: '#6f7683',
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 18,
+  },
+  joinInput: {
+    height: 54,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: '#e2e5ee',
+    backgroundColor: '#f8f9fc',
+    paddingHorizontal: 18,
+    fontSize: 22,
+    fontWeight: '800',
+    letterSpacing: 6,
+    color: '#161821',
+    textAlign: 'center',
+  },
+  joinError: {
+    marginTop: 8,
+    color: '#d53d18',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  joinButton: {
+    marginTop: 14,
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: '#ff4f74',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  joinButtonDisabled: {
+    opacity: 0.5,
+  },
+  joinButtonText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '800',
   },
 });

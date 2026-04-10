@@ -65,8 +65,8 @@ export default function LoginScreen() {
       setNotice('');
 
       if (mode === 'signin') {
-        await signIn(email.trim(), password);
-        router.replace('/(tabs)');
+        const profile = await signIn(email.trim(), password);
+        router.replace(profile && !profile.hasCompletedOnboarding ? '/onboarding' : '/(tabs)');
         return;
       }
 
@@ -152,8 +152,8 @@ export default function LoginScreen() {
         throw new Error(t('auth.google_session_incomplete'));
       }
 
-      await refreshProfile();
-      router.replace('/(tabs)');
+      const profile = await refreshProfile();
+      router.replace(profile && !profile.hasCompletedOnboarding ? '/onboarding' : '/(tabs)');
     } catch (err) {
       setError(err instanceof Error ? err.message : t('auth.google_failed'));
     } finally {

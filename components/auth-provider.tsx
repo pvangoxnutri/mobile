@@ -18,7 +18,7 @@ type AuthContextValue = {
   loading: boolean;
   user: UserInfo | null;
   refreshProfile: () => Promise<UserInfo | null>;
-  signIn: (email: string, password: string) => Promise<void>;
+  signIn: (email: string, password: string) => Promise<UserInfo | null>;
   signUp: (name: string, email: string, password: string, language: AppLanguage) => Promise<void>;
   signOut: () => Promise<void>;
   deleteAccount: () => Promise<void>;
@@ -38,6 +38,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       name: (rawUser?.user_metadata?.name as string | undefined) ?? rawUser?.email ?? 'User',
       email: rawUser?.email ?? '',
       avatarUrl: (rawUser?.user_metadata?.avatar_url as string | null | undefined) ?? null,
+      hasCompletedOnboarding: true, // fallback: don't show onboarding if backend is unreachable
       role: null,
       language: normalizeLanguage(rawUser?.user_metadata?.language as string | undefined),
     };
@@ -149,12 +150,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [devLoginTried, refreshProfile, tryDevAutoLogin]);
 
-  async function signIn(email: string, password: string) {
+  async function signIn(email: string, password: string): Promise<UserInfo | null> {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
       throw error;
     }
-    await refreshProfile();
+    return refreshProfile();
   }
 
   async function signUp(name: string, email: string, password: string, language: AppLanguage) {

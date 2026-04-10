@@ -3,14 +3,28 @@ import { Stack, router, useLocalSearchParams } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 import * as Linking from 'expo-linking';
 import { useFocusEffect } from '@react-navigation/native';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Image, Modal, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/components/auth-provider';
 import { apiFetch, apiJson } from '@/lib/api';
 import { stripLocationMarker } from '@/lib/sidequest-location';
-import { getDefaultNotificationPreferences, loadNotificationPreferences, loadTripChat, sendTripChatMessage, type ChatMessage, type NotificationPreferences } from '@/lib/social';
 import type { Quest, SideQuestActivity, TripInvite } from '@/lib/types';
+
+type ChatMsg = {
+  id: string;
+  userId?: string | null;
+  userName: string;
+  text: string;
+  isSystem: boolean;
+  createdAt: string;
+};
+
+type ChatPresenceUser = {
+  userId: string;
+  userName: string;
+  avatarUrl?: string | null;
+};
 
 type TripMember = {
   id: string;
@@ -35,10 +49,14 @@ export default function TripDetailsScreen() {
   const [peopleSheetOpen, setPeopleSheetOpen] = useState(false);
   const [inviteComposerOpen, setInviteComposerOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
   const [chatDraft, setChatDraft] = useState('');
-  const [chatPreferences, setChatPreferences] = useState<NotificationPreferences | null>(null);
   const [chatSending, setChatSending] = useState(false);
+  const [chatPresence, setChatPresence] = useState<ChatPresenceUser[]>([]);
+  const [chatUnread, setChatUnread] = useState(false);
+  const lastChatTimestampRef = useRef<string | null>(null);
+  const lastReadAtRef = useRef<string>(new Date(Date.now() - 24 * 3600 * 1000).toISOString());
+  const chatScrollRef = useRef<ScrollView | null>(null);
   const [spotifyModalOpen, setSpotifyModalOpen] = useState(false);
   const [spotifyUrlDraft, setSpotifyUrlDraft] = useState('');
   const [spotifySaving, setSpotifySaving] = useState(false);
@@ -64,13 +82,14 @@ export default function TripDetailsScreen() {
           setMembers(memberData);
           setInvites(inviteData);
           setActivities(activityData);
-          const [prefs, chatState] = await Promise.all([
-            loadNotificationPreferences(),
-            loadTripChat(id, tripData.title ?? 'this adventure'),
-          ]);
-          if (!active) return;
-          setChatPreferences(prefs);
-          setChatMessages(chatState.messages);
+          // Check for unread chat messages
+          try {
+            const latestMsgs = await apiJson<ChatMsg[]>(`/api/trips/${id}/chat?since=${encodeURIComponent(lastReadAtRef.current)}`);
+            if (!active) return;
+            if (latestMsgs.length > 0) setChatUnread(true);
+          } catch {
+            if (!active) return;
+          }
           setError('');
         } catch (err) {
           if (!active) return;
@@ -108,6 +127,45 @@ export default function TripDetailsScreen() {
     }
     return Array.from(groups.entries()).map(([date, items]) => ({ date, items }));
   }, [sortedActivities]);
+
+  const memberAvatarMap = useMemo(() => {
+    const map = new Map<string, string | null>();
+    for (const m of members) map.set(m.id, m.avatarUrl ?? null);
+    return map;
+  }, [members]);
+
+  // ── Chat polling + presence ──────────────────────────────────────────────
+
+  useEffect(() => {
+    if (!chatOpen) return;
+
+    lastReadAtRef.current = new Date().toISOString();
+    setChatUnread(false);
+    lastChatTimestampRef.current = null;
+
+    void loadChatMessages(true);
+    void sendChatHeartbeat();
+    void loadChatPresence();
+
+    const msgPollId = setInterval(() => void loadChatMessages(false), 3000);
+    const heartbeatId = setInterval(() => void sendChatHeartbeat(), 15000);
+    const presencePollId = setInterval(() => void loadChatPresence(), 5000);
+
+    return () => {
+      clearInterval(msgPollId);
+      clearInterval(heartbeatId);
+      clearInterval(presencePollId);
+      void apiFetch(`/api/trips/${id}/chat/presence`, { method: 'DELETE' }).catch(() => {});
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatOpen, id]);
+
+  // Auto-scroll chat to bottom when messages arrive
+  useEffect(() => {
+    if (!chatOpen || chatMessages.length === 0) return;
+    const timer = setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: true }), 80);
+    return () => clearTimeout(timer);
+  }, [chatMessages, chatOpen]);
 
   async function handleAddInvite() {
     const normalizedEmail = inviteEmail.trim().toLowerCase();
@@ -163,25 +221,51 @@ export default function TripDetailsScreen() {
     });
   }
 
-  async function handleSendChat() {
-    if (!trip || !user) return;
+  async function loadChatMessages(initial: boolean) {
+    try {
+      const since = initial ? null : lastChatTimestampRef.current;
+      const url = `/api/trips/${id}/chat${since ? `?since=${encodeURIComponent(since)}` : ''}`;
+      const msgs = await apiJson<ChatMsg[]>(url);
+      if (initial) {
+        setChatMessages(msgs);
+        lastChatTimestampRef.current = msgs.length > 0 ? msgs[msgs.length - 1].createdAt : null;
+      } else if (msgs.length > 0) {
+        setChatMessages((prev) => {
+          const existingIds = new Set(prev.map((m) => m.id));
+          const fresh = msgs.filter((m) => !existingIds.has(m.id));
+          return fresh.length > 0 ? [...prev, ...fresh] : prev;
+        });
+        lastChatTimestampRef.current = msgs[msgs.length - 1].createdAt;
+      }
+    } catch {
+      // ignore poll errors
+    }
+  }
 
+  async function sendChatHeartbeat() {
+    await apiFetch(`/api/trips/${id}/chat/presence`, { method: 'PUT' }).catch(() => {});
+  }
+
+  async function loadChatPresence() {
+    try {
+      const data = await apiJson<ChatPresenceUser[]>(`/api/trips/${id}/chat/presence`);
+      setChatPresence(data);
+    } catch {}
+  }
+
+  async function handleSendChat() {
     const trimmed = chatDraft.trim();
     if (!trimmed || chatSending) return;
-
     setChatSending(true);
-
     try {
-      const nextState = await sendTripChatMessage({
-        tripId: id,
-        tripTitle: trip.title ?? 'this adventure',
-        user: { id: user.id, name: user.name || 'Traveler' },
-        text: trimmed,
-        preferences: chatPreferences ?? getDefaultNotificationPreferences(),
+      const msg = await apiJson<ChatMsg>(`/api/trips/${id}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: trimmed }),
       });
-
-      setChatMessages(nextState.messages);
+      setChatMessages((prev) => [...prev, msg]);
       setChatDraft('');
+      lastChatTimestampRef.current = msg.createdAt;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to send message right now.');
     } finally {
@@ -360,8 +444,8 @@ export default function TripDetailsScreen() {
               <View style={styles.emptyIconCircle}>
                 <Ionicons name="sparkles-outline" size={30} color="#a0a8b5" />
               </View>
-              <Text style={styles.emptyTitle}>No SideQuests yet</Text>
-              <Text style={styles.emptyCopy}>Create the first hidden mission, reveal moment, or surprise plan for this adventure.</Text>
+              <Text style={styles.emptyTitle}>Inga aktiviteter än</Text>
+              <Text style={styles.emptyCopy}>Skapa det första överraskningsuppdraget, avslöjningsmomentet eller planen för äventyret.</Text>
             </View>
           )}
 
@@ -371,13 +455,14 @@ export default function TripDetailsScreen() {
         <View pointerEvents="box-none" style={[styles.chatBubbleWrap, { bottom: Math.max(insets.bottom, 16) + 6 }]}>
           <TouchableOpacity activeOpacity={0.92} style={styles.chatBubble} onPress={() => setChatOpen(true)}>
             <Ionicons name="chatbubble-ellipses-outline" size={20} color="#fff" />
+            {chatUnread ? <View style={styles.chatUnreadDot} /> : null}
           </TouchableOpacity>
         </View>
 
         <View pointerEvents="box-none" style={[styles.floatingWrap, { bottom: Math.max(insets.bottom, 16) + 6 }]}>
           <TouchableOpacity activeOpacity={0.92} style={styles.floatingButton} onPress={() => router.push(`/trip/${id}/sidequest/new`)}>
             <Ionicons name="add" size={20} color="#fff" />
-            <Text style={styles.floatingButtonText}>Create SideQuest</Text>
+            <Text style={styles.floatingButtonText}>Lägg till aktivitet</Text>
           </TouchableOpacity>
         </View>
 
@@ -502,7 +587,7 @@ export default function TripDetailsScreen() {
             <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setChatOpen(false)} />
             <View style={[styles.chatPanel, { paddingTop: Math.max(insets.top, 18) + 14, paddingBottom: Math.max(insets.bottom, 18) + 14 }]}>
               <View style={styles.chatPanelHeader}>
-                <View>
+                <View style={styles.chatPanelHeaderLeft}>
                   <Text style={styles.chatPanelEyebrow}>GROUP CHAT</Text>
                   <Text style={styles.chatPanelTitle}>{trip?.title ?? 'Adventure chat'}</Text>
                 </View>
@@ -511,36 +596,68 @@ export default function TripDetailsScreen() {
                 </TouchableOpacity>
               </View>
 
-              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.chatList}>
-                {chatMessages.map((message) => {
-                  const ownMessage = message.authorId === user?.id;
-                  const systemMessage = message.kind === 'system';
+              {chatPresence.length > 0 ? (
+                <View style={styles.chatPresenceRow}>
+                  {chatPresence.slice(0, 6).map((u) => (
+                    <View key={u.userId} style={styles.chatPresenceBubble}>
+                      <Text style={styles.chatPresenceBubbleText}>{getInitials(u.userName)}</Text>
+                    </View>
+                  ))}
+                  {chatPresence.length > 6 ? (
+                    <View style={styles.chatPresenceBubble}>
+                      <Text style={styles.chatPresenceBubbleText}>+{chatPresence.length - 6}</Text>
+                    </View>
+                  ) : null}
+                  <Text style={styles.chatPresenceLabel}>
+                    {chatPresence.length === 1 ? '1 in chat' : `${chatPresence.length} in chat`}
+                  </Text>
+                </View>
+              ) : null}
+
+              <ScrollView ref={chatScrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={styles.chatList}>
+                {chatMessages.map((message, index) => {
+                  const ownMessage = message.userId === user?.id;
+                  const systemMessage = message.isSystem;
+                  const prevMessage = index > 0 ? chatMessages[index - 1] : null;
+                  const showTime =
+                    !prevMessage ||
+                    new Date(message.createdAt).getTime() - new Date(prevMessage.createdAt).getTime() >= 5 * 60 * 1000;
+                  const avatarUrl = message.userId ? (memberAvatarMap.get(message.userId) ?? null) : null;
 
                   return (
-                    <View
-                      key={message.id}
-                      style={[
-                        styles.chatMessageWrap,
-                        ownMessage ? styles.chatMessageWrapOwn : null,
-                        systemMessage ? styles.chatMessageWrapSystem : null,
-                      ]}>
-                      {!ownMessage && !systemMessage ? <Text style={styles.chatAuthor}>{message.authorName}</Text> : null}
-                      <View
-                        style={[
-                          styles.chatBubbleCard,
-                          ownMessage ? styles.chatBubbleCardOwn : null,
-                          systemMessage ? styles.chatBubbleCardSystem : null,
-                        ]}>
-                        <Text
-                          style={[
-                            styles.chatBubbleText,
-                            ownMessage ? styles.chatBubbleTextOwn : null,
-                            systemMessage ? styles.chatBubbleTextSystem : null,
-                          ]}>
-                          {message.text}
-                        </Text>
-                      </View>
-                      <Text style={styles.chatMeta}>{formatChatTimestamp(message.createdAt)}</Text>
+                    <View key={message.id}>
+                      {showTime ? (
+                        <Text style={styles.chatTimeLabel}>{formatChatTimestamp(message.createdAt)}</Text>
+                      ) : null}
+                      {systemMessage ? (
+                        <View style={styles.chatMessageWrapSystem}>
+                          <View style={[styles.chatBubbleCard, styles.chatBubbleCardSystem]}>
+                            <Text style={[styles.chatBubbleText, styles.chatBubbleTextSystem]}>{message.text}</Text>
+                          </View>
+                        </View>
+                      ) : ownMessage ? (
+                        <View style={styles.chatMessageWrapOwn}>
+                          <View style={[styles.chatBubbleCard, styles.chatBubbleCardOwn]}>
+                            <Text style={[styles.chatBubbleText, styles.chatBubbleTextOwn]}>{message.text}</Text>
+                          </View>
+                        </View>
+                      ) : (
+                        <View style={styles.chatMessageRow}>
+                          <View style={styles.chatAvatar}>
+                            {avatarUrl ? (
+                              <Image source={{ uri: avatarUrl }} style={styles.chatAvatarImage} />
+                            ) : (
+                              <Text style={styles.chatAvatarText}>{getInitials(message.userName)}</Text>
+                            )}
+                          </View>
+                          <View style={styles.chatMessageContent}>
+                            <Text style={styles.chatAuthor}>{message.userName}</Text>
+                            <View style={styles.chatBubbleCard}>
+                              <Text style={styles.chatBubbleText}>{message.text}</Text>
+                            </View>
+                          </View>
+                        </View>
+                      )}
                     </View>
                   );
                 })}
@@ -621,6 +738,13 @@ async function openSpotifyLink(url: string) {
   }
 }
 
+const CATEGORY_LABELS: Record<string, { label: string; emoji: string }> = {
+  flight:     { label: 'Flyg',        emoji: '✈️' },
+  sidequest:  { label: 'Sidequest',   emoji: '🎯' },
+  food:       { label: 'Mat',         emoji: '🍽️' },
+  sight:      { label: 'Sevärdighet', emoji: '🏛️' },
+};
+
 function SideQuestFeedCard({
   activity,
   onPress,
@@ -648,8 +772,17 @@ function SideQuestFeedCard({
       </View>
 
       <View style={styles.feedBody}>
-        <Text style={styles.feedDate}>{formatActivityDate(activity.date)}</Text>
-        <Text style={styles.feedTitle}>{activity.title ?? 'Hidden SideQuest'}</Text>
+        <View style={styles.feedMeta}>
+          <Text style={styles.feedDate}>{formatActivityDate(activity.date)}</Text>
+          {activity.category && CATEGORY_LABELS[activity.category] ? (
+            <View style={styles.feedCategoryBadge}>
+              <Text style={styles.feedCategoryText}>
+                {CATEGORY_LABELS[activity.category].emoji} {CATEGORY_LABELS[activity.category].label}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+        <Text style={styles.feedTitle}>{activity.title ?? 'Hidden aktivitet'}</Text>
         <Text numberOfLines={2} style={styles.feedDescription}>
           {hidden
             ? activity.teaserVisible && activity.teaser
@@ -1399,11 +1532,28 @@ const styles = StyleSheet.create({
     paddingTop: 14,
     paddingBottom: 15,
   },
+  feedMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
   feedDate: {
     color: '#868d99',
     fontSize: 12,
     fontWeight: '800',
     letterSpacing: 1.2,
+  },
+  feedCategoryBadge: {
+    backgroundColor: '#f3f5f8',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  feedCategoryText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#5a6072',
   },
   feedTitle: {
     marginTop: 6,
@@ -1496,6 +1646,17 @@ const styles = StyleSheet.create({
     shadowRadius: 24,
     elevation: 8,
   },
+  chatUnreadDot: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#ff4f74',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
   chatModalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(9,11,17,0.42)',
@@ -1516,6 +1677,39 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#eef1f5',
+  },
+  chatPanelHeaderLeft: {
+    flex: 1,
+    paddingRight: 10,
+  },
+  chatPresenceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eef1f5',
+  },
+  chatPresenceBubble: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#e8f4f7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  chatPresenceBubbleText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#0d90a8',
+  },
+  chatPresenceLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#7d8491',
+    marginLeft: 2,
   },
   chatPanelEyebrow: {
     color: '#9aa2ae',
@@ -1560,10 +1754,15 @@ const styles = StyleSheet.create({
   chatList: {
     paddingTop: 18,
     paddingBottom: 10,
-    gap: 12,
+    gap: 10,
   },
-  chatMessageWrap: {
-    alignItems: 'flex-start',
+  chatTimeLabel: {
+    textAlign: 'center',
+    color: '#a4aab4',
+    fontSize: 11,
+    fontWeight: '600',
+    marginBottom: 6,
+    marginTop: 4,
   },
   chatMessageWrapOwn: {
     alignItems: 'flex-end',
@@ -1571,11 +1770,39 @@ const styles = StyleSheet.create({
   chatMessageWrapSystem: {
     alignItems: 'center',
   },
+  chatMessageRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 8,
+  },
+  chatAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#1d212a',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    flexShrink: 0,
+  },
+  chatAvatarImage: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+  },
+  chatAvatarText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  chatMessageContent: {
+    flexShrink: 1,
+    maxWidth: '78%',
+  },
   chatAuthor: {
-    marginBottom: 4,
-    marginLeft: 4,
-    color: '#7b828e',
-    fontSize: 12,
+    marginBottom: 3,
+    color: '#9aa2ae',
+    fontSize: 11,
     fontWeight: '700',
   },
   chatBubbleCard: {

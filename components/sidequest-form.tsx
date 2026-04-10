@@ -27,6 +27,7 @@ type MessageState = { type: 'success' | 'error'; text: string } | null;
 export type SideQuestFormValues = {
   title: string;
   description: string;
+  category: string | null;
   locationQuery: string;
   locationPlace: StoredMapPlace | null;
   date: string;
@@ -37,6 +38,13 @@ export type SideQuestFormValues = {
   teaserOffsetMinutes: number | null;
   imageUrl: string | null;
 };
+
+const CATEGORIES: { value: string; label: string; emoji: string }[] = [
+  { value: 'flight',      label: 'Flyg',        emoji: '✈️' },
+  { value: 'sidequest',   label: 'Sidequest',   emoji: '🎯' },
+  { value: 'food',        label: 'Mat',         emoji: '🍽️' },
+  { value: 'sight',       label: 'Sevärdighet', emoji: '🏛️' },
+];
 
 type Props = {
   mode: 'create' | 'edit';
@@ -66,6 +74,7 @@ export default function SideQuestForm({
   const insets = useSafeAreaInsets();
   const [title, setTitle] = useState(initialValues?.title ?? '');
   const [description, setDescription] = useState(initialValues?.description ?? '');
+  const [category, setCategory] = useState<string | null>(initialValues?.category ?? null);
   const [locationQuery, setLocationQuery] = useState(initialValues?.locationQuery ?? '');
   const [locationPlace, setLocationPlace] = useState<StoredMapPlace | null>(initialValues?.locationPlace ?? null);
   const [locationSuggestions, setLocationSuggestions] = useState<PlaceAutocompleteSuggestion[]>([]);
@@ -207,12 +216,12 @@ export default function SideQuestForm({
     const normalizedTitle = title.trim();
 
     if (!normalizedTitle) {
-      setMessage({ type: 'error', text: 'Give the SideQuest a title first.' });
+      setMessage({ type: 'error', text: 'Ange en titel för aktiviteten.' });
       return;
     }
 
     if (!isDateInputValid(date)) {
-      setMessage({ type: 'error', text: 'Choose a valid date for the SideQuest.' });
+      setMessage({ type: 'error', text: 'Välj ett giltigt datum.' });
       return;
     }
 
@@ -262,6 +271,7 @@ export default function SideQuestForm({
       const payload = {
         title: normalizedTitle,
         description: withLocationMarker(description.trim() || null, locationQuery.trim() || null, locationPlace),
+        category: category || null,
         date,
         visibility,
         revealAt,
@@ -284,7 +294,7 @@ export default function SideQuestForm({
         });
 
         if (!response.ok) {
-          throw new Error((await response.text()) || 'Unable to update the SideQuest right now.');
+          throw new Error((await response.text()) || 'Kunde inte uppdatera aktiviteten.');
         }
 
         router.replace(`/trip/${tripId}/sidequest/${sideQuestId}`);
@@ -298,7 +308,7 @@ export default function SideQuestForm({
         router.replace(`/trip/${tripId}/sidequest/${response.id}`);
       }
     } catch (error) {
-      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Unable to save SideQuest right now.' });
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Kunde inte spara aktiviteten.' });
     } finally {
       setSubmitting(false);
     }
@@ -362,6 +372,25 @@ export default function SideQuestForm({
       </View>
 
       <View style={styles.block}>
+        <Text style={styles.label}>Kategori <Text style={styles.labelOptional}>(valfritt)</Text></Text>
+        <View style={styles.categoryRow}>
+          {CATEGORIES.map((cat) => {
+            const active = category === cat.value;
+            return (
+              <TouchableOpacity
+                key={cat.value}
+                activeOpacity={0.8}
+                style={[styles.categoryChip, active && styles.categoryChipActive]}
+                onPress={() => setCategory(active ? null : cat.value)}>
+                <Text style={styles.categoryEmoji}>{cat.emoji}</Text>
+                <Text style={[styles.categoryLabel, active && styles.categoryLabelActive]}>{cat.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
+
+      <View style={styles.block}>
         <Text style={styles.label}>Description</Text>
         <TextInput
           value={description}
@@ -412,21 +441,40 @@ export default function SideQuestForm({
 
       <View style={styles.block}>
         <Text style={styles.label}>When does it happen?</Text>
-        <TouchableOpacity
-          activeOpacity={0.92}
-          style={[
-            styles.selectionCard,
-            pickerTarget === 'date' ? styles.selectionCardActive : null,
-            selectedDateOutOfRange ? styles.selectionCardError : null,
-          ]}
-          onPress={() => setPickerTarget('date')}>
-          <View>
-            <Text style={styles.selectionEyebrow}>SIDEQUEST DATE</Text>
-            <Text style={styles.selectionValue}>{formatLongDate(date)}</Text>
-            <Text style={styles.selectionHint}>Only inside {tripRangeText}</Text>
+        {Platform.OS === 'web' ? (
+          <View style={[styles.selectionCard, selectedDateOutOfRange ? styles.selectionCardError : null]}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.selectionEyebrow}>AKTIVITETSDATUM</Text>
+              <TextInput
+                value={date}
+                onChangeText={setDate}
+                placeholder="ÅÅÅÅ-MM-DD"
+                placeholderTextColor="#b7bcc7"
+                style={styles.webDateInput}
+                keyboardType="numbers-and-punctuation"
+                maxLength={10}
+              />
+              <Text style={styles.selectionHint}>Inom {tripRangeText}</Text>
+            </View>
+            <Ionicons name="calendar-outline" size={22} color="#5f6570" />
           </View>
-          <Ionicons name="calendar-outline" size={22} color="#5f6570" />
-        </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            activeOpacity={0.92}
+            style={[
+              styles.selectionCard,
+              pickerTarget === 'date' ? styles.selectionCardActive : null,
+              selectedDateOutOfRange ? styles.selectionCardError : null,
+            ]}
+            onPress={() => setPickerTarget('date')}>
+            <View>
+              <Text style={styles.selectionEyebrow}>AKTIVITETSDATUM</Text>
+              <Text style={styles.selectionValue}>{formatLongDate(date)}</Text>
+              <Text style={styles.selectionHint}>Inom {tripRangeText}</Text>
+            </View>
+            <Ionicons name="calendar-outline" size={22} color="#5f6570" />
+          </TouchableOpacity>
+        )}
       </View>
 
       <View style={styles.block}>
@@ -455,23 +503,53 @@ export default function SideQuestForm({
           <View style={styles.block}>
             <Text style={styles.label}>Reveal schedule</Text>
             <View style={styles.revealRow}>
-              <TouchableOpacity
-                activeOpacity={0.92}
-                style={[
-                  styles.selectionCard,
-                  styles.revealCard,
-                  pickerTarget === 'revealDate' ? styles.selectionCardActive : null,
-                  revealDateOutOfRange ? styles.selectionCardError : null,
-                ]}
-                onPress={() => setPickerTarget('revealDate')}>
-                <Text style={styles.selectionEyebrow}>REVEAL DATE</Text>
-                <Text style={styles.selectionValueSmall}>{formatShortDate(revealDate)}</Text>
-                <Text style={styles.selectionHint}>{`${formatShortDate(revealRange.min)} - ${formatShortDate(revealRange.max)}`}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity activeOpacity={0.92} style={[styles.selectionCard, styles.revealCard, pickerTarget === 'revealTime' ? styles.selectionCardActive : null]} onPress={() => setPickerTarget('revealTime')}>
-                <Text style={styles.selectionEyebrow}>REVEAL TIME</Text>
-                <Text style={styles.selectionValueSmall}>{formatTime(revealTime)}</Text>
-              </TouchableOpacity>
+              {Platform.OS === 'web' ? (
+                <View style={[styles.selectionCard, styles.revealCard, revealDateOutOfRange ? styles.selectionCardError : null]}>
+                  <Text style={styles.selectionEyebrow}>REVEAL DATE</Text>
+                  <TextInput
+                    value={revealDate}
+                    onChangeText={setRevealDate}
+                    placeholder="ÅÅÅÅ-MM-DD"
+                    placeholderTextColor="#b7bcc7"
+                    style={styles.webDateInput}
+                    keyboardType="numbers-and-punctuation"
+                    maxLength={10}
+                  />
+                  <Text style={styles.selectionHint}>{`${formatShortDate(revealRange.min)} – ${formatShortDate(revealRange.max)}`}</Text>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  activeOpacity={0.92}
+                  style={[
+                    styles.selectionCard,
+                    styles.revealCard,
+                    pickerTarget === 'revealDate' ? styles.selectionCardActive : null,
+                    revealDateOutOfRange ? styles.selectionCardError : null,
+                  ]}
+                  onPress={() => setPickerTarget('revealDate')}>
+                  <Text style={styles.selectionEyebrow}>REVEAL DATE</Text>
+                  <Text style={styles.selectionValueSmall}>{formatShortDate(revealDate)}</Text>
+                  <Text style={styles.selectionHint}>{`${formatShortDate(revealRange.min)} – ${formatShortDate(revealRange.max)}`}</Text>
+                </TouchableOpacity>
+              )}
+              {Platform.OS === 'web' ? (
+                <View style={[styles.selectionCard, styles.revealCard]}>
+                  <Text style={styles.selectionEyebrow}>REVEAL TIME</Text>
+                  <TextInput
+                    value={revealTime}
+                    onChangeText={setRevealTime}
+                    placeholder="HH:MM"
+                    placeholderTextColor="#b7bcc7"
+                    style={styles.webDateInput}
+                    maxLength={5}
+                  />
+                </View>
+              ) : (
+                <TouchableOpacity activeOpacity={0.92} style={[styles.selectionCard, styles.revealCard, pickerTarget === 'revealTime' ? styles.selectionCardActive : null]} onPress={() => setPickerTarget('revealTime')}>
+                  <Text style={styles.selectionEyebrow}>REVEAL TIME</Text>
+                  <Text style={styles.selectionValueSmall}>{formatTime(revealTime)}</Text>
+                </TouchableOpacity>
+              )}
             </View>
             <View style={styles.revealSummary}>
               <Ionicons name="sparkles-outline" size={16} color="#ff4f74" />
@@ -517,44 +595,38 @@ export default function SideQuestForm({
       ) : null}
 
       <TouchableOpacity activeOpacity={0.92} style={[styles.primaryButton, submitting ? styles.primaryButtonDisabled : null]} disabled={submitting} onPress={() => void handleSubmit()}>
-        <Text style={styles.primaryButtonText}>{submitting ? 'Saving...' : mode === 'edit' ? 'Save changes' : 'Create SideQuest'}</Text>
+        <Text style={styles.primaryButtonText}>{submitting ? 'Sparar...' : mode === 'edit' ? 'Spara ändringar' : 'Lägg till aktivitet'}</Text>
       </TouchableOpacity>
 
-      <PickerSheet
-        visible={pickerTarget !== null}
-        title={getPickerTitle(pickerTarget)}
-        subtitle={pickerTarget === 'date' ? `Allowed range: ${tripRangeText}` : pickerTarget === 'revealDate' ? 'Choose when the hidden SideQuest should unlock.' : 'Choose the reveal time.'}
-        onClose={() => setPickerTarget(null)}>
-        {pickerTarget ? (
-          <DateTimePicker
-            value={pickerValue}
-            mode={pickerTarget === 'revealTime' ? 'time' : 'date'}
-            display={Platform.OS === 'ios' ? (pickerTarget === 'revealTime' ? 'spinner' : 'inline') : 'default'}
-            minimumDate={
-              pickerTarget === 'date'
-                ? tripStartDate
-                  ? new Date(`${tripStartDate}T12:00:00`)
-                  : undefined
-                : pickerTarget === 'revealDate'
-                  ? new Date(`${revealRange.min}T12:00:00`)
-                  : undefined
-            }
-            maximumDate={
-              pickerTarget === 'date'
-                ? tripEndDate
-                  ? new Date(`${tripEndDate}T12:00:00`)
-                  : undefined
-                : pickerTarget === 'revealDate'
-                  ? new Date(`${revealRange.max}T12:00:00`)
-                  : undefined
-            }
-            themeVariant="light"
-            accentColor="#ff4f74"
-            textColor="#161821"
-            onChange={handleDateChange}
-          />
-        ) : null}
-      </PickerSheet>
+      {Platform.OS !== 'web' ? (
+        <PickerSheet
+          visible={pickerTarget !== null}
+          title={getPickerTitle(pickerTarget)}
+          subtitle={pickerTarget === 'date' ? `Tillåtet intervall: ${tripRangeText}` : pickerTarget === 'revealDate' ? 'Välj när aktiviteten ska avslöjas.' : 'Välj avslöjandetid.'}
+          onClose={() => setPickerTarget(null)}>
+          {pickerTarget ? (
+            <DateTimePicker
+              value={pickerValue}
+              mode={pickerTarget === 'revealTime' ? 'time' : 'date'}
+              display={Platform.OS === 'ios' ? (pickerTarget === 'revealTime' ? 'spinner' : 'inline') : 'default'}
+              minimumDate={
+                pickerTarget === 'date'
+                  ? tripStartDate ? new Date(`${tripStartDate}T12:00:00`) : undefined
+                  : pickerTarget === 'revealDate' ? new Date(`${revealRange.min}T12:00:00`) : undefined
+              }
+              maximumDate={
+                pickerTarget === 'date'
+                  ? tripEndDate ? new Date(`${tripEndDate}T12:00:00`) : undefined
+                  : pickerTarget === 'revealDate' ? new Date(`${revealRange.max}T12:00:00`) : undefined
+              }
+              themeVariant="light"
+              accentColor="#ff4f74"
+              textColor="#161821"
+              onChange={handleDateChange}
+            />
+          ) : null}
+        </PickerSheet>
+      ) : null}
     </ScrollView>
   );
 }
@@ -696,6 +768,44 @@ const styles = StyleSheet.create({
     paddingHorizontal: 22,
     paddingTop: 12,
   },
+  labelOptional: {
+    fontSize: 13,
+    color: '#9298a4',
+    fontWeight: '400',
+  },
+  categoryRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 8,
+  },
+  categoryChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: '#e2e5eb',
+    backgroundColor: '#fafbfc',
+  },
+  categoryChipActive: {
+    borderColor: '#ff4f74',
+    backgroundColor: '#fff0f3',
+  },
+  categoryEmoji: {
+    fontSize: 16,
+  },
+  categoryLabel: {
+    fontSize: 14,
+    color: '#5a6072',
+    fontWeight: '500',
+  },
+  categoryLabelActive: {
+    color: '#ff4f74',
+    fontWeight: '600',
+  },
   coverCard: {
     height: 240,
     borderRadius: 32,
@@ -832,6 +942,16 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 1.2,
+  },
+  webDateInput: {
+    marginTop: 6,
+    color: '#161821',
+    fontSize: 17,
+    fontWeight: '700',
+    paddingVertical: 2,
+    borderBottomWidth: 1.5,
+    borderBottomColor: '#e2e5eb',
+    minWidth: 100,
   },
   selectionValue: {
     marginTop: 8,

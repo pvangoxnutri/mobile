@@ -11,7 +11,13 @@ export default function SplashRoute() {
 
   useEffect(() => {
     const timeout = setTimeout(() => {
-      router.replace(user ? '/(tabs)' : '/(auth)/login');
+      if (!user) {
+        router.replace('/(auth)/login');
+      } else if (!user.hasCompletedOnboarding) {
+        router.replace('/onboarding');
+      } else {
+        router.replace('/(tabs)');
+      }
     }, 1200);
 
     return () => clearTimeout(timeout);

@@ -3,8 +3,17 @@ export interface UserInfo {
   name: string;
   email: string;
   avatarUrl?: string | null;
+  bio?: string | null;
+  hasCompletedOnboarding: boolean;
   role?: string | null;
   language?: 'en' | 'sv';
+}
+
+export interface AppTheme {
+  id: string;
+  name: string;
+  primaryColor: string;
+  secondaryColor: string;
 }
 
 export interface Quest {
@@ -29,6 +38,16 @@ export interface TripInvite {
   id: string;
   email: string;
   status: 'pending' | string;
+  createdAt: string;
+}
+
+export interface PendingInvite {
+  id: string;
+  tripId: string;
+  tripTitle?: string | null;
+  tripDestination?: string | null;
+  tripImageUrl?: string | null;
+  invitedByName: string;
   createdAt: string;
 }
 
@@ -76,7 +95,8 @@ export interface Expense {
   description: string;
   totalAmount: number;
   date: string;
-  splitMode: 'equal' | 'exact' | 'percentage' | 'shares';
+  splitMode: 'equal' | 'exact' | 'percentage';
+  currency: string;
   createdAt: string;
   createdByName: string;
   payers: { userId: string; userName: string; amount: number }[];
@@ -101,6 +121,15 @@ export interface Debt {
 export interface BalancesResponse {
   balances: MemberBalance[];
   simplifiedDebts: Debt[];
+}
+
+export interface TripEvent {
+  id: string;
+  tripId: string;
+  tripTitle?: string | null;
+  actorName: string;
+  type: 'member_joined' | 'member_left';
+  createdAt: string;
 }
 
 export interface Settlement {

@@ -54,6 +54,7 @@ export default function EditSideQuestScreen() {
     return {
       title: activity.title ?? '',
       description: stripLocationMarker(activity.description) ?? '',
+      category: activity.category ?? null,
       locationQuery: extractLocationQuery(activity.description),
       locationPlace: extractStoredMapPlace(activity.description),
       date: activity.date,
@@ -75,8 +76,8 @@ export default function EditSideQuestScreen() {
             <Ionicons name="arrow-back" size={24} color="#11131a" />
           </TouchableOpacity>
           <View>
-            <Text style={styles.title}>Edit SideQuest</Text>
-            <Text style={styles.subtitle}>Trip members can update the plan together.</Text>
+            <Text style={styles.title}>Redigera aktivitet</Text>
+            <Text style={styles.subtitle}>Resans medlemmar kan uppdatera planen tillsammans.</Text>
           </View>
         </View>
 

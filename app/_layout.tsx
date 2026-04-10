@@ -29,6 +29,7 @@ export default function RootLayout() {
                 <Stack.Screen name="reset-password" options={{ headerShown: false }} />
                 <Stack.Screen name="settings" options={{ headerShown: false }} />
                 <Stack.Screen name="create-trip" options={{ headerShown: false }} />
+                <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false }} />
                 <Stack.Screen name="TMP_Navbar" options={{ headerShown: false }} />
                 <Stack.Screen name="trip/[id]" options={{ headerShown: false }} />
                 <Stack.Screen name="trip/[id]/settings" options={{ headerShown: false }} />

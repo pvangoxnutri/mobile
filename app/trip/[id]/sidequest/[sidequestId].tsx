@@ -151,6 +151,18 @@ export default function SideQuestDetailScreen() {
             </View>
 
             <View style={styles.metaCard}>
+              {activity.category ? (
+                <MetaRow
+                  icon="pricetag-outline"
+                  label="Kategori"
+                  value={{
+                    flight:    '✈️ Flyg',
+                    sidequest: '🎯 Sidequest',
+                    food:      '🍽️ Mat',
+                    sight:     '🏛️ Sevärdighet',
+                  }[activity.category] ?? activity.category}
+                />
+              ) : null}
               <MetaRow icon="calendar-outline" label="Date" value={formatLongDate(activity.date)} />
               {activity.visibility === 'hidden' && activity.revealAt ? (
                 <MetaRow icon="sparkles-outline" label="Reveal" value={formatReveal(activity.revealAt)} />

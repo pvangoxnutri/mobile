@@ -44,8 +44,8 @@ export default function NewSideQuestScreen() {
             <Ionicons name="arrow-back" size={24} color="#11131a" />
           </TouchableOpacity>
           <View>
-            <Text style={styles.title}>Create SideQuest</Text>
-            <Text style={styles.subtitle}>Build something playful for this trip.</Text>
+            <Text style={styles.title}>Lägg till aktivitet</Text>
+            <Text style={styles.subtitle}>Bygg något kul för den här resan.</Text>
           </View>
         </View>
         {trip ? (

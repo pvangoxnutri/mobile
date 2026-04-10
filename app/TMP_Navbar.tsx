@@ -6,19 +6,24 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-nati
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiJson } from '@/lib/api';
 import { loadNotifications, type AppNotification } from '@/lib/social';
-import type { Quest, SideQuestActivity } from '@/lib/types';
+import type { Quest, SideQuestActivity, TripEvent } from '@/lib/types';
 
 export default function TmpNavbarScreen() {
   const insets = useSafeAreaInsets();
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [activityFeed, setActivityFeed] = useState<SideQuestActivity[]>([]);
+  const [tripEvents, setTripEvents] = useState<TripEvent[]>([]);
   const [error, setError] = useState('');
 
   const loadAlerts = useCallback(() => {
     let active = true;
 
-    void Promise.all([loadNotifications(), apiJson<Quest[]>('/api/trips')])
-      .then(async ([storedNotifications, quests]) => {
+    void Promise.all([
+      loadNotifications(),
+      apiJson<Quest[]>('/api/trips'),
+      apiJson<TripEvent[]>('/api/trips/events/me').catch(() => [] as TripEvent[]),
+    ])
+      .then(async ([storedNotifications, quests, events]) => {
         if (!active) return;
 
         const activityGroups = await Promise.all(
@@ -33,6 +38,7 @@ export default function TmpNavbarScreen() {
 
         if (!active) return;
         setNotifications(storedNotifications);
+        setTripEvents(Array.isArray(events) ? events : []);
         setActivityFeed(
           activityGroups
             .flat()
@@ -67,26 +73,23 @@ export default function TmpNavbarScreen() {
       pushReady: false,
     }));
 
-    const previewNotifications = activityFeed.slice(0, 3).map((item, index) => ({
-      id: `sample-${item.id}`,
-      type: 'upcoming_sidequest' as const,
-      title: item.visibility === 'hidden' ? 'Hidden' : item.title ?? 'Upcoming SideQuest',
-      body:
-        index === 0
-          ? `Maya added this SideQuest for ${formatDate(item.date)}.`
-          : index === 1
-            ? `Alex dropped a new plan here${item.time ? ` at ${item.time}` : ''}.`
-            : `Jamie just created this surprise for the trip.`,
-      createdAt: new Date(Date.now() - (index + 1) * 36e5).toISOString(),
-      tripId: item.tripId,
-      sideQuestId: item.id,
+    const joinedEvents = tripEvents.map((event) => ({
+      id: `event-${event.id}`,
+      type: 'chat_member_joined' as const,
+      title: event.tripTitle ?? 'Adventure',
+      body: event.type === 'member_left'
+        ? `${event.actorName} left the adventure.`
+        : `${event.actorName} joined the adventure!`,
+      createdAt: event.createdAt,
+      tripId: event.tripId,
+      sideQuestId: undefined as string | undefined,
       pushReady: false,
     }));
 
-    return [...previewNotifications, ...notifications, ...derived]
+    return [...joinedEvents, ...notifications, ...derived]
       .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())
       .slice(0, 20);
-  }, [activityFeed, notifications]);
+  }, [activityFeed, notifications, tripEvents]);
 
   return (
     <ScrollView

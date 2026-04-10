@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/components/auth-provider';
+import { CurrencyPicker } from '@/components/currency-picker';
 import { apiFetch, apiJson } from '@/lib/api';
 import type { BalancesResponse, Debt, Expense, Settlement } from '@/lib/types';
 
@@ -24,17 +25,18 @@ type TripMember = {
   isOwner: boolean;
 };
 
-type SplitMode = 'equal' | 'exact' | 'percentage' | 'shares';
+type SplitMode = 'equal' | 'exact' | 'percentage';
 
 type AddExpenseForm = {
   description: string;
   amount: string;
+  currency: string;
   date: string;
   splitMode: SplitMode;
   payerAmounts: Record<string, string>; // userId -> amount string
   selectedPayers: Set<string>;
   selectedParticipants: Set<string>;
-  participantValues: Record<string, string>; // userId -> value string (shares/pct/exact)
+  participantValues: Record<string, string>; // userId -> value string (pct/exact)
 };
 
 function getInitials(name?: string | null) {
@@ -84,6 +86,7 @@ export default function CostSplitScreen() {
   const [form, setForm] = useState<AddExpenseForm>({
     description: '',
     amount: '',
+    currency: 'SEK',
     date: todayIso(),
     splitMode: 'equal',
     payerAmounts: {},
@@ -91,6 +94,8 @@ export default function CostSplitScreen() {
     selectedParticipants: new Set<string>(),
     participantValues: {},
   });
+
+  const [expandedBalanceUser, setExpandedBalanceUser] = useState<string | null>(null);
 
   const [settlingDebt, setSettlingDebt] = useState<Debt | null>(null);
   const [settleSubmitting, setSettleSubmitting] = useState(false);
@@ -126,10 +131,10 @@ export default function CostSplitScreen() {
 
   function openAddModal() {
     if (!user) return;
-    const allMemberIds = new Set(members.map((m) => m.id));
     setForm({
       description: '',
       amount: '',
+      currency: 'SEK',
       date: todayIso(),
       splitMode: 'equal',
       payerAmounts: { [user.id]: '' },
@@ -199,10 +204,20 @@ export default function CostSplitScreen() {
       return;
     }
 
-    const participantsList = Array.from(form.selectedParticipants).map((uid) => ({
+    let participantValues = Array.from(form.selectedParticipants).map((uid) => ({
       userId: uid,
       value: form.splitMode === 'equal' ? 1 : parseFloat(form.participantValues[uid] ?? '0') || 0,
     }));
+
+    if (form.splitMode === 'percentage') {
+      const pctSum = participantValues.reduce((s, p) => s + p.value, 0);
+      if (pctSum <= 0) { setSubmitError('Enter percentages for all participants.'); return; }
+      if (Math.abs(pctSum - 100) > 5) { setSubmitError(`Percentages sum to ${pctSum.toFixed(1)}% — must be close to 100%.`); return; }
+      // Auto-normalize so they sum to exactly 100
+      participantValues = participantValues.map((p) => ({ ...p, value: Math.round((p.value / pctSum) * 10000) / 100 }));
+    }
+
+    const participantsList = participantValues;
 
     setSubmitting(true);
     try {
@@ -212,6 +227,7 @@ export default function CostSplitScreen() {
         body: JSON.stringify({
           description: form.description.trim(),
           totalAmount,
+          currency: form.currency.trim().toUpperCase(),
           date: form.date,
           splitMode: form.splitMode,
           payers: payersList,
@@ -336,7 +352,9 @@ export default function CostSplitScreen() {
                         <Text style={styles.expenseDate}>{formatDate(expense.date)}</Text>
                       </View>
                       <View style={styles.expenseRight}>
-                        <Text style={styles.expenseAmount}>{formatAmount(expense.totalAmount)}</Text>
+                        <Text style={styles.expenseAmount}>
+                          {expense.currency ? `${expense.currency} ` : ''}{formatAmount(expense.totalAmount)}
+                        </Text>
                         <View style={[styles.splitModeChip, { backgroundColor: splitModeColor(expense.splitMode) }]}>
                           <Text style={styles.splitModeChipText}>{expense.splitMode}</Text>
                         </View>
@@ -369,17 +387,57 @@ export default function CostSplitScreen() {
               {balancesData?.balances && balancesData.balances.length > 0 ? (
                 <>
                   <Text style={styles.sectionLabel}>NET BALANCES</Text>
-                  {balancesData.balances.map((bal) => (
-                    <View key={bal.userId} style={styles.balanceCard}>
-                      <View style={styles.balanceAvatar}>
-                        <Text style={styles.balanceAvatarText}>{getInitials(bal.userName)}</Text>
+                  {balancesData.balances.map((bal) => {
+                    const isExpanded = expandedBalanceUser === bal.userId;
+                    const userExpenses = expenses.filter((e) =>
+                      e.participants.some((p) => p.userId === bal.userId)
+                    );
+                    return (
+                      <View key={bal.userId}>
+                        <TouchableOpacity
+                          activeOpacity={0.8}
+                          style={styles.balanceCard}
+                          onPress={() => setExpandedBalanceUser(isExpanded ? null : bal.userId)}>
+                          <View style={styles.balanceAvatar}>
+                            <Text style={styles.balanceAvatarText}>{getInitials(bal.userName)}</Text>
+                          </View>
+                          <Text style={styles.balanceName}>{bal.userName}</Text>
+                          <Text style={[styles.balanceNet, bal.net >= 0 ? styles.balancePositive : styles.balanceNegative]}>
+                            {bal.net >= 0 ? '+' : ''}{formatAmount(bal.net)}
+                          </Text>
+                          <Ionicons
+                            name={isExpanded ? 'chevron-up' : 'chevron-down'}
+                            size={16}
+                            color="#8a909b"
+                            style={{ marginLeft: 6 }}
+                          />
+                        </TouchableOpacity>
+                        {isExpanded && userExpenses.length > 0 && (
+                          <View style={styles.balanceExpenseList}>
+                            {userExpenses.map((e) => {
+                              const share = e.participants.find((p) => p.userId === bal.userId);
+                              const paid = e.payers.find((p) => p.userId === bal.userId);
+                              return (
+                                <View key={e.id} style={styles.balanceExpenseRow}>
+                                  <Text style={styles.balanceExpenseDesc} numberOfLines={1}>{e.description}</Text>
+                                  <View style={styles.balanceExpenseAmounts}>
+                                    {paid && (
+                                      <Text style={styles.balanceExpensePaid}>
+                                        paid {e.currency ? `${e.currency} ` : ''}{formatAmount(paid.amount)}
+                                      </Text>
+                                    )}
+                                    <Text style={styles.balanceExpenseShare}>
+                                      share {e.currency ? `${e.currency} ` : ''}{formatAmount(share?.amount ?? 0)}
+                                    </Text>
+                                  </View>
+                                </View>
+                              );
+                            })}
+                          </View>
+                        )}
                       </View>
-                      <Text style={styles.balanceName}>{bal.userName}</Text>
-                      <Text style={[styles.balanceNet, bal.net >= 0 ? styles.balancePositive : styles.balanceNegative]}>
-                        {bal.net >= 0 ? '+' : ''}{formatAmount(bal.net)}
-                      </Text>
-                    </View>
-                  ))}
+                    );
+                  })}
 
                   {balancesData.simplifiedDebts && balancesData.simplifiedDebts.length > 0 ? (
                     <>
@@ -476,19 +534,23 @@ export default function CostSplitScreen() {
 
               {settlements.length > 0 ? (
                 <>
-                  <Text style={[styles.sectionLabel, { marginTop: 28 }]}>SETTLEMENT HISTORY</Text>
+                  <Text style={[styles.sectionLabel, { marginTop: 28 }]}>SETTLED</Text>
                   {settlements.map((s) => (
                     <View key={s.id} style={styles.settlementHistoryCard}>
+                      <View style={styles.settlementPaidBadge}>
+                        <Ionicons name="checkmark-circle" size={16} color="#27b371" />
+                        <Text style={styles.settlementPaidText}>Paid</Text>
+                      </View>
                       <View style={styles.settlementHistoryRow}>
                         <View style={styles.settlementHistoryCopy}>
                           <Text style={styles.settlementHistoryText}>
-                            <Text style={styles.debtName}>{s.fromUserName}</Text> paid{' '}
+                            <Text style={styles.debtName}>{s.fromUserName}</Text>
+                            {' paid '}
                             <Text style={styles.debtName}>{s.toUserName}</Text>
                           </Text>
                           <Text style={styles.settlementHistoryDate}>
                             {formatDate(s.createdAt.slice(0, 10))} · {formatAmount(s.amount)}
                           </Text>
-                          {s.note ? <Text style={styles.settlementHistoryNote}>{s.note}</Text> : null}
                         </View>
                         <TouchableOpacity
                           style={styles.deleteSmallButton}
@@ -520,7 +582,7 @@ export default function CostSplitScreen() {
       <Modal visible={addModalOpen} transparent animationType="slide" onRequestClose={() => setAddModalOpen(false)}>
         <View style={styles.modalBackdrop}>
           <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setAddModalOpen(false)} />
-          <View style={[styles.modalCard, { paddingBottom: Math.max(insets.bottom, 18) + 12 }]}>
+          <View style={[styles.modalCard, { paddingBottom: Math.max(insets.bottom, 18) + 12, zIndex: 1 }]}>
             <View style={styles.modalHandle} />
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Add Expense</Text>
@@ -543,16 +605,19 @@ export default function CostSplitScreen() {
                 onChangeText={(v) => setField('description', v)}
               />
 
-              {/* Amount */}
+              {/* Amount + Currency */}
               <Text style={styles.fieldLabel}>Total Amount</Text>
-              <TextInput
-                style={styles.textInput}
-                placeholder="0.00"
-                placeholderTextColor="#afb5bf"
-                keyboardType="decimal-pad"
-                value={form.amount}
-                onChangeText={(v) => setField('amount', v)}
-              />
+              <View style={styles.amountCurrencyRow}>
+                <TextInput
+                  style={[styles.textInput, { flex: 1, marginRight: 8 }]}
+                  placeholder="0.00"
+                  placeholderTextColor="#afb5bf"
+                  keyboardType="decimal-pad"
+                  value={form.amount}
+                  onChangeText={(v) => setField('amount', v)}
+                />
+                <CurrencyPicker value={form.currency} onChange={(v) => setField('currency', v)} />
+              </View>
 
               {/* Date */}
               <Text style={styles.fieldLabel}>Date (YYYY-MM-DD)</Text>
@@ -564,26 +629,11 @@ export default function CostSplitScreen() {
                 onChangeText={(v) => setField('date', v)}
               />
 
-              {/* Split Mode */}
-              <Text style={styles.fieldLabel}>Split Mode</Text>
-              <View style={styles.chipRow}>
-                {(['equal', 'exact', 'percentage', 'shares'] as SplitMode[]).map((mode) => (
-                  <TouchableOpacity
-                    key={mode}
-                    activeOpacity={0.85}
-                    style={[styles.modeChip, form.splitMode === mode && styles.modeChipActive]}
-                    onPress={() => setField('splitMode', mode)}>
-                    <Text style={[styles.modeChipText, form.splitMode === mode && styles.modeChipTextActive]}>
-                      {mode.charAt(0).toUpperCase() + mode.slice(1)}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              {/* Payers */}
-              <Text style={styles.fieldLabel}>Payers</Text>
+              {/* Paid By */}
+              <Text style={styles.fieldLabel}>Paid By</Text>
               {members.map((member) => {
                 const selected = form.selectedPayers.has(member.id);
+                const isCurrentUser = member.id === user?.id;
                 return (
                   <View key={member.id} style={styles.memberRow}>
                     <TouchableOpacity
@@ -592,7 +642,9 @@ export default function CostSplitScreen() {
                       onPress={() => togglePayer(member.id)}>
                       {selected && <Ionicons name="checkmark" size={14} color="#fff" />}
                     </TouchableOpacity>
-                    <Text style={styles.memberName}>{member.name}</Text>
+                    <Text style={styles.memberName}>
+                      {member.name}{isCurrentUser ? ' (You)' : ''}
+                    </Text>
                     {selected && form.selectedPayers.size > 1 && (
                       <TextInput
                         style={styles.inlineAmountInput}
@@ -609,27 +661,70 @@ export default function CostSplitScreen() {
                       />
                     )}
                     {selected && form.selectedPayers.size === 1 && (
-                      <Text style={styles.fullAmountLabel}>Full amount</Text>
+                      <Text style={styles.fullAmountLabel}>
+                        {form.amount ? formatAmount(parseFloat(form.amount) || 0) : 'Full amount'}
+                      </Text>
                     )}
                   </View>
                 );
               })}
 
+              {/* Split Mode */}
+              <Text style={[styles.fieldLabel, { marginTop: 20 }]}>Split Mode</Text>
+              <View style={styles.chipRow}>
+                {(['equal', 'exact', 'percentage'] as SplitMode[]).map((mode) => (
+                  <TouchableOpacity
+                    key={mode}
+                    activeOpacity={0.85}
+                    style={[styles.modeChip, form.splitMode === mode && styles.modeChipActive]}
+                    onPress={() => setField('splitMode', mode)}>
+                    <Text style={[styles.modeChipText, form.splitMode === mode && styles.modeChipTextActive]}>
+                      {mode.charAt(0).toUpperCase() + mode.slice(1)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
               {/* Participants */}
-              <Text style={styles.fieldLabel}>Participants</Text>
+              <Text style={styles.fieldLabel}>Split Between</Text>
               {form.splitMode === 'equal' ? (
                 <Text style={styles.fieldHint}>All selected members split equally.</Text>
               ) : (
                 <Text style={styles.fieldHint}>
                   {form.splitMode === 'percentage'
                     ? 'Enter % for each (must sum to 100)'
-                    : form.splitMode === 'shares'
-                    ? 'Enter shares for each'
                     : 'Enter exact amount for each'}
                 </Text>
               )}
+              {(form.splitMode === 'exact' || form.splitMode === 'percentage') && (() => {
+                if (form.splitMode === 'exact') {
+                  const total = parseFloat(form.amount) || 0;
+                  const used = Array.from(form.selectedParticipants).reduce(
+                    (sum, uid) => sum + (parseFloat(form.participantValues[uid] ?? '0') || 0), 0
+                  );
+                  const remaining = total - used;
+                  const isOver = remaining < -0.005;
+                  return total > 0 ? (
+                    <Text style={[styles.fieldHint, { color: isOver ? '#d95f6a' : '#27b371', fontWeight: '600' }]}>
+                      {isOver ? `Over by ${formatAmount(Math.abs(remaining))}` : `Remaining: ${formatAmount(remaining)}`}
+                    </Text>
+                  ) : null;
+                } else {
+                  const used = Array.from(form.selectedParticipants).reduce(
+                    (sum, uid) => sum + (parseFloat(form.participantValues[uid] ?? '0') || 0), 0
+                  );
+                  const remaining = 100 - used;
+                  const isOver = remaining < -0.05;
+                  return (
+                    <Text style={[styles.fieldHint, { color: isOver ? '#d95f6a' : Math.abs(remaining) < 2 ? '#27b371' : '#8a909b', fontWeight: '600' }]}>
+                      {isOver ? `Over by ${Math.abs(remaining).toFixed(1)}%` : `Remaining: ${remaining.toFixed(1)}%`}
+                    </Text>
+                  );
+                }
+              })()}
               {members.map((member) => {
                 const selected = form.selectedParticipants.has(member.id);
+                const isCurrentUser = member.id === user?.id;
                 return (
                   <View key={member.id} style={styles.memberRow}>
                     <TouchableOpacity
@@ -638,20 +733,30 @@ export default function CostSplitScreen() {
                       onPress={() => toggleParticipant(member.id)}>
                       {selected && <Ionicons name="checkmark" size={14} color="#fff" />}
                     </TouchableOpacity>
-                    <Text style={styles.memberName}>{member.name}</Text>
+                    <Text style={styles.memberName}>
+                      {member.name}{isCurrentUser ? ' (You)' : ''}
+                    </Text>
                     {selected && form.splitMode !== 'equal' && (
                       <TextInput
                         style={styles.inlineAmountInput}
-                        placeholder={form.splitMode === 'percentage' ? '%' : form.splitMode === 'shares' ? 'shares' : 'amount'}
+                        placeholder={form.splitMode === 'percentage' ? '%' : 'amount'}
                         placeholderTextColor="#afb5bf"
                         keyboardType="decimal-pad"
                         value={form.participantValues[member.id] ?? ''}
-                        onChangeText={(v) =>
+                        onChangeText={(v) => {
+                          if (form.splitMode === 'exact') {
+                            const total = parseFloat(form.amount) || 0;
+                            const alreadyUsed = Array.from(form.selectedParticipants)
+                              .filter((uid) => uid !== member.id)
+                              .reduce((sum, uid) => sum + (parseFloat(form.participantValues[uid] ?? '0') || 0), 0);
+                            const newVal = parseFloat(v) || 0;
+                            if (newVal > total - alreadyUsed + 0.005) return;
+                          }
                           setForm((prev) => ({
                             ...prev,
                             participantValues: { ...prev.participantValues, [member.id]: v },
-                          }))
-                        }
+                          }));
+                        }}
                       />
                     )}
                   </View>
@@ -963,6 +1068,42 @@ const styles = StyleSheet.create({
   balanceNegative: {
     color: '#d95f6a',
   },
+  balanceExpenseList: {
+    backgroundColor: '#f7f8fa',
+    borderRadius: 10,
+    marginBottom: 8,
+    marginTop: -4,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  balanceExpenseRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 5,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eaedf2',
+  },
+  balanceExpenseDesc: {
+    flex: 1,
+    fontSize: 13,
+    color: '#3a3f4b',
+    marginRight: 8,
+  },
+  balanceExpenseAmounts: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+  },
+  balanceExpensePaid: {
+    fontSize: 12,
+    color: '#27b371',
+    fontWeight: '500',
+  },
+  balanceExpenseShare: {
+    fontSize: 12,
+    color: '#8a909b',
+  },
   debtCard: {
     borderRadius: 16,
     borderWidth: 1,
@@ -1058,10 +1199,21 @@ const styles = StyleSheet.create({
   settlementHistoryCard: {
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#eaedf2',
-    backgroundColor: '#fafbfc',
+    borderColor: '#c3eed9',
+    backgroundColor: '#f2fdf7',
     padding: 12,
     marginBottom: 8,
+  },
+  settlementPaidBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 6,
+  },
+  settlementPaidText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#27b371',
   },
   settlementHistoryRow: {
     flexDirection: 'row',
@@ -1167,6 +1319,11 @@ const styles = StyleSheet.create({
     color: '#a0a8b5',
     marginBottom: 8,
     marginTop: -4,
+  },
+  amountCurrencyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
   },
   textInput: {
     borderWidth: 1,

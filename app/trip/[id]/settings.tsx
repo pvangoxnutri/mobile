@@ -51,6 +51,8 @@ export default function TripSettingsScreen() {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteMessage, setInviteMessage] = useState('');
   const [inviteSubmitting, setInviteSubmitting] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const [confirmingLeave, setConfirmingLeave] = useState(false);
 
   const canManageTrip = Boolean(user?.id && trip?.ownerIds?.includes(user.id));
 
@@ -215,6 +217,23 @@ export default function TripSettingsScreen() {
     }
   }
 
+  async function handleLeave() {
+    setLeaving(true);
+    try {
+      const response = await apiFetch(`/api/trips/${id}/members/me`, { method: 'DELETE' });
+      if (!response.ok) {
+        const text = await response.text();
+        setMessage({ type: 'error', text: text || 'Unable to leave this adventure.' });
+        return;
+      }
+      router.replace('/(tabs)');
+    } catch {
+      setMessage({ type: 'error', text: 'Unable to leave this adventure.' });
+    } finally {
+      setLeaving(false);
+    }
+  }
+
   async function handleCopyInviteCode() {
     if (!trip?.inviteCode) return;
     await Clipboard.setStringAsync(trip.inviteCode);
@@ -248,7 +267,9 @@ export default function TripSettingsScreen() {
             <View style={styles.centerState}>
               <ActivityIndicator color="#ff4f74" />
             </View>
-          ) : (
+          ) : canManageTrip ? (
+
+            // ── OWNER VIEW ────────────────────────────────────────────────────
             <>
               <TouchableOpacity activeOpacity={0.92} style={styles.coverCard} onPress={() => void handlePickImage()}>
                 {imageUrl ? <Image source={{ uri: imageUrl }} style={styles.coverImage} /> : null}
@@ -262,10 +283,8 @@ export default function TripSettingsScreen() {
               <View style={styles.card}>
                 <Text style={styles.label}>Trip title</Text>
                 <TextInput value={title} onChangeText={setTitle} placeholder="Trip title" style={styles.input} />
-
                 <Text style={styles.label}>Destination</Text>
                 <TextInput value={destination} onChangeText={setDestination} placeholder="Destination" style={styles.input} />
-
                 <Text style={styles.label}>Dates</Text>
                 <TouchableOpacity style={styles.dateRangeCard} activeOpacity={0.9} onPress={() => setRangePickerOpen(true)}>
                   <View style={styles.dateRangeCopy}>
@@ -294,52 +313,47 @@ export default function TripSettingsScreen() {
                     ) : null}
                   </View>
                 ))}
-                {canManageTrip ? (
-                  <View style={styles.inviteSection}>
-                    <View style={styles.inviteHeaderRow}>
-                      <View>
-                        <Text style={styles.inviteTitle}>Invite traveler</Text>
-                        <Text style={styles.inviteSubtitle}>Add by email or share the trip code directly from settings.</Text>
-                      </View>
-                      <View style={styles.inviteCodePill}>
-                        <Text style={styles.inviteCodePillText}>{trip?.inviteCode ?? '------'}</Text>
-                      </View>
+                <View style={styles.inviteSection}>
+                  <View style={styles.inviteHeaderRow}>
+                    <View>
+                      <Text style={styles.inviteTitle}>Invite traveler</Text>
+                      <Text style={styles.inviteSubtitle}>Add by email or share the trip code directly from settings.</Text>
                     </View>
-
-                    <View style={styles.inviteComposer}>
-                      <TextInput
-                        value={inviteEmail}
-                        onChangeText={setInviteEmail}
-                        placeholder="friend@example.com"
-                        placeholderTextColor="#afb5bf"
-                        keyboardType="email-address"
-                        autoCapitalize="none"
-                        autoCorrect={false}
-                        style={styles.inviteInput}
-                      />
-                      <TouchableOpacity
-                        activeOpacity={0.9}
-                        style={[styles.inviteAddButton, inviteSubmitting ? styles.inviteAddButtonDisabled : null]}
-                        disabled={inviteSubmitting}
-                        onPress={() => void handleAddInvite()}>
-                        <Text style={styles.inviteAddButtonText}>{inviteSubmitting ? 'Adding...' : 'Invite'}</Text>
-                      </TouchableOpacity>
+                    <View style={styles.inviteCodePill}>
+                      <Text style={styles.inviteCodePillText}>{trip?.inviteCode ?? '------'}</Text>
                     </View>
-
-                    <View style={styles.inviteActions}>
-                      <TouchableOpacity activeOpacity={0.9} style={styles.secondaryInviteButton} onPress={() => void handleCopyInviteCode()}>
-                        <Ionicons name="copy-outline" size={16} color="#ff4f74" />
-                        <Text style={styles.secondaryInviteButtonText}>Copy code</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity activeOpacity={0.9} style={styles.secondaryInviteButton} onPress={() => void handleShareInvite()}>
-                        <Ionicons name="share-social-outline" size={16} color="#ff4f74" />
-                        <Text style={styles.secondaryInviteButtonText}>Share</Text>
-                      </TouchableOpacity>
-                    </View>
-
-                    {inviteMessage ? <Text style={styles.inviteMessage}>{inviteMessage}</Text> : null}
                   </View>
-                ) : null}
+                  <View style={styles.inviteComposer}>
+                    <TextInput
+                      value={inviteEmail}
+                      onChangeText={setInviteEmail}
+                      placeholder="friend@example.com"
+                      placeholderTextColor="#afb5bf"
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      style={styles.inviteInput}
+                    />
+                    <TouchableOpacity
+                      activeOpacity={0.9}
+                      style={[styles.inviteAddButton, inviteSubmitting ? styles.inviteAddButtonDisabled : null]}
+                      disabled={inviteSubmitting}
+                      onPress={() => void handleAddInvite()}>
+                      <Text style={styles.inviteAddButtonText}>{inviteSubmitting ? 'Adding...' : 'Invite'}</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.inviteActions}>
+                    <TouchableOpacity activeOpacity={0.9} style={styles.secondaryInviteButton} onPress={() => void handleCopyInviteCode()}>
+                      <Ionicons name="copy-outline" size={16} color="#ff4f74" />
+                      <Text style={styles.secondaryInviteButtonText}>Copy code</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity activeOpacity={0.9} style={styles.secondaryInviteButton} onPress={() => void handleShareInvite()}>
+                      <Ionicons name="share-social-outline" size={16} color="#ff4f74" />
+                      <Text style={styles.secondaryInviteButtonText}>Share</Text>
+                    </TouchableOpacity>
+                  </View>
+                  {inviteMessage ? <Text style={styles.inviteMessage}>{inviteMessage}</Text> : null}
+                </View>
               </View>
 
               <View style={styles.card}>
@@ -371,6 +385,75 @@ export default function TripSettingsScreen() {
                 <Text style={styles.primaryButtonText}>{saving ? 'Saving...' : 'Save trip settings'}</Text>
               </TouchableOpacity>
             </>
+
+          ) : (
+
+            // ── MEMBER VIEW (read-only + leave) ───────────────────────────────
+            <>
+              {imageUrl ? (
+                <View style={styles.coverCard}>
+                  <Image source={{ uri: imageUrl }} style={styles.coverImage} />
+                  <View style={styles.coverOverlay} />
+                </View>
+              ) : null}
+
+              <View style={styles.card}>
+                <Text style={styles.readOnlyLabel}>Trip title</Text>
+                <Text style={styles.readOnlyValue}>{trip?.title ?? '—'}</Text>
+                <View style={styles.readOnlyDivider} />
+                <Text style={styles.readOnlyLabel}>Destination</Text>
+                <Text style={styles.readOnlyValue}>{trip?.destination ?? '—'}</Text>
+                <View style={styles.readOnlyDivider} />
+                <Text style={styles.readOnlyLabel}>Dates</Text>
+                <Text style={styles.readOnlyValue}>{formatRangeDisplay(startDate, endDate)}</Text>
+              </View>
+
+              <View style={styles.card}>
+                <Text style={styles.sectionTitle}>Members</Text>
+                {members.map((member) => (
+                  <View key={member.id} style={styles.listRow}>
+                    <View style={styles.listCopy}>
+                      <Text style={styles.listTitle}>{member.name}</Text>
+                      <Text style={styles.listMeta}>{member.isOwner ? 'Owner' : 'Member'}</Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+
+              {message ? (
+                <View style={[styles.messageBanner, message.type === 'success' ? styles.messageBannerSuccess : styles.messageBannerError]}>
+                  <Text style={[styles.messageText, message.type === 'success' ? styles.messageTextSuccess : styles.messageTextError]}>{message.text}</Text>
+                </View>
+              ) : null}
+
+              <View style={styles.dangerCard}>
+                <Text style={styles.dangerTitle}>Leave adventure</Text>
+                <Text style={styles.dangerCopy}>
+                  You'll be removed from the group and won't see its SideQuests. You'll need a new invite to rejoin.
+                </Text>
+                {confirmingLeave ? (
+                  <View style={styles.dangerConfirmRow}>
+                    <TouchableOpacity activeOpacity={0.88} style={styles.dangerCancelButton} onPress={() => setConfirmingLeave(false)}>
+                      <Text style={styles.dangerCancelText}>Cancel</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      activeOpacity={0.88}
+                      style={[styles.dangerConfirmButton, leaving ? styles.dangerButtonDisabled : null]}
+                      disabled={leaving}
+                      onPress={() => void handleLeave()}>
+                      <Ionicons name="exit-outline" size={16} color="#fff" />
+                      <Text style={styles.dangerConfirmText}>{leaving ? 'Leaving...' : 'Yes, leave'}</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <TouchableOpacity activeOpacity={0.88} style={styles.dangerButton} onPress={() => setConfirmingLeave(true)}>
+                    <Ionicons name="exit-outline" size={18} color="#d53d18" />
+                    <Text style={styles.dangerButtonText}>Leave adventure</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </>
+
           )}
         </ScrollView>
 
@@ -622,4 +705,54 @@ const styles = StyleSheet.create({
   },
   primaryButtonDisabled: { opacity: 0.7 },
   primaryButtonText: { color: '#fff', fontSize: 18, fontWeight: '900' },
+  readOnlyLabel: { color: '#868d99', fontSize: 12, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', marginTop: 4 },
+  readOnlyValue: { color: '#161821', fontSize: 16, fontWeight: '700', marginTop: 4, marginBottom: 4 },
+  readOnlyDivider: { height: 1, backgroundColor: '#f0f2f5', marginVertical: 10 },
+  dangerCard: {
+    marginTop: 16,
+    marginBottom: 20,
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: '#ffd0c3',
+    backgroundColor: '#fff9f8',
+    padding: 18,
+  },
+  dangerTitle: { color: '#a52617', fontSize: 16, fontWeight: '900', marginBottom: 6 },
+  dangerCopy: { color: '#7d4238', fontSize: 14, lineHeight: 20, marginBottom: 16 },
+  dangerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    minHeight: 52,
+    borderRadius: 999,
+    borderWidth: 1.5,
+    borderColor: '#f0b0a0',
+    backgroundColor: '#fff',
+  },
+  dangerButtonDisabled: { opacity: 0.6 },
+  dangerButtonText: { color: '#d53d18', fontSize: 15, fontWeight: '800' },
+  dangerConfirmRow: { flexDirection: 'row', gap: 10 },
+  dangerCancelButton: {
+    flex: 1,
+    minHeight: 52,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#dde0e6',
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dangerCancelText: { color: '#4a5160', fontSize: 15, fontWeight: '700' },
+  dangerConfirmButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    minHeight: 52,
+    borderRadius: 999,
+    backgroundColor: '#d53d18',
+  },
+  dangerConfirmText: { color: '#fff', fontSize: 15, fontWeight: '800' },
 });
