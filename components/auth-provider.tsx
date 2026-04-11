@@ -209,7 +209,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   if (loading) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' }}>
-        <ActivityIndicator size="large" color="#ff4f74" />
+        <ActivityIndicator size="large" color="#ff4f74" />{/* default brand color — theme not yet loaded */}
       </View>
     );
   }

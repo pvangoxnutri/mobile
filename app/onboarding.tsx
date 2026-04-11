@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/components/auth-provider';
+import { useAppTheme } from '@/contexts/app-theme-context';
 import { apiFetch, apiJson } from '@/lib/api';
 import type { AppTheme } from '@/lib/types';
 
@@ -37,6 +38,7 @@ const PURPOSES = [
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function OnboardingScreen() {
+  const theme = useAppTheme();
   const insets = useSafeAreaInsets();
   const { refreshProfile, user } = useAuth();
 
@@ -177,7 +179,7 @@ export default function OnboardingScreen() {
 
         {/* ── Progress bar ────────────────────────────────── */}
         <View style={styles.progressTrack}>
-          <Animated.View style={[styles.progressFill, { width: progressWidth }]} />
+          <Animated.View style={[styles.progressFill, { width: progressWidth, backgroundColor: theme.primary }]} />
         </View>
 
         {/* ── Step content ────────────────────────────────── */}
@@ -219,7 +221,7 @@ export default function OnboardingScreen() {
         {/* ── Footer button ───────────────────────────────── */}
         <View style={styles.footer}>
           <Pressable
-            style={({ pressed }) => [styles.nextButton, pressed && styles.nextButtonPressed]}
+            style={({ pressed }) => [styles.nextButton, { backgroundColor: theme.primary, shadowColor: theme.primary }, pressed && styles.nextButtonPressed]}
             disabled={busy}
             onPress={() => (step < TOTAL_STEPS ? changeStep(step + 1) : void finish(false))}>
             {busy ? (
@@ -253,6 +255,7 @@ function StepDiscovery({
   purposeOther: string;
   setPurposeOther: (v: string) => void;
 }) {
+  const theme = useAppTheme();
   return (
     <View>
       <Text style={styles.stepHeading}>How did you find us? 👋</Text>
@@ -262,10 +265,10 @@ function StepDiscovery({
         {FOUND_VIA.map((opt) => (
           <TouchableOpacity
             key={opt}
-            style={[styles.chip, foundVia === opt && styles.chipSelected]}
+            style={[styles.chip, foundVia === opt && { borderColor: theme.primary, backgroundColor: theme.primary08 }]}
             activeOpacity={0.75}
             onPress={() => setFoundVia(foundVia === opt ? null : opt)}>
-            <Text style={[styles.chipText, foundVia === opt && styles.chipTextSelected]}>{opt}</Text>
+            <Text style={[styles.chipText, foundVia === opt && { color: theme.primary, fontWeight: '700' }]}>{opt}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -277,11 +280,11 @@ function StepDiscovery({
         {PURPOSES.map((opt) => (
           <TouchableOpacity
             key={opt.value}
-            style={[styles.purposeCard, purpose === opt.value && styles.purposeCardSelected]}
+            style={[styles.purposeCard, purpose === opt.value && { borderColor: theme.primary, backgroundColor: theme.primary08 }]}
             activeOpacity={0.78}
             onPress={() => setPurpose(purpose === opt.value ? null : opt.value)}>
             <Text style={styles.purposeEmoji}>{opt.emoji}</Text>
-            <Text style={[styles.purposeLabel, purpose === opt.value && styles.purposeLabelSelected]}>
+            <Text style={[styles.purposeLabel, purpose === opt.value && { color: theme.primary }]}>
               {opt.label}
             </Text>
           </TouchableOpacity>
@@ -312,6 +315,7 @@ function StepTheme({
   selectedThemeId: string | null;
   setSelectedThemeId: (id: string) => void;
 }) {
+  const palette = useAppTheme();
   return (
     <View>
       <Text style={styles.stepHeading}>Pick your vibe 🎨</Text>
@@ -319,7 +323,7 @@ function StepTheme({
 
       {themes.length === 0 ? (
         <View style={styles.themeLoading}>
-          <ActivityIndicator color="#ff4f74" />
+          <ActivityIndicator color={palette.primary} />
         </View>
       ) : (
         <View style={styles.themeList}>
@@ -328,7 +332,7 @@ function StepTheme({
             return (
               <TouchableOpacity
                 key={theme.id}
-                style={[styles.themeCard, selected && styles.themeCardSelected]}
+                style={[styles.themeCard, selected && { borderColor: palette.primary, backgroundColor: '#fff' }]}
                 activeOpacity={0.88}
                 onPress={() => setSelectedThemeId(theme.id)}>
                 {/* Color preview strip */}
@@ -356,7 +360,7 @@ function StepTheme({
                     </View>
                   </View>
                   {selected ? (
-                    <View style={styles.themeCheck}>
+                    <View style={[styles.themeCheck, { backgroundColor: palette.primary }]}>
                       <Ionicons name="checkmark" size={15} color="#fff" />
                     </View>
                   ) : (
@@ -391,6 +395,7 @@ function StepProfile({
   uploadBusy: boolean;
   onPickAvatar: () => void;
 }) {
+  const theme = useAppTheme();
   return (
     <View>
       <Text style={styles.stepHeading}>Almost done! 🙌</Text>
@@ -398,7 +403,7 @@ function StepProfile({
 
       {/* Avatar upload */}
       <View style={styles.avatarSection}>
-        <TouchableOpacity style={styles.avatarRing} activeOpacity={0.82} onPress={onPickAvatar}>
+        <TouchableOpacity style={[styles.avatarRing, { borderColor: theme.primary }]} activeOpacity={0.82} onPress={onPickAvatar}>
           {avatarUrl ? (
             <Image source={{ uri: avatarUrl }} style={styles.avatar} />
           ) : (
@@ -406,7 +411,7 @@ function StepProfile({
               <Text style={styles.avatarInitials}>{initials}</Text>
             </View>
           )}
-          <View style={styles.avatarCamera}>
+          <View style={[styles.avatarCamera, { backgroundColor: theme.primary }]}>
             {uploadBusy ? (
               <ActivityIndicator size="small" color="#fff" />
             ) : (

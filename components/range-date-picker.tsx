@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useAppTheme } from '@/contexts/app-theme-context';
 import {
   FlatList,
   Modal,
@@ -46,6 +47,7 @@ export default function RangeDatePicker({
   onChange,
   onClose,
 }: Props) {
+  const theme = useAppTheme();
   const { width } = useWindowDimensions();
   const flatListRef = useRef<FlatList<MonthItem>>(null);
   const pageWidth = width - 40;
@@ -162,7 +164,7 @@ export default function RangeDatePicker({
             <Ionicons
               name={!draftStartDate ? 'calendar-outline' : !draftEndDate ? 'ellipse-outline' : 'checkmark-circle'}
               size={16}
-              color="#ff4f74"
+              color={theme.primary}
             />
             <Text style={styles.helperText}>{helperText}</Text>
           </View>
@@ -229,7 +231,7 @@ export default function RangeDatePicker({
             </TouchableOpacity>
             <TouchableOpacity
               activeOpacity={0.92}
-              style={[styles.primaryButton, !(draftStartDate && draftEndDate) ? styles.primaryButtonDisabled : null]}
+              style={[styles.primaryButton, { backgroundColor: theme.primary }, !(draftStartDate && draftEndDate) ? styles.primaryButtonDisabled : null]}
               disabled={!(draftStartDate && draftEndDate)}
               onPress={handleConfirm}>
               <Text style={styles.primaryButtonText}>{confirmLabel}</Text>
@@ -258,6 +260,7 @@ function MonthGrid({
   maxDate?: string | null;
   onDayPress: (day: string) => void;
 }) {
+  const theme = useAppTheme();
   const days = buildMonthCells(month.year, month.month);
 
   return (
@@ -286,7 +289,7 @@ function MonthGrid({
                 isEnd ? styles.dayCellRangeEnd : null,
                 single ? styles.dayCellSingle : null,
               ]}>
-              <View style={[styles.dayCircle, isStart || isEnd ? styles.dayCircleSelected : null, disabled ? styles.dayCircleDisabled : null]}>
+              <View style={[styles.dayCircle, isStart || isEnd ? { backgroundColor: theme.primary, shadowColor: theme.primary } : null, disabled ? styles.dayCircleDisabled : null]}>
                 <Text
                   style={[
                     styles.dayText,

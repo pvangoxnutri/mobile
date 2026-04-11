@@ -5,6 +5,7 @@ import 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AuthGate, AuthProvider } from '@/components/auth-provider';
+import { AppThemeProvider } from '@/contexts/app-theme-context';
 import { I18nProvider } from '@/components/i18n-provider';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
@@ -20,6 +21,7 @@ export default function RootLayout() {
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
         <I18nProvider>
           <AuthProvider>
+            <AppThemeProvider>
             <AuthGate>
               <Stack>
                 <Stack.Screen name="index" options={{ headerShown: false }} />
@@ -41,6 +43,7 @@ export default function RootLayout() {
               </Stack>
               <StatusBar style="dark" />
             </AuthGate>
+            </AppThemeProvider>
           </AuthProvider>
         </I18nProvider>
       </ThemeProvider>

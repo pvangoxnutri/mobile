@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAppTheme } from '@/contexts/app-theme-context';
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
@@ -59,11 +60,16 @@ export default function TabLayout() {
 }
 
 function TabIcon({ focused, icon }: { focused: boolean; icon: React.ReactNode }) {
+  const theme = useAppTheme();
   if (!focused) {
     return <View style={styles.inactiveIcon}>{icon}</View>;
   }
 
-  return <View style={styles.activeIcon}>{icon}</View>;
+  return (
+    <View style={[styles.activeIcon, { backgroundColor: theme.primary, shadowColor: theme.primary }]}>
+      {icon}
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -94,8 +100,6 @@ const styles = StyleSheet.create({
     borderRadius: 25,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#ff4f74',
-    shadowColor: '#ff4f74',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.28,
     shadowRadius: 20,

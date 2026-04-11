@@ -7,6 +7,9 @@ export interface UserInfo {
   hasCompletedOnboarding: boolean;
   role?: string | null;
   language?: 'en' | 'sv';
+  themeId?: string | null;
+  themePrimaryColor?: string | null;
+  themeSecondaryColor?: string | null;
 }
 
 export interface AppTheme {

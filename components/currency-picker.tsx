@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAppTheme } from '@/contexts/app-theme-context';
 
 type Currency = {
   code: string;
@@ -98,6 +99,7 @@ type Props = {
 };
 
 export function CurrencyPicker({ value, onChange }: Props) {
+  const theme = useAppTheme();
   const insets = useSafeAreaInsets();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -163,7 +165,7 @@ export function CurrencyPicker({ value, onChange }: Props) {
                   <Text style={styles.itemCode}>{item.code}</Text>
                   <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
                   {item.code === value && (
-                    <Ionicons name="checkmark" size={16} color="#ff4f74" />
+                    <Ionicons name="checkmark" size={16} color={theme.primary} />
                   )}
                 </TouchableOpacity>
               )}

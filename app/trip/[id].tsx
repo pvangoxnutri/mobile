@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Image, Modal, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/components/auth-provider';
+import { useAppTheme } from '@/contexts/app-theme-context';
 import { apiFetch, apiJson } from '@/lib/api';
 import { stripLocationMarker } from '@/lib/sidequest-location';
 import type { Quest, SideQuestActivity, TripInvite } from '@/lib/types';
@@ -34,6 +35,7 @@ type TripMember = {
 };
 
 export default function TripDetailsScreen() {
+  const theme = useAppTheme();
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView | null>(null);
   const feedOffsets = useRef<Record<string, number>>({});
@@ -453,14 +455,14 @@ export default function TripDetailsScreen() {
         </ScrollView>
 
         <View pointerEvents="box-none" style={[styles.chatBubbleWrap, { bottom: Math.max(insets.bottom, 16) + 6 }]}>
-          <TouchableOpacity activeOpacity={0.92} style={styles.chatBubble} onPress={() => setChatOpen(true)}>
+          <TouchableOpacity activeOpacity={0.92} style={[styles.chatBubble, { backgroundColor: theme.secondary, shadowColor: theme.secondary }]} onPress={() => setChatOpen(true)}>
             <Ionicons name="chatbubble-ellipses-outline" size={20} color="#fff" />
-            {chatUnread ? <View style={styles.chatUnreadDot} /> : null}
+            {chatUnread ? <View style={[styles.chatUnreadDot, { backgroundColor: theme.primary }]} /> : null}
           </TouchableOpacity>
         </View>
 
         <View pointerEvents="box-none" style={[styles.floatingWrap, { bottom: Math.max(insets.bottom, 16) + 6 }]}>
-          <TouchableOpacity activeOpacity={0.92} style={styles.floatingButton} onPress={() => router.push(`/trip/${id}/sidequest/new`)}>
+          <TouchableOpacity activeOpacity={0.92} style={[styles.floatingButton, { backgroundColor: theme.primary, shadowColor: theme.primary }]} onPress={() => router.push(`/trip/${id}/sidequest/new`)}>
             <Ionicons name="add" size={20} color="#fff" />
             <Text style={styles.floatingButtonText}>Lägg till aktivitet</Text>
           </TouchableOpacity>
@@ -505,7 +507,7 @@ export default function TripDetailsScreen() {
                           setInviteComposerOpen((current) => !current);
                         }}>
                         <View style={[styles.personAvatar, styles.inviteAvatar]}>
-                          <Ionicons name="add" size={20} color="#ff4f74" />
+                          <Ionicons name="add" size={20} color={theme.primary} />
                         </View>
                         <View style={styles.personCopy}>
                           <Text style={styles.personName}>Invite traveler</Text>
@@ -529,7 +531,7 @@ export default function TripDetailsScreen() {
                             />
                             <TouchableOpacity
                               activeOpacity={0.9}
-                              style={[styles.inviteAddButton, inviteSubmitting ? styles.inviteAddButtonDisabled : null]}
+                              style={[styles.inviteAddButton, { backgroundColor: theme.primary }, inviteSubmitting ? styles.inviteAddButtonDisabled : null]}
                               disabled={inviteSubmitting}
                               onPress={() => void handleAddInvite()}>
                               <Text style={styles.inviteAddButtonText}>{inviteSubmitting ? 'Adding...' : 'Invite'}</Text>
@@ -538,18 +540,18 @@ export default function TripDetailsScreen() {
 
                           <View style={styles.inviteActions}>
                             <TouchableOpacity activeOpacity={0.9} style={styles.secondaryInviteButton} onPress={() => void handleCopyInviteCode()}>
-                              <Ionicons name="copy-outline" size={16} color="#ff4f74" />
-                              <Text style={styles.secondaryInviteButtonText}>Copy code</Text>
+                              <Ionicons name="copy-outline" size={16} color={theme.primary} />
+                              <Text style={[styles.secondaryInviteButtonText, { color: theme.primary }]}>Copy code</Text>
                             </TouchableOpacity>
                             <TouchableOpacity activeOpacity={0.9} style={styles.secondaryInviteButton} onPress={() => void handleShareInvite()}>
-                              <Ionicons name="share-social-outline" size={16} color="#ff4f74" />
-                              <Text style={styles.secondaryInviteButtonText}>Share</Text>
+                              <Ionicons name="share-social-outline" size={16} color={theme.primary} />
+                              <Text style={[styles.secondaryInviteButtonText, { color: theme.primary }]}>Share</Text>
                             </TouchableOpacity>
                           </View>
 
                           <View style={styles.inviteHintRow}>
                             <Text style={styles.inviteHintLabel}>Invite code</Text>
-                            <Text style={styles.inviteHintCode}>{trip?.inviteCode ?? '------'}</Text>
+                            <Text style={[styles.inviteHintCode, { color: theme.primary }]}>{trip?.inviteCode ?? '------'}</Text>
                           </View>
 
                           {inviteMessage ? <Text style={styles.inviteMessage}>{inviteMessage}</Text> : null}
@@ -600,7 +602,7 @@ export default function TripDetailsScreen() {
                 <View style={styles.chatPresenceRow}>
                   {chatPresence.slice(0, 6).map((u) => (
                     <View key={u.userId} style={styles.chatPresenceBubble}>
-                      <Text style={styles.chatPresenceBubbleText}>{getInitials(u.userName)}</Text>
+                      <Text style={[styles.chatPresenceBubbleText, { color: theme.secondary }]}>{getInitials(u.userName)}</Text>
                     </View>
                   ))}
                   {chatPresence.length > 6 ? (
@@ -637,7 +639,7 @@ export default function TripDetailsScreen() {
                         </View>
                       ) : ownMessage ? (
                         <View style={styles.chatMessageWrapOwn}>
-                          <View style={[styles.chatBubbleCard, styles.chatBubbleCardOwn]}>
+                          <View style={[styles.chatBubbleCard, styles.chatBubbleCardOwn, { backgroundColor: theme.primary }]}>
                             <Text style={[styles.chatBubbleText, styles.chatBubbleTextOwn]}>{message.text}</Text>
                           </View>
                         </View>
@@ -673,7 +675,7 @@ export default function TripDetailsScreen() {
                 />
                 <TouchableOpacity
                   activeOpacity={0.9}
-                  style={[styles.chatSendButton, !chatDraft.trim() || chatSending ? styles.chatSendButtonDisabled : null]}
+                  style={[styles.chatSendButton, { backgroundColor: theme.primary }, !chatDraft.trim() || chatSending ? styles.chatSendButtonDisabled : null]}
                   disabled={!chatDraft.trim() || chatSending}
                   onPress={() => void handleSendChat()}>
                   <Ionicons name="send" size={16} color="#fff" />
@@ -752,6 +754,7 @@ function SideQuestFeedCard({
   activity: SideQuestActivity;
   onPress: () => void;
 }) {
+  const theme = useAppTheme();
   const hidden = activity.isHiddenForViewer;
   const hasImage = Boolean(activity.imageUrl);
 
@@ -792,9 +795,9 @@ function SideQuestFeedCard({
         </Text>
         <View style={styles.feedFooter}>
           {activity.commentCount > 0 && !hidden ? (
-            <View style={styles.feedCommentBadge}>
-              <Ionicons name="chatbubble-outline" size={13} color="#ff4f74" />
-              <Text style={styles.feedCommentCount}>{activity.commentCount}</Text>
+            <View style={[styles.feedCommentBadge, { backgroundColor: theme.primary08 }]}>
+              <Ionicons name="chatbubble-outline" size={13} color={theme.primary} />
+              <Text style={[styles.feedCommentCount, { color: theme.primary }]}>{activity.commentCount}</Text>
             </View>
           ) : null}
           <Ionicons name="chevron-forward" size={18} color="#9298a4" />
@@ -822,9 +825,10 @@ function TripMetaChip({
 }
 
 function FeedBadge({ label, tone }: { label: string; tone: 'pink' | 'dark' | 'light' }) {
+  const theme = useAppTheme();
   return (
-    <View style={[styles.feedBadge, tone === 'pink' ? styles.feedBadgePink : tone === 'dark' ? styles.feedBadgeDark : styles.feedBadgeLight]}>
-      <Text style={[styles.feedBadgeText, tone === 'dark' ? styles.feedBadgeTextLight : null]}>{label}</Text>
+    <View style={[styles.feedBadge, tone === 'pink' ? [styles.feedBadgePink, { backgroundColor: theme.primary12 }] : tone === 'dark' ? styles.feedBadgeDark : styles.feedBadgeLight]}>
+      <Text style={[styles.feedBadgeText, { color: theme.primary }, tone === 'dark' ? styles.feedBadgeTextLight : null]}>{label}</Text>
     </View>
   );
 }

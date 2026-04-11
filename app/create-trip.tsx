@@ -15,6 +15,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAppTheme } from '@/contexts/app-theme-context';
 import RangeDatePicker, { formatRangeDisplay } from '@/components/range-date-picker';
 import { apiFetch, apiJson } from '@/lib/api';
 import type { Quest } from '@/lib/types';
@@ -22,6 +23,7 @@ import type { Quest } from '@/lib/types';
 type MessageState = { type: 'success' | 'error'; text: string } | null;
 
 export default function CreateTripScreen() {
+  const theme = useAppTheme();
   const insets = useSafeAreaInsets();
   const [title, setTitle] = useState('');
   const [destination, setDestination] = useState('');
@@ -169,7 +171,7 @@ export default function CreateTripScreen() {
         showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <TouchableOpacity style={styles.backButton} activeOpacity={0.8} onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={28} color="#ff4f74" />
+            <Ionicons name="arrow-back" size={28} color={theme.primary} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>New Adventure</Text>
         </View>
@@ -217,7 +219,7 @@ export default function CreateTripScreen() {
 
         <View style={styles.section}>
           <View style={styles.sectionTitleRow}>
-            <Ionicons name="calendar-outline" size={23} color="#ff4f74" />
+            <Ionicons name="calendar-outline" size={23} color={theme.primary} />
             <Text style={styles.sectionTitle}>When are you going?</Text>
           </View>
 
@@ -227,15 +229,15 @@ export default function CreateTripScreen() {
               <Text style={styles.dateRangeValue}>{formatRangeDisplay(startDate, endDate)}</Text>
               <Text style={styles.dateRangeHint}>Tap once, pick start and end in one calendar.</Text>
             </View>
-            <View style={styles.dateRangeIcon}>
-              <Ionicons name="calendar-outline" size={22} color="#ff4f74" />
+            <View style={[styles.dateRangeIcon, { backgroundColor: theme.primary08, borderColor: theme.primary20 }]}>
+              <Ionicons name="calendar-outline" size={22} color={theme.primary} />
             </View>
           </Pressable>
         </View>
 
         <View style={styles.section}>
           <View style={styles.sectionTitleRow}>
-            <Ionicons name="key-outline" size={23} color="#10b7d6" />
+            <Ionicons name="key-outline" size={23} color={theme.secondary} />
             <Text style={styles.sectionTitle}>Invite code</Text>
           </View>
 
@@ -246,13 +248,13 @@ export default function CreateTripScreen() {
             </View>
 
             <View style={styles.codeActions}>
-              <TouchableOpacity activeOpacity={0.86} style={styles.codeActionButton} onPress={() => void handleCopyInviteCode()}>
-                <Ionicons name="copy-outline" size={16} color="#ff4f74" />
-                <Text style={styles.codeActionText}>Copy</Text>
+              <TouchableOpacity activeOpacity={0.86} style={[styles.codeActionButton, { borderColor: theme.primary20 }]} onPress={() => void handleCopyInviteCode()}>
+                <Ionicons name="copy-outline" size={16} color={theme.primary} />
+                <Text style={[styles.codeActionText, { color: theme.primary }]}>Copy</Text>
               </TouchableOpacity>
-              <TouchableOpacity activeOpacity={0.86} style={styles.codeActionButton} onPress={() => void handleShareInviteCode()}>
-                <Ionicons name="share-social-outline" size={16} color="#ff4f74" />
-                <Text style={styles.codeActionText}>Share</Text>
+              <TouchableOpacity activeOpacity={0.86} style={[styles.codeActionButton, { borderColor: theme.primary20 }]} onPress={() => void handleShareInviteCode()}>
+                <Ionicons name="share-social-outline" size={16} color={theme.primary} />
+                <Text style={[styles.codeActionText, { color: theme.primary }]}>Share</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -260,7 +262,7 @@ export default function CreateTripScreen() {
 
         <View style={styles.section}>
           <View style={styles.sectionTitleRow}>
-            <Ionicons name="mail-open-outline" size={23} color="#10b7d6" />
+            <Ionicons name="mail-open-outline" size={23} color={theme.secondary} />
             <Text style={styles.sectionTitle}>Invited and waiting</Text>
           </View>
 
@@ -277,7 +279,7 @@ export default function CreateTripScreen() {
               autoCorrect={false}
               style={styles.inviteInput}
             />
-            <TouchableOpacity activeOpacity={0.88} style={styles.inviteAddButton} onPress={handleAddInvite}>
+            <TouchableOpacity activeOpacity={0.88} style={[styles.inviteAddButton, { backgroundColor: theme.primary }]} onPress={handleAddInvite}>
               <Text style={styles.inviteAddButtonText}>Add</Text>
             </TouchableOpacity>
           </View>
@@ -310,7 +312,7 @@ export default function CreateTripScreen() {
           </View>
         ) : null}
 
-        <TouchableOpacity activeOpacity={0.9} style={[styles.primaryButton, submitting ? styles.primaryButtonDisabled : null]} disabled={submitting} onPress={() => void handleCreateTrip()}>
+        <TouchableOpacity activeOpacity={0.9} style={[styles.primaryButton, { backgroundColor: theme.primary, shadowColor: theme.primary }, submitting ? styles.primaryButtonDisabled : null]} disabled={submitting} onPress={() => void handleCreateTrip()}>
           <Text style={styles.primaryButtonText}>{submitting ? 'Starting...' : 'Start Adventure'}</Text>
         </TouchableOpacity>
       </ScrollView>
@@ -353,12 +355,13 @@ function BottomTab({
   active?: boolean;
   onPress?: () => void;
 }) {
+  const theme = useAppTheme();
   return (
     <Pressable style={styles.bottomTab} onPress={onPress}>
-      <View style={active ? styles.bottomTabActiveIcon : styles.bottomTabIcon}>
+      <View style={[active ? styles.bottomTabActiveIcon : styles.bottomTabIcon, active && { backgroundColor: theme.primary, shadowColor: theme.primary }]}>
         <Ionicons name={icon} size={22} color={active ? '#fff' : '#7a7e87'} />
       </View>
-      <Text style={[styles.bottomTabLabel, active ? styles.bottomTabLabelActive : null]}>{label}</Text>
+      <Text style={[styles.bottomTabLabel, active && { color: theme.primary, fontWeight: '700' }]}>{label}</Text>
     </Pressable>
   );
 }

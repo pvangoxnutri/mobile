@@ -15,6 +15,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAppTheme } from '@/contexts/app-theme-context';
 import { apiFetch, apiJson } from '@/lib/api';
 import { fetchPlaceSuggestions, type PlaceAutocompleteSuggestion } from '@/lib/maps-api';
 import { type StoredMapPlace, withLocationMarker } from '@/lib/sidequest-location';
@@ -71,6 +72,7 @@ export default function SideQuestForm({
   initialValues,
   initialImageUrl,
 }: Props) {
+  const theme = useAppTheme();
   const insets = useSafeAreaInsets();
   const [title, setTitle] = useState(initialValues?.title ?? '');
   const [description, setDescription] = useState(initialValues?.description ?? '');
@@ -380,10 +382,10 @@ export default function SideQuestForm({
               <TouchableOpacity
                 key={cat.value}
                 activeOpacity={0.8}
-                style={[styles.categoryChip, active && styles.categoryChipActive]}
+                style={[styles.categoryChip, active && { borderColor: theme.primary, backgroundColor: theme.primary08 }]}
                 onPress={() => setCategory(active ? null : cat.value)}>
                 <Text style={styles.categoryEmoji}>{cat.emoji}</Text>
-                <Text style={[styles.categoryLabel, active && styles.categoryLabelActive]}>{cat.label}</Text>
+                <Text style={[styles.categoryLabel, active && { color: theme.primary, fontWeight: '600' }]}>{cat.label}</Text>
               </TouchableOpacity>
             );
           })}
@@ -428,7 +430,7 @@ export default function SideQuestForm({
                 activeOpacity={0.9}
                 style={styles.locationSuggestionRow}
                 onPress={() => void handlePickPlace(item)}>
-                <Ionicons name="location-outline" size={16} color="#0d90a8" />
+                <Ionicons name="location-outline" size={16} color={theme.secondary} />
                 <View style={styles.locationSuggestionCopy}>
                   <Text style={styles.locationSuggestionTitle}>{item.primaryText}</Text>
                   {item.secondaryText ? <Text style={styles.locationSuggestionSubtitle}>{item.secondaryText}</Text> : null}
@@ -552,7 +554,7 @@ export default function SideQuestForm({
               )}
             </View>
             <View style={styles.revealSummary}>
-              <Ionicons name="sparkles-outline" size={16} color="#ff4f74" />
+              <Ionicons name="sparkles-outline" size={16} color={theme.primary} />
               <Text style={styles.revealSummaryText}>{revealAtPreview}</Text>
             </View>
           </View>
@@ -594,7 +596,7 @@ export default function SideQuestForm({
         </View>
       ) : null}
 
-      <TouchableOpacity activeOpacity={0.92} style={[styles.primaryButton, submitting ? styles.primaryButtonDisabled : null]} disabled={submitting} onPress={() => void handleSubmit()}>
+      <TouchableOpacity activeOpacity={0.92} style={[styles.primaryButton, { backgroundColor: theme.primary, shadowColor: theme.primary }, submitting ? styles.primaryButtonDisabled : null]} disabled={submitting} onPress={() => void handleSubmit()}>
         <Text style={styles.primaryButtonText}>{submitting ? 'Sparar...' : mode === 'edit' ? 'Spara ändringar' : 'Lägg till aktivitet'}</Text>
       </TouchableOpacity>
 
@@ -620,7 +622,7 @@ export default function SideQuestForm({
                   : pickerTarget === 'revealDate' ? new Date(`${revealRange.max}T12:00:00`) : undefined
               }
               themeVariant="light"
-              accentColor="#ff4f74"
+              accentColor={theme.primary}
               textColor="#161821"
               onChange={handleDateChange}
             />
@@ -644,6 +646,7 @@ function PickerSheet({
   onClose: () => void;
   children: React.ReactNode;
 }) {
+  const theme = useAppTheme();
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.modalBackdrop}>
@@ -653,7 +656,7 @@ function PickerSheet({
           <Text style={styles.modalTitle}>{title}</Text>
           <Text style={styles.modalSubtitle}>{subtitle}</Text>
           <View style={styles.modalPickerWrap}>{children}</View>
-          <TouchableOpacity activeOpacity={0.9} style={styles.doneButton} onPress={onClose}>
+          <TouchableOpacity activeOpacity={0.9} style={[styles.doneButton, { backgroundColor: theme.primary }]} onPress={onClose}>
             <Text style={styles.doneButtonText}>Done</Text>
           </TouchableOpacity>
         </View>
@@ -673,10 +676,11 @@ function VisibilityOption({
   active: boolean;
   onPress: () => void;
 }) {
+  const theme = useAppTheme();
   return (
-    <TouchableOpacity activeOpacity={0.92} style={[styles.segmentOption, active ? styles.segmentOptionActive : null]} onPress={onPress}>
-      <Text style={[styles.segmentTitle, active ? styles.segmentTitleActive : null]}>{label}</Text>
-      <Text style={[styles.segmentSubtitle, active ? styles.segmentSubtitleActive : null]}>{subtitle}</Text>
+    <TouchableOpacity activeOpacity={0.92} style={[styles.segmentOption, active && { borderColor: theme.primary20, backgroundColor: theme.primary08 }]} onPress={onPress}>
+      <Text style={[styles.segmentTitle, active && { color: theme.primary }]}>{label}</Text>
+      <Text style={[styles.segmentSubtitle, active && { color: theme.primary20 }]}>{subtitle}</Text>
     </TouchableOpacity>
   );
 }

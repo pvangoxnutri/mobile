@@ -14,10 +14,12 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BrandMark from '@/components/brand-mark';
+import { useAppTheme } from '@/contexts/app-theme-context';
 import { getPasswordResetRedirectUrl, isExpoGo } from '@/lib/auth-redirect';
 import { supabase } from '@/lib/supabase';
 
 export default function ForgotPasswordScreen() {
+  const theme = useAppTheme();
   const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
   const [message, setMessage] = useState('');
@@ -120,7 +122,7 @@ export default function ForgotPasswordScreen() {
           />
 
           <Pressable
-            style={[styles.primaryButton, loading || cooldownSeconds > 0 ? styles.primaryButtonDisabled : null]}
+            style={[styles.primaryButton, { backgroundColor: theme.primary }, loading || cooldownSeconds > 0 ? styles.primaryButtonDisabled : null]}
             onPress={() => void handleSubmit()}
             disabled={loading || cooldownSeconds > 0}>
             {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>Send reset link</Text>}

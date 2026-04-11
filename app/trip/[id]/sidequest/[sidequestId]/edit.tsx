@@ -4,12 +4,14 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAppTheme } from '@/contexts/app-theme-context';
 import SideQuestForm, { type SideQuestFormValues } from '@/components/sidequest-form';
 import { apiJson } from '@/lib/api';
 import { extractLocationQuery, extractStoredMapPlace, stripLocationMarker } from '@/lib/sidequest-location';
 import type { Quest, SideQuestActivity } from '@/lib/types';
 
 export default function EditSideQuestScreen() {
+  const theme = useAppTheme();
   const insets = useSafeAreaInsets();
   const { id, sidequestId } = useLocalSearchParams<{ id: string; sidequestId: string }>();
   const [activity, setActivity] = useState<SideQuestActivity | null>(null);
@@ -83,7 +85,7 @@ export default function EditSideQuestScreen() {
 
         {loading ? (
           <View style={styles.centerState}>
-            <ActivityIndicator color="#ff4f74" />
+            <ActivityIndicator color={theme.primary} />
           </View>
         ) : error ? (
           <View style={styles.centerState}>

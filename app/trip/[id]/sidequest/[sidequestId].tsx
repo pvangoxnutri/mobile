@@ -15,11 +15,13 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAppTheme } from '@/contexts/app-theme-context';
 import { apiFetch, apiJson } from '@/lib/api';
 import { buildGoogleMapsSearchUrl, extractLocationQuery, extractStoredMapPlace, stripLocationMarker } from '@/lib/sidequest-location';
 import type { ActivityComment, SideQuestActivity } from '@/lib/types';
 
 export default function SideQuestDetailScreen() {
+  const theme = useAppTheme();
   const insets = useSafeAreaInsets();
   const { id, sidequestId } = useLocalSearchParams<{ id: string; sidequestId: string }>();
   const [activity, setActivity] = useState<SideQuestActivity | null>(null);
@@ -106,7 +108,7 @@ export default function SideQuestDetailScreen() {
 
         {loading ? (
           <View style={styles.centerState}>
-            <ActivityIndicator color="#ff4f74" />
+            <ActivityIndicator color={theme.primary} />
           </View>
         ) : error ? (
           <View style={styles.centerState}>
@@ -180,7 +182,7 @@ export default function SideQuestDetailScreen() {
                       void Linking.openURL(url);
                     }
                   }}>
-                  <Ionicons name="map-outline" size={17} color="#0d90a8" />
+                  <Ionicons name="map-outline" size={17} color={theme.secondary} />
                   <Text style={styles.mapButtonText}>Open map: {locationQuery}</Text>
                 </TouchableOpacity>
               ) : null}
@@ -224,7 +226,7 @@ export default function SideQuestDetailScreen() {
                     onSubmitEditing={() => void submitComment()}
                   />
                   <TouchableOpacity
-                    style={[styles.commentSend, (!commentText.trim() || submitting) && styles.commentSendDisabled]}
+                    style={[styles.commentSend, { backgroundColor: theme.primary }, (!commentText.trim() || submitting) && styles.commentSendDisabled]}
                     activeOpacity={0.8}
                     onPress={() => void submitComment()}
                     disabled={!commentText.trim() || submitting}>
@@ -243,10 +245,11 @@ export default function SideQuestDetailScreen() {
 }
 
 function MetaRow({ icon, label, value }: { icon: keyof typeof Ionicons.glyphMap; label: string; value: string }) {
+  const theme = useAppTheme();
   return (
     <View style={styles.metaRow}>
       <View style={styles.metaIcon}>
-        <Ionicons name={icon} size={18} color="#ff4f74" />
+        <Ionicons name={icon} size={18} color={theme.primary} />
       </View>
       <View style={styles.metaCopy}>
         <Text style={styles.metaLabel}>{label}</Text>

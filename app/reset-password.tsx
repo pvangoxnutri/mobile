@@ -15,9 +15,11 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BrandMark from '@/components/brand-mark';
+import { useAppTheme } from '@/contexts/app-theme-context';
 import { supabase } from '@/lib/supabase';
 
 export default function ResetPasswordScreen() {
+  const theme = useAppTheme();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<Record<string, string | string[]>>();
   const [password, setPassword] = useState('');
@@ -138,7 +140,7 @@ export default function ResetPasswordScreen() {
             onChangeText={setPassword}
           />
 
-          <Pressable style={styles.primaryButton} onPress={() => void handleSubmit()} disabled={loading || !ready}>
+          <Pressable style={[styles.primaryButton, { backgroundColor: theme.primary }]} onPress={() => void handleSubmit()} disabled={loading || !ready}>
             {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>Update password</Text>}
           </Pressable>
         </View>

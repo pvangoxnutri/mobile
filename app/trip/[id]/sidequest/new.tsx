@@ -4,11 +4,13 @@ import { useCallback, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useAppTheme } from '@/contexts/app-theme-context';
 import SideQuestForm from '@/components/sidequest-form';
 import { apiJson } from '@/lib/api';
 import type { Quest } from '@/lib/types';
 
 export default function NewSideQuestScreen() {
+  const theme = useAppTheme();
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [trip, setTrip] = useState<Quest | null>(null);
@@ -56,7 +58,7 @@ export default function NewSideQuestScreen() {
           </View>
         ) : (
           <View style={styles.centerState}>
-            <ActivityIndicator color="#ff4f74" />
+            <ActivityIndicator color={theme.primary} />
           </View>
         )}
       </View>

@@ -12,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import type { AppLanguage } from '@/components/i18n-provider';
+import { useAppTheme } from '@/contexts/app-theme-context';
 
 type LanguageOption = {
   code: AppLanguage;
@@ -37,6 +38,7 @@ export default function LanguagePicker({
   label: string;
   searchPlaceholder?: string;
 }) {
+  const theme = useAppTheme();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
 
@@ -100,7 +102,7 @@ export default function LanguagePicker({
                         <Text style={styles.optionMeta}>{option.nativeName}</Text>
                       </View>
                     </View>
-                    {active ? <Ionicons name="checkmark-circle" size={20} color="#ff4f74" /> : null}
+                    {active ? <Ionicons name="checkmark-circle" size={20} color={theme.primary} /> : null}
                   </TouchableOpacity>
                 );
               })}

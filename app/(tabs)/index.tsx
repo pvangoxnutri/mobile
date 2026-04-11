@@ -6,6 +6,7 @@ import { ActivityIndicator, Animated, Image, Modal, Platform, Pressable, ScrollV
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BrandMark from '@/components/brand-mark';
 import { useAuth } from '@/components/auth-provider';
+import { useAppTheme } from '@/contexts/app-theme-context';
 import TopAlertsButton from '@/components/top-alerts-button';
 import { apiFetch, apiJson } from '@/lib/api';
 import type { PendingInvite, Quest, SideQuestActivity } from '@/lib/types';
@@ -26,6 +27,7 @@ type TripWithEvent = {
 
 export default function HomeScreen() {
   const { user, signOut } = useAuth();
+  const theme = useAppTheme();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const [quests, setQuests] = useState<Quest[]>([]);
@@ -237,11 +239,11 @@ export default function HomeScreen() {
           {pendingInvites.length > 0 ? (
             <View style={[styles.inviteSection, { marginTop: 20 }]}>
               <View style={styles.inviteSectionHeader}>
-                <Ionicons name="mail-unread-outline" size={16} color="#ff4f74" />
-                <Text style={styles.inviteSectionTitle}>You're invited!</Text>
+                <Ionicons name="mail-unread-outline" size={16} color={theme.primary} />
+                <Text style={[styles.inviteSectionTitle, { color: theme.primary }]}>You're invited!</Text>
               </View>
               {pendingInvites.map((invite) => (
-                <View key={invite.id} style={styles.inviteCard}>
+                <View key={invite.id} style={[styles.inviteCard, { borderColor: theme.primary20, backgroundColor: theme.primary08 }]}>
                   {invite.tripImageUrl ? (
                     <Image source={{ uri: invite.tripImageUrl }} style={styles.inviteCardImage} />
                   ) : (
@@ -257,7 +259,7 @@ export default function HomeScreen() {
                     <Text style={styles.inviteCardFrom}>Invited by {invite.invitedByName}</Text>
                   </View>
                   <View style={styles.inviteCardActions}>
-                    <TouchableOpacity style={styles.inviteAcceptBtn} activeOpacity={0.82} onPress={() => void handleAcceptInvite(invite)} disabled={inviteActionBusy === invite.id}>
+                    <TouchableOpacity style={[styles.inviteAcceptBtn, { backgroundColor: theme.primary }]} activeOpacity={0.82} onPress={() => void handleAcceptInvite(invite)} disabled={inviteActionBusy === invite.id}>
                       {inviteActionBusy === invite.id ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.inviteAcceptText}>Join</Text>}
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.inviteDeclineBtn} activeOpacity={0.82} onPress={() => void handleDeclineInvite(invite)} disabled={inviteActionBusy === invite.id + '_decline'}>
@@ -525,6 +527,7 @@ function FloatingFab({
   onDismiss: () => void;
   onJoin: () => void;
 }) {
+  const theme = useAppTheme();
   return (
     <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
       {open ? <Pressable style={styles.fabBackdrop} onPress={onDismiss} /> : null}
@@ -533,7 +536,7 @@ function FloatingFab({
           <View style={styles.fabMenu}>
             <TouchableOpacity
               activeOpacity={0.9}
-              style={[styles.fabMenuButton, styles.fabMenuButtonPrimary]}
+              style={[styles.fabMenuButton, styles.fabMenuButtonPrimary, { backgroundColor: theme.primary, borderColor: theme.primary }]}
               onPress={() => {
                 onDismiss();
                 router.push('/create-trip');
@@ -545,8 +548,8 @@ function FloatingFab({
             </TouchableOpacity>
 
             <TouchableOpacity activeOpacity={0.9} style={styles.fabMenuButton} onPress={onJoin}>
-              <Text style={styles.fabMenuButtonText}>Join Adventure</Text>
-              <Ionicons name="person-add-outline" size={15} color="#ff4f74" />
+              <Text style={[styles.fabMenuButtonText, { color: theme.primary }]}>Join Adventure</Text>
+              <Ionicons name="person-add-outline" size={15} color={theme.primary} />
             </TouchableOpacity>
 
             <View style={styles.fabMenuCaret} />
@@ -572,9 +575,10 @@ function InfoBadge({
   tone: 'cyan' | 'pink';
   onPress?: () => void;
 }) {
+  const theme = useAppTheme();
   const content = (
     <View style={styles.infoBadge}>
-      <View style={[styles.infoBadgeIcon, tone === 'cyan' ? styles.infoBadgeIconCyan : styles.infoBadgeIconPink]}>
+      <View style={[styles.infoBadgeIcon, tone === 'cyan' ? styles.infoBadgeIconCyan : styles.infoBadgeIconPink, { backgroundColor: tone === 'cyan' ? theme.secondary : theme.primary }]}>
         <Ionicons name={icon} size={16} color="#fff" />
       </View>
       <Text style={styles.infoBadgeLabel}>{label}</Text>
@@ -604,6 +608,7 @@ function QuestCard({
   imageUrl?: string | null;
   cardWidth: number;
 }) {
+  const theme = useAppTheme();
   return (
     <TouchableOpacity
       activeOpacity={0.86}
@@ -611,7 +616,7 @@ function QuestCard({
       style={[styles.questCard, { width: cardWidth }, badgeTone === 'cyan' ? styles.questCardSky : styles.questCardLava]}>
       {imageUrl ? <Image source={{ uri: imageUrl }} style={styles.questCardImage} /> : null}
       <View style={[styles.questCardOverlay, badgeTone === 'cyan' ? styles.questCardOverlaySky : styles.questCardOverlayLava]} />
-      <View style={[styles.questCardBadge, badgeTone === 'cyan' ? styles.questCardBadgeCyan : styles.questCardBadgePink]}>
+      <View style={[styles.questCardBadge, badgeTone === 'cyan' ? styles.questCardBadgeCyan : styles.questCardBadgePink, { backgroundColor: badgeTone === 'cyan' ? theme.secondary : theme.primary }]}>
         <Text style={[styles.questCardBadgeText, badgeTone === 'cyan' ? styles.questCardBadgeTextDark : null]}>{badge}</Text>
       </View>
       <Text style={styles.questCardTitle}>{title}</Text>
@@ -636,6 +641,7 @@ function JoinModal({
   error: string;
   insets: { bottom: number };
 }) {
+  const theme = useAppTheme();
   return (
     <View style={styles.modalBackdrop}>
       <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={onClose} />
@@ -666,7 +672,7 @@ function JoinModal({
         />
         {error ? <Text style={styles.joinError}>{error}</Text> : null}
         <Pressable
-          style={({ pressed }) => [styles.joinButton, pressed && { opacity: 0.88 }, (!code.trim() || busy) && styles.joinButtonDisabled]}
+          style={({ pressed }) => [styles.joinButton, { backgroundColor: theme.primary }, pressed && { opacity: 0.88 }, (!code.trim() || busy) && styles.joinButtonDisabled]}
           onPress={onJoin}
           disabled={!code.trim() || busy}>
           {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.joinButtonText}>Join Adventure</Text>}
