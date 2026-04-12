@@ -17,6 +17,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '@/contexts/app-theme-context';
 import RangeDatePicker, { formatRangeDisplay } from '@/components/range-date-picker';
+import CountryPicker from '@/components/travel-tracker/country-picker';
 import { apiFetch, apiJson } from '@/lib/api';
 import type { Quest } from '@/lib/types';
 
@@ -27,6 +28,7 @@ export default function CreateTripScreen() {
   const insets = useSafeAreaInsets();
   const [title, setTitle] = useState('');
   const [destination, setDestination] = useState('');
+  const [tripCountries, setTripCountries] = useState<string[]>([]);
   const [startDate, setStartDate] = useState(getDefaultStartDate());
   const [endDate, setEndDate] = useState(getDefaultEndDate());
   const [coverImage, setCoverImage] = useState<string | null>(null);
@@ -140,6 +142,7 @@ export default function CreateTripScreen() {
           startDate,
           endDate,
           inviteCode,
+          countries: tripCountries,
         }),
       });
 
@@ -216,6 +219,8 @@ export default function CreateTripScreen() {
           placeholderTextColor="#cfd3db"
           style={styles.destinationInput}
         />
+
+        <CountryPicker value={tripCountries} onChange={setTripCountries} label="Add countries" />
 
         <View style={styles.section}>
           <View style={styles.sectionTitleRow}>

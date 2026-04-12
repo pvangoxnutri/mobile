@@ -35,6 +35,7 @@ export interface Quest {
   isRevealed: boolean;
   teaser?: string | null;
   inviteCode: string;
+  countries?: string[];
 }
 
 export interface TripInvite {

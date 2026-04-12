@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -21,6 +22,8 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const [joinedTrips, setJoinedTrips] = useState(0);
   const [createdQuests, setCreatedQuests] = useState(0);
+  const [tripDerivedVisited, setTripDerivedVisited] = useState<Record<string, string>>({});
+  const [manualStatusMap, setManualStatusMap] = useState<Record<string, string>>({});
   const [name, setName] = useState(user?.name ?? '');
   const [bio, setBio] = useState(user?.bio ?? '');
   const [selectedLanguage, setSelectedLanguage] = useState<AppLanguage>(language);
@@ -78,6 +81,19 @@ export default function ProfileScreen() {
         const safeQuests = Array.isArray(quests) ? quests : [];
         setJoinedTrips(safeQuests.length);
         setCreatedQuests(safeQuests.filter((quest) => quest.ownerId === user?.id).length);
+
+        const today = new Date().toISOString().slice(0, 10);
+        const derived: Record<string, string> = {};
+        for (const quest of safeQuests) {
+          if (!quest.countries?.length) continue;
+          const status = quest.endDate < today ? 'visited' : 'planned';
+          for (const code of quest.countries) {
+            if (!derived[code] || (derived[code] === 'planned' && status === 'visited')) {
+              derived[code] = status;
+            }
+          }
+        }
+        setTripDerivedVisited(derived);
       })
       .catch(() => {
         if (!active) return;
@@ -89,6 +105,17 @@ export default function ProfileScreen() {
       active = false;
     };
   }, [user?.id]);
+
+  useEffect(() => {
+    void AsyncStorage.getItem('travel_tracker_status_map')
+      .then((raw) => { if (raw) setManualStatusMap(JSON.parse(raw) as Record<string, string>); })
+      .catch(() => {});
+  }, []);
+
+  const visitedCountries = useMemo(() => {
+    const merged = { ...tripDerivedVisited, ...manualStatusMap };
+    return Object.values(merged).filter((s) => s === 'visited').length;
+  }, [tripDerivedVisited, manualStatusMap]);
 
   useEffect(() => {
     let active = true;
@@ -384,8 +411,16 @@ export default function ProfileScreen() {
 
       <View style={styles.statsRow}>
         <StatCard value={String(joinedTrips)} label="TRIPS JOINED" accent={theme.secondary} />
-        <StatCard value={String(createdQuests)} label="QUESTS CREATED" accent={theme.primary} />
+        <StatCard value={String(createdQuests)} label="SIDEQUESTS CREATED" accent={theme.primary} />
+        <StatCard value={String(visitedCountries)} label="COUNTRIES VISITED" accent={theme.primary} />
       </View>
+
+      <SectionCard
+        title="Explore"
+        items={[
+          { icon: 'earth-outline', label: 'Travel Tracker', accent: theme.secondary, onPress: () => router.push('/travel-tracker') },
+        ]}
+      />
 
       <SectionCard
         title="Edit Profile"

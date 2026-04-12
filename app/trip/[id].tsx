@@ -632,11 +632,7 @@ export default function TripDetailsScreen() {
                         <Text style={styles.chatTimeLabel}>{formatChatTimestamp(message.createdAt)}</Text>
                       ) : null}
                       {systemMessage ? (
-                        <View style={styles.chatMessageWrapSystem}>
-                          <View style={[styles.chatBubbleCard, styles.chatBubbleCardSystem]}>
-                            <Text style={[styles.chatBubbleText, styles.chatBubbleTextSystem]}>{message.text}</Text>
-                          </View>
-                        </View>
+                        <Text style={styles.chatSystemLabel}>{message.text}</Text>
                       ) : ownMessage ? (
                         <View style={styles.chatMessageWrapOwn}>
                           <View style={[styles.chatBubbleCard, styles.chatBubbleCardOwn, { backgroundColor: theme.primary }]}>
@@ -1758,7 +1754,7 @@ const styles = StyleSheet.create({
   chatList: {
     paddingTop: 18,
     paddingBottom: 10,
-    gap: 10,
+    gap: 6,
   },
   chatTimeLabel: {
     textAlign: 'center',
@@ -1770,14 +1766,19 @@ const styles = StyleSheet.create({
   },
   chatMessageWrapOwn: {
     alignItems: 'flex-end',
+    marginVertical: 3,
   },
-  chatMessageWrapSystem: {
-    alignItems: 'center',
+  chatSystemLabel: {
+    textAlign: 'center',
+    color: '#a4aab4',
+    fontSize: 12,
+    marginVertical: 2,
   },
   chatMessageRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: 8,
+    marginVertical: 3,
   },
   chatAvatar: {
     width: 28,
@@ -1800,8 +1801,9 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   chatMessageContent: {
-    flexShrink: 1,
-    maxWidth: '78%',
+    flex: 1,
+    minWidth: 0,
+    maxWidth: '70%',
   },
   chatAuthor: {
     marginBottom: 3,
@@ -1810,17 +1812,17 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   chatBubbleCard: {
-    maxWidth: '82%',
+    alignSelf: 'flex-start',
+    maxWidth: '100%',
     borderRadius: 20,
     backgroundColor: '#f3f5f8',
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
   chatBubbleCardOwn: {
+    alignSelf: 'flex-end',
+    maxWidth: '70%',
     backgroundColor: '#ff4f74',
-  },
-  chatBubbleCardSystem: {
-    backgroundColor: '#eef7fa',
   },
   chatBubbleText: {
     color: '#161821',
@@ -1829,10 +1831,6 @@ const styles = StyleSheet.create({
   },
   chatBubbleTextOwn: {
     color: '#fff',
-  },
-  chatBubbleTextSystem: {
-    color: '#0d7187',
-    fontWeight: '700',
   },
   chatMeta: {
     marginTop: 4,

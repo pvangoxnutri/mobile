@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/components/auth-provider';
 import { useAppTheme } from '@/contexts/app-theme-context';
 import RangeDatePicker, { formatRangeDisplay } from '@/components/range-date-picker';
+import CountryPicker from '@/components/travel-tracker/country-picker';
 import { apiFetch, apiJson } from '@/lib/api';
 import type { Quest, TripInvite } from '@/lib/types';
 import { uploadImageIfNeeded } from '@/lib/uploads';
@@ -45,6 +46,7 @@ export default function TripSettingsScreen() {
   const [invites, setInvites] = useState<TripInvite[]>([]);
   const [title, setTitle] = useState('');
   const [destination, setDestination] = useState('');
+  const [tripCountries, setTripCountries] = useState<string[]>([]);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -74,6 +76,7 @@ export default function TripSettingsScreen() {
         setInvites(inviteData);
         setTitle(tripData.title ?? '');
         setDestination(tripData.destination ?? '');
+        setTripCountries(tripData.countries ?? []);
         setStartDate(tripData.startDate);
         setEndDate(tripData.endDate);
         setImageUrl(tripData.imageUrl ?? null);
@@ -124,6 +127,7 @@ export default function TripSettingsScreen() {
         body: JSON.stringify({
           title: title.trim(),
           destination: destination.trim(),
+          countries: tripCountries,
           startDate,
           endDate,
           imageUrl: uploadedImageUrl,
@@ -287,6 +291,8 @@ export default function TripSettingsScreen() {
                 <TextInput value={title} onChangeText={setTitle} placeholder="Trip title" style={styles.input} />
                 <Text style={styles.label}>Destination</Text>
                 <TextInput value={destination} onChangeText={setDestination} placeholder="Destination" style={styles.input} />
+                <Text style={styles.label}>Countries</Text>
+                <CountryPicker value={tripCountries} onChange={setTripCountries} label="Select countries" />
                 <Text style={styles.label}>Dates</Text>
                 <TouchableOpacity style={styles.dateRangeCard} activeOpacity={0.9} onPress={() => setRangePickerOpen(true)}>
                   <View style={styles.dateRangeCopy}>

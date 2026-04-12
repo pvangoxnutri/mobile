@@ -556,7 +556,10 @@ function FloatingFab({
           </View>
         ) : null}
 
-        <TouchableOpacity activeOpacity={0.92} style={styles.floatingFab} onPress={onToggle}>
+        <TouchableOpacity
+          activeOpacity={0.92}
+          style={[styles.floatingFab, { backgroundColor: theme.primary, shadowColor: theme.primary }]}
+          onPress={onToggle}>
           <Ionicons name="add" size={30} color="#fff" />
         </TouchableOpacity>
       </View>
