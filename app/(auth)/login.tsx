@@ -164,7 +164,9 @@ export default function LoginScreen() {
   }
 
   return (
-    <KeyboardAvoidingView style={[styles.screen, { backgroundColor: theme.primary08 }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <View style={styles.backgroundGlowTop} />
+      <View style={styles.backgroundGlowBottom} />
       <ScrollView
         contentContainerStyle={[
           styles.scrollContent,
@@ -172,10 +174,10 @@ export default function LoginScreen() {
         ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}>
-      <View style={styles.logoRow}>
+      <View style={styles.hero}>
         <BrandMark size="md" />
+        <Text style={styles.tagline}>{t('auth.tagline')}</Text>
       </View>
-      <Text style={styles.tagline}>{t('auth.tagline')}</Text>
 
       <View style={styles.card}>
         <Text style={styles.heading}>{mode === 'signin' ? t('auth.welcome') : t('auth.create_account')}</Text>
@@ -286,7 +288,12 @@ function readAuthParams(url: string) {
 function GoogleGlyph() {
   return (
     <View style={styles.googleGlyph}>
-      <Text style={styles.googleGlyphBlue}>G</Text>
+      <View style={[styles.googleArc, styles.googleArcBlue]} />
+      <View style={[styles.googleArc, styles.googleArcRed]} />
+      <View style={[styles.googleArc, styles.googleArcYellow]} />
+      <View style={[styles.googleArc, styles.googleArcGreen]} />
+      <View style={styles.googleCenterCut} />
+      <View style={styles.googleBar} />
     </View>
   );
 }
@@ -299,7 +306,25 @@ function isRateLimitError(message: string) {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#fff7f8',
+    backgroundColor: '#fffaf8',
+  },
+  backgroundGlowTop: {
+    position: 'absolute',
+    top: -140,
+    left: -80,
+    width: 320,
+    height: 320,
+    borderRadius: 160,
+    backgroundColor: 'rgba(255, 109, 123, 0.14)',
+  },
+  backgroundGlowBottom: {
+    position: 'absolute',
+    right: -120,
+    bottom: 80,
+    width: 280,
+    height: 280,
+    borderRadius: 140,
+    backgroundColor: 'rgba(13, 144, 168, 0.10)',
   },
   scrollContent: {
     flexGrow: 1,
@@ -307,27 +332,31 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingVertical: 28,
   },
+  hero: {
+    alignItems: 'center',
+    marginBottom: 18,
+  },
   logoRow: {
     justifyContent: 'center',
   },
   tagline: {
     marginTop: 14,
     textAlign: 'center',
-    color: '#8f94a2',
-    fontSize: 17,
+    color: '#7f8694',
+    fontSize: 16,
+    lineHeight: 24,
   },
   card: {
-    marginTop: 30,
     borderRadius: 28,
-    backgroundColor: '#fff',
+    backgroundColor: 'rgba(255,255,255,0.96)',
     borderWidth: 1,
-    borderColor: '#eceef2',
-    padding: 20,
+    borderColor: '#efe5e8',
+    padding: 22,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.06,
-    shadowRadius: 24,
-    elevation: 5,
+    shadowOpacity: 0.08,
+    shadowRadius: 30,
+    elevation: 6,
   },
   heading: {
     fontSize: 24,
@@ -354,10 +383,10 @@ const styles = StyleSheet.create({
   },
   input: {
     height: 52,
-    borderRadius: 16,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#e4e7ee',
-    backgroundColor: '#f9fafc',
+    borderColor: '#eadfe3',
+    backgroundColor: '#fffdfd',
     paddingHorizontal: 16,
     fontSize: 16,
     color: '#14161d',
@@ -443,12 +472,56 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   googleGlyph: {
+    width: 20,
+    height: 20,
+    position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  googleGlyphBlue: {
-    color: '#4285F4',
-    fontSize: 18,
-    fontWeight: '900',
+  googleArc: {
+    position: 'absolute',
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 4,
+  },
+  googleArcBlue: {
+    borderColor: '#4285F4',
+    borderTopColor: 'transparent',
+    borderLeftColor: 'transparent',
+    transform: [{ rotate: '45deg' }],
+  },
+  googleArcRed: {
+    borderColor: '#EA4335',
+    borderBottomColor: 'transparent',
+    borderLeftColor: 'transparent',
+    transform: [{ rotate: '-35deg' }],
+  },
+  googleArcYellow: {
+    borderColor: '#FBBC05',
+    borderTopColor: 'transparent',
+    borderRightColor: 'transparent',
+    transform: [{ rotate: '135deg' }],
+  },
+  googleArcGreen: {
+    borderColor: '#34A853',
+    borderTopColor: 'transparent',
+    borderRightColor: 'transparent',
+    transform: [{ rotate: '215deg' }],
+  },
+  googleCenterCut: {
+    position: 'absolute',
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#fff',
+  },
+  googleBar: {
+    position: 'absolute',
+    right: 1,
+    width: 9,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#4285F4',
   },
 });

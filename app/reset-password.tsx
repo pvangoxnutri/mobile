@@ -23,10 +23,12 @@ export default function ResetPasswordScreen() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<Record<string, string | string[]>>();
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
+  const passwordsMatch = password.length > 0 && password === confirmPassword;
 
   const initialUrl = useMemo(() => buildUrlFromParams(params), [params]);
 
@@ -88,6 +90,10 @@ export default function ResetPasswordScreen() {
       setError('');
       setMessage('');
 
+      if (!passwordsMatch) {
+        throw new Error('Passwords must match.');
+      }
+
       const { error: updateError } = await supabase.auth.updateUser({ password });
       if (updateError) {
         throw updateError;
@@ -140,7 +146,22 @@ export default function ResetPasswordScreen() {
             onChangeText={setPassword}
           />
 
-          <Pressable style={[styles.primaryButton, { backgroundColor: theme.primary }]} onPress={() => void handleSubmit()} disabled={loading || !ready}>
+          <TextInput
+            style={styles.input}
+            placeholder="Confirm new password"
+            secureTextEntry
+            autoCapitalize="none"
+            autoCorrect={false}
+            value={confirmPassword}
+            onChangeText={setConfirmPassword}
+          />
+
+          {confirmPassword && !passwordsMatch ? <Text style={styles.error}>Passwords must match.</Text> : null}
+
+          <Pressable
+            style={[styles.primaryButton, { backgroundColor: theme.primary }, loading || !ready || !passwordsMatch ? styles.primaryButtonDisabled : null]}
+            onPress={() => void handleSubmit()}
+            disabled={loading || !ready || !passwordsMatch}>
             {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>Update password</Text>}
           </Pressable>
         </View>
@@ -270,6 +291,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#ff4f74',
+  },
+  primaryButtonDisabled: {
+    opacity: 0.62,
   },
   primaryButtonText: {
     color: '#fff',

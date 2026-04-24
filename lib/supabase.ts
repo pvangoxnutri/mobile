@@ -1,5 +1,5 @@
 import 'react-native-url-polyfill/auto';
-import * as SecureStore from 'expo-secure-store';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { createClient } from '@supabase/supabase-js';
 
@@ -18,24 +18,24 @@ const webStorage =
 
 const memoryStorage = new Map<string, string>();
 
-const secureStorage = {
+const nativeStorage = {
   getItem: async (key: string) => {
     try {
-      return await SecureStore.getItemAsync(key);
+      return await AsyncStorage.getItem(key);
     } catch {
       return memoryStorage.get(key) ?? null;
     }
   },
   setItem: async (key: string, value: string) => {
     try {
-      await SecureStore.setItemAsync(key, value);
+      await AsyncStorage.setItem(key, value);
     } catch {
       memoryStorage.set(key, value);
     }
   },
   removeItem: async (key: string) => {
     try {
-      await SecureStore.deleteItemAsync(key);
+      await AsyncStorage.removeItem(key);
     } catch {
       memoryStorage.delete(key);
     }
@@ -44,7 +44,7 @@ const secureStorage = {
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    storage: Platform.OS === 'web' && webStorage ? webStorage : secureStorage,
+    storage: Platform.OS === 'web' && webStorage ? webStorage : nativeStorage,
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,
