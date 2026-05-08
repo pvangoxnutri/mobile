@@ -517,7 +517,7 @@ export default function SideQuestForm({
                     keyboardType="numbers-and-punctuation"
                     maxLength={10}
                   />
-                  <Text style={styles.selectionHint}>{`${formatShortDate(revealRange.min)} – ${formatShortDate(revealRange.max)}`}</Text>
+                  <Text style={styles.selectionHint} numberOfLines={1}>{`${formatShortDate(revealRange.min)} – ${formatShortDate(revealRange.max)}`}</Text>
                 </View>
               ) : (
                 <TouchableOpacity
@@ -530,8 +530,8 @@ export default function SideQuestForm({
                   ]}
                   onPress={() => setPickerTarget('revealDate')}>
                   <Text style={styles.selectionEyebrow}>REVEAL DATE</Text>
-                  <Text style={styles.selectionValueSmall}>{formatShortDate(revealDate)}</Text>
-                  <Text style={styles.selectionHint}>{`${formatShortDate(revealRange.min)} – ${formatShortDate(revealRange.max)}`}</Text>
+                  <Text style={styles.selectionValueSmall} numberOfLines={1}>{formatShortDate(revealDate)}</Text>
+                  <Text style={styles.selectionHint} numberOfLines={1}>{`${formatShortDate(revealRange.min)} – ${formatShortDate(revealRange.max)}`}</Text>
                 </TouchableOpacity>
               )}
               {Platform.OS === 'web' ? (
@@ -549,13 +549,13 @@ export default function SideQuestForm({
               ) : (
                 <TouchableOpacity activeOpacity={0.92} style={[styles.selectionCard, styles.revealCard, pickerTarget === 'revealTime' ? styles.selectionCardActive : null]} onPress={() => setPickerTarget('revealTime')}>
                   <Text style={styles.selectionEyebrow}>REVEAL TIME</Text>
-                  <Text style={styles.selectionValueSmall}>{formatTime(revealTime)}</Text>
+                  <Text style={styles.selectionValueSmall} numberOfLines={1}>{formatTime(revealTime)}</Text>
                 </TouchableOpacity>
               )}
             </View>
             <View style={styles.revealSummary}>
               <Ionicons name="sparkles-outline" size={16} color={theme.primary} />
-              <Text style={styles.revealSummaryText}>{revealAtPreview}</Text>
+              <Text style={styles.revealSummaryText} numberOfLines={2}>{revealAtPreview}</Text>
             </View>
           </View>
 

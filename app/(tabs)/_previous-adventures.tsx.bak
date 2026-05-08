@@ -1,0 +1,5 @@
+// This file has been moved to app/previous-adventures.tsx
+// This is a placeholder to avoid routing conflicts
+export default function PreviousAdventuresScreen() {
+  return null;
+}

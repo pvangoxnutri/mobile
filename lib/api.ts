@@ -63,3 +63,30 @@ export async function apiJson<T>(path: string, options: RequestInit = {}) {
 
   return (await response.json()) as T;
 }
+
+// ── Share endpoints ──
+
+export async function getCompletedTrips() {
+  return apiJson<any[]>('/api/trips/completed');
+}
+
+export async function completeTrip(tripId: string) {
+  return apiFetch(`/api/trips/${tripId}/complete`, { method: 'PATCH' });
+}
+
+export async function shareTrip(tripId: string) {
+  return apiJson<{ shareCode: string; shareUrl: string }>(
+    `/api/trips/${tripId}/share`,
+    { method: 'POST' }
+  );
+}
+
+export async function getSharedTrip(shareCode: string) {
+  return apiJson<any>(`/api/trips/share/${shareCode}`);
+}
+
+// ── User endpoints ──
+
+export async function getUserProfile(userId: string) {
+  return apiJson<any>(`/api/users/${userId}/profile`);
+}

@@ -1,0 +1,4 @@
+// Placeholder - this screen is not used
+export default function ExploreScreen() {
+  return null;
+}

@@ -110,7 +110,7 @@ export default function CalendarScreen() {
   return (
     <ScrollView
       ref={scrollRef}
-      contentContainerStyle={[styles.screen, { paddingTop: Math.max(insets.top, 18) + 12, paddingBottom: Math.max(insets.bottom, 20) + 140 }]}
+      contentContainerStyle={[styles.screen, { paddingTop: Math.max(insets.top, 16) + 8, paddingBottom: Math.max(insets.bottom, 20) + 140 }]}
       showsVerticalScrollIndicator={false}>
       <View style={styles.headerRow}>
         <View style={styles.headerTopRow}>
@@ -344,7 +344,7 @@ const styles = StyleSheet.create({
   },
   headerTopRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
   },
   title: {

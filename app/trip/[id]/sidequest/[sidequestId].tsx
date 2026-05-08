@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '@/contexts/app-theme-context';
+import UserProfileCard from '@/components/user-profile-card';
 import { apiFetch, apiJson } from '@/lib/api';
 import { buildGoogleMapsSearchUrl, extractLocationQuery, extractStoredMapPlace, stripLocationMarker } from '@/lib/sidequest-location';
 import type { ActivityComment, SideQuestActivity } from '@/lib/types';
@@ -30,6 +31,7 @@ export default function SideQuestDetailScreen() {
   const [comments, setComments] = useState<ActivityComment[]>([]);
   const [commentText, setCommentText] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [profileCardUserId, setProfileCardUserId] = useState<string | null>(null);
   const inputRef = useRef<TextInput>(null);
 
   useFocusEffect(
@@ -116,43 +118,66 @@ export default function SideQuestDetailScreen() {
           </View>
         ) : activity ? (
           <>
-            <View style={styles.heroCard}>
-              {activity.imageUrl ? (
+            {activity.imageUrl ? (
+              <View style={styles.heroCard}>
                 <Image source={{ uri: activity.imageUrl }} style={styles.heroImage} blurRadius={activity.isHiddenForViewer ? 22 : 0} />
-              ) : (
-                <View style={styles.heroPlaceholder}>
-                  <Ionicons name="sparkles-outline" size={40} color="#bcc2cb" />
+                <View style={[styles.heroOverlay, activity.isHiddenForViewer ? styles.heroOverlayHidden : null]} />
+                {activity.canEdit ? (
+                  <TouchableOpacity
+                    activeOpacity={0.9}
+                    style={styles.editButtonFloating}
+                    onPress={() => router.push(`/trip/${id}/sidequest/${sidequestId}/edit`)}>
+                    <Ionicons name="create-outline" size={16} color="#fff" />
+                    <Text style={styles.editButtonText}>Edit</Text>
+                  </TouchableOpacity>
+                ) : null}
+                <View style={styles.heroContent}>
+                  <View style={styles.statusRow}>
+                    <StatusChip
+                      label={activity.visibility === 'hidden' && !activity.isRevealed ? 'Hidden' : activity.ownerName || 'Visible'}
+                      tone={activity.visibility === 'hidden' && !activity.isRevealed ? 'dark' : 'pink'}
+                    />
+                  </View>
+                  <Text style={styles.heroTitle}>{hiddenTitle}</Text>
+                  <Text style={styles.heroSubtitle}>
+                    {activity.isHiddenForViewer
+                      ? activity.teaserVisible && activity.teaser
+                        ? activity.teaser
+                        : 'This SideQuest is still under wraps.'
+                      : cleanDescription || 'No extra description yet.'}
+                  </Text>
                 </View>
-              )}
-              <View style={[styles.heroOverlay, activity.isHiddenForViewer ? styles.heroOverlayHidden : null]} />
-              {activity.canEdit ? (
-                <TouchableOpacity
-                  activeOpacity={0.9}
-                  style={styles.editButtonFloating}
-                  onPress={() => router.push(`/trip/${id}/sidequest/${sidequestId}/edit`)}>
-                  <Ionicons name="create-outline" size={16} color="#fff" />
-                  <Text style={styles.editButtonText}>Edit</Text>
-                </TouchableOpacity>
-              ) : null}
-              <View style={styles.heroContent}>
-                <View style={styles.statusRow}>
-                  <StatusChip
-                    label={activity.visibility === 'hidden' && !activity.isRevealed ? 'Hidden' : activity.ownerName || 'Visible'}
-                    tone={activity.visibility === 'hidden' && !activity.isRevealed ? 'dark' : 'pink'}
-                  />
-                </View>
-                <Text style={styles.heroTitle}>{hiddenTitle}</Text>
-                <Text style={styles.heroSubtitle}>
-                  {activity.isHiddenForViewer
-                    ? activity.teaserVisible && activity.teaser
-                      ? activity.teaser
-                      : 'This SideQuest is still under wraps.'
-                    : cleanDescription || 'No extra description yet.'}
-                </Text>
               </View>
-            </View>
+            ) : null}
 
             <View style={styles.metaCard}>
+              {!activity.imageUrl ? (
+                <>
+                  <View style={styles.statusRowNoImage}>
+                    <StatusChip
+                      label={activity.visibility === 'hidden' && !activity.isRevealed ? 'Hidden' : activity.ownerName || 'Visible'}
+                      tone={activity.visibility === 'hidden' && !activity.isRevealed ? 'dark' : 'pink'}
+                    />
+                  </View>
+                  <Text style={styles.titleNoImage}>{hiddenTitle}</Text>
+                  <Text style={styles.descriptionNoImage}>
+                    {activity.isHiddenForViewer
+                      ? activity.teaserVisible && activity.teaser
+                        ? activity.teaser
+                        : 'This SideQuest is still under wraps.'
+                      : cleanDescription || 'No extra description yet.'}
+                  </Text>
+                  {activity.canEdit ? (
+                    <TouchableOpacity
+                      activeOpacity={0.9}
+                      style={styles.editButton}
+                      onPress={() => router.push(`/trip/${id}/sidequest/${sidequestId}/edit`)}>
+                      <Ionicons name="create-outline" size={16} color="#0d90a8" />
+                      <Text style={styles.editButtonTextNoImage}>Edit</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </>
+              ) : null}
               {activity.category ? (
                 <MetaRow
                   icon="pricetag-outline"
@@ -200,11 +225,14 @@ export default function SideQuestDetailScreen() {
                 ) : (
                   comments.map((c) => (
                     <View key={c.id} style={styles.commentItem}>
-                      <View style={styles.commentAvatar}>
+                      <TouchableOpacity
+                        style={styles.commentAvatar}
+                        activeOpacity={0.7}
+                        onPress={() => setProfileCardUserId(c.userId)}>
                         {c.userAvatarUrl
                           ? <Image source={{ uri: c.userAvatarUrl }} style={styles.commentAvatarImage} />
                           : <Text style={styles.commentAvatarText}>{c.userName.charAt(0).toUpperCase()}</Text>}
-                      </View>
+                      </TouchableOpacity>
                       <View style={styles.commentBody}>
                         <Text style={styles.commentAuthor}>{c.userName}</Text>
                         <Text style={styles.commentText}>{c.text}</Text>
@@ -240,6 +268,8 @@ export default function SideQuestDetailScreen() {
           </>
         ) : null}
       </ScrollView>
+
+      <UserProfileCard userId={profileCardUserId} onClose={() => setProfileCardUserId(null)} />
     </>
   );
 }
@@ -539,5 +569,28 @@ const styles = StyleSheet.create({
   },
   commentSendDisabled: {
     backgroundColor: '#f0c0cc',
+  },
+  statusRowNoImage: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  titleNoImage: {
+    color: '#161821',
+    fontSize: 28,
+    fontWeight: '900',
+    letterSpacing: -1,
+    marginBottom: 6,
+  },
+  descriptionNoImage: {
+    marginBottom: 14,
+    color: '#666d7a',
+    fontSize: 16,
+    lineHeight: 24,
+  },
+  editButtonTextNoImage: {
+    color: '#0d90a8',
+    fontSize: 13,
+    fontWeight: '800',
   },
 });

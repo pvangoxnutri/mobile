@@ -8,6 +8,7 @@ import { Image, Modal, ScrollView, Share, StyleSheet, Text, TextInput, Touchable
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/components/auth-provider';
 import { useAppTheme } from '@/contexts/app-theme-context';
+import UserProfileCard from '@/components/user-profile-card';
 import { apiFetch, apiJson } from '@/lib/api';
 import { stripLocationMarker } from '@/lib/sidequest-location';
 import type { Quest, SideQuestActivity, TripInvite } from '@/lib/types';
@@ -64,6 +65,7 @@ export default function TripDetailsScreen() {
   const [spotifySaving, setSpotifySaving] = useState(false);
   const [spotifyMessage, setSpotifyMessage] = useState('');
   const [error, setError] = useState('');
+  const [profileCardUserId, setProfileCardUserId] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -641,13 +643,16 @@ export default function TripDetailsScreen() {
                         </View>
                       ) : (
                         <View style={styles.chatMessageRow}>
-                          <View style={styles.chatAvatar}>
+                          <TouchableOpacity
+                            style={styles.chatAvatar}
+                            activeOpacity={0.7}
+                            onPress={() => message.userId && setProfileCardUserId(message.userId)}>
                             {avatarUrl ? (
                               <Image source={{ uri: avatarUrl }} style={styles.chatAvatarImage} />
                             ) : (
                               <Text style={styles.chatAvatarText}>{getInitials(message.userName)}</Text>
                             )}
-                          </View>
+                          </TouchableOpacity>
                           <View style={styles.chatMessageContent}>
                             <Text style={styles.chatAuthor}>{message.userName}</Text>
                             <View style={styles.chatBubbleCard}>
@@ -724,6 +729,8 @@ export default function TripDetailsScreen() {
             </View>
           </View>
         </Modal>
+
+        <UserProfileCard userId={profileCardUserId} onClose={() => setProfileCardUserId(null)} />
       </View>
     </>
   );
@@ -756,19 +763,16 @@ function SideQuestFeedCard({
 
   return (
     <TouchableOpacity activeOpacity={0.92} style={styles.feedCard} onPress={onPress}>
-      <View style={styles.feedImageWrap}>
-        {hasImage ? <Image source={{ uri: activity.imageUrl! }} style={styles.feedImage} blurRadius={hidden ? 18 : 0} /> : null}
-        {!hasImage ? (
-          <View style={styles.feedPlaceholder}>
-            <Ionicons name={hidden ? 'eye-off-outline' : 'image-outline'} size={28} color="#b0b6c0" />
+      {hasImage ? (
+        <View style={styles.feedImageWrap}>
+          <Image source={{ uri: activity.imageUrl! }} style={styles.feedImage} blurRadius={hidden ? 18 : 0} />
+          <View style={[styles.feedImageOverlay, hidden ? styles.feedImageOverlayHidden : null]} />
+          <View style={styles.feedBadgeRow}>
+            <FeedBadge label={hidden ? 'Hidden' : activity.ownerName || 'Visible'} tone={hidden ? 'dark' : 'pink'} />
+            {activity.revealAt && !activity.isRevealed ? <FeedBadge label={formatRevealChip(activity.revealAt)} tone="light" /> : null}
           </View>
-        ) : null}
-        <View style={[styles.feedImageOverlay, hidden ? styles.feedImageOverlayHidden : null]} />
-        <View style={styles.feedBadgeRow}>
-          <FeedBadge label={hidden ? 'Hidden' : activity.ownerName || 'Visible'} tone={hidden ? 'dark' : 'pink'} />
-          {activity.revealAt && !activity.isRevealed ? <FeedBadge label={formatRevealChip(activity.revealAt)} tone="light" /> : null}
         </View>
-      </View>
+      ) : null}
 
       <View style={styles.feedBody}>
         <View style={styles.feedMeta}>

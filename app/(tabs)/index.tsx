@@ -8,6 +8,7 @@ import BrandMark from '@/components/brand-mark';
 import { useAuth } from '@/components/auth-provider';
 import { useAppTheme } from '@/contexts/app-theme-context';
 import TopAlertsButton from '@/components/top-alerts-button';
+import UserProfileCard from '@/components/user-profile-card';
 import { apiFetch, apiJson } from '@/lib/api';
 import type { PendingInvite, Quest, SideQuestActivity } from '@/lib/types';
 
@@ -46,6 +47,7 @@ export default function HomeScreen() {
   const [joinCode, setJoinCode] = useState('');
   const [joinBusy, setJoinBusy] = useState(false);
   const [joinError, setJoinError] = useState('');
+  const [profileCardUserId, setProfileCardUserId] = useState<string | null>(null);
   const eventFade = useRef(new Animated.Value(1)).current;
   const floatingBottom = Math.max(insets.bottom, 14) + 78;
   const upcomingCardWidth = Math.min(width - 56, 320);
@@ -217,10 +219,10 @@ export default function HomeScreen() {
         <ScrollView
           contentContainerStyle={[
             styles.emptyScreenContent,
-            { paddingTop: Math.max(insets.top, 18) + 10, paddingBottom: floatingBottom + 96 },
+            { paddingTop: Math.max(insets.top, 16) + 8, paddingBottom: floatingBottom + 96 },
           ]}
           showsVerticalScrollIndicator={false}>
-          <View style={styles.topRow}>
+          <View style={[styles.topRow, { alignItems: 'center' }]}>
             <BrandMark size="sm" />
             <View style={styles.topActions}>
               <TopAlertsButton inviteCount={pendingInvites.length} />
@@ -311,10 +313,10 @@ export default function HomeScreen() {
       <ScrollView
         contentContainerStyle={[
           styles.screenContent,
-          { paddingTop: Math.max(insets.top, 18) + 10, paddingBottom: floatingBottom + 96 },
+          { paddingTop: Math.max(insets.top, 16) + 8, paddingBottom: floatingBottom + 96 },
         ]}
         showsVerticalScrollIndicator={false}>
-        <View style={styles.topRow}>
+        <View style={[styles.topRow, { alignItems: 'center' }]}>
           <BrandMark size="sm" />
           <View style={styles.topActions}>
             <TopAlertsButton inviteCount={pendingInvites.length} />
@@ -495,21 +497,27 @@ export default function HomeScreen() {
             ) : (
               <View style={styles.membersList}>
                 {featuredMembers.map((member) => (
-                  <View key={member.id} style={styles.memberRow}>
-                    <View style={styles.memberAvatar}>
-                      <Text style={styles.memberAvatarText}>{getInitials(member.name)}</Text>
-                    </View>
+                  <Pressable key={member.id} style={styles.memberRow} onPress={() => setProfileCardUserId(member.id)}>
+                    {member.avatarUrl ? (
+                      <Image source={{ uri: member.avatarUrl }} style={styles.memberAvatarImage} />
+                    ) : (
+                      <View style={styles.memberAvatar}>
+                        <Text style={styles.memberAvatarText}>{getInitials(member.name)}</Text>
+                      </View>
+                    )}
                     <View style={styles.memberCopy}>
                       <Text style={styles.memberName}>{member.name}</Text>
                       <Text style={styles.memberMeta}>{member.isOwner ? 'Owner' : 'Member'}</Text>
                     </View>
-                  </View>
+                  </Pressable>
                 ))}
               </View>
             )}
           </View>
         </View>
       </Modal>
+
+      <UserProfileCard userId={profileCardUserId} onClose={() => setProfileCardUserId(null)} />
     </View>
   );
 }
@@ -830,7 +838,7 @@ const styles = StyleSheet.create({
   topRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
   },
   topActions: {
     flexDirection: 'row',
@@ -1213,6 +1221,12 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: '800',
+  },
+  memberAvatarImage: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    marginRight: 12,
   },
   memberCopy: {
     flex: 1,

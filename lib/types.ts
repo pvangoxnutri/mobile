@@ -12,6 +12,16 @@ export interface UserInfo {
   themeSecondaryColor?: string | null;
 }
 
+export interface UserProfile {
+  id: string;
+  name: string;
+  bio?: string | null;
+  avatarUrl?: string | null;
+  tripsJoined: number;
+  sidequestsCreated: number;
+  countriesVisited: number;
+}
+
 export interface AppTheme {
   id: string;
   name: string;

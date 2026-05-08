@@ -419,6 +419,7 @@ export default function ProfileScreen() {
         title="Explore"
         items={[
           { icon: 'earth-outline', label: 'Travel Tracker', accent: theme.secondary, onPress: () => router.push('/travel-tracker') },
+          { icon: 'checkmark-done-outline', label: 'Previous Adventures', accent: theme.primary, onPress: () => router.push('/previous-adventures') },
         ]}
       />
 
