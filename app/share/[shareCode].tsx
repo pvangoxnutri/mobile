@@ -65,8 +65,8 @@ export default function SharedAdventureScreen() {
           <Ionicons name="chevron-back" size={24} color={'#14161d'} />
         </Pressable>
         <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle-outline" size={64} color={'#14161d'Secondary} />
-          <Text style={[styles.errorText, { color: '#14161d'Secondary }]}>
+          <Ionicons name="alert-circle-outline" size={64} color={'#14161d'} />
+          <Text style={[styles.errorText, { color: '#14161d' }]}>
             {error || 'Adventure not found'}
           </Text>
         </View>
@@ -93,7 +93,7 @@ export default function SharedAdventureScreen() {
 
       <View style={styles.content}>
         <Text style={[styles.title, { color: '#14161d' }]}>{trip.title}</Text>
-        <Text style={[styles.owner, { color: '#14161d'Secondary }]}>
+        <Text style={[styles.owner, { color: '#14161d' }]}>
           by {trip.ownerName}
         </Text>
 
@@ -110,7 +110,7 @@ export default function SharedAdventureScreen() {
         </View>
 
         {trip.description && (
-          <Text style={[styles.description, { color: '#14161d'Secondary }]}>
+          <Text style={[styles.description, { color: '#14161d' }]}>
             {trip.description}
           </Text>
         )}

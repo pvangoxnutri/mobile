@@ -77,7 +77,7 @@ export default function UserProfileCard({ userId, onClose }: { userId: string | 
               </View>
 
               <Text style={[styles.name, { color: '#14161d' }]}>{profile.name}</Text>
-              {profile.bio ? <Text style={[styles.bio, { color: '#14161d'Secondary }]}>{profile.bio}</Text> : null}
+              {profile.bio ? <Text style={[styles.bio, { color: '#14161d' }]}>{profile.bio}</Text> : null}
 
               <View style={styles.statsGrid}>
                 <StatCard
