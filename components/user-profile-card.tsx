@@ -7,7 +7,8 @@ import { getUserProfile } from '@/lib/api';
 import type { UserProfile } from '@/lib/types';
 import { PRIMARY_COLOR } from '@/constants/colors';
 
-export default function UserProfileCard({ userId, onClose }: { userId: string | null; onClose: () => void }) {  const insets = useSafeAreaInsets();
+export default function UserProfileCard({ userId, onClose }: { userId: string | null; onClose: () => void }) {
+  const insets = useSafeAreaInsets();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
