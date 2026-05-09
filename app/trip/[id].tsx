@@ -388,9 +388,11 @@ export default function TripDetailsScreen() {
             {spotifyMessage ? <Text style={styles.spotifyMessage}>{spotifyMessage}</Text> : null}
           </View>
 
-          <View style={styles.costSplitRow}>
-            <TripMetaChip icon="wallet-outline" label="Cost Split" onPress={() => router.push(`/trip/${id}/split`)} />
-          </View>
+          <TouchableOpacity style={styles.costSplitCard} onPress={() => router.push(`/trip/${id}/split`)}>
+            <Ionicons name="wallet-outline" size={18} color={PRIMARY_COLOR} />
+            <Text style={styles.costSplitLabel}>Cost Split</Text>
+            <Ionicons name="chevron-forward" size={18} color="#b2b7c0" />
+          </TouchableOpacity>
 
           {activityGroups.length > 0 ? (
             <View style={styles.miniCalendarWrap}>
@@ -955,8 +957,24 @@ const styles = StyleSheet.create({
     gap: 10,
     marginTop: 18,
   },
-  costSplitRow: {
+  costSplitCard: {
     marginTop: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#eaedf2',
+    backgroundColor: '#ffffff',
+  },
+  costSplitLabel: {
+    flex: 1,
+    marginLeft: 12,
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1b1e28',
   },
   heroChip: {
     flexDirection: 'row',
