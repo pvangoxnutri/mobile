@@ -333,7 +333,6 @@ export default function TripDetailsScreen() {
               <View style={styles.heroMetaRow}>
                 <TripMetaChip icon="people-outline" label={`${members.length || 1} travelers`} onPress={() => setPeopleSheetOpen(true)} />
                 <TripMetaChip icon="mail-outline" label={`${invites.length} pending`} onPress={() => setPeopleSheetOpen(true)} />
-                <TripMetaChip icon="wallet-outline" label="Cost Split" onPress={() => router.push(`/trip/${id}/split`)} />
               </View>
             </View>
           </View>
@@ -387,6 +386,10 @@ export default function TripDetailsScreen() {
             )}
 
             {spotifyMessage ? <Text style={styles.spotifyMessage}>{spotifyMessage}</Text> : null}
+          </View>
+
+          <View style={styles.costSplitRow}>
+            <TripMetaChip icon="wallet-outline" label="Cost Split" onPress={() => router.push(`/trip/${id}/split`)} />
           </View>
 
           {activityGroups.length > 0 ? (
@@ -951,6 +954,9 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 10,
     marginTop: 18,
+  },
+  costSplitRow: {
+    marginTop: 14,
   },
   heroChip: {
     flexDirection: 'row',
