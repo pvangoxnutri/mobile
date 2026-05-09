@@ -4,13 +4,12 @@ import { router } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAppTheme } from '@/contexts/app-theme-context';
 import { apiJson } from '@/lib/api';
 import { loadNotifications, type AppNotification } from '@/lib/social';
 import type { Quest, SideQuestActivity, TripEvent } from '@/lib/types';
+import { PRIMARY_COLOR, SECONDARY_COLOR } from '@/constants/colors';
 
 export default function TmpNavbarScreen() {
-  const theme = useAppTheme();
   const insets = useSafeAreaInsets();
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [activityFeed, setActivityFeed] = useState<SideQuestActivity[]>([]);
@@ -125,7 +124,7 @@ export default function TmpNavbarScreen() {
                 }
                 router.push(`/trip/${item.tripId}`);
               }}>
-              <View style={[styles.feedIcon, { backgroundColor: item.type === 'chat_message' ? theme.primary : item.type === 'chat_member_joined' ? theme.secondary : '#d79a19' }]}>
+              <View style={[styles.feedIcon, { backgroundColor: item.type === 'chat_message' ? PRIMARY_COLOR : item.type === 'chat_member_joined' ? SECONDARY_COLOR : '#d79a19' }]}>
                 <Ionicons
                   name={item.type === 'chat_message' ? 'chatbubble-outline' : item.type === 'chat_member_joined' ? 'person-add-outline' : 'calendar-outline'}
                   size={16}

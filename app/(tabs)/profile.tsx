@@ -6,18 +6,16 @@ import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Image, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/components/auth-provider';
-import { useAppTheme } from '@/contexts/app-theme-context';
 import { useI18n, type AppLanguage } from '@/components/i18n-provider';
 import LanguagePicker from '@/components/language-picker';
 import TopAlertsButton from '@/components/top-alerts-button';
 import { apiFetch, apiJson } from '@/lib/api';
 import { getDefaultNotificationPreferences, loadNotificationPreferences, saveNotificationPreferences, type NotificationPreferences } from '@/lib/social';
 import { supabase } from '@/lib/supabase';
-import type { AppTheme, Quest } from '@/lib/types';
+import type { Quest } from '@/lib/types';
 
 export default function ProfileScreen() {
   const { user, signOut, refreshProfile, deleteAccount } = useAuth();
-  const theme = useAppTheme();
   const { language, setLanguage } = useI18n();
   const insets = useSafeAreaInsets();
   const [joinedTrips, setJoinedTrips] = useState(0);
@@ -33,13 +31,10 @@ export default function ProfileScreen() {
   const [editingPassword, setEditingPassword] = useState(false);
   const [editingLanguage, setEditingLanguage] = useState(false);
   const [editingNotifications, setEditingNotifications] = useState(false);
-  const [editingTheme, setEditingTheme] = useState(false);
-  const [themes, setThemes] = useState<AppTheme[]>([]);
-  const [selectedThemeId, setSelectedThemeId] = useState<string | null>(user?.themeId ?? null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferences>(getDefaultNotificationPreferences());
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [busy, setBusy] = useState<'name' | 'bio' | 'password' | 'avatar' | 'language' | 'theme' | 'delete' | null>(null);
+  const [busy, setBusy] = useState<'name' | 'bio' | 'password' | 'avatar' | 'language' | 'delete' | null>(null);
 
   useEffect(() => {
     setName(user?.name ?? '');
@@ -48,16 +43,6 @@ export default function ProfileScreen() {
   useEffect(() => {
     setBio(user?.bio ?? '');
   }, [user?.bio]);
-
-  useEffect(() => {
-    setSelectedThemeId(user?.themeId ?? null);
-  }, [user?.themeId]);
-
-  useEffect(() => {
-    void apiJson<AppTheme[]>('/api/themes')
-      .then(setThemes)
-      .catch(() => {});
-  }, []);
 
   useEffect(() => {
     setSelectedLanguage(language);
@@ -323,25 +308,6 @@ export default function ProfileScreen() {
     }
   }
 
-  async function handleThemeSave() {
-    try {
-      setBusy('theme');
-      setMessage(null);
-      const response = await apiFetch('/api/auth/profile', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ themeId: selectedThemeId }),
-      });
-      if (!response.ok) throw new Error((await response.text()) || 'Could not save theme.');
-      await refreshProfile();
-      setEditingTheme(false);
-      setMessage({ type: 'success', text: 'Theme updated.' });
-    } catch (error) {
-      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Could not update theme.' });
-    } finally {
-      setBusy(null);
-    }
-  }
 
   function handleDeleteAccount() {
     setDeleteConfirmOpen(true);
@@ -378,7 +344,7 @@ export default function ProfileScreen() {
       </View>
 
       <View style={styles.avatarSection}>
-        <View style={[styles.avatarRing, { borderColor: theme.primary }]}>
+        <View style={[styles.avatarRing, { borderColor: '#ff4f74' }]}>
           {user?.avatarUrl ? (
             <Image source={{ uri: user.avatarUrl }} style={styles.avatar} />
           ) : (
@@ -388,7 +354,7 @@ export default function ProfileScreen() {
           )}
         </View>
 
-        <TouchableOpacity style={[styles.editAvatarButton, { backgroundColor: theme.secondary, shadowColor: theme.secondary }]} activeOpacity={0.85} onPress={() => void handleAvatarPick()}>
+        <TouchableOpacity style={[styles.editAvatarButton, { backgroundColor: '#10a6c0', shadowColor: '#10a6c0' }]} activeOpacity={0.85} onPress={() => void handleAvatarPick()}>
           {busy === 'avatar' ? <ActivityIndicator size="small" color="#fff" /> : <Ionicons name="create-outline" size={18} color="#fff" />}
         </TouchableOpacity>
 
@@ -410,25 +376,25 @@ export default function ProfileScreen() {
       </View>
 
       <View style={styles.statsRow}>
-        <StatCard value={String(joinedTrips)} label="TRIPS JOINED" accent={theme.secondary} />
-        <StatCard value={String(createdQuests)} label="SIDEQUESTS CREATED" accent={theme.primary} />
-        <StatCard value={String(visitedCountries)} label="COUNTRIES VISITED" accent={theme.primary} />
+        <StatCard value={String(joinedTrips)} label="TRIPS JOINED" accent="#10a6c0" />
+        <StatCard value={String(createdQuests)} label="SIDEQUESTS CREATED" accent="#ff4f74" />
+        <StatCard value={String(visitedCountries)} label="COUNTRIES VISITED" accent="#ff4f74" />
       </View>
 
       <SectionCard
         title="Explore"
         items={[
-          { icon: 'earth-outline', label: 'Travel Tracker', accent: theme.secondary, onPress: () => router.push('/travel-tracker') },
-          { icon: 'checkmark-done-outline', label: 'Previous Adventures', accent: theme.primary, onPress: () => router.push('/previous-adventures') },
+          { icon: 'earth-outline', label: 'Travel Tracker', accent: '#10a6c0', onPress: () => router.push('/travel-tracker') },
+          { icon: 'checkmark-done-outline', label: 'Previous Adventures', accent: '#ff4f74', onPress: () => router.push('/previous-adventures') },
         ]}
       />
 
       <SectionCard
         title="Edit Profile"
         items={[
-          { icon: 'person-circle-outline', label: 'Change name', accent: theme.primary, onPress: () => setEditingName(true) },
-          { icon: 'text-outline', label: 'Edit bio', accent: theme.primary, onPress: () => setEditingBio(true) },
-          { icon: 'camera-outline', label: busy === 'avatar' ? 'Uploading image...' : 'Change profile image', accent: theme.primary, onPress: () => void handleAvatarPick() },
+          { icon: 'person-circle-outline', label: 'Change name', accent: '#ff4f74', onPress: () => setEditingName(true) },
+          { icon: 'text-outline', label: 'Edit bio', accent: '#ff4f74', onPress: () => setEditingBio(true) },
+          { icon: 'camera-outline', label: busy === 'avatar' ? 'Uploading image...' : 'Change profile image', accent: '#ff4f74', onPress: () => void handleAvatarPick() },
         ]}
       />
 
@@ -442,7 +408,7 @@ export default function ProfileScreen() {
               <TouchableOpacity style={styles.confirmCancel} activeOpacity={0.88} onPress={() => setEditingName(false)}>
                 <Text style={styles.confirmCancelText}>Cancel</Text>
               </TouchableOpacity>
-              <Pressable style={[styles.confirmDelete, { backgroundColor: theme.primary }]} onPress={() => void handleNameSave()} disabled={busy === 'name'}>
+              <Pressable style={[styles.confirmDelete, { backgroundColor: '#ff4f74' }]} onPress={() => void handleNameSave()} disabled={busy === 'name'}>
                 {busy === 'name' ? <ActivityIndicator color="#fff" /> : <Text style={styles.confirmDeleteText}>Save name</Text>}
               </Pressable>
             </View>
@@ -468,7 +434,7 @@ export default function ProfileScreen() {
               <TouchableOpacity style={styles.confirmCancel} activeOpacity={0.88} onPress={() => setEditingBio(false)}>
                 <Text style={styles.confirmCancelText}>Cancel</Text>
               </TouchableOpacity>
-              <Pressable style={[styles.confirmDelete, { backgroundColor: theme.primary }]} onPress={() => void handleBioSave()} disabled={busy === 'bio'}>
+              <Pressable style={[styles.confirmDelete, { backgroundColor: '#ff4f74' }]} onPress={() => void handleBioSave()} disabled={busy === 'bio'}>
                 {busy === 'bio' ? <ActivityIndicator color="#fff" /> : <Text style={styles.confirmDeleteText}>Save bio</Text>}
               </Pressable>
             </View>
@@ -476,79 +442,16 @@ export default function ProfileScreen() {
         </View>
       </Modal>
 
-      <SectionCard
-        title="Appearance"
-        items={[
-          { icon: 'color-palette-outline', label: 'Change theme', accent: theme.primary, onPress: () => setEditingTheme(true) },
-        ]}
-      />
-
-      <Modal visible={editingTheme} transparent animationType="fade" onRequestClose={() => setEditingTheme(false)}>
-        <View style={styles.confirmBackdrop}>
-          <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setEditingTheme(false)} />
-          <View style={[styles.confirmCard, { maxHeight: '80%' }]}>
-            <Text style={styles.confirmTitle}>Change theme</Text>
-            {themes.length === 0 ? (
-              <ActivityIndicator color={theme.primary} style={{ marginVertical: 16 }} />
-            ) : (
-              <ScrollView style={{ marginTop: 16, marginBottom: 16 }} showsVerticalScrollIndicator={false}>
-                <View style={styles.themeList}>
-                  {themes.map((t) => {
-                    const selected = selectedThemeId === t.id;
-                    return (
-                      <TouchableOpacity
-                        key={t.id}
-                        style={[styles.themeCard, selected && { borderColor: theme.primary }]}
-                        activeOpacity={0.88}
-                        onPress={() => setSelectedThemeId(t.id)}>
-                        <View style={styles.themeColorStrip}>
-                          <View style={[styles.themeColorBlock, { backgroundColor: t.primaryColor }]} />
-                          <View style={[styles.themeColorBlock, { backgroundColor: t.secondaryColor, borderLeftWidth: 1, borderLeftColor: '#e0e3ea' }]} />
-                        </View>
-                        <View style={styles.themeCardInfo}>
-                          <View style={styles.themeSwatchRow}>
-                            <View style={[styles.themeSwatch, { backgroundColor: t.primaryColor }]} />
-                            <View style={[styles.themeSwatch, { backgroundColor: t.secondaryColor, borderWidth: 1, borderColor: '#dde0e8' }]} />
-                            <View style={{ flex: 1, paddingLeft: 6 }}>
-                              <Text style={styles.themeName}>{t.name}</Text>
-                              <Text style={styles.themeColorCodes}>{t.primaryColor} · {t.secondaryColor}</Text>
-                            </View>
-                          </View>
-                          {selected ? (
-                            <View style={[styles.themeCheck, { backgroundColor: theme.primary }]}>
-                              <Ionicons name="checkmark" size={14} color="#fff" />
-                            </View>
-                          ) : (
-                            <View style={styles.themeCheckEmpty} />
-                          )}
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </ScrollView>
-            )}
-            <View style={styles.confirmActions}>
-              <TouchableOpacity style={styles.confirmCancel} activeOpacity={0.88} onPress={() => setEditingTheme(false)}>
-                <Text style={styles.confirmCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <Pressable style={[styles.confirmDelete, { backgroundColor: theme.primary }]} onPress={() => void handleThemeSave()} disabled={busy === 'theme'}>
-                {busy === 'theme' ? <ActivityIndicator color="#fff" /> : <Text style={styles.confirmDeleteText}>Apply theme</Text>}
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
 
       <SectionCard
         title="Account Settings"
         items={[
-          { icon: 'lock-closed-outline', label: 'Change password', accent: theme.secondary, onPress: () => setEditingPassword(true) },
-          { icon: 'language-outline', label: 'Change language', accent: theme.secondary, onPress: () => setEditingLanguage(true) },
+          { icon: 'lock-closed-outline', label: 'Change password', accent: '#10a6c0', onPress: () => setEditingPassword(true) },
+          { icon: 'language-outline', label: 'Change language', accent: '#10a6c0', onPress: () => setEditingLanguage(true) },
           {
             icon: 'log-out-outline',
             label: 'Logout',
-            accent: theme.primary,
+            accent: '#ff4f74',
             onPress: () => {
               void signOut().then(() => router.replace('/(auth)/login'));
             },
@@ -579,7 +482,7 @@ export default function ProfileScreen() {
               <TouchableOpacity style={styles.confirmCancel} activeOpacity={0.88} onPress={() => setEditingPassword(false)}>
                 <Text style={styles.confirmCancelText}>Cancel</Text>
               </TouchableOpacity>
-              <Pressable style={[styles.confirmDelete, { backgroundColor: theme.primary }]} onPress={() => void handlePasswordSave()} disabled={busy === 'password'}>
+              <Pressable style={[styles.confirmDelete, { backgroundColor: '#ff4f74' }]} onPress={() => void handlePasswordSave()} disabled={busy === 'password'}>
                 {busy === 'password' ? <ActivityIndicator color="#fff" /> : <Text style={styles.confirmDeleteText}>Update password</Text>}
               </Pressable>
             </View>
@@ -604,7 +507,7 @@ export default function ProfileScreen() {
               <TouchableOpacity style={styles.confirmCancel} activeOpacity={0.88} onPress={() => setEditingLanguage(false)}>
                 <Text style={styles.confirmCancelText}>Cancel</Text>
               </TouchableOpacity>
-              <Pressable style={[styles.confirmDelete, { backgroundColor: theme.primary }]} onPress={() => void handleLanguageSave()} disabled={busy === 'language'}>
+              <Pressable style={[styles.confirmDelete, { backgroundColor: '#ff4f74' }]} onPress={() => void handleLanguageSave()} disabled={busy === 'language'}>
                 {busy === 'language' ? <ActivityIndicator color="#fff" /> : <Text style={styles.confirmDeleteText}>Save language</Text>}
               </Pressable>
             </View>
@@ -618,7 +521,7 @@ export default function ProfileScreen() {
           {
             icon: 'notifications-outline',
             label: 'Notification settings',
-            accent: theme.primary,
+            accent: '#ff4f74',
             onPress: () => setEditingNotifications(true),
           },
         ]}
@@ -706,17 +609,16 @@ function NotificationSettingRow({
   value: boolean;
   onValueChange: (value: boolean) => void;
 }) {
-  const theme = useAppTheme();
   return (
     <View style={styles.notificationRow}>
-      <View style={[styles.notificationIcon, { backgroundColor: theme.primary08 }]}>
-        <Ionicons name={icon} size={18} color={theme.primary} />
+      <View style={[styles.notificationIcon, { backgroundColor: '#fff1f5' }]}>
+        <Ionicons name={icon} size={18} color="#ff4f74" />
       </View>
       <View style={styles.notificationCopy}>
         <Text style={styles.notificationTitle}>{title}</Text>
         <Text style={styles.notificationSubtitle}>{subtitle}</Text>
       </View>
-      <Switch value={value} onValueChange={onValueChange} trackColor={{ false: '#d8dde6', true: theme.primary20 }} thumbColor={value ? theme.primary : '#fff'} />
+      <Switch value={value} onValueChange={onValueChange} trackColor={{ false: '#d8dde6', true: '#ffe5ec' }} thumbColor={value ? '#ff4f74' : '#fff'} />
     </View>
   );
 }

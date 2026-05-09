@@ -12,7 +12,6 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAppTheme } from '@/contexts/app-theme-context';
 import WorldOverview from '@/components/travel-tracker/map-section';
 import StatusSheet from '@/components/travel-tracker/status-sheet';
 import {
@@ -27,6 +26,7 @@ import {
 } from '@/components/travel-tracker/country-data';
 import { apiJson } from '@/lib/api';
 import type { Quest } from '@/lib/types';
+import { PRIMARY_COLOR, SECONDARY_COLOR } from '@/constants/colors';
 
 type Filter = 'all' | 'visited' | 'planned' | 'living';
 
@@ -40,7 +40,6 @@ const STATUS_LABEL: Record<CountryStatus, string> = {
 };
 
 export default function TravelTrackerScreen() {
-  const theme = useAppTheme();
   const insets = useSafeAreaInsets();
 
   // ── State ──────────────────────────────────────────────────────────────────
@@ -194,15 +193,15 @@ export default function TravelTrackerScreen() {
           <StatPill
             value={visitedCount}
             label="Visited"
-            color={theme.primary}
-            bg={theme.primary08}
+            color={PRIMARY_COLOR}
+            bg={PRIMARY_COLOR08}
             icon="checkmark-circle"
           />
           <StatPill
             value={plannedCount}
             label="Planned"
-            color={theme.secondary}
-            bg={theme.secondary08}
+            color={SECONDARY_COLOR}
+            bg={SECONDARY_COLOR08}
             icon="bookmark"
           />
           <View style={[styles.livingPill, livingCountry && { backgroundColor: '#FEF3C7', borderColor: '#FCD34D' }]}>
@@ -234,7 +233,7 @@ export default function TravelTrackerScreen() {
                 <TouchableOpacity
                   style={[
                     styles.filterChip,
-                    isActive && { backgroundColor: theme.primary, borderColor: theme.primary },
+                    isActive && { backgroundColor: PRIMARY_COLOR, borderColor: PRIMARY_COLOR },
                   ]}
                   activeOpacity={0.8}
                   onPress={() => pressFilter(f)}>
@@ -289,7 +288,7 @@ export default function TravelTrackerScreen() {
                       {fromTrip ? <Text style={styles.fromTripLabel}>✈ from trip</Text> : null}
                     </View>
                     {entry.status !== 'none' ? (
-                      <StatusBadge status={entry.status} theme={theme} />
+                      <StatusBadge status={entry.status} />
                     ) : (
                       <Ionicons name="chevron-forward" size={18} color="#C8CDD8" />
                     )}
@@ -337,11 +336,11 @@ function StatPill({
   );
 }
 
-function StatusBadge({ status, theme }: { status: CountryStatus; theme: ReturnType<typeof useAppTheme> }) {
+function StatusBadge({ status }: { status: CountryStatus }) {
   const config: Record<CountryStatus, { bg: string; color: string } | null> = {
     none:    null,
-    visited: { bg: theme.primary12,  color: theme.primary },
-    planned: { bg: theme.secondary12, color: theme.secondary },
+    visited: { bg: PRIMARY_COLOR12,  color: PRIMARY_COLOR },
+    planned: { bg: SECONDARY_COLOR12, color: SECONDARY_COLOR },
     living:  { bg: '#FEF3C7', color: '#D97706' },
   };
   const c = config[status];

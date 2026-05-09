@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+﻿import { Ionicons } from '@expo/vector-icons';
 import { useMemo, useState } from 'react';
 import {
   FlatList,
@@ -10,7 +10,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAppTheme } from '@/contexts/app-theme-context';
+import { PRIMARY_COLOR } from '@/constants/colors';
 
 type Currency = {
   code: string;
@@ -28,14 +28,14 @@ function flag(cc: string) {
 
 const CURRENCIES: Currency[] = [
   { code: 'SEK', name: 'Swedish Krona',        flag: flag('SE') },
-  { code: 'EUR', name: 'Euro',                  flag: '🇪🇺' },
+  { code: 'EUR', name: 'Euro',                  flag: 'ðŸ‡ªðŸ‡º' },
   { code: 'USD', name: 'US Dollar',             flag: flag('US') },
   { code: 'GBP', name: 'British Pound',         flag: flag('GB') },
   { code: 'NOK', name: 'Norwegian Krone',       flag: flag('NO') },
   { code: 'DKK', name: 'Danish Krone',          flag: flag('DK') },
-  { code: 'ISK', name: 'Icelandic Króna',       flag: flag('IS') },
+  { code: 'ISK', name: 'Icelandic KrÃ³na',       flag: flag('IS') },
   { code: 'CHF', name: 'Swiss Franc',           flag: flag('CH') },
-  { code: 'PLN', name: 'Polish Złoty',          flag: flag('PL') },
+  { code: 'PLN', name: 'Polish ZÅ‚oty',          flag: flag('PL') },
   { code: 'CZK', name: 'Czech Koruna',          flag: flag('CZ') },
   { code: 'HUF', name: 'Hungarian Forint',      flag: flag('HU') },
   { code: 'RON', name: 'Romanian Leu',          flag: flag('RO') },
@@ -74,7 +74,7 @@ const CURRENCIES: Currency[] = [
   { code: 'MMK', name: 'Myanmar Kyat',          flag: flag('MM') },
   { code: 'KHR', name: 'Cambodian Riel',        flag: flag('KH') },
   { code: 'LAK', name: 'Lao Kip',              flag: flag('LA') },
-  { code: 'MNT', name: 'Mongolian Tögrög',      flag: flag('MN') },
+  { code: 'MNT', name: 'Mongolian TÃ¶grÃ¶g',      flag: flag('MN') },
   { code: 'AED', name: 'UAE Dirham',            flag: flag('AE') },
   { code: 'SAR', name: 'Saudi Riyal',           flag: flag('SA') },
   { code: 'QAR', name: 'Qatari Riyal',          flag: flag('QA') },
@@ -98,9 +98,7 @@ type Props = {
   onChange: (code: string) => void;
 };
 
-export function CurrencyPicker({ value, onChange }: Props) {
-  const theme = useAppTheme();
-  const insets = useSafeAreaInsets();
+export function CurrencyPicker({ value, onChange }: Props) {  const insets = useSafeAreaInsets();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
 
@@ -123,7 +121,7 @@ export function CurrencyPicker({ value, onChange }: Props) {
   return (
     <>
       <TouchableOpacity style={styles.trigger} activeOpacity={0.8} onPress={() => setOpen(true)}>
-        <Text style={styles.triggerFlag}>{selected?.flag ?? '🌐'}</Text>
+        <Text style={styles.triggerFlag}>{selected?.flag ?? 'ðŸŒ'}</Text>
         <Text style={styles.triggerCode}>{value || 'SEK'}</Text>
         <Ionicons name="chevron-down" size={14} color="#8a909b" />
       </TouchableOpacity>
@@ -138,7 +136,7 @@ export function CurrencyPicker({ value, onChange }: Props) {
               <Ionicons name="search-outline" size={16} color="#8a909b" style={styles.searchIcon} />
               <TextInput
                 style={styles.searchInput}
-                placeholder="Search currency or code…"
+                placeholder="Search currency or codeâ€¦"
                 placeholderTextColor="#afb5bf"
                 value={query}
                 onChangeText={setQuery}
@@ -165,7 +163,7 @@ export function CurrencyPicker({ value, onChange }: Props) {
                   <Text style={styles.itemCode}>{item.code}</Text>
                   <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
                   {item.code === value && (
-                    <Ionicons name="checkmark" size={16} color={theme.primary} />
+                    <Ionicons name="checkmark" size={16} color={PRIMARY_COLOR} />
                   )}
                 </TouchableOpacity>
               )}
@@ -278,3 +276,4 @@ const styles = StyleSheet.create({
     color: '#5a6072',
   },
 });
+

@@ -1,5 +1,5 @@
-/**
- * WorldOverview — continent-based summary used as the world map placeholder.
+﻿/**
+ * WorldOverview â€” continent-based summary used as the world map placeholder.
  *
  * Architecture contract:
  *   props: { statusMap, onContinentPress }
@@ -10,8 +10,9 @@
  */
 
 import { TouchableOpacity, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
-import { useAppTheme } from '@/contexts/app-theme-context';
+
 import { COUNTRIES, CONTINENT_ORDER, inContinent, type Continent, type StatusMap } from './country-data';
+import { PRIMARY_COLOR, PRIMARY_12, PRIMARY_20, SECONDARY_COLOR } from '@/constants/colors';
 
 interface ContinentStats {
   continent: Continent;
@@ -23,19 +24,19 @@ interface ContinentStats {
 
 interface WorldOverviewProps {
   statusMap: StatusMap;
-  /** Called when the user taps a continent card — parent can use to filter the list */
+  /** Called when the user taps a continent card â€” parent can use to filter the list */
   onContinentPress: (continent: Continent | null) => void;
   activeContinentFilter: Continent | null;
 }
 
 // Rough geographic emoji / icon for each continent
 const CONTINENT_META: Record<Continent, { emoji: string; color: string; lightBg: string }> = {
-  Europe:          { emoji: '🏰', color: '#3B82F6', lightBg: '#EFF6FF' },
-  Asia:            { emoji: '🏯', color: '#8B5CF6', lightBg: '#F5F3FF' },
-  Africa:          { emoji: '🌍', color: '#F59E0B', lightBg: '#FFFBEB' },
-  'North America': { emoji: '🗽', color: '#10B981', lightBg: '#ECFDF5' },
-  'South America': { emoji: '🌿', color: '#06B6D4', lightBg: '#ECFEFF' },
-  Oceania:         { emoji: '🌊', color: '#F97316', lightBg: '#FFF7ED' },
+  Europe:          { emoji: 'ðŸ°', color: '#3B82F6', lightBg: '#EFF6FF' },
+  Asia:            { emoji: 'ðŸ¯', color: '#8B5CF6', lightBg: '#F5F3FF' },
+  Africa:          { emoji: 'ðŸŒ', color: '#F59E0B', lightBg: '#FFFBEB' },
+  'North America': { emoji: 'ðŸ—½', color: '#10B981', lightBg: '#ECFDF5' },
+  'South America': { emoji: 'ðŸŒ¿', color: '#06B6D4', lightBg: '#ECFEFF' },
+  Oceania:         { emoji: 'ðŸŒŠ', color: '#F97316', lightBg: '#FFF7ED' },
 };
 
 function buildStats(statusMap: StatusMap): ContinentStats[] {
@@ -48,9 +49,7 @@ function buildStats(statusMap: StatusMap): ContinentStats[] {
   });
 }
 
-export default function WorldOverview({ statusMap, onContinentPress, activeContinentFilter }: WorldOverviewProps) {
-  const theme = useAppTheme();
-  const { width } = useWindowDimensions();
+export default function WorldOverview({ statusMap, onContinentPress, activeContinentFilter }: WorldOverviewProps) {  const { width } = useWindowDimensions();
   const stats = buildStats(statusMap);
   const cardWidth = (width - 40 - 10) / 2; // 2 columns, 20px side padding, 10px gap
 
@@ -61,16 +60,16 @@ export default function WorldOverview({ statusMap, onContinentPress, activeConti
 
   return (
     <View>
-      {/* ── Global progress banner ─────────────────────────────────────────── */}
-      <View style={[styles.progressBanner, { borderColor: theme.primary20 }]}>
+      {/* â”€â”€ Global progress banner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      <View style={[styles.progressBanner, { borderColor: PRIMARY_COLOR20 }]}>
         <View style={styles.progressRow}>
           <View style={styles.progressItem}>
-            <Text style={[styles.progressValue, { color: theme.primary }]}>{totalVisited}</Text>
+            <Text style={[styles.progressValue, { color: PRIMARY_COLOR }]}>{totalVisited}</Text>
             <Text style={styles.progressLabel}>visited</Text>
           </View>
           <View style={styles.progressDivider} />
           <View style={styles.progressItem}>
-            <Text style={[styles.progressValue, { color: theme.secondary }]}>{totalPlanned}</Text>
+            <Text style={[styles.progressValue, { color: SECONDARY_COLOR }]}>{totalPlanned}</Text>
             <Text style={styles.progressLabel}>planned</Text>
           </View>
           <View style={styles.progressDivider} />
@@ -88,10 +87,10 @@ export default function WorldOverview({ statusMap, onContinentPress, activeConti
         {/* Progress track */}
         <View style={styles.track}>
           {totalVisited > 0 ? (
-            <View style={[styles.trackFill, { flex: totalVisited, backgroundColor: theme.primary }]} />
+            <View style={[styles.trackFill, { flex: totalVisited, backgroundColor: PRIMARY_COLOR }]} />
           ) : null}
           {totalPlanned > 0 ? (
-            <View style={[styles.trackFill, { flex: totalPlanned, backgroundColor: theme.secondary }]} />
+            <View style={[styles.trackFill, { flex: totalPlanned, backgroundColor: SECONDARY_COLOR }]} />
           ) : null}
           {totalLiving > 0 ? (
             <View style={[styles.trackFill, { flex: totalLiving, backgroundColor: '#D97706' }]} />
@@ -100,15 +99,15 @@ export default function WorldOverview({ statusMap, onContinentPress, activeConti
         </View>
       </View>
 
-      {/* ── All-continents chip ───────────────────────────────────────────── */}
+      {/* â”€â”€ All-continents chip â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <TouchableOpacity
-        style={[styles.allChip, activeContinentFilter === null && { backgroundColor: theme.primary12, borderColor: theme.primary20 }]}
+        style={[styles.allChip, activeContinentFilter === null && { backgroundColor: PRIMARY_COLOR12, borderColor: PRIMARY_COLOR20 }]}
         activeOpacity={0.75}
         onPress={() => onContinentPress(null)}>
-        <Text style={[styles.allChipText, activeContinentFilter === null && { color: theme.primary }]}>🌐  All continents</Text>
+        <Text style={[styles.allChipText, activeContinentFilter === null && { color: PRIMARY_COLOR }]}>ðŸŒ  All continents</Text>
       </TouchableOpacity>
 
-      {/* ── 2-column continent grid ───────────────────────────────────────── */}
+      {/* â”€â”€ 2-column continent grid â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <View style={styles.grid}>
         {stats.map((s) => {
           const meta = CONTINENT_META[s.continent];
@@ -142,7 +141,7 @@ export default function WorldOverview({ statusMap, onContinentPress, activeConti
                 ) : null}
                 {s.living ? (
                   <View style={[styles.miniTag, { backgroundColor: '#FEF3C7' }]}>
-                    <Text style={styles.miniTagText}>🏠</Text>
+                    <Text style={styles.miniTagText}>ðŸ </Text>
                   </View>
                 ) : null}
               </View>
@@ -301,3 +300,4 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
+

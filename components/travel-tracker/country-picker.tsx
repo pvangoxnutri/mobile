@@ -1,5 +1,5 @@
-/**
- * CountryPicker — reusable multi-select for ISO country codes.
+﻿/**
+ * CountryPicker â€” reusable multi-select for ISO country codes.
  *
  * Usage:
  *   <CountryPicker value={codes} onChange={setCodes} />
@@ -21,8 +21,9 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAppTheme } from '@/contexts/app-theme-context';
+
 import { COUNTRIES, getCountryFlag } from './country-data';
+import { PRIMARY_COLOR, SECONDARY_COLOR, SECONDARY_08, SECONDARY_12, SECONDARY_20 } from '@/constants/colors';
 
 interface CountryPickerProps {
   value: string[];
@@ -30,9 +31,7 @@ interface CountryPickerProps {
   label?: string;
 }
 
-export default function CountryPicker({ value, onChange, label = 'Countries' }: CountryPickerProps) {
-  const theme = useAppTheme();
-  const insets = useSafeAreaInsets();
+export default function CountryPicker({ value, onChange, label = 'Countries' }: CountryPickerProps) {  const insets = useSafeAreaInsets();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
 
@@ -68,47 +67,47 @@ export default function CountryPicker({ value, onChange, label = 'Countries' }: 
 
   return (
     <>
-      {/* ── Trigger ─────────────────────────────────────────────────────────── */}
+      {/* â”€â”€ Trigger â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <TouchableOpacity style={[styles.trigger, { borderColor: '#E4E7EE' }]} activeOpacity={0.8} onPress={() => setOpen(true)}>
         <View style={styles.triggerLeft}>
-          <Ionicons name="earth-outline" size={18} color={theme.secondary} style={styles.triggerIcon} />
-          <Text style={[styles.triggerLabel, { color: theme.secondary }]}>{label}</Text>
+          <Ionicons name="earth-outline" size={18} color={SECONDARY_COLOR} style={styles.triggerIcon} />
+          <Text style={[styles.triggerLabel, { color: SECONDARY_COLOR }]}>{label}</Text>
         </View>
         <Ionicons name="chevron-forward" size={18} color="#B2B7C0" />
       </TouchableOpacity>
 
-      {/* ── Selected chips ───────────────────────────────────────────────────── */}
+      {/* â”€â”€ Selected chips â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {selectedCountries.length > 0 ? (
         <View style={styles.chips}>
           {selectedCountries.map((c) => (
-            <TouchableOpacity key={c.code} style={[styles.chip, { backgroundColor: theme.secondary12, borderColor: theme.secondary20 }]} activeOpacity={0.75} onPress={() => toggle(c.code)}>
+            <TouchableOpacity key={c.code} style={[styles.chip, { backgroundColor: SECONDARY_COLOR12, borderColor: SECONDARY_COLOR20 }]} activeOpacity={0.75} onPress={() => toggle(c.code)}>
               <Text style={styles.chipFlag}>{getCountryFlag(c)}</Text>
-              <Text style={[styles.chipName, { color: theme.secondary }]} numberOfLines={1}>{c.name}</Text>
-              <Ionicons name="close" size={13} color={theme.secondary} />
+              <Text style={[styles.chipName, { color: SECONDARY_COLOR }]} numberOfLines={1}>{c.name}</Text>
+              <Ionicons name="close" size={13} color={SECONDARY_COLOR} />
             </TouchableOpacity>
           ))}
         </View>
       ) : null}
 
-      {/* ── Modal ───────────────────────────────────────────────────────────── */}
+      {/* â”€â”€ Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <Modal visible={open} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setOpen(false)}>
         <View style={[styles.modal, { paddingTop: Math.max(insets.top, 16) }]}>
           {/* Header */}
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Select countries</Text>
             <TouchableOpacity onPress={() => { setOpen(false); setSearch(''); }} hitSlop={12}>
-              <Ionicons name="checkmark-circle" size={28} color={theme.primary} />
+              <Ionicons name="checkmark-circle" size={28} color={PRIMARY_COLOR} />
             </TouchableOpacity>
           </View>
 
           {/* Selected count */}
           {value.length > 0 ? (
-            <View style={[styles.countBanner, { backgroundColor: theme.secondary08 }]}>
-              <Text style={[styles.countBannerText, { color: theme.secondary }]}>
+            <View style={[styles.countBanner, { backgroundColor: SECONDARY_COLOR08 }]}>
+              <Text style={[styles.countBannerText, { color: SECONDARY_COLOR }]}>
                 {value.length} {value.length === 1 ? 'country' : 'countries'} selected
               </Text>
               <TouchableOpacity onPress={() => onChange([])} hitSlop={8}>
-                <Text style={[styles.clearAll, { color: theme.secondary }]}>Clear all</Text>
+                <Text style={[styles.clearAll, { color: SECONDARY_COLOR }]}>Clear all</Text>
               </TouchableOpacity>
             </View>
           ) : null}
@@ -120,7 +119,7 @@ export default function CountryPicker({ value, onChange, label = 'Countries' }: 
               style={styles.searchInput}
               value={search}
               onChangeText={setSearch}
-              placeholder="Search countries…"
+              placeholder="Search countriesâ€¦"
               placeholderTextColor="#B0B7C3"
               autoCapitalize="none"
               autoCorrect={false}
@@ -142,10 +141,10 @@ export default function CountryPicker({ value, onChange, label = 'Countries' }: 
                   <TouchableOpacity style={styles.row} activeOpacity={0.7} onPress={() => toggle(country.code)}>
                     <Text style={styles.rowFlag}>{getCountryFlag(country)}</Text>
                     <View style={styles.rowText}>
-                      <Text style={[styles.rowName, selected && { color: theme.primary, fontWeight: '700' }]}>{country.name}</Text>
+                      <Text style={[styles.rowName, selected && { color: PRIMARY_COLOR, fontWeight: '700' }]}>{country.name}</Text>
                       <Text style={styles.rowContinent}>{country.continent}</Text>
                     </View>
-                    <View style={[styles.checkbox, selected && { backgroundColor: theme.primary, borderColor: theme.primary }]}>
+                    <View style={[styles.checkbox, selected && { backgroundColor: PRIMARY_COLOR, borderColor: PRIMARY_COLOR }]}>
                       {selected ? <Ionicons name="checkmark" size={14} color="#fff" /> : null}
                     </View>
                   </TouchableOpacity>
@@ -267,3 +266,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 });
+

@@ -1,9 +1,10 @@
-import { Ionicons } from '@expo/vector-icons';
+﻿import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useRef } from 'react';
 import { Animated, Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAppTheme } from '@/contexts/app-theme-context';
+
 import { getCountryFlag, type Country, type CountryStatus } from './country-data';
+import { PRIMARY_COLOR, PRIMARY_12, SECONDARY_COLOR, SECONDARY_12 } from '@/constants/colors';
 
 interface StatusSheetProps {
   country: Country | null;
@@ -21,9 +22,7 @@ interface Option {
   color: string;
 }
 
-export default function StatusSheet({ country, currentStatus, visible, onSelect, onClose }: StatusSheetProps) {
-  const theme = useAppTheme();
-  const insets = useSafeAreaInsets();
+export default function StatusSheet({ country, currentStatus, visible, onSelect, onClose }: StatusSheetProps) {  const insets = useSafeAreaInsets();
   const slideAnim = useRef(new Animated.Value(300)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -42,8 +41,8 @@ export default function StatusSheet({ country, currentStatus, visible, onSelect,
   }, [visible, slideAnim, fadeAnim]);
 
   const options: Option[] = [
-    { status: 'visited', label: 'Visited', icon: 'checkmark-circle', bg: theme.primary12, color: theme.primary },
-    { status: 'planned', label: 'Planning to visit', icon: 'bookmark', bg: theme.secondary12, color: theme.secondary },
+    { status: 'visited', label: 'Visited', icon: 'checkmark-circle', bg: PRIMARY_COLOR12, color: PRIMARY_COLOR },
+    { status: 'planned', label: 'Planning to visit', icon: 'bookmark', bg: SECONDARY_COLOR12, color: SECONDARY_COLOR },
     { status: 'living', label: 'I live here', icon: 'home', bg: '#FEF3C7', color: '#D97706' },
     { status: 'none', label: 'Clear status', icon: 'close-circle-outline', bg: '#F4F5F7', color: '#8A909D' },
   ];
@@ -187,3 +186,4 @@ const styles = StyleSheet.create({
     marginRight: 4,
   },
 });
+

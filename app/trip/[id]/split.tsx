@@ -14,10 +14,10 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/components/auth-provider';
-import { useAppTheme } from '@/contexts/app-theme-context';
 import { CurrencyPicker } from '@/components/currency-picker';
 import { apiFetch, apiJson } from '@/lib/api';
 import type { BalancesResponse, Debt, Expense, Settlement } from '@/lib/types';
+import { PRIMARY_COLOR, PRIMARY_08 } from '@/constants/colors';
 
 type TripMember = {
   id: string;
@@ -68,7 +68,6 @@ function todayIso() {
 }
 
 export default function CostSplitScreen() {
-  const theme = useAppTheme();
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuth();
@@ -309,7 +308,7 @@ export default function CostSplitScreen() {
           <TouchableOpacity
             key={tab}
             activeOpacity={0.85}
-            style={[styles.tabPill, activeTab === tab && [styles.tabPillActive, { backgroundColor: theme.primary }]]}
+            style={[styles.tabPill, activeTab === tab && [styles.tabPillActive, { backgroundColor: PRIMARY_COLOR }]]}
             onPress={() => setActiveTab(tab)}>
             <Text style={[styles.tabPillText, activeTab === tab && styles.tabPillTextActive]}>
               {tab === 'expenses' ? 'Expenses' : tab === 'balances' ? 'Balances' : 'Settle Up'}
@@ -320,12 +319,12 @@ export default function CostSplitScreen() {
 
       {loading ? (
         <View style={styles.loadingWrap}>
-          <ActivityIndicator size="large" color={theme.primary} />
+          <ActivityIndicator size="large" color={PRIMARY_COLOR} />
         </View>
       ) : error ? (
         <View style={styles.errorWrap}>
           <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity style={[styles.retryButton, { backgroundColor: theme.primary }]} onPress={() => void loadAll()}>
+          <TouchableOpacity style={[styles.retryButton, { backgroundColor: PRIMARY_COLOR }]} onPress={() => void loadAll()}>
             <Text style={styles.retryButtonText}>Retry</Text>
           </TouchableOpacity>
         </View>
@@ -461,7 +460,7 @@ export default function CostSplitScreen() {
                                 <Text style={styles.debtName}>{debt.fromUserName}</Text> pays{' '}
                                 <Text style={styles.debtName}>{debt.toUserName}</Text>
                               </Text>
-                              <Text style={[styles.debtAmount, { color: theme.primary }]}>{formatAmount(debt.amount)}</Text>
+                              <Text style={[styles.debtAmount, { color: PRIMARY_COLOR }]}>{formatAmount(debt.amount)}</Text>
                             </View>
                           </View>
                         </View>
@@ -517,7 +516,7 @@ export default function CostSplitScreen() {
                         </View>
                       </View>
                       <TouchableOpacity
-                        style={[styles.markSettledButton, { backgroundColor: theme.primary }]}
+                        style={[styles.markSettledButton, { backgroundColor: PRIMARY_COLOR }]}
                         activeOpacity={0.88}
                         onPress={() => handleSettleDebt(debt)}>
                         <Ionicons name="checkmark-circle-outline" size={16} color="#fff" />
@@ -573,7 +572,7 @@ export default function CostSplitScreen() {
       {/* FAB for adding expense */}
       {activeTab === 'expenses' && !loading && (
         <View style={[styles.fab, { bottom: Math.max(insets.bottom, 16) + 10 }]}>
-          <TouchableOpacity activeOpacity={0.92} style={[styles.fabButton, { backgroundColor: theme.primary, shadowColor: theme.primary }]} onPress={openAddModal}>
+          <TouchableOpacity activeOpacity={0.92} style={[styles.fabButton, { backgroundColor: PRIMARY_COLOR, shadowColor: PRIMARY_COLOR }]} onPress={openAddModal}>
             <Ionicons name="add" size={22} color="#fff" />
             <Text style={styles.fabText}>Add Expense</Text>
           </TouchableOpacity>
@@ -639,7 +638,7 @@ export default function CostSplitScreen() {
                 return (
                   <View key={member.id} style={styles.memberRow}>
                     <TouchableOpacity
-                      style={[styles.memberCheckbox, selected && [styles.memberCheckboxActive, { backgroundColor: theme.primary, borderColor: theme.primary }]]}
+                      style={[styles.memberCheckbox, selected && [styles.memberCheckboxActive, { backgroundColor: PRIMARY_COLOR, borderColor: PRIMARY_COLOR }]]}
                       activeOpacity={0.8}
                       onPress={() => togglePayer(member.id)}>
                       {selected && <Ionicons name="checkmark" size={14} color="#fff" />}
@@ -678,7 +677,7 @@ export default function CostSplitScreen() {
                   <TouchableOpacity
                     key={mode}
                     activeOpacity={0.85}
-                    style={[styles.modeChip, form.splitMode === mode && [styles.modeChipActive, { backgroundColor: theme.primary, borderColor: theme.primary }]]}
+                    style={[styles.modeChip, form.splitMode === mode && [styles.modeChipActive, { backgroundColor: PRIMARY_COLOR, borderColor: PRIMARY_COLOR }]]}
                     onPress={() => setField('splitMode', mode)}>
                     <Text style={[styles.modeChipText, form.splitMode === mode && styles.modeChipTextActive]}>
                       {mode.charAt(0).toUpperCase() + mode.slice(1)}
@@ -730,7 +729,7 @@ export default function CostSplitScreen() {
                 return (
                   <View key={member.id} style={styles.memberRow}>
                     <TouchableOpacity
-                      style={[styles.memberCheckbox, selected && [styles.memberCheckboxActive, { backgroundColor: theme.primary, borderColor: theme.primary }]]}
+                      style={[styles.memberCheckbox, selected && [styles.memberCheckboxActive, { backgroundColor: PRIMARY_COLOR, borderColor: PRIMARY_COLOR }]]}
                       activeOpacity={0.8}
                       onPress={() => toggleParticipant(member.id)}>
                       {selected && <Ionicons name="checkmark" size={14} color="#fff" />}
@@ -768,7 +767,7 @@ export default function CostSplitScreen() {
               {submitError ? <Text style={styles.submitError}>{submitError}</Text> : null}
 
               <TouchableOpacity
-                style={[styles.submitButton, { backgroundColor: theme.primary }, submitting && styles.submitButtonDisabled]}
+                style={[styles.submitButton, { backgroundColor: PRIMARY_COLOR }, submitting && styles.submitButtonDisabled]}
                 activeOpacity={0.9}
                 disabled={submitting}
                 onPress={() => void handleSubmitExpense()}>
@@ -806,7 +805,7 @@ export default function CostSplitScreen() {
                 <Text style={styles.confirmCancelText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.confirmOkButton, { backgroundColor: theme.primary }, settleSubmitting && styles.submitButtonDisabled]}
+                style={[styles.confirmOkButton, { backgroundColor: PRIMARY_COLOR }, settleSubmitting && styles.submitButtonDisabled]}
                 activeOpacity={0.9}
                 disabled={settleSubmitting}
                 onPress={() => void handleConfirmSettle()}>

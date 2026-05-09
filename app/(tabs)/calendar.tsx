@@ -4,10 +4,10 @@ import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAppTheme } from '@/contexts/app-theme-context';
 import TopAlertsButton from '@/components/top-alerts-button';
 import { apiJson } from '@/lib/api';
 import type { Quest, SideQuestActivity } from '@/lib/types';
+import { PRIMARY_COLOR, PRIMARY_08, PRIMARY_20, SECONDARY_COLOR, SECONDARY_08 } from '@/constants/colors';
 
 type CalendarItem = {
   id: string;
@@ -29,7 +29,6 @@ type CalendarItem = {
 };
 
 export default function CalendarScreen() {
-  const theme = useAppTheme();
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView | null>(null);
   const [quests, setQuests] = useState<Quest[]>([]);
@@ -143,18 +142,18 @@ export default function CalendarScreen() {
               const date = parseDateKey(dateKey);
 
               return (
-                <Pressable key={dateKey} style={[styles.dateChip, isSelected ? [styles.dateChipSelected, { backgroundColor: theme.primary08, borderColor: theme.primary20 }] : null]} onPress={() => jumpToSelectedDay(dateKey)}>
-                  <Text style={[styles.dateChipWeekday, isSelected ? [styles.dateChipWeekdaySelected, { color: theme.primary }] : null]}>
+                <Pressable key={dateKey} style={[styles.dateChip, isSelected ? [styles.dateChipSelected, { backgroundColor: PRIMARY_COLOR08, borderColor: PRIMARY_COLOR20 }] : null]} onPress={() => jumpToSelectedDay(dateKey)}>
+                  <Text style={[styles.dateChipWeekday, isSelected ? [styles.dateChipWeekdaySelected, { color: PRIMARY_COLOR }] : null]}>
                     {new Intl.DateTimeFormat('en-US', { weekday: 'short' }).format(date)}
                   </Text>
-                  <Text style={[styles.dateChipDay, isSelected ? [styles.dateChipDaySelected, { color: theme.primary }] : null]}>{date.getDate()}</Text>
+                  <Text style={[styles.dateChipDay, isSelected ? [styles.dateChipDaySelected, { color: PRIMARY_COLOR }] : null]}>{date.getDate()}</Text>
                   <View style={styles.dateChipDots}>
                     {getCalendarDots(items).map((tone, index) => (
                       <View
                         key={`${dateKey}-${tone}-${index}`}
                         style={[
                           styles.dateChipDot,
-                          tone === 'trip' ? [styles.dateChipDotTrip, { backgroundColor: theme.secondary }] : tone === 'hidden' ? styles.dateChipDotHidden : [styles.dateChipDotActivity, { backgroundColor: theme.primary }],
+                          tone === 'trip' ? [styles.dateChipDotTrip, { backgroundColor: SECONDARY_COLOR }] : tone === 'hidden' ? styles.dateChipDotHidden : [styles.dateChipDotActivity, { backgroundColor: PRIMARY_COLOR }],
                           isSelected ? styles.dateChipDotSelected : null,
                         ]}
                       />
@@ -187,8 +186,8 @@ export default function CalendarScreen() {
                   style={styles.activityCard}
                   onPress={() => router.push(`/trip/${item.tripId}/sidequest/${item.activityId ?? item.id}`)}>
                   <View style={styles.activityHeader}>
-                    <View style={[styles.planTimePill, styles.planTimePillActivity, { backgroundColor: theme.primary08 }]}>
-                      <Text style={[styles.planTimeText, styles.planTimeTextActivity, { color: theme.primary }]}>{item.time?.trim() ? item.time : 'Anytime'}</Text>
+                    <View style={[styles.planTimePill, styles.planTimePillActivity, { backgroundColor: PRIMARY_COLOR08 }]}>
+                      <Text style={[styles.planTimeText, styles.planTimeTextActivity, { color: PRIMARY_COLOR }]}>{item.time?.trim() ? item.time : 'Anytime'}</Text>
                     </View>
                     <Text style={styles.activityOwner}>{item.hidden ? 'Hidden' : item.ownerName || 'SideQuest'}</Text>
                   </View>
@@ -209,8 +208,8 @@ export default function CalendarScreen() {
                 </TouchableOpacity>
               ) : (
                 <TouchableOpacity key={item.id} activeOpacity={0.86} style={styles.planRow} onPress={() => router.push(`/trip/${item.tripId}`)}>
-                  <View style={[styles.planTimePill, styles.planTimePillTrip, { backgroundColor: theme.secondary08 }]}>
-                    <Text style={[styles.planTimeText, { color: theme.secondary }]}>{item.time?.trim() ? item.time : 'All day'}</Text>
+                  <View style={[styles.planTimePill, styles.planTimePillTrip, { backgroundColor: SECONDARY_COLOR08 }]}>
+                    <Text style={[styles.planTimeText, { color: SECONDARY_COLOR }]}>{item.time?.trim() ? item.time : 'All day'}</Text>
                   </View>
                   <View style={styles.planCopyWrap}>
                     <Text style={styles.planRowTitle}>{item.title}</Text>

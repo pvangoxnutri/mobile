@@ -1,14 +1,13 @@
-import { Ionicons } from '@expo/vector-icons';
+﻿import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Image, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAppTheme } from '@/contexts/app-theme-context';
+
 import { getUserProfile } from '@/lib/api';
 import type { UserProfile } from '@/lib/types';
+import { PRIMARY_COLOR } from '@/constants/colors';
 
-export default function UserProfileCard({ userId, onClose }: { userId: string | null; onClose: () => void }) {
-  const theme = useAppTheme();
-  const insets = useSafeAreaInsets();
+export default function UserProfileCard({ userId, onClose }: { userId: string | null; onClose: () => void }) {  const insets = useSafeAreaInsets();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -51,47 +50,47 @@ export default function UserProfileCard({ userId, onClose }: { userId: string | 
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose} />
       <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-        <View style={[styles.card, { backgroundColor: theme.surface }]}>
+        <View style={[styles.card, { backgroundColor: '#fff' }]}>
           {loading ? (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={theme.primary} />
+              <ActivityIndicator size="large" color={PRIMARY_COLOR} />
             </View>
           ) : error ? (
             <View style={styles.errorContainer}>
-              <Ionicons name="alert-circle-outline" size={48} color={theme.textSecondary} />
-              <Text style={[styles.errorText, { color: theme.textSecondary }]}>{error}</Text>
+              <Ionicons name="alert-circle-outline" size={48} color={'#14161d'Secondary} />
+              <Text style={[styles.errorText, { color: '#14161d'Secondary }]}>{error}</Text>
             </View>
           ) : profile ? (
             <>
               <Pressable style={styles.closeButton} onPress={onClose}>
-                <Ionicons name="close" size={24} color={theme.text} />
+                <Ionicons name="close" size={24} color={'#14161d'} />
               </Pressable>
 
               <View style={styles.avatarSection}>
                 {profile.avatarUrl ? (
                   <Image source={{ uri: profile.avatarUrl }} style={styles.avatar} />
                 ) : (
-                  <View style={[styles.avatar, { backgroundColor: theme.primary }]}>
+                  <View style={[styles.avatar, { backgroundColor: PRIMARY_COLOR }]}>
                     <Text style={styles.avatarInitials}>{getInitials(profile.name)}</Text>
                   </View>
                 )}
               </View>
 
-              <Text style={[styles.name, { color: theme.text }]}>{profile.name}</Text>
-              {profile.bio ? <Text style={[styles.bio, { color: theme.textSecondary }]}>{profile.bio}</Text> : null}
+              <Text style={[styles.name, { color: '#14161d' }]}>{profile.name}</Text>
+              {profile.bio ? <Text style={[styles.bio, { color: '#14161d'Secondary }]}>{profile.bio}</Text> : null}
 
               <View style={styles.statsGrid}>
                 <StatCard
                   value={String(profile.tripsJoined)}
                   label="TRIPS JOINED"
-                  accent={theme.primary}
+                  accent={PRIMARY_COLOR}
                 />
                 <StatCard
                   value={String(profile.sidequestsCreated)}
                   label="SIDEQUESTS CREATED"
-                  accent={theme.primary}
+                  accent={PRIMARY_COLOR}
                 />
-                <StatCard value={String(profile.countriesVisited)} label="COUNTRIES VISITED" accent={theme.primary} />
+                <StatCard value={String(profile.countriesVisited)} label="COUNTRIES VISITED" accent={PRIMARY_COLOR} />
               </View>
             </>
           ) : null}
@@ -210,3 +209,4 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 });
+

@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+﻿import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
@@ -15,12 +15,13 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAppTheme } from '@/contexts/app-theme-context';
+
 import { apiFetch, apiJson } from '@/lib/api';
 import { fetchPlaceSuggestions, type PlaceAutocompleteSuggestion } from '@/lib/maps-api';
 import { type StoredMapPlace, withLocationMarker } from '@/lib/sidequest-location';
 import type { SideQuestActivity } from '@/lib/types';
 import { uploadImageIfNeeded } from '@/lib/uploads';
+import { PRIMARY_COLOR, PRIMARY_08, SECONDARY_COLOR } from '@/constants/colors';
 
 type PickerTarget = 'date' | 'revealDate' | 'revealTime' | null;
 type MessageState = { type: 'success' | 'error'; text: string } | null;
@@ -41,10 +42,10 @@ export type SideQuestFormValues = {
 };
 
 const CATEGORIES: { value: string; label: string; emoji: string }[] = [
-  { value: 'flight',      label: 'Flyg',        emoji: '✈️' },
-  { value: 'sidequest',   label: 'Sidequest',   emoji: '🎯' },
-  { value: 'food',        label: 'Mat',         emoji: '🍽️' },
-  { value: 'sight',       label: 'Sevärdighet', emoji: '🏛️' },
+  { value: 'flight',      label: 'Flyg',        emoji: 'âœˆï¸' },
+  { value: 'sidequest',   label: 'Sidequest',   emoji: 'ðŸŽ¯' },
+  { value: 'food',        label: 'Mat',         emoji: 'ðŸ½ï¸' },
+  { value: 'sight',       label: 'SevÃ¤rdighet', emoji: 'ðŸ›ï¸' },
 ];
 
 type Props = {
@@ -71,9 +72,7 @@ export default function SideQuestForm({
   tripEndDate,
   initialValues,
   initialImageUrl,
-}: Props) {
-  const theme = useAppTheme();
-  const insets = useSafeAreaInsets();
+}: Props) {  const insets = useSafeAreaInsets();
   const [title, setTitle] = useState(initialValues?.title ?? '');
   const [description, setDescription] = useState(initialValues?.description ?? '');
   const [category, setCategory] = useState<string | null>(initialValues?.category ?? null);
@@ -218,12 +217,12 @@ export default function SideQuestForm({
     const normalizedTitle = title.trim();
 
     if (!normalizedTitle) {
-      setMessage({ type: 'error', text: 'Ange en titel för aktiviteten.' });
+      setMessage({ type: 'error', text: 'Ange en titel fÃ¶r aktiviteten.' });
       return;
     }
 
     if (!isDateInputValid(date)) {
-      setMessage({ type: 'error', text: 'Välj ett giltigt datum.' });
+      setMessage({ type: 'error', text: 'VÃ¤lj ett giltigt datum.' });
       return;
     }
 
@@ -382,10 +381,10 @@ export default function SideQuestForm({
               <TouchableOpacity
                 key={cat.value}
                 activeOpacity={0.8}
-                style={[styles.categoryChip, active && { borderColor: theme.primary, backgroundColor: theme.primary08 }]}
+                style={[styles.categoryChip, active && { borderColor: PRIMARY_COLOR, backgroundColor: PRIMARY_COLOR08 }]}
                 onPress={() => setCategory(active ? null : cat.value)}>
                 <Text style={styles.categoryEmoji}>{cat.emoji}</Text>
-                <Text style={[styles.categoryLabel, active && { color: theme.primary, fontWeight: '600' }]}>{cat.label}</Text>
+                <Text style={[styles.categoryLabel, active && { color: PRIMARY_COLOR, fontWeight: '600' }]}>{cat.label}</Text>
               </TouchableOpacity>
             );
           })}
@@ -430,7 +429,7 @@ export default function SideQuestForm({
                 activeOpacity={0.9}
                 style={styles.locationSuggestionRow}
                 onPress={() => void handlePickPlace(item)}>
-                <Ionicons name="location-outline" size={16} color={theme.secondary} />
+                <Ionicons name="location-outline" size={16} color={SECONDARY_COLOR} />
                 <View style={styles.locationSuggestionCopy}>
                   <Text style={styles.locationSuggestionTitle}>{item.primaryText}</Text>
                   {item.secondaryText ? <Text style={styles.locationSuggestionSubtitle}>{item.secondaryText}</Text> : null}
@@ -450,7 +449,7 @@ export default function SideQuestForm({
               <TextInput
                 value={date}
                 onChangeText={setDate}
-                placeholder="ÅÅÅÅ-MM-DD"
+                placeholder="Ã…Ã…Ã…Ã…-MM-DD"
                 placeholderTextColor="#b7bcc7"
                 style={styles.webDateInput}
                 keyboardType="numbers-and-punctuation"
@@ -511,13 +510,13 @@ export default function SideQuestForm({
                   <TextInput
                     value={revealDate}
                     onChangeText={setRevealDate}
-                    placeholder="ÅÅÅÅ-MM-DD"
+                    placeholder="Ã…Ã…Ã…Ã…-MM-DD"
                     placeholderTextColor="#b7bcc7"
                     style={styles.webDateInput}
                     keyboardType="numbers-and-punctuation"
                     maxLength={10}
                   />
-                  <Text style={styles.selectionHint} numberOfLines={1}>{`${formatShortDate(revealRange.min)} – ${formatShortDate(revealRange.max)}`}</Text>
+                  <Text style={styles.selectionHint} numberOfLines={1}>{`${formatShortDate(revealRange.min)} â€“ ${formatShortDate(revealRange.max)}`}</Text>
                 </View>
               ) : (
                 <TouchableOpacity
@@ -531,7 +530,7 @@ export default function SideQuestForm({
                   onPress={() => setPickerTarget('revealDate')}>
                   <Text style={styles.selectionEyebrow}>REVEAL DATE</Text>
                   <Text style={styles.selectionValueSmall} numberOfLines={1}>{formatShortDate(revealDate)}</Text>
-                  <Text style={styles.selectionHint} numberOfLines={1}>{`${formatShortDate(revealRange.min)} – ${formatShortDate(revealRange.max)}`}</Text>
+                  <Text style={styles.selectionHint} numberOfLines={1}>{`${formatShortDate(revealRange.min)} â€“ ${formatShortDate(revealRange.max)}`}</Text>
                 </TouchableOpacity>
               )}
               {Platform.OS === 'web' ? (
@@ -554,7 +553,7 @@ export default function SideQuestForm({
               )}
             </View>
             <View style={styles.revealSummary}>
-              <Ionicons name="sparkles-outline" size={16} color={theme.primary} />
+              <Ionicons name="sparkles-outline" size={16} color={PRIMARY_COLOR} />
               <Text style={styles.revealSummaryText} numberOfLines={2}>{revealAtPreview}</Text>
             </View>
           </View>
@@ -596,15 +595,15 @@ export default function SideQuestForm({
         </View>
       ) : null}
 
-      <TouchableOpacity activeOpacity={0.92} style={[styles.primaryButton, { backgroundColor: theme.primary, shadowColor: theme.primary }, submitting ? styles.primaryButtonDisabled : null]} disabled={submitting} onPress={() => void handleSubmit()}>
-        <Text style={styles.primaryButtonText}>{submitting ? 'Sparar...' : mode === 'edit' ? 'Spara ändringar' : 'Lägg till aktivitet'}</Text>
+      <TouchableOpacity activeOpacity={0.92} style={[styles.primaryButton, { backgroundColor: PRIMARY_COLOR, shadowColor: PRIMARY_COLOR }, submitting ? styles.primaryButtonDisabled : null]} disabled={submitting} onPress={() => void handleSubmit()}>
+        <Text style={styles.primaryButtonText}>{submitting ? 'Sparar...' : mode === 'edit' ? 'Spara Ã¤ndringar' : 'LÃ¤gg till aktivitet'}</Text>
       </TouchableOpacity>
 
       {Platform.OS !== 'web' ? (
         <PickerSheet
           visible={pickerTarget !== null}
           title={getPickerTitle(pickerTarget)}
-          subtitle={pickerTarget === 'date' ? `Tillåtet intervall: ${tripRangeText}` : pickerTarget === 'revealDate' ? 'Välj när aktiviteten ska avslöjas.' : 'Välj avslöjandetid.'}
+          subtitle={pickerTarget === 'date' ? `TillÃ¥tet intervall: ${tripRangeText}` : pickerTarget === 'revealDate' ? 'VÃ¤lj nÃ¤r aktiviteten ska avslÃ¶jas.' : 'VÃ¤lj avslÃ¶jandetid.'}
           onClose={() => setPickerTarget(null)}>
           {pickerTarget ? (
             <DateTimePicker
@@ -622,7 +621,7 @@ export default function SideQuestForm({
                   : pickerTarget === 'revealDate' ? new Date(`${revealRange.max}T12:00:00`) : undefined
               }
               themeVariant="light"
-              accentColor={theme.primary}
+              accentColor={PRIMARY_COLOR}
               textColor="#161821"
               onChange={handleDateChange}
             />
@@ -645,9 +644,7 @@ function PickerSheet({
   subtitle: string;
   onClose: () => void;
   children: React.ReactNode;
-}) {
-  const theme = useAppTheme();
-  return (
+}) {  return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.modalBackdrop}>
         <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={onClose} />
@@ -656,7 +653,7 @@ function PickerSheet({
           <Text style={styles.modalTitle}>{title}</Text>
           <Text style={styles.modalSubtitle}>{subtitle}</Text>
           <View style={styles.modalPickerWrap}>{children}</View>
-          <TouchableOpacity activeOpacity={0.9} style={[styles.doneButton, { backgroundColor: theme.primary }]} onPress={onClose}>
+          <TouchableOpacity activeOpacity={0.9} style={[styles.doneButton, { backgroundColor: PRIMARY_COLOR }]} onPress={onClose}>
             <Text style={styles.doneButtonText}>Done</Text>
           </TouchableOpacity>
         </View>
@@ -675,12 +672,10 @@ function VisibilityOption({
   subtitle: string;
   active: boolean;
   onPress: () => void;
-}) {
-  const theme = useAppTheme();
-  return (
-    <TouchableOpacity activeOpacity={0.92} style={[styles.segmentOption, active && { borderColor: theme.primary20, backgroundColor: theme.primary08 }]} onPress={onPress}>
-      <Text style={[styles.segmentTitle, active && { color: theme.primary }]}>{label}</Text>
-      <Text style={[styles.segmentSubtitle, active && { color: theme.primary20 }]}>{subtitle}</Text>
+}) {  return (
+    <TouchableOpacity activeOpacity={0.92} style={[styles.segmentOption, active && { borderColor: PRIMARY_COLOR20, backgroundColor: PRIMARY_COLOR08 }]} onPress={onPress}>
+      <Text style={[styles.segmentTitle, active && { color: PRIMARY_COLOR }]}>{label}</Text>
+      <Text style={[styles.segmentSubtitle, active && { color: PRIMARY_COLOR20 }]}>{subtitle}</Text>
     </TouchableOpacity>
   );
 }
@@ -1225,3 +1220,4 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
 });
+

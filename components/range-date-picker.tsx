@@ -1,6 +1,6 @@
-import { Ionicons } from '@expo/vector-icons';
+﻿import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useAppTheme } from '@/contexts/app-theme-context';
+
 import {
   FlatList,
   Modal,
@@ -13,6 +13,7 @@ import {
   type NativeSyntheticEvent,
   type NativeScrollEvent,
 } from 'react-native';
+import { PRIMARY_COLOR } from '@/constants/colors';
 
 type Props = {
   visible: boolean;
@@ -46,9 +47,7 @@ export default function RangeDatePicker({
   confirmLabel = 'Apply dates',
   onChange,
   onClose,
-}: Props) {
-  const theme = useAppTheme();
-  const { width } = useWindowDimensions();
+}: Props) {  const { width } = useWindowDimensions();
   const flatListRef = useRef<FlatList<MonthItem>>(null);
   const pageWidth = width - 40;
   const months = useMemo(() => buildMonthItems(startDate ?? minDate ?? null, maxDate ?? null), [maxDate, minDate, startDate]);
@@ -164,7 +163,7 @@ export default function RangeDatePicker({
             <Ionicons
               name={!draftStartDate ? 'calendar-outline' : !draftEndDate ? 'ellipse-outline' : 'checkmark-circle'}
               size={16}
-              color={theme.primary}
+              color={PRIMARY_COLOR}
             />
             <Text style={styles.helperText}>{helperText}</Text>
           </View>
@@ -231,7 +230,7 @@ export default function RangeDatePicker({
             </TouchableOpacity>
             <TouchableOpacity
               activeOpacity={0.92}
-              style={[styles.primaryButton, { backgroundColor: theme.primary }, !(draftStartDate && draftEndDate) ? styles.primaryButtonDisabled : null]}
+              style={[styles.primaryButton, { backgroundColor: PRIMARY_COLOR }, !(draftStartDate && draftEndDate) ? styles.primaryButtonDisabled : null]}
               disabled={!(draftStartDate && draftEndDate)}
               onPress={handleConfirm}>
               <Text style={styles.primaryButtonText}>{confirmLabel}</Text>
@@ -259,9 +258,7 @@ function MonthGrid({
   minDate?: string | null;
   maxDate?: string | null;
   onDayPress: (day: string) => void;
-}) {
-  const theme = useAppTheme();
-  const days = buildMonthCells(month.year, month.month);
+}) {  const days = buildMonthCells(month.year, month.month);
 
   return (
     <View style={[styles.monthPage, { width }]}>
@@ -289,7 +286,7 @@ function MonthGrid({
                 isEnd ? styles.dayCellRangeEnd : null,
                 single ? styles.dayCellSingle : null,
               ]}>
-              <View style={[styles.dayCircle, isStart || isEnd ? { backgroundColor: theme.primary, shadowColor: theme.primary } : null, disabled ? styles.dayCircleDisabled : null]}>
+              <View style={[styles.dayCircle, isStart || isEnd ? { backgroundColor: PRIMARY_COLOR, shadowColor: PRIMARY_COLOR } : null, disabled ? styles.dayCircleDisabled : null]}>
                 <Text
                   style={[
                     styles.dayText,
@@ -646,3 +643,4 @@ const styles = StyleSheet.create({
     letterSpacing: -0.2,
   },
 });
+

@@ -3,11 +3,10 @@ import { router } from 'expo-router';
 import { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { useAuth } from '@/components/auth-provider';
-import { useAppTheme } from '@/contexts/app-theme-context';
 import { supabase } from '@/lib/supabase';
+import { PRIMARY_COLOR } from '@/constants/colors';
 
 export default function AuthCallbackScreen() {
-  const theme = useAppTheme();
   const { refreshProfile } = useAuth();
 
   useEffect(() => {
@@ -51,7 +50,7 @@ export default function AuthCallbackScreen() {
 
   return (
     <View style={styles.screen}>
-      <ActivityIndicator size="large" color={theme.primary} />
+      <ActivityIndicator size="large" color={PRIMARY_COLOR} />
     </View>
   );
 }

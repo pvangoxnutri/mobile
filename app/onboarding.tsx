@@ -16,13 +16,12 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/components/auth-provider';
-import { useAppTheme } from '@/contexts/app-theme-context';
-import { apiFetch, apiJson } from '@/lib/api';
-import type { AppTheme } from '@/lib/types';
+import { apiFetch } from '@/lib/api';
+import { PRIMARY_COLOR, PRIMARY_08 } from '@/constants/colors';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const TOTAL_STEPS = 3;
+const TOTAL_STEPS = 2;
 
 const FOUND_VIA = ['Friend', 'TikTok', 'Instagram', 'App Store', 'Other'];
 
@@ -38,7 +37,6 @@ const PURPOSES = [
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function OnboardingScreen() {
-  const theme = useAppTheme();
   const insets = useSafeAreaInsets();
   const { refreshProfile, user } = useAuth();
 
@@ -54,22 +52,9 @@ export default function OnboardingScreen() {
   const [purposeOther, setPurposeOther] = useState('');
 
   // Step 2 state
-  const [themes, setThemes] = useState<AppTheme[]>([]);
-  const [selectedThemeId, setSelectedThemeId] = useState<string | null>(null);
-
-  // Step 3 state
   const [bio, setBio] = useState(user?.bio ?? '');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(user?.avatarUrl ?? null);
   const [uploadBusy, setUploadBusy] = useState(false);
-
-  useEffect(() => {
-    void apiJson<AppTheme[]>('/api/themes')
-      .then((data) => {
-        setThemes(data);
-        if (data.length > 0) setSelectedThemeId(data[0].id);
-      })
-      .catch(() => {});
-  }, []);
 
   // Animate progress bar when step changes
   useEffect(() => {
@@ -129,10 +114,9 @@ export default function OnboardingScreen() {
       if (foundVia) payload.foundVia = foundVia;
       if (purpose) payload.purpose = purpose;
       if (purpose === 'other' && purposeOther.trim()) payload.purposeOtherText = purposeOther.trim();
-      if (selectedThemeId) payload.themeId = selectedThemeId;
 
-      // Only save step 3 data if we actually reached step 3 (or finished it)
-      if (!skip || step === 3) {
+      // Only save step 2 data if we actually reached step 2 (or finished it)
+      if (!skip || step === 2) {
         if (bio.trim()) payload.bio = bio.trim();
         if (avatarUrl) payload.avatarUrl = avatarUrl;
       }
@@ -179,7 +163,7 @@ export default function OnboardingScreen() {
 
         {/* ── Progress bar ────────────────────────────────── */}
         <View style={styles.progressTrack}>
-          <Animated.View style={[styles.progressFill, { width: progressWidth, backgroundColor: theme.primary }]} />
+          <Animated.View style={[styles.progressFill, { width: progressWidth, backgroundColor: PRIMARY_COLOR }]} />
         </View>
 
         {/* ── Step content ────────────────────────────────── */}
@@ -199,13 +183,6 @@ export default function OnboardingScreen() {
               />
             )}
             {step === 2 && (
-              <StepTheme
-                themes={themes}
-                selectedThemeId={selectedThemeId}
-                setSelectedThemeId={setSelectedThemeId}
-              />
-            )}
-            {step === 3 && (
               <StepProfile
                 bio={bio}
                 setBio={setBio}
@@ -221,7 +198,7 @@ export default function OnboardingScreen() {
         {/* ── Footer button ───────────────────────────────── */}
         <View style={styles.footer}>
           <Pressable
-            style={({ pressed }) => [styles.nextButton, { backgroundColor: theme.primary, shadowColor: theme.primary }, pressed && styles.nextButtonPressed]}
+            style={({ pressed }) => [styles.nextButton, { backgroundColor: PRIMARY_COLOR, shadowColor: PRIMARY_COLOR }, pressed && styles.nextButtonPressed]}
             disabled={busy}
             onPress={() => (step < TOTAL_STEPS ? changeStep(step + 1) : void finish(false))}>
             {busy ? (
@@ -255,7 +232,6 @@ function StepDiscovery({
   purposeOther: string;
   setPurposeOther: (v: string) => void;
 }) {
-  const theme = useAppTheme();
   return (
     <View>
       <Text style={styles.stepHeading}>How did you find us? 👋</Text>
@@ -265,10 +241,10 @@ function StepDiscovery({
         {FOUND_VIA.map((opt) => (
           <TouchableOpacity
             key={opt}
-            style={[styles.chip, foundVia === opt && { borderColor: theme.primary, backgroundColor: theme.primary08 }]}
+            style={[styles.chip, foundVia === opt && { borderColor: PRIMARY_COLOR, backgroundColor: PRIMARY_COLOR08 }]}
             activeOpacity={0.75}
             onPress={() => setFoundVia(foundVia === opt ? null : opt)}>
-            <Text style={[styles.chipText, foundVia === opt && { color: theme.primary, fontWeight: '700' }]}>{opt}</Text>
+            <Text style={[styles.chipText, foundVia === opt && { color: PRIMARY_COLOR, fontWeight: '700' }]}>{opt}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -280,11 +256,11 @@ function StepDiscovery({
         {PURPOSES.map((opt) => (
           <TouchableOpacity
             key={opt.value}
-            style={[styles.purposeCard, purpose === opt.value && { borderColor: theme.primary, backgroundColor: theme.primary08 }]}
+            style={[styles.purposeCard, purpose === opt.value && { borderColor: PRIMARY_COLOR, backgroundColor: PRIMARY_COLOR08 }]}
             activeOpacity={0.78}
             onPress={() => setPurpose(purpose === opt.value ? null : opt.value)}>
             <Text style={styles.purposeEmoji}>{opt.emoji}</Text>
-            <Text style={[styles.purposeLabel, purpose === opt.value && { color: theme.primary }]}>
+            <Text style={[styles.purposeLabel, purpose === opt.value && { color: PRIMARY_COLOR }]}>
               {opt.label}
             </Text>
           </TouchableOpacity>
@@ -304,81 +280,7 @@ function StepDiscovery({
   );
 }
 
-// ─── Step 2: Theme ────────────────────────────────────────────────────────────
-
-function StepTheme({
-  themes,
-  selectedThemeId,
-  setSelectedThemeId,
-}: {
-  themes: AppTheme[];
-  selectedThemeId: string | null;
-  setSelectedThemeId: (id: string) => void;
-}) {
-  const palette = useAppTheme();
-  return (
-    <View>
-      <Text style={styles.stepHeading}>Pick your vibe 🎨</Text>
-      <Text style={styles.stepSubtitle}>Choose how SideQuest looks for you</Text>
-
-      {themes.length === 0 ? (
-        <View style={styles.themeLoading}>
-          <ActivityIndicator color={palette.primary} />
-        </View>
-      ) : (
-        <View style={styles.themeList}>
-          {themes.map((theme) => {
-            const selected = selectedThemeId === theme.id;
-            return (
-              <TouchableOpacity
-                key={theme.id}
-                style={[styles.themeCard, selected && { borderColor: palette.primary, backgroundColor: '#fff' }]}
-                activeOpacity={0.88}
-                onPress={() => setSelectedThemeId(theme.id)}>
-                {/* Color preview strip */}
-                <View style={styles.themeColorStrip}>
-                  <View style={[styles.themeColorBlock, { backgroundColor: theme.primaryColor }]} />
-                  <View style={[styles.themeColorBlock, { backgroundColor: theme.secondaryColor, borderLeftWidth: 1, borderLeftColor: '#e0e3ea' }]} />
-                  {/* Mini mockup */}
-                  <View style={[styles.themeMockup, { backgroundColor: theme.secondaryColor }]}>
-                    <View style={[styles.themeMockupBar, { backgroundColor: theme.primaryColor, width: '80%' }]} />
-                    <View style={[styles.themeMockupBar, { backgroundColor: theme.primaryColor, width: '55%', opacity: 0.5 }]} />
-                    <View style={[styles.themeMockupDot, { backgroundColor: theme.primaryColor }]} />
-                  </View>
-                </View>
-
-                {/* Card bottom row */}
-                <View style={styles.themeCardInfo}>
-                  <View style={styles.themeSwatchRow}>
-                    <View style={[styles.themeSwatch, { backgroundColor: theme.primaryColor }]} />
-                    <View style={[styles.themeSwatch, { backgroundColor: theme.secondaryColor, borderWidth: 1, borderColor: '#dde0e8' }]} />
-                    <View style={styles.themeNameBlock}>
-                      <Text style={styles.themeName}>{theme.name}</Text>
-                      <Text style={styles.themeColorCodes}>
-                        {theme.primaryColor} · {theme.secondaryColor}
-                      </Text>
-                    </View>
-                  </View>
-                  {selected ? (
-                    <View style={[styles.themeCheck, { backgroundColor: palette.primary }]}>
-                      <Ionicons name="checkmark" size={15} color="#fff" />
-                    </View>
-                  ) : (
-                    <View style={styles.themeCheckEmpty} />
-                  )}
-                </View>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      )}
-
-      <Text style={styles.themeHint}>More themes coming soon</Text>
-    </View>
-  );
-}
-
-// ─── Step 3: Profile ─────────────────────────────────────────────────────────
+// ─── Step 2: Profile ─────────────────────────────────────────────────────────
 
 function StepProfile({
   bio,
@@ -395,7 +297,6 @@ function StepProfile({
   uploadBusy: boolean;
   onPickAvatar: () => void;
 }) {
-  const theme = useAppTheme();
   return (
     <View>
       <Text style={styles.stepHeading}>Almost done! 🙌</Text>
@@ -403,7 +304,7 @@ function StepProfile({
 
       {/* Avatar upload */}
       <View style={styles.avatarSection}>
-        <TouchableOpacity style={[styles.avatarRing, { borderColor: theme.primary }]} activeOpacity={0.82} onPress={onPickAvatar}>
+        <TouchableOpacity style={[styles.avatarRing, { borderColor: PRIMARY_COLOR }]} activeOpacity={0.82} onPress={onPickAvatar}>
           {avatarUrl ? (
             <Image source={{ uri: avatarUrl }} style={styles.avatar} />
           ) : (
@@ -411,7 +312,7 @@ function StepProfile({
               <Text style={styles.avatarInitials}>{initials}</Text>
             </View>
           )}
-          <View style={[styles.avatarCamera, { backgroundColor: theme.primary }]}>
+          <View style={[styles.avatarCamera, { backgroundColor: PRIMARY_COLOR }]}>
             {uploadBusy ? (
               <ActivityIndicator size="small" color="#fff" />
             ) : (

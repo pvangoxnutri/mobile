@@ -18,12 +18,12 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/components/auth-provider';
-import { useAppTheme } from '@/contexts/app-theme-context';
 import RangeDatePicker, { formatRangeDisplay } from '@/components/range-date-picker';
 import CountryPicker from '@/components/travel-tracker/country-picker';
 import { apiFetch, apiJson } from '@/lib/api';
 import type { Quest, TripInvite } from '@/lib/types';
 import { uploadImageIfNeeded } from '@/lib/uploads';
+import { PRIMARY_COLOR, PRIMARY_08 } from '@/constants/colors';
 
 type TripMember = {
   id: string;
@@ -35,7 +35,6 @@ type TripMember = {
 type MessageState = { type: 'success' | 'error'; text: string } | null;
 
 export default function TripSettingsScreen() {
-  const theme = useAppTheme();
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuth();
@@ -271,7 +270,7 @@ export default function TripSettingsScreen() {
 
           {loading ? (
             <View style={styles.centerState}>
-              <ActivityIndicator color={theme.primary} />
+              <ActivityIndicator color={PRIMARY_COLOR} />
             </View>
           ) : canManageTrip ? (
 
@@ -300,8 +299,8 @@ export default function TripSettingsScreen() {
                     <Text style={styles.dateRangeValue}>{formatRangeDisplay(startDate, endDate)}</Text>
                     <Text style={styles.dateRangeHint}>Tap once and adjust the whole range in one calendar.</Text>
                   </View>
-                  <View style={[styles.dateRangeIcon, { backgroundColor: theme.primary08 }]}>
-                    <Ionicons name="calendar-outline" size={20} color={theme.primary} />
+                  <View style={[styles.dateRangeIcon, { backgroundColor: PRIMARY_COLOR08 }]}>
+                    <Ionicons name="calendar-outline" size={20} color={PRIMARY_COLOR} />
                   </View>
                 </TouchableOpacity>
               </View>
@@ -328,7 +327,7 @@ export default function TripSettingsScreen() {
                       <Text style={styles.inviteSubtitle}>Add by email or share the trip code directly from settings.</Text>
                     </View>
                     <View style={styles.inviteCodePill}>
-                      <Text style={[styles.inviteCodePillText, { color: theme.primary }]}>{trip?.inviteCode ?? '------'}</Text>
+                      <Text style={[styles.inviteCodePillText, { color: PRIMARY_COLOR }]}>{trip?.inviteCode ?? '------'}</Text>
                     </View>
                   </View>
                   <View style={styles.inviteComposer}>
@@ -344,7 +343,7 @@ export default function TripSettingsScreen() {
                     />
                     <TouchableOpacity
                       activeOpacity={0.9}
-                      style={[styles.inviteAddButton, { backgroundColor: theme.primary }, inviteSubmitting ? styles.inviteAddButtonDisabled : null]}
+                      style={[styles.inviteAddButton, { backgroundColor: PRIMARY_COLOR }, inviteSubmitting ? styles.inviteAddButtonDisabled : null]}
                       disabled={inviteSubmitting}
                       onPress={() => void handleAddInvite()}>
                       <Text style={styles.inviteAddButtonText}>{inviteSubmitting ? 'Adding...' : 'Invite'}</Text>
@@ -352,12 +351,12 @@ export default function TripSettingsScreen() {
                   </View>
                   <View style={styles.inviteActions}>
                     <TouchableOpacity activeOpacity={0.9} style={styles.secondaryInviteButton} onPress={() => void handleCopyInviteCode()}>
-                      <Ionicons name="copy-outline" size={16} color={theme.primary} />
-                      <Text style={[styles.secondaryInviteButtonText, { color: theme.primary }]}>Copy code</Text>
+                      <Ionicons name="copy-outline" size={16} color={PRIMARY_COLOR} />
+                      <Text style={[styles.secondaryInviteButtonText, { color: PRIMARY_COLOR }]}>Copy code</Text>
                     </TouchableOpacity>
                     <TouchableOpacity activeOpacity={0.9} style={styles.secondaryInviteButton} onPress={() => void handleShareInvite()}>
-                      <Ionicons name="share-social-outline" size={16} color={theme.primary} />
-                      <Text style={[styles.secondaryInviteButtonText, { color: theme.primary }]}>Share</Text>
+                      <Ionicons name="share-social-outline" size={16} color={PRIMARY_COLOR} />
+                      <Text style={[styles.secondaryInviteButtonText, { color: PRIMARY_COLOR }]}>Share</Text>
                     </TouchableOpacity>
                   </View>
                   {inviteMessage ? <Text style={styles.inviteMessage}>{inviteMessage}</Text> : null}
@@ -389,7 +388,7 @@ export default function TripSettingsScreen() {
                 </View>
               ) : null}
 
-              <TouchableOpacity activeOpacity={0.92} style={[styles.primaryButton, { backgroundColor: theme.primary }, saving ? styles.primaryButtonDisabled : null]} disabled={saving} onPress={() => void handleSave()}>
+              <TouchableOpacity activeOpacity={0.92} style={[styles.primaryButton, { backgroundColor: PRIMARY_COLOR }, saving ? styles.primaryButtonDisabled : null]} disabled={saving} onPress={() => void handleSave()}>
                 <Text style={styles.primaryButtonText}>{saving ? 'Saving...' : 'Save trip settings'}</Text>
               </TouchableOpacity>
             </>

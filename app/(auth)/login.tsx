@@ -16,15 +16,14 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BrandMark from '@/components/brand-mark';
 import { useAuth } from '@/components/auth-provider';
-import { useAppTheme } from '@/contexts/app-theme-context';
 import { useI18n, type AppLanguage } from '@/components/i18n-provider';
 import LanguagePicker from '@/components/language-picker';
 import { supabase } from '@/lib/supabase';
+import { PRIMARY_COLOR } from '@/constants/colors';
 
 WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen() {
-  const theme = useAppTheme();
   const { signIn, signUp, refreshProfile } = useAuth();
   const { language, setLanguage, t } = useI18n();
   const insets = useSafeAreaInsets();
@@ -232,7 +231,7 @@ export default function LoginScreen() {
         ) : null}
 
         <Pressable
-          style={[styles.primaryButton, { backgroundColor: theme.primary }, busy || (mode === 'signup' && cooldownSeconds > 0) ? styles.primaryButtonDisabled : null]}
+          style={[styles.primaryButton, { backgroundColor: PRIMARY_COLOR }, busy || (mode === 'signup' && cooldownSeconds > 0) ? styles.primaryButtonDisabled : null]}
           onPress={() => void handleSubmit()}
           disabled={busy || (mode === 'signup' && cooldownSeconds > 0)}>
           {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>{mode === 'signin' ? t('auth.btn_signin') : t('auth.btn_signup')}</Text>}
@@ -240,7 +239,7 @@ export default function LoginScreen() {
 
         {mode === 'signin' ? (
           <Pressable style={styles.secondaryButton} onPress={() => router.push('/forgot-password')}>
-            <Text style={[styles.forgotButtonText, { color: theme.primary }]}>{t('auth.forgot_password')}</Text>
+            <Text style={[styles.forgotButtonText, { color: PRIMARY_COLOR }]}>{t('auth.forgot_password')}</Text>
           </Pressable>
         ) : null}
 

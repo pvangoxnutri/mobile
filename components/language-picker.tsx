@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+﻿import { Ionicons } from '@expo/vector-icons';
 import { useMemo, useState } from 'react';
 import {
   Image,
@@ -12,7 +12,7 @@ import {
   View,
 } from 'react-native';
 import type { AppLanguage } from '@/components/i18n-provider';
-import { useAppTheme } from '@/contexts/app-theme-context';
+import { PRIMARY_COLOR } from '@/constants/colors';
 
 type LanguageOption = {
   code: AppLanguage;
@@ -37,9 +37,7 @@ export default function LanguagePicker({
   onChange: (next: AppLanguage) => void;
   label: string;
   searchPlaceholder?: string;
-}) {
-  const theme = useAppTheme();
-  const [open, setOpen] = useState(false);
+}) {  const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
 
   const selected = LANGUAGE_OPTIONS.find((option) => option.code === value) ?? LANGUAGE_OPTIONS[0];
@@ -102,7 +100,7 @@ export default function LanguagePicker({
                         <Text style={styles.optionMeta}>{option.nativeName}</Text>
                       </View>
                     </View>
-                    {active ? <Ionicons name="checkmark-circle" size={20} color={theme.primary} /> : null}
+                    {active ? <Ionicons name="checkmark-circle" size={20} color={PRIMARY_COLOR} /> : null}
                   </TouchableOpacity>
                 );
               })}
@@ -233,3 +231,4 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
 });
+

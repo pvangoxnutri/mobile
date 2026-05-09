@@ -1,19 +1,17 @@
-import { Ionicons } from '@expo/vector-icons';
+﻿import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { useAppTheme } from '@/contexts/app-theme-context';
+import { PRIMARY_COLOR } from '@/constants/colors';
 
-export default function TopAlertsButton({ inviteCount = 0 }: { inviteCount?: number }) {
-  const theme = useAppTheme();
-  return (
+export default function TopAlertsButton({ inviteCount = 0 }: { inviteCount?: number }) {  return (
     <TouchableOpacity activeOpacity={0.84} style={styles.button} onPress={() => router.push('/TMP_Navbar')}>
       <Ionicons name="notifications-outline" size={22} color="#161821" />
       {inviteCount > 0 ? (
-        <View style={[styles.badge, { backgroundColor: theme.primary }]}>
+        <View style={[styles.badge, { backgroundColor: PRIMARY_COLOR }]}>
           <Text style={styles.badgeText}>{inviteCount > 9 ? '9+' : String(inviteCount)}</Text>
         </View>
       ) : (
-        <View style={[styles.dot, { backgroundColor: theme.primary }]} />
+        <View style={[styles.dot, { backgroundColor: PRIMARY_COLOR }]} />
       )}
     </TouchableOpacity>
   );
@@ -61,3 +59,4 @@ const styles = StyleSheet.create({
     lineHeight: 12,
   },
 });
+
