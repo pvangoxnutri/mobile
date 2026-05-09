@@ -426,93 +426,125 @@ export default function ProfileScreen() {
       <SectionCard
         title="Edit Profile"
         items={[
-          { icon: 'person-circle-outline', label: editingName ? 'Close name editor' : 'Change name', accent: theme.primary, onPress: () => setEditingName((current) => !current) },
-          { icon: 'text-outline', label: editingBio ? 'Close bio editor' : 'Edit bio', accent: theme.primary, onPress: () => setEditingBio((current) => !current) },
+          { icon: 'person-circle-outline', label: 'Change name', accent: theme.primary, onPress: () => setEditingName(true) },
+          { icon: 'text-outline', label: 'Edit bio', accent: theme.primary, onPress: () => setEditingBio(true) },
           { icon: 'camera-outline', label: busy === 'avatar' ? 'Uploading image...' : 'Change profile image', accent: theme.primary, onPress: () => void handleAvatarPick() },
         ]}
       />
-      {editingName ? (
-        <View style={styles.editorCard}>
-          <TextInput value={name} onChangeText={setName} placeholder="Display name" style={styles.input} />
-          <Pressable style={[styles.saveButton, { backgroundColor: theme.primary }]} onPress={() => void handleNameSave()} disabled={busy === 'name'}>
-            {busy === 'name' ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>Save name</Text>}
-          </Pressable>
+
+      <Modal visible={editingName} transparent animationType="fade" onRequestClose={() => setEditingName(false)}>
+        <View style={styles.confirmBackdrop}>
+          <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setEditingName(false)} />
+          <View style={styles.confirmCard}>
+            <Text style={styles.confirmTitle}>Change name</Text>
+            <TextInput value={name} onChangeText={setName} placeholder="Display name" style={[styles.input, { marginTop: 16 }]} />
+            <View style={styles.confirmActions}>
+              <TouchableOpacity style={styles.confirmCancel} activeOpacity={0.88} onPress={() => setEditingName(false)}>
+                <Text style={styles.confirmCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <Pressable style={[styles.confirmDelete, { backgroundColor: theme.primary }]} onPress={() => void handleNameSave()} disabled={busy === 'name'}>
+                {busy === 'name' ? <ActivityIndicator color="#fff" /> : <Text style={styles.confirmDeleteText}>Save name</Text>}
+              </Pressable>
+            </View>
+          </View>
         </View>
-      ) : null}
-      {editingBio ? (
-        <View style={styles.editorCard}>
-          <TextInput
-            value={bio}
-            onChangeText={setBio}
-            placeholder="Tell others a little about yourself..."
-            style={styles.bioInput}
-            multiline
-            numberOfLines={4}
-            textAlignVertical="top"
-          />
-          <Pressable style={[styles.saveButton, { backgroundColor: theme.primary }]} onPress={() => void handleBioSave()} disabled={busy === 'bio'}>
-            {busy === 'bio' ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>Save bio</Text>}
-          </Pressable>
+      </Modal>
+
+      <Modal visible={editingBio} transparent animationType="fade" onRequestClose={() => setEditingBio(false)}>
+        <View style={styles.confirmBackdrop}>
+          <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setEditingBio(false)} />
+          <View style={styles.confirmCard}>
+            <Text style={styles.confirmTitle}>Edit bio</Text>
+            <TextInput
+              value={bio}
+              onChangeText={setBio}
+              placeholder="Tell others a little about yourself..."
+              style={[styles.bioInput, { marginTop: 16 }]}
+              multiline
+              numberOfLines={4}
+              textAlignVertical="top"
+            />
+            <View style={styles.confirmActions}>
+              <TouchableOpacity style={styles.confirmCancel} activeOpacity={0.88} onPress={() => setEditingBio(false)}>
+                <Text style={styles.confirmCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <Pressable style={[styles.confirmDelete, { backgroundColor: theme.primary }]} onPress={() => void handleBioSave()} disabled={busy === 'bio'}>
+                {busy === 'bio' ? <ActivityIndicator color="#fff" /> : <Text style={styles.confirmDeleteText}>Save bio</Text>}
+              </Pressable>
+            </View>
+          </View>
         </View>
-      ) : null}
+      </Modal>
 
       <SectionCard
         title="Appearance"
         items={[
-          { icon: 'color-palette-outline', label: editingTheme ? 'Close theme picker' : 'Change theme', accent: theme.primary, onPress: () => setEditingTheme((c) => !c) },
+          { icon: 'color-palette-outline', label: 'Change theme', accent: theme.primary, onPress: () => setEditingTheme(true) },
         ]}
       />
-      {editingTheme ? (
-        <View style={styles.editorCard}>
-          {themes.length === 0 ? (
-            <ActivityIndicator color={theme.primary} style={{ marginVertical: 16 }} />
-          ) : (
-            <View style={styles.themeList}>
-              {themes.map((t) => {
-                const selected = selectedThemeId === t.id;
-                return (
-                  <TouchableOpacity
-                    key={t.id}
-                    style={[styles.themeCard, selected && { borderColor: theme.primary }]}
-                    activeOpacity={0.88}
-                    onPress={() => setSelectedThemeId(t.id)}>
-                    <View style={styles.themeColorStrip}>
-                      <View style={[styles.themeColorBlock, { backgroundColor: t.primaryColor }]} />
-                      <View style={[styles.themeColorBlock, { backgroundColor: t.secondaryColor, borderLeftWidth: 1, borderLeftColor: '#e0e3ea' }]} />
-                    </View>
-                    <View style={styles.themeCardInfo}>
-                      <View style={styles.themeSwatchRow}>
-                        <View style={[styles.themeSwatch, { backgroundColor: t.primaryColor }]} />
-                        <View style={[styles.themeSwatch, { backgroundColor: t.secondaryColor, borderWidth: 1, borderColor: '#dde0e8' }]} />
-                        <View style={{ flex: 1, paddingLeft: 6 }}>
-                          <Text style={styles.themeName}>{t.name}</Text>
-                          <Text style={styles.themeColorCodes}>{t.primaryColor} · {t.secondaryColor}</Text>
+
+      <Modal visible={editingTheme} transparent animationType="fade" onRequestClose={() => setEditingTheme(false)}>
+        <View style={styles.confirmBackdrop}>
+          <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setEditingTheme(false)} />
+          <View style={[styles.confirmCard, { maxHeight: '80%' }]}>
+            <Text style={styles.confirmTitle}>Change theme</Text>
+            {themes.length === 0 ? (
+              <ActivityIndicator color={theme.primary} style={{ marginVertical: 16 }} />
+            ) : (
+              <ScrollView style={{ marginTop: 16, marginBottom: 16 }} showsVerticalScrollIndicator={false}>
+                <View style={styles.themeList}>
+                  {themes.map((t) => {
+                    const selected = selectedThemeId === t.id;
+                    return (
+                      <TouchableOpacity
+                        key={t.id}
+                        style={[styles.themeCard, selected && { borderColor: theme.primary }]}
+                        activeOpacity={0.88}
+                        onPress={() => setSelectedThemeId(t.id)}>
+                        <View style={styles.themeColorStrip}>
+                          <View style={[styles.themeColorBlock, { backgroundColor: t.primaryColor }]} />
+                          <View style={[styles.themeColorBlock, { backgroundColor: t.secondaryColor, borderLeftWidth: 1, borderLeftColor: '#e0e3ea' }]} />
                         </View>
-                      </View>
-                      {selected ? (
-                        <View style={[styles.themeCheck, { backgroundColor: theme.primary }]}>
-                          <Ionicons name="checkmark" size={14} color="#fff" />
+                        <View style={styles.themeCardInfo}>
+                          <View style={styles.themeSwatchRow}>
+                            <View style={[styles.themeSwatch, { backgroundColor: t.primaryColor }]} />
+                            <View style={[styles.themeSwatch, { backgroundColor: t.secondaryColor, borderWidth: 1, borderColor: '#dde0e8' }]} />
+                            <View style={{ flex: 1, paddingLeft: 6 }}>
+                              <Text style={styles.themeName}>{t.name}</Text>
+                              <Text style={styles.themeColorCodes}>{t.primaryColor} · {t.secondaryColor}</Text>
+                            </View>
+                          </View>
+                          {selected ? (
+                            <View style={[styles.themeCheck, { backgroundColor: theme.primary }]}>
+                              <Ionicons name="checkmark" size={14} color="#fff" />
+                            </View>
+                          ) : (
+                            <View style={styles.themeCheckEmpty} />
+                          )}
                         </View>
-                      ) : (
-                        <View style={styles.themeCheckEmpty} />
-                      )}
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </ScrollView>
+            )}
+            <View style={styles.confirmActions}>
+              <TouchableOpacity style={styles.confirmCancel} activeOpacity={0.88} onPress={() => setEditingTheme(false)}>
+                <Text style={styles.confirmCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <Pressable style={[styles.confirmDelete, { backgroundColor: theme.primary }]} onPress={() => void handleThemeSave()} disabled={busy === 'theme'}>
+                {busy === 'theme' ? <ActivityIndicator color="#fff" /> : <Text style={styles.confirmDeleteText}>Apply theme</Text>}
+              </Pressable>
             </View>
-          )}
-          <Pressable style={[styles.saveButton, { backgroundColor: theme.primary }]} onPress={() => void handleThemeSave()} disabled={busy === 'theme'}>
-            {busy === 'theme' ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>Apply theme</Text>}
-          </Pressable>
+          </View>
         </View>
-      ) : null}
+      </Modal>
 
       <SectionCard
         title="Account Settings"
         items={[
-          { icon: 'lock-closed-outline', label: editingPassword ? 'Close password editor' : 'Change password', accent: theme.secondary, onPress: () => setEditingPassword((current) => !current) },
-          { icon: 'language-outline', label: editingLanguage ? 'Close language settings' : 'Change language', accent: theme.secondary, onPress: () => setEditingLanguage((current) => !current) },
+          { icon: 'lock-closed-outline', label: 'Change password', accent: theme.secondary, onPress: () => setEditingPassword(true) },
+          { icon: 'language-outline', label: 'Change language', accent: theme.secondary, onPress: () => setEditingLanguage(true) },
           {
             icon: 'log-out-outline',
             label: 'Logout',
@@ -529,73 +561,107 @@ export default function ProfileScreen() {
           },
         ]}
       />
-      {editingPassword ? (
-        <View style={styles.editorCard}>
-          <TextInput
-            value={newPassword}
-            onChangeText={setNewPassword}
-            placeholder="New password"
-            secureTextEntry
-            style={styles.input}
-          />
-          <Text style={styles.helperText}>Use at least 6 characters. You will stay signed in after the update.</Text>
-          <Pressable style={[styles.saveButton, { backgroundColor: theme.primary }]} onPress={() => void handlePasswordSave()} disabled={busy === 'password'}>
-            {busy === 'password' ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>Update password</Text>}
-          </Pressable>
+
+      <Modal visible={editingPassword} transparent animationType="fade" onRequestClose={() => setEditingPassword(false)}>
+        <View style={styles.confirmBackdrop}>
+          <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setEditingPassword(false)} />
+          <View style={styles.confirmCard}>
+            <Text style={styles.confirmTitle}>Change password</Text>
+            <TextInput
+              value={newPassword}
+              onChangeText={setNewPassword}
+              placeholder="New password"
+              secureTextEntry
+              style={[styles.input, { marginTop: 16 }]}
+            />
+            <Text style={[styles.helperText, { marginTop: 12 }]}>Use at least 6 characters. You will stay signed in after the update.</Text>
+            <View style={styles.confirmActions}>
+              <TouchableOpacity style={styles.confirmCancel} activeOpacity={0.88} onPress={() => setEditingPassword(false)}>
+                <Text style={styles.confirmCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <Pressable style={[styles.confirmDelete, { backgroundColor: theme.primary }]} onPress={() => void handlePasswordSave()} disabled={busy === 'password'}>
+                {busy === 'password' ? <ActivityIndicator color="#fff" /> : <Text style={styles.confirmDeleteText}>Update password</Text>}
+              </Pressable>
+            </View>
+          </View>
         </View>
-      ) : null}
-      {editingLanguage ? (
-        <View style={styles.editorCard}>
-          <LanguagePicker
-            label="Language"
-            value={selectedLanguage}
-            onChange={setSelectedLanguage}
-            searchPlaceholder={language === 'sv' ? 'Sök språk' : 'Search language'}
-          />
-          <Pressable style={[styles.saveButton, { backgroundColor: theme.primary }]} onPress={() => void handleLanguageSave()} disabled={busy === 'language'}>
-            {busy === 'language' ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>Save language</Text>}
-          </Pressable>
+      </Modal>
+
+      <Modal visible={editingLanguage} transparent animationType="fade" onRequestClose={() => setEditingLanguage(false)}>
+        <View style={styles.confirmBackdrop}>
+          <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setEditingLanguage(false)} />
+          <View style={styles.confirmCard}>
+            <Text style={styles.confirmTitle}>Change language</Text>
+            <View style={{ marginTop: 16, marginBottom: 16 }}>
+              <LanguagePicker
+                label="Language"
+                value={selectedLanguage}
+                onChange={setSelectedLanguage}
+                searchPlaceholder={language === 'sv' ? 'Sök språk' : 'Search language'}
+              />
+            </View>
+            <View style={styles.confirmActions}>
+              <TouchableOpacity style={styles.confirmCancel} activeOpacity={0.88} onPress={() => setEditingLanguage(false)}>
+                <Text style={styles.confirmCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <Pressable style={[styles.confirmDelete, { backgroundColor: theme.primary }]} onPress={() => void handleLanguageSave()} disabled={busy === 'language'}>
+                {busy === 'language' ? <ActivityIndicator color="#fff" /> : <Text style={styles.confirmDeleteText}>Save language</Text>}
+              </Pressable>
+            </View>
+          </View>
         </View>
-      ) : null}
+      </Modal>
 
       <SectionCard
         title="Notifications"
         items={[
           {
             icon: 'notifications-outline',
-            label: editingNotifications ? 'Close notification settings' : 'Notification settings',
+            label: 'Notification settings',
             accent: theme.primary,
-            onPress: () => setEditingNotifications((current) => !current),
+            onPress: () => setEditingNotifications(true),
           },
         ]}
       />
-      {editingNotifications ? (
-        <View style={styles.editorCard}>
-          <NotificationSettingRow
-            icon="phone-portrait-outline"
-            title="Push notifications"
-            subtitle="Prepare alerts when someone sends a message."
-            value={notificationPreferences.pushEnabled}
-            onValueChange={(value) => void updateNotificationPreference('pushEnabled', value)}
-          />
-          <View style={styles.rowDivider} />
-          <NotificationSettingRow
-            icon="chatbubble-ellipses-outline"
-            title="Chat messages"
-            subtitle="Create in-app alerts for new group chat messages."
-            value={notificationPreferences.chatMessages}
-            onValueChange={(value) => void updateNotificationPreference('chatMessages', value)}
-          />
-          <View style={styles.rowDivider} />
-          <NotificationSettingRow
-            icon="people-outline"
-            title="Chat joins"
-            subtitle="Alert when someone joins a group chat."
-            value={notificationPreferences.chatJoins}
-            onValueChange={(value) => void updateNotificationPreference('chatJoins', value)}
-          />
+
+      <Modal visible={editingNotifications} transparent animationType="fade" onRequestClose={() => setEditingNotifications(false)}>
+        <View style={styles.confirmBackdrop}>
+          <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setEditingNotifications(false)} />
+          <View style={styles.confirmCard}>
+            <Text style={styles.confirmTitle}>Notification settings</Text>
+            <View style={{ marginTop: 16 }}>
+              <NotificationSettingRow
+                icon="phone-portrait-outline"
+                title="Push notifications"
+                subtitle="Prepare alerts when someone sends a message."
+                value={notificationPreferences.pushEnabled}
+                onValueChange={(value) => void updateNotificationPreference('pushEnabled', value)}
+              />
+              <View style={styles.rowDivider} />
+              <NotificationSettingRow
+                icon="chatbubble-ellipses-outline"
+                title="Chat messages"
+                subtitle="Create in-app alerts for new group chat messages."
+                value={notificationPreferences.chatMessages}
+                onValueChange={(value) => void updateNotificationPreference('chatMessages', value)}
+              />
+              <View style={styles.rowDivider} />
+              <NotificationSettingRow
+                icon="people-outline"
+                title="Chat joins"
+                subtitle="Alert when someone joins a group chat."
+                value={notificationPreferences.chatJoins}
+                onValueChange={(value) => void updateNotificationPreference('chatJoins', value)}
+              />
+            </View>
+            <View style={styles.confirmActions}>
+              <TouchableOpacity style={[styles.confirmCancel, { flex: 1 }]} activeOpacity={0.88} onPress={() => setEditingNotifications(false)}>
+                <Text style={styles.confirmCancelText}>Done</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
-      ) : null}
+      </Modal>
 
       <View style={styles.brandBlock}>
         <Text style={styles.brandWord}>BEYOND</Text>

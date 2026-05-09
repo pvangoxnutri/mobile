@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TouchableOpacity, View, Share as RNShare } from 'react-native';
+import { ActivityIndicator, FlatList, Image, Pressable, StyleSheet, Text, TouchableOpacity, View, Share as RNShare } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -35,7 +35,7 @@ export default function PreviousAdventuresScreen() {
       const result = await shareTrip(trip.id);
       await RNShare.share({
         message: `Check out my adventure: ${trip.title} in ${trip.destination}!`,
-        url: result.shareUrl,
+        url: result.shareUrl || undefined,
         title: trip.title,
       });
     } catch (error) {
@@ -82,7 +82,15 @@ export default function PreviousAdventuresScreen() {
             data={trips}
             renderItem={({ item }) => (
               <View style={styles.card}>
-                <View style={{ flex: 1 }}>
+                {item.imageUrl && (
+                  <Image
+                    source={{ uri: item.imageUrl }}
+                    style={styles.cardImage}
+                    blurRadius={3}
+                  />
+                )}
+                <View style={styles.cardOverlay} />
+                <View style={styles.cardContent}>
                   <Text style={styles.tripTitle}>{item.title}</Text>
                   <Text style={styles.destination}>{item.destination}</Text>
                   <Text style={styles.dates}>
@@ -153,36 +161,50 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   card: {
-    backgroundColor: '#ffffff',
     borderRadius: 12,
+    overflow: 'hidden',
+    height: 180,
+    justifyContent: 'flex-end',
+  },
+  cardImage: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
+  },
+  cardOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+  },
+  cardContent: {
     padding: 16,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    zIndex: 2,
   },
   tripTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#000000',
-    marginBottom: 6,
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#ffffff',
+    marginBottom: 4,
   },
   destination: {
     fontSize: 14,
-    color: '#666666',
+    color: 'rgba(255,255,255,0.9)',
     marginBottom: 4,
   },
   dates: {
     fontSize: 12,
-    color: '#999999',
+    color: 'rgba(255,255,255,0.8)',
   },
   shareButton: {
+    position: 'absolute',
+    bottom: 16,
+    right: 16,
     width: 44,
     height: 44,
     borderRadius: 22,
     backgroundColor: '#ff4f74',
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: 12,
+    zIndex: 3,
   },
   shareButtonDisabled: {
     opacity: 0.6,
