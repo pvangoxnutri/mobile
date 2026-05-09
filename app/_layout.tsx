@@ -21,27 +21,7 @@ export default function RootLayout() {
         <I18nProvider>
           <AuthProvider>
             <AuthGate>
-              <Stack>
-                <Stack.Screen name="index" options={{ headerShown: false }} />
-                <Stack.Screen name="(auth)/login" options={{ headerShown: false }} />
-                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-                <Stack.Screen name="forgot-password" options={{ headerShown: false }} />
-                <Stack.Screen name="reset-password" options={{ headerShown: false }} />
-                <Stack.Screen name="settings" options={{ headerShown: false }} />
-                <Stack.Screen name="create-trip" options={{ headerShown: false }} />
-                <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false }} />
-                <Stack.Screen name="TMP_Navbar" options={{ headerShown: false }} />
-                <Stack.Screen name="trip/[id]" options={{ headerShown: false }} />
-                <Stack.Screen name="trip/[id]/settings" options={{ headerShown: false }} />
-                <Stack.Screen name="trip/[id]/sidequest/new" options={{ headerShown: false }} />
-                <Stack.Screen name="trip/[id]/sidequest/[sidequestId]" options={{ headerShown: false }} />
-                <Stack.Screen name="trip/[id]/sidequest/[sidequestId]/edit" options={{ headerShown: false }} />
-                <Stack.Screen name="trip/[id]/split" options={{ headerShown: false }} />
-                <Stack.Screen name="travel-tracker" options={{ headerShown: false }} />
-                <Stack.Screen name="previous-adventures" options={{ headerShown: false }} />
-                <Stack.Screen name="share/[shareCode]" options={{ headerShown: false }} />
-                <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-              </Stack>
+              <Stack />
               <StatusBar style="dark" />
             </AuthGate>
           </AuthProvider>
