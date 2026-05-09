@@ -7,9 +7,6 @@ export interface UserInfo {
   hasCompletedOnboarding: boolean;
   role?: string | null;
   language?: 'en' | 'sv';
-  themeId?: string | null;
-  themePrimaryColor?: string | null;
-  themeSecondaryColor?: string | null;
 }
 
 export interface UserProfile {
@@ -20,13 +17,6 @@ export interface UserProfile {
   tripsJoined: number;
   sidequestsCreated: number;
   countriesVisited: number;
-}
-
-export interface AppTheme {
-  id: string;
-  name: string;
-  primaryColor: string;
-  secondaryColor: string;
 }
 
 export interface Quest {
