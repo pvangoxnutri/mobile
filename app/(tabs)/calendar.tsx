@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import TopAlertsButton from '@/components/top-alerts-button';
 import { apiJson } from '@/lib/api';
 import type { Quest, SideQuestActivity } from '@/lib/types';
-import { PRIMARY_COLOR, PRIMARY_08, PRIMARY_20, SECONDARY_COLOR, SECONDARY_08 } from '@/constants/colors';
+import { PRIMARY_COLOR, PRIMARY_08, PRIMARY_20, SECONDARY_COLOR, SECONDARY_08, SECONDARY_COLOR08 } from '@/constants/colors';
 
 type CalendarItem = {
   id: string;
