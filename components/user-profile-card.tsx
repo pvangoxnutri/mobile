@@ -57,8 +57,8 @@ export default function UserProfileCard({ userId, onClose }: { userId: string | 
             </View>
           ) : error ? (
             <View style={styles.errorContainer}>
-              <Ionicons name="alert-circle-outline" size={48} color={'#14161d'Secondary} />
-              <Text style={[styles.errorText, { color: '#14161d'Secondary }]}>{error}</Text>
+              <Ionicons name="alert-circle-outline" size={48} color="#14161d" />
+              <Text style={[styles.errorText, { color: '#14161d' }]}>{error}</Text>
             </View>
           ) : profile ? (
             <>
