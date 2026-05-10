@@ -80,6 +80,16 @@ const dictionaries: Record<AppLanguage, Record<string, string>> = {
     'home.join_title': 'Join an Adventure',
     'home.join_subtitle': 'Enter the code shared with you to join their trip.',
     'home.code_placeholder': 'e.g. A3F9B2',
+    'home.defaultTripName': 'Adventure',
+    'home.countdown_days': 'DAYS',
+    'home.countdown_hours': 'HOURS',
+    'home.countdown_minutes': 'MIN',
+    'home.up_next': 'UP NEXT',
+    'home.in_days': 'IN {days} DAYS',
+    'home.members_loading': 'Loading members...',
+    'home.members_heading': 'TRAVELERS',
+
+    'common.create_trip_hint': 'Create a trip to start the timer',
 
     'calendar.title': 'Calendar',
     'calendar.subtitle': 'Everything planned across your trips, including hidden moments.',
@@ -240,6 +250,16 @@ const dictionaries: Record<AppLanguage, Record<string, string>> = {
     'home.join_title': 'Gå med i ett äventyr',
     'home.join_subtitle': 'Ange koden som delades med dig för att gå med i deras resa.',
     'home.code_placeholder': 't.ex. A3F9B2',
+    'home.defaultTripName': 'Äventyr',
+    'home.countdown_days': 'DAGAR',
+    'home.countdown_hours': 'TIMMAR',
+    'home.countdown_minutes': 'MIN',
+    'home.up_next': 'KOMMANDE NÄST',
+    'home.in_days': 'OM {days} DAGAR',
+    'home.members_loading': 'Laddar medlemmar...',
+    'home.members_heading': 'RESENÄRER',
+
+    'common.create_trip_hint': 'Skapa en resa för att starta timern',
 
     'calendar.title': 'Kalender',
     'calendar.subtitle': 'Allt planerat på dina resor, inklusive dolda stunder.',

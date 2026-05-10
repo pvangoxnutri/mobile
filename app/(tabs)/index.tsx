@@ -6,6 +6,7 @@ import { ActivityIndicator, Animated, Image, Modal, Platform, Pressable, ScrollV
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BrandMark from '@/components/brand-mark';
 import { useAuth } from '@/components/auth-provider';
+import { useI18n } from '@/components/i18n-provider';
 import TopAlertsButton from '@/components/top-alerts-button';
 import UserProfileCard from '@/components/user-profile-card';
 import { apiFetch, apiJson } from '@/lib/api';
@@ -28,6 +29,7 @@ type TripWithEvent = {
 
 export default function HomeScreen() {
   const { user, signOut } = useAuth();
+  const { t } = useI18n();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const [quests, setQuests] = useState<Quest[]>([]);
@@ -113,7 +115,7 @@ export default function HomeScreen() {
 
   const sortedTrips = useMemo(() => sortTripsByUpcomingEvent(quests, activities, now), [activities, now, quests]);
   const featuredTrip = sortedTrips[selectedTripIndex] ?? null;
-  const countdownParts = useMemo(() => getCountdownParts(featuredTrip?.nextEventDate, now), [featuredTrip?.nextEventDate, now]);
+  const countdownParts = useMemo(() => getCountdownParts(featuredTrip?.nextEventDate, now, t), [featuredTrip?.nextEventDate, now, t]);
   const featuredEvent = featuredTrip?.upcomingEvents[featuredEventIndex] ?? null;
   const allowNativeDriver = Platform.OS !== 'web';
 
@@ -248,7 +250,7 @@ export default function HomeScreen() {
             <View style={[styles.inviteSection, { marginTop: 20 }]}>
               <View style={styles.inviteSectionHeader}>
                 <Ionicons name="mail-unread-outline" size={16} color={PRIMARY_COLOR} />
-                <Text style={[styles.inviteSectionTitle, { color: PRIMARY_COLOR }]}>You're invited!</Text>
+                <Text style={[styles.inviteSectionTitle, { color: PRIMARY_COLOR }]}>{t('home.invited')}</Text>
               </View>
               {pendingInvites.map((invite) => (
                 <View key={invite.id} style={[styles.inviteCard, { borderColor: PRIMARY_20, backgroundColor: PRIMARY_08 }]}>
@@ -260,7 +262,7 @@ export default function HomeScreen() {
                     </View>
                   )}
                   <View style={styles.inviteCardBody}>
-                    <Text style={styles.inviteCardTitle} numberOfLines={1}>{invite.tripTitle ?? 'Adventure'}</Text>
+                    <Text style={styles.inviteCardTitle} numberOfLines={1}>{invite.tripTitle ?? t('home.defaultTripName')}</Text>
                     {invite.tripDestination ? (
                       <Text style={styles.inviteCardMeta} numberOfLines={1}><Ionicons name="location-outline" size={11} /> {invite.tripDestination}</Text>
                     ) : null}
@@ -268,7 +270,7 @@ export default function HomeScreen() {
                   </View>
                   <View style={styles.inviteCardActions}>
                     <TouchableOpacity style={[styles.inviteAcceptBtn, { backgroundColor: PRIMARY_COLOR }]} activeOpacity={0.82} onPress={() => void handleAcceptInvite(invite)} disabled={inviteActionBusy === invite.id}>
-                      {inviteActionBusy === invite.id ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.inviteAcceptText}>Join</Text>}
+                      {inviteActionBusy === invite.id ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.inviteAcceptText}>{t('common.join')}</Text>}
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.inviteDeclineBtn} activeOpacity={0.82} onPress={() => void handleDeclineInvite(invite)} disabled={inviteActionBusy === invite.id + '_decline'}>
                       {inviteActionBusy === invite.id + '_decline' ? <ActivityIndicator size="small" color="#8a909e" /> : <Ionicons name="close" size={16} color="#8a909e" />}
@@ -279,16 +281,16 @@ export default function HomeScreen() {
             </View>
           ) : null}
 
-          <Text style={styles.emptySectionHeading}>UPCOMING</Text>
+          <Text style={styles.emptySectionHeading}>{t('home.upcoming')}</Text>
           <View style={styles.emptyUpcoming}>
             <View style={styles.emptyRocketCircle}>
               <Ionicons name="rocket-outline" size={46} color="#c8c7ca" />
             </View>
-            <Text style={styles.emptyUpcomingTitle}>No adventures yet</Text>
-            <Text style={styles.emptyUpcomingCopy}>Create your first trip and start building SideQuests together</Text>
+            <Text style={styles.emptyUpcomingTitle}>{t('home.no_adventures')}</Text>
+            <Text style={styles.emptyUpcomingCopy}>{t('home.create_first_trip')}</Text>
           </View>
 
-          <Text style={styles.emptyHint}>Tap + to create your first adventure</Text>
+          <Text style={styles.emptyHint}>{t('home.tap_to_create')}</Text>
         </ScrollView>
 
         <FloatingFab
@@ -297,6 +299,7 @@ export default function HomeScreen() {
           onToggle={() => setFabOpen((current) => !current)}
           onDismiss={() => setFabOpen(false)}
           onJoin={() => { setFabOpen(false); setJoinModalOpen(true); setJoinCode(''); setJoinError(''); }}
+          t={t}
         />
 
         <Modal visible={joinModalOpen} transparent animationType="fade" onRequestClose={() => setJoinModalOpen(false)}>
@@ -308,6 +311,7 @@ export default function HomeScreen() {
             busy={joinBusy}
             error={joinError}
             insets={insets}
+            t={t}
           />
         </Modal>
       </View>
@@ -342,7 +346,7 @@ export default function HomeScreen() {
           <View style={styles.inviteSection}>
             <View style={styles.inviteSectionHeader}>
               <Ionicons name="mail-unread-outline" size={16} color="#ff4f74" />
-              <Text style={styles.inviteSectionTitle}>You're invited!</Text>
+              <Text style={styles.inviteSectionTitle}>{t('home.invited')}</Text>
             </View>
             {pendingInvites.map((invite) => (
               <View key={invite.id} style={styles.inviteCard}>
@@ -355,7 +359,7 @@ export default function HomeScreen() {
                 )}
                 <View style={styles.inviteCardBody}>
                   <Text style={styles.inviteCardTitle} numberOfLines={1}>
-                    {invite.tripTitle ?? 'Adventure'}
+                    {invite.tripTitle ?? t('home.defaultTripName')}
                   </Text>
                   {invite.tripDestination ? (
                     <Text style={styles.inviteCardMeta} numberOfLines={1}>
@@ -373,7 +377,7 @@ export default function HomeScreen() {
                     {inviteActionBusy === invite.id ? (
                       <ActivityIndicator size="small" color="#fff" />
                     ) : (
-                      <Text style={styles.inviteAcceptText}>Join</Text>
+                      <Text style={styles.inviteAcceptText}>{t('common.join')}</Text>
                     )}
                   </TouchableOpacity>
                   <TouchableOpacity
@@ -395,17 +399,17 @@ export default function HomeScreen() {
 
         {loading ? (
           <View style={styles.loadingState}>
-            <Text style={styles.loadingText}>Loading your next adventure...</Text>
+            <Text style={styles.loadingText}>{t('home.loading')}</Text>
           </View>
         ) : (
           <>
             <View style={styles.hero}>
-              <Text style={styles.heroTitle}>{featuredTrip?.quest.title?.trim() || 'Your next adventure'}</Text>
+              <Text style={styles.heroTitle}>{featuredTrip?.quest.title?.trim() || t('home.defaultTripName')}</Text>
 
               <View style={styles.dateRow}>
                 <Ionicons name="calendar-clear-outline" size={25} color="#4f5461" />
                 <Animated.Text style={[styles.dateText, { opacity: eventFade }]}>
-                  {featuredEvent?.label ?? featuredTrip?.nextEventLabel ?? 'Dates coming soon'}
+                  {featuredEvent?.label ?? featuredTrip?.nextEventLabel ?? t('home.no_upcoming_event')}
                 </Animated.Text>
               </View>
 
@@ -416,7 +420,7 @@ export default function HomeScreen() {
             </View>
 
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionLabel}>UPCOMING</Text>
+              <Text style={styles.sectionLabel}>{t('home.upcoming')}</Text>
               <View style={styles.sectionLine} />
             </View>
 
@@ -439,8 +443,8 @@ export default function HomeScreen() {
                 <QuestCard
                   key={entry.quest.id}
                   id={entry.quest.id}
-                  title={entry.quest.title ?? 'Untitled quest'}
-                  badge={formatCardCountdown(entry.nextEventDate, now)}
+                  title={entry.quest.title ?? t('home.defaultTripName')}
+                  badge={formatCardCountdown(entry.nextEventDate, now, t)}
                   badgeTone={index % 2 === 0 ? 'pink' : 'cyan'}
                   imageUrl={entry.quest.imageUrl}
                   cardWidth={upcomingCardWidth}
@@ -462,9 +466,9 @@ export default function HomeScreen() {
             <View style={styles.activeQuestDot} />
             <View style={styles.activeQuestTextBlock}>
               <Text style={styles.activeQuestLabel}>COUNTDOWN</Text>
-              <Text style={styles.activeQuestTitle}>{featuredTrip?.nextEventLabel ?? 'No upcoming event'}</Text>
+              <Text style={styles.activeQuestTitle}>{featuredTrip?.nextEventLabel ?? t('home.no_upcoming_event')}</Text>
               <Text style={styles.activeQuestMeta}>
-                {featuredTrip ? `${countdownParts[0].value}d ${countdownParts[1].value}h ${countdownParts[2].value}m` : 'Create a trip to start the timer'}
+                {featuredTrip ? `${countdownParts[0].value}d ${countdownParts[1].value}h ${countdownParts[2].value}m` : t('common.create_trip_hint')}
               </Text>
             </View>
           </TouchableOpacity>
@@ -477,6 +481,7 @@ export default function HomeScreen() {
         onToggle={() => setFabOpen((current) => !current)}
         onDismiss={() => setFabOpen(false)}
         onJoin={() => { setFabOpen(false); setJoinModalOpen(true); setJoinCode(''); setJoinError(''); }}
+        t={t}
       />
 
       <Modal visible={joinModalOpen} transparent animationType="fade" onRequestClose={() => setJoinModalOpen(false)}>
@@ -488,6 +493,7 @@ export default function HomeScreen() {
           busy={joinBusy}
           error={joinError}
           insets={insets}
+          t={t}
         />
       </Modal>
 
@@ -497,8 +503,8 @@ export default function HomeScreen() {
           <View style={[styles.membersCard, { paddingBottom: Math.max(insets.bottom, 18) + 16 }]}>
             <View style={styles.membersHeader}>
               <View>
-                <Text style={styles.membersEyebrow}>TRAVELERS</Text>
-                <Text style={styles.membersTitle}>{featuredTrip?.quest.title ?? 'Adventure'}</Text>
+                <Text style={styles.membersEyebrow}>{t('home.members_heading')}</Text>
+                <Text style={styles.membersTitle}>{featuredTrip?.quest.title ?? t('home.defaultTripName')}</Text>
               </View>
               <TouchableOpacity style={styles.membersClose} activeOpacity={0.88} onPress={() => setMembersOpen(false)}>
                 <Ionicons name="close" size={20} color="#161821" />
@@ -506,7 +512,7 @@ export default function HomeScreen() {
             </View>
 
             {membersLoading ? (
-              <Text style={styles.membersLoading}>Loading members...</Text>
+              <Text style={styles.membersLoading}>{t('home.members_loading')}</Text>
             ) : (
               <View style={styles.membersList}>
                 {featuredMembers.map((member) => (
@@ -520,7 +526,7 @@ export default function HomeScreen() {
                     )}
                     <View style={styles.memberCopy}>
                       <Text style={styles.memberName}>{member.name}</Text>
-                      <Text style={styles.memberMeta}>{member.isOwner ? 'Owner' : 'Member'}</Text>
+                      <Text style={styles.memberMeta}>{member.isOwner ? t('common.owner') : t('common.member')}</Text>
                     </View>
                   </Pressable>
                 ))}
@@ -541,12 +547,14 @@ function FloatingFab({
   onToggle,
   onDismiss,
   onJoin,
+  t,
 }: {
   open: boolean;
   bottom: number;
   onToggle: () => void;
   onDismiss: () => void;
   onJoin: () => void;
+  t?: (key: string) => string;
 }) {
   return (
     <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
@@ -561,14 +569,14 @@ function FloatingFab({
                 onDismiss();
                 router.push('/create-trip');
               }}>
-              <Text style={styles.fabMenuButtonPrimaryText}>Create Adventure</Text>
+              <Text style={styles.fabMenuButtonPrimaryText}>{t ? t('home.create_adventure') : 'Create Adventure'}</Text>
               <View style={styles.fabMenuIconCircle}>
                 <Ionicons name="add" size={14} color="#fff" />
               </View>
             </TouchableOpacity>
 
             <TouchableOpacity activeOpacity={0.9} style={styles.fabMenuButton} onPress={onJoin}>
-              <Text style={[styles.fabMenuButtonText, { color: PRIMARY_COLOR }]}>Join Adventure</Text>
+              <Text style={[styles.fabMenuButtonText, { color: PRIMARY_COLOR }]}>{t ? t('home.join_adventure') : 'Join Adventure'}</Text>
               <Ionicons name="person-add-outline" size={15} color={PRIMARY_COLOR} />
             </TouchableOpacity>
 
@@ -653,6 +661,7 @@ function JoinModal({
   busy,
   error,
   insets,
+  t,
 }: {
   code: string;
   onChangeCode: (v: string) => void;
@@ -661,6 +670,7 @@ function JoinModal({
   busy: boolean;
   error: string;
   insets: { bottom: number };
+  t?: (key: string, vars?: Record<string, string | number>) => string;
 }) {
   return (
     <View style={styles.modalBackdrop}>
@@ -668,19 +678,19 @@ function JoinModal({
       <View style={[styles.joinCard, { paddingBottom: Math.max(insets.bottom, 18) + 8 }]}>
         <View style={styles.joinHeader}>
           <View>
-            <Text style={styles.joinEyebrow}>INVITE CODE</Text>
-            <Text style={styles.joinTitle}>Join an Adventure</Text>
+            <Text style={styles.joinEyebrow}>{t ? t('home.invite_code') : 'INVITE CODE'}</Text>
+            <Text style={styles.joinTitle}>{t ? t('home.join_title') : 'Join an Adventure'}</Text>
           </View>
           <TouchableOpacity style={styles.membersClose} activeOpacity={0.88} onPress={onClose}>
             <Ionicons name="close" size={20} color="#161821" />
           </TouchableOpacity>
         </View>
         <Text style={styles.joinSubtitle}>
-          Ask the trip organiser for the 6-character code and enter it below.
+          {t ? t('home.join_subtitle') : 'Enter the code shared with you to join their trip.'}
         </Text>
         <TextInput
           style={styles.joinInput}
-          placeholder="e.g. A3F9B2"
+          placeholder={t ? t('home.code_placeholder') : 'e.g. A3F9B2'}
           placeholderTextColor="#b0b5c0"
           value={code}
           onChangeText={(v) => onChangeCode(v.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
@@ -695,7 +705,7 @@ function JoinModal({
           style={({ pressed }) => [styles.joinButton, { backgroundColor: PRIMARY_COLOR }, pressed && { opacity: 0.88 }, (!code.trim() || busy) && styles.joinButtonDisabled]}
           onPress={onJoin}
           disabled={!code.trim() || busy}>
-          {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.joinButtonText}>Join Adventure</Text>}
+          {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.joinButtonText}>{t ? t('home.join_adventure') : 'Join Adventure'}</Text>}
         </Pressable>
       </View>
     </View>
@@ -750,12 +760,12 @@ function getInitials(name?: string | null) {
   return parts.map((part) => part[0]?.toUpperCase()).join('') || 'SQ';
 }
 
-function getCountdownParts(targetDate: Date | undefined, now: Date) {
+function getCountdownParts(targetDate: Date | undefined, now: Date, t?: (key: string) => string) {
   if (!targetDate) {
     return [
-      { label: 'DAYS', value: '00' },
-      { label: 'HOURS', value: '00' },
-      { label: 'MIN', value: '00' },
+      { label: t ? t('home.countdown_days') : 'DAYS', value: '00' },
+      { label: t ? t('home.countdown_hours') : 'HOURS', value: '00' },
+      { label: t ? t('home.countdown_minutes') : 'MIN', value: '00' },
     ];
   }
 
@@ -765,9 +775,9 @@ function getCountdownParts(targetDate: Date | undefined, now: Date) {
   const minutes = Math.floor((diff % 3600000) / 60000);
 
   return [
-    { label: 'DAYS', value: String(days).padStart(2, '0') },
-    { label: 'HOURS', value: String(hours).padStart(2, '0') },
-    { label: 'MIN', value: String(minutes).padStart(2, '0') },
+    { label: t ? t('home.countdown_days') : 'DAYS', value: String(days).padStart(2, '0') },
+    { label: t ? t('home.countdown_hours') : 'HOURS', value: String(hours).padStart(2, '0') },
+    { label: t ? t('home.countdown_minutes') : 'MIN', value: String(minutes).padStart(2, '0') },
   ];
 }
 
@@ -776,11 +786,11 @@ function formatHeaderCountdown(targetDate: Date | undefined, now: Date) {
   return `${parts[0].value}D ${parts[1].value}H`;
 }
 
-function formatCardCountdown(targetDate: Date, now: Date) {
+function formatCardCountdown(targetDate: Date, now: Date, t?: (key: string, vars?: Record<string, string | number>) => string) {
   const diff = Math.max(0, targetDate.getTime() - now.getTime());
   const days = Math.ceil(diff / 86400000);
-  if (days <= 1) return 'UP NEXT';
-  return `IN ${days} DAYS`;
+  if (days <= 1) return t ? t('home.up_next') : 'UP NEXT';
+  return t ? t('home.in_days', { days }) : `IN ${days} DAYS`;
 }
 
 function getMembersLabel(quest?: Quest | null) {
