@@ -101,7 +101,7 @@ export default function WorldOverview({ statusMap, onContinentPress, activeConti
 
       {/* â”€â”€ All-continents chip â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <TouchableOpacity
-        style={[styles.allChip, activeContinentFilter === null && { backgroundColor: PRIMARY_COLOR12, borderColor: PRIMARY_20 }]}
+        style={[styles.allChip, activeContinentFilter === null && { backgroundColor: PRIMARY_12, borderColor: PRIMARY_20 }]}
         activeOpacity={0.75}
         onPress={() => onContinentPress(null)}>
         <Text style={[styles.allChipText, activeContinentFilter === null && { color: PRIMARY_COLOR }]}>ðŸŒ  All continents</Text>

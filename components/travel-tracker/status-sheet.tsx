@@ -41,8 +41,8 @@ export default function StatusSheet({ country, currentStatus, visible, onSelect,
   }, [visible, slideAnim, fadeAnim]);
 
   const options: Option[] = [
-    { status: 'visited', label: 'Visited', icon: 'checkmark-circle', bg: PRIMARY_COLOR12, color: PRIMARY_COLOR },
-    { status: 'planned', label: 'Planning to visit', icon: 'bookmark', bg: SECONDARY_COLOR12, color: SECONDARY_COLOR },
+    { status: 'visited', label: 'Visited', icon: 'checkmark-circle', bg: PRIMARY_12, color: PRIMARY_COLOR },
+    { status: 'planned', label: 'Planning to visit', icon: 'bookmark', bg: SECONDARY_12, color: SECONDARY_COLOR },
     { status: 'living', label: 'I live here', icon: 'home', bg: '#FEF3C7', color: '#D97706' },
     { status: 'none', label: 'Clear status', icon: 'close-circle-outline', bg: '#F4F5F7', color: '#8A909D' },
   ];

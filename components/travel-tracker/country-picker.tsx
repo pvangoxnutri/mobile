@@ -80,7 +80,7 @@ export default function CountryPicker({ value, onChange, label = 'Countries' }: 
       {selectedCountries.length > 0 ? (
         <View style={styles.chips}>
           {selectedCountries.map((c) => (
-            <TouchableOpacity key={c.code} style={[styles.chip, { backgroundColor: SECONDARY_COLOR12, borderColor: SECONDARY_COLOR20 }]} activeOpacity={0.75} onPress={() => toggle(c.code)}>
+            <TouchableOpacity key={c.code} style={[styles.chip, { backgroundColor: SECONDARY_12, borderColor: SECONDARY_20 }]} activeOpacity={0.75} onPress={() => toggle(c.code)}>
               <Text style={styles.chipFlag}>{getCountryFlag(c)}</Text>
               <Text style={[styles.chipName, { color: SECONDARY_COLOR }]} numberOfLines={1}>{c.name}</Text>
               <Ionicons name="close" size={13} color={SECONDARY_COLOR} />
@@ -102,7 +102,7 @@ export default function CountryPicker({ value, onChange, label = 'Countries' }: 
 
           {/* Selected count */}
           {value.length > 0 ? (
-            <View style={[styles.countBanner, { backgroundColor: SECONDARY_COLOR08 }]}>
+            <View style={[styles.countBanner, { backgroundColor: SECONDARY_08 }]}>
               <Text style={[styles.countBannerText, { color: SECONDARY_COLOR }]}>
                 {value.length} {value.length === 1 ? 'country' : 'countries'} selected
               </Text>

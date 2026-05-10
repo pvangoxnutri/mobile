@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import TopAlertsButton from '@/components/top-alerts-button';
 import { apiJson } from '@/lib/api';
 import type { Quest, SideQuestActivity } from '@/lib/types';
-import { PRIMARY_COLOR, PRIMARY_08, PRIMARY_20, SECONDARY_COLOR, SECONDARY_08, SECONDARY_COLOR08 } from '@/constants/colors';
+import { PRIMARY_COLOR, PRIMARY_08, PRIMARY_20, SECONDARY_COLOR, SECONDARY_08 } from '@/constants/colors';
 
 type CalendarItem = {
   id: string;
@@ -211,7 +211,7 @@ export default function CalendarScreen() {
                 </TouchableOpacity>
               ) : (
                 <TouchableOpacity key={item.id} activeOpacity={0.86} style={styles.planRow} onPress={() => router.push(`/trip/${item.tripId}`)}>
-                  <View style={[styles.planTimePill, styles.planTimePillTrip, { backgroundColor: SECONDARY_COLOR08 }]}>
+                  <View style={[styles.planTimePill, styles.planTimePillTrip, { backgroundColor: SECONDARY_08 }]}>
                     <Text style={[styles.planTimeText, { color: SECONDARY_COLOR }]}>{item.time?.trim() ? item.time : 'All day'}</Text>
                   </View>
                   <View style={styles.planCopyWrap}>
