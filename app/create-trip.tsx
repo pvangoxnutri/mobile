@@ -233,7 +233,7 @@ export default function CreateTripScreen() {
               <Text style={styles.dateRangeValue}>{formatRangeDisplay(startDate, endDate)}</Text>
               <Text style={styles.dateRangeHint}>Tap once, pick start and end in one calendar.</Text>
             </View>
-            <View style={[styles.dateRangeIcon, { backgroundColor: PRIMARY_COLOR08, borderColor: PRIMARY_COLOR20 }]}>
+            <View style={[styles.dateRangeIcon, { backgroundColor: PRIMARY_08, borderColor: PRIMARY_20 }]}>
               <Ionicons name="calendar-outline" size={22} color={PRIMARY_COLOR} />
             </View>
           </Pressable>
@@ -252,11 +252,11 @@ export default function CreateTripScreen() {
             </View>
 
             <View style={styles.codeActions}>
-              <TouchableOpacity activeOpacity={0.86} style={[styles.codeActionButton, { borderColor: PRIMARY_COLOR20 }]} onPress={() => void handleCopyInviteCode()}>
+              <TouchableOpacity activeOpacity={0.86} style={[styles.codeActionButton, { borderColor: PRIMARY_20 }]} onPress={() => void handleCopyInviteCode()}>
                 <Ionicons name="copy-outline" size={16} color={PRIMARY_COLOR} />
                 <Text style={[styles.codeActionText, { color: PRIMARY_COLOR }]}>Copy</Text>
               </TouchableOpacity>
-              <TouchableOpacity activeOpacity={0.86} style={[styles.codeActionButton, { borderColor: PRIMARY_COLOR20 }]} onPress={() => void handleShareInviteCode()}>
+              <TouchableOpacity activeOpacity={0.86} style={[styles.codeActionButton, { borderColor: PRIMARY_20 }]} onPress={() => void handleShareInviteCode()}>
                 <Ionicons name="share-social-outline" size={16} color={PRIMARY_COLOR} />
                 <Text style={[styles.codeActionText, { color: PRIMARY_COLOR }]}>Share</Text>
               </TouchableOpacity>

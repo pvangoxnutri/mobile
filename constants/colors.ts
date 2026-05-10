@@ -10,14 +10,8 @@ export const SECONDARY_COLOR = '#0d90a8'; // Teal
 export const PRIMARY_08 = 'rgba(255, 79, 116, 0.08)';
 export const PRIMARY_12 = 'rgba(255, 79, 116, 0.12)';
 export const PRIMARY_20 = 'rgba(255, 79, 116, 0.20)';
-export const PRIMARY_COLOR08 = 'rgba(255, 79, 116, 0.08)';
-export const PRIMARY_COLOR12 = 'rgba(255, 79, 116, 0.12)';
-export const PRIMARY_COLOR20 = 'rgba(255, 79, 116, 0.20)';
 
 // Secondary color variants
 export const SECONDARY_08 = 'rgba(13, 144, 168, 0.08)';
 export const SECONDARY_12 = 'rgba(13, 144, 168, 0.12)';
 export const SECONDARY_20 = 'rgba(13, 144, 168, 0.20)';
-export const SECONDARY_COLOR08 = 'rgba(13, 144, 168, 0.08)';
-export const SECONDARY_COLOR12 = 'rgba(13, 144, 168, 0.12)';
-export const SECONDARY_COLOR20 = 'rgba(13, 144, 168, 0.20)';

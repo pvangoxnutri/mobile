@@ -241,7 +241,7 @@ function StepDiscovery({
         {FOUND_VIA.map((opt) => (
           <TouchableOpacity
             key={opt}
-            style={[styles.chip, foundVia === opt && { borderColor: PRIMARY_COLOR, backgroundColor: PRIMARY_COLOR08 }]}
+            style={[styles.chip, foundVia === opt && { borderColor: PRIMARY_COLOR, backgroundColor: PRIMARY_08 }]}
             activeOpacity={0.75}
             onPress={() => setFoundVia(foundVia === opt ? null : opt)}>
             <Text style={[styles.chipText, foundVia === opt && { color: PRIMARY_COLOR, fontWeight: '700' }]}>{opt}</Text>
@@ -256,7 +256,7 @@ function StepDiscovery({
         {PURPOSES.map((opt) => (
           <TouchableOpacity
             key={opt.value}
-            style={[styles.purposeCard, purpose === opt.value && { borderColor: PRIMARY_COLOR, backgroundColor: PRIMARY_COLOR08 }]}
+            style={[styles.purposeCard, purpose === opt.value && { borderColor: PRIMARY_COLOR, backgroundColor: PRIMARY_08 }]}
             activeOpacity={0.78}
             onPress={() => setPurpose(purpose === opt.value ? null : opt.value)}>
             <Text style={styles.purposeEmoji}>{opt.emoji}</Text>

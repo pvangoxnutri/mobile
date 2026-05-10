@@ -26,7 +26,7 @@ import {
 } from '@/components/travel-tracker/country-data';
 import { apiJson } from '@/lib/api';
 import type { Quest } from '@/lib/types';
-import { PRIMARY_COLOR, SECONDARY_COLOR } from '@/constants/colors';
+import { PRIMARY_COLOR, PRIMARY_08, PRIMARY_12, SECONDARY_COLOR, SECONDARY_08, SECONDARY_12 } from '@/constants/colors';
 
 type Filter = 'all' | 'visited' | 'planned' | 'living';
 
@@ -194,14 +194,14 @@ export default function TravelTrackerScreen() {
             value={visitedCount}
             label="Visited"
             color={PRIMARY_COLOR}
-            bg={PRIMARY_COLOR08}
+            bg={PRIMARY_08}
             icon="checkmark-circle"
           />
           <StatPill
             value={plannedCount}
             label="Planned"
             color={SECONDARY_COLOR}
-            bg={SECONDARY_COLOR08}
+            bg={SECONDARY_08}
             icon="bookmark"
           />
           <View style={[styles.livingPill, livingCountry && { backgroundColor: '#FEF3C7', borderColor: '#FCD34D' }]}>
@@ -339,8 +339,8 @@ function StatPill({
 function StatusBadge({ status }: { status: CountryStatus }) {
   const config: Record<CountryStatus, { bg: string; color: string } | null> = {
     none:    null,
-    visited: { bg: PRIMARY_COLOR12,  color: PRIMARY_COLOR },
-    planned: { bg: SECONDARY_COLOR12, color: SECONDARY_COLOR },
+    visited: { bg: PRIMARY_12,  color: PRIMARY_COLOR },
+    planned: { bg: SECONDARY_12, color: SECONDARY_COLOR },
     living:  { bg: '#FEF3C7', color: '#D97706' },
   };
   const c = config[status];
