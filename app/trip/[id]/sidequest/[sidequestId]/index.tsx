@@ -16,12 +16,14 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import UserProfileCard from '@/components/user-profile-card';
+import { useI18n } from '@/components/i18n-provider';
 import { apiFetch, apiJson } from '@/lib/api';
 import { buildGoogleMapsSearchUrl, extractLocationQuery, extractStoredMapPlace, stripLocationMarker } from '@/lib/sidequest-location';
 import type { ActivityComment, SideQuestActivity } from '@/lib/types';
 import { PRIMARY_COLOR, SECONDARY_COLOR } from '@/constants/colors';
 
 export default function SideQuestDetailScreen() {
+  const { t } = useI18n();
   const insets = useSafeAreaInsets();
   const { id, sidequestId } = useLocalSearchParams<{ id: string; sidequestId: string }>();
   const [activity, setActivity] = useState<SideQuestActivity | null>(null);
@@ -103,7 +105,7 @@ export default function SideQuestDetailScreen() {
           <TouchableOpacity style={styles.backButton} activeOpacity={0.88} onPress={() => router.back()}>
             <Ionicons name="arrow-back" size={24} color="#11131a" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>SideQuest</Text>
+          <Text style={styles.headerTitle}>{t('activity.sidequest')}</Text>
           <View style={styles.headerSpacer} />
         </View>
 
@@ -144,8 +146,8 @@ export default function SideQuestDetailScreen() {
                     {activity.isHiddenForViewer
                       ? activity.teaserVisible && activity.teaser
                         ? activity.teaser
-                        : 'This SideQuest is still under wraps.'
-                      : cleanDescription || 'No extra description yet.'}
+                        : t('activity.hidden_title')
+                      : cleanDescription || t('activity.no_description')}
                   </Text>
                 </View>
               </View>
@@ -165,8 +167,8 @@ export default function SideQuestDetailScreen() {
                     {activity.isHiddenForViewer
                       ? activity.teaserVisible && activity.teaser
                         ? activity.teaser
-                        : 'This SideQuest is still under wraps.'
-                      : cleanDescription || 'No extra description yet.'}
+                        : t('activity.hidden_title')
+                      : cleanDescription || t('activity.no_description')}
                   </Text>
                   {activity.canEdit ? (
                     <TouchableOpacity
@@ -184,20 +186,21 @@ export default function SideQuestDetailScreen() {
               {activity.category ? (
                 <MetaRow
                   icon="pricetag-outline"
-                  label="Kategori"
+                  label={t('activity.category')}
                   value={{
-                    flight:    '✈️ Flyg',
-                    sidequest: '🎯 Sidequest',
-                    food:      '🍽️ Mat',
-                    sight:     '🏛️ Sevärdighet',
+                    flight:    t('activity.category_flight'),
+                    sidequest: t('activity.category_sidequest'),
+                    food:      t('activity.category_food'),
+                    sight:     t('activity.category_sight'),
+                    other:     t('activity.category_other'),
                   }[activity.category] ?? activity.category}
                 />
               ) : null}
-              <MetaRow icon="calendar-outline" label="Date" value={formatLongDate(activity.date)} />
+              <MetaRow icon="calendar-outline" label={t('activity.date')} value={formatLongDate(activity.date)} />
               {activity.visibility === 'hidden' && activity.revealAt ? (
-                <MetaRow icon="sparkles-outline" label="Reveal" value={formatReveal(activity.revealAt)} />
+                <MetaRow icon="sparkles-outline" label={t('activity.reveal')} value={formatReveal(activity.revealAt)} />
               ) : null}
-              <MetaRow icon="eye-outline" label="Visibility" value={activity.visibility === 'hidden' ? 'Hidden until reveal' : 'Public'} />
+              <MetaRow icon="eye-outline" label={t('activity.visibility')} value={activity.visibility === 'hidden' ? t('activity.hidden_until_reveal') : t('activity.public')} />
               {locationQuery ? (
                 <TouchableOpacity
                   activeOpacity={0.88}
@@ -211,20 +214,20 @@ export default function SideQuestDetailScreen() {
                     }
                   }}>
                   <Ionicons name="map-outline" size={17} color={SECONDARY_COLOR} />
-                  <Text style={styles.mapButtonText}>Open map: {locationQuery}</Text>
+                  <Text style={styles.mapButtonText}>{t('activity.open_map')}{locationQuery}</Text>
                 </TouchableOpacity>
               ) : null}
               {activity.canEdit && activity.teaser ? (
-                <MetaRow icon="chatbubble-ellipses-outline" label="Teaser" value={activity.teaser} />
+                <MetaRow icon="chatbubble-ellipses-outline" label={t('activity.teaser')} value={activity.teaser} />
               ) : null}
             </View>
 
             {activity.visibility === 'public' ? (
               <View style={styles.commentsCard}>
-                <Text style={styles.commentsTitle}>Comments</Text>
+                <Text style={styles.commentsTitle}>{t('activity.comments')}</Text>
 
                 {comments.length === 0 ? (
-                  <Text style={styles.commentsEmpty}>No comments yet. Be the first!</Text>
+                  <Text style={styles.commentsEmpty}>{t('activity.no_comments')}</Text>
                 ) : (
                   comments.map((c) => (
                     <View key={c.id} style={styles.commentItem}>
@@ -248,7 +251,7 @@ export default function SideQuestDetailScreen() {
                   <TextInput
                     ref={inputRef}
                     style={styles.commentInput}
-                    placeholder="Write a comment…"
+                    placeholder={t('activity.write_comment')}
                     placeholderTextColor="#aab0bc"
                     value={commentText}
                     onChangeText={setCommentText}
