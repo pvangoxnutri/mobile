@@ -121,14 +121,32 @@ export default function TripDetailsScreen() {
     () => Boolean(user?.id && trip?.ownerIds?.includes(user.id)),
     [trip?.ownerIds, user?.id],
   );
-  const activityGroups = useMemo(() => {
-    const groups = new Map<string, SideQuestActivity[]>();
+  const categoryGroupings = useMemo(() => {
+    const groups = new Map<string, { label: string; emoji: string; items: SideQuestActivity[] }>();
+
+    // Initialize category groups
+    groups.set('flight', { label: 'Flights', emoji: '✈️', items: [] });
+    groups.set('food', { label: 'Restaurants', emoji: '🍽️', items: [] });
+    groups.set('activities', { label: 'Activities', emoji: '🎯', items: [] });
+    groups.set('other', { label: 'Övrigt', emoji: '⭐', items: [] });
+
+    // Group activities by category
     for (const activity of sortedActivities) {
-      const current = groups.get(activity.date) ?? [];
-      current.push(activity);
-      groups.set(activity.date, current);
+      if (activity.category === 'flight') {
+        groups.get('flight')!.items.push(activity);
+      } else if (activity.category === 'food') {
+        groups.get('food')!.items.push(activity);
+      } else if (activity.category === 'sidequest' || activity.category === 'sight') {
+        groups.get('activities')!.items.push(activity);
+      } else {
+        groups.get('other')!.items.push(activity);
+      }
     }
-    return Array.from(groups.entries()).map(([date, items]) => ({ date, items }));
+
+    // Filter out empty groups and return
+    return Array.from(groups.entries())
+      .filter(([_, group]) => group.items.length > 0)
+      .map(([key, group]) => ({ key, ...group }));
   }, [sortedActivities]);
 
   const memberAvatarMap = useMemo(() => {
@@ -394,31 +412,6 @@ export default function TripDetailsScreen() {
             <Ionicons name="chevron-forward" size={18} color="#b2b7c0" />
           </TouchableOpacity>
 
-          {activityGroups.length > 0 ? (
-            <View style={styles.miniCalendarWrap}>
-              <Text style={styles.miniCalendarEyebrow}>TRIP CALENDAR</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.miniCalendarRow}>
-                {activityGroups.map((group) => {
-                  const date = new Date(`${group.date}T12:00:00`);
-                  return (
-                    <TouchableOpacity
-                      key={group.date}
-                      activeOpacity={0.88}
-                      style={styles.miniCalendarChip}
-                      onPress={() => {
-                        const y = feedOffsets.current[group.date];
-                        if (typeof y === 'number') {
-                          scrollRef.current?.scrollTo({ y: Math.max(y - 18, 0), animated: true });
-                        }
-                      }}>
-                      <Text style={styles.miniCalendarWeekday}>{new Intl.DateTimeFormat('en-US', { weekday: 'short' }).format(date)}</Text>
-                      <Text style={styles.miniCalendarDay}>{date.getDate()}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-            </View>
-          ) : null}
 
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionEyebrow}>SIDEQUEST FEED</Text>
@@ -427,24 +420,29 @@ export default function TripDetailsScreen() {
           </View>
 
           {activityGroups.length > 0 ? (
-            <View style={styles.feed}>
+            <View style={styles.categoryGrid}>
               {activityGroups.map((group) => (
-                <View
-                  key={group.date}
-                  onLayout={(event) => {
-                    feedOffsets.current[group.date] = event.nativeEvent.layout.y;
+                <TouchableOpacity
+                  key={group.key}
+                  style={styles.categoryCard}
+                  activeOpacity={0.92}
+                  onPress={() => {
+                    router.push({
+                      pathname: `/trip/${encodeURIComponent(id)}/category`,
+                      params: { categoryKey: group.key }
+                    });
                   }}>
-                  <Text style={styles.feedDayLabel}>{formatActivityDate(group.date)}</Text>
-                  <View style={styles.feedDayGroup}>
-                    {group.items.map((activity) => (
-                      <SideQuestFeedCard
-                        key={activity.id}
-                        activity={activity}
-                        onPress={() => router.push(`/trip/${encodeURIComponent(id)}/sidequest/${encodeURIComponent(activity.id)}`)}
-                      />
-                    ))}
+                  <View style={styles.categoryCardHeader}>
+                    <Text style={styles.categoryEmoji}>{group.emoji}</Text>
+                    <View style={styles.categoryInfo}>
+                      <Text style={styles.categoryLabel}>{group.label}</Text>
+                      <Text style={styles.categoryItemName} numberOfLines={1}>{group.items[0]?.title ?? 'Activity'}</Text>
+                    </View>
                   </View>
-                </View>
+                  {group.items.length > 1 && (
+                    <Text style={styles.categoryCount}>+{group.items.length - 1} more</Text>
+                  )}
+                </TouchableOpacity>
               ))}
             </View>
           ) : (
@@ -1890,5 +1888,55 @@ const styles = StyleSheet.create({
   },
   chatSendButtonDisabled: {
     opacity: 0.55,
+  },
+  categoryGrid: {
+    marginTop: 16,
+    gap: 12,
+  },
+  categoryCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 18,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#ebedf2',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    elevation: 2,
+  },
+  categoryCardHeader: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  categoryEmoji: {
+    fontSize: 28,
+  },
+  categoryInfo: {
+    flex: 1,
+  },
+  categoryLabel: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#8a919d',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  categoryItemName: {
+    marginTop: 4,
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#161821',
+  },
+  categoryCount: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#8a919d',
   },
 });
