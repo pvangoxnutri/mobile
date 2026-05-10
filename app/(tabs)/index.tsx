@@ -856,8 +856,9 @@ const styles = StyleSheet.create({
   },
   topRow: {
     flexDirection: 'row',
-    justifyContent: 'flex-start',
+    justifyContent: 'space-between',
     alignItems: 'center',
+    minHeight: 50,
   },
   avatarShell: {
     width: 56,
