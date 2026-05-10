@@ -232,6 +232,8 @@ export default function HomeScreen() {
           showsVerticalScrollIndicator={false}>
           <View style={[styles.topRow, { alignItems: 'center' }]}>
             <BrandMark size="sm" />
+            <View style={{ flex: 1 }} />
+            <TopAlertsButton inviteCount={pendingInvites.length} />
             <TouchableOpacity style={styles.avatarShell} activeOpacity={0.8} onPress={() => router.push('/(tabs)/profile')}>
               {user?.avatarUrl ? (
                 <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
@@ -241,9 +243,6 @@ export default function HomeScreen() {
                 </View>
               )}
             </TouchableOpacity>
-          </View>
-          <View style={{ position: 'absolute', top: Math.max(insets.top, 16) + 8, right: 20, zIndex: 10 }}>
-            <TopAlertsButton inviteCount={pendingInvites.length} />
           </View>
 
           {pendingInvites.length > 0 ? (
@@ -328,18 +327,17 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}>
         <View style={[styles.topRow, { alignItems: 'center' }]}>
           <BrandMark size="sm" />
-          <View style={styles.topActions}>
-            <TopAlertsButton inviteCount={pendingInvites.length} />
-            <TouchableOpacity style={styles.avatarShell} activeOpacity={0.8} onPress={() => router.push('/(tabs)/profile')}>
-              {user?.avatarUrl ? (
-                <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
-              ) : (
-                <View style={styles.avatarCore}>
-                  <Text style={styles.avatarText}>{getInitials(user?.name)}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          </View>
+          <View style={{ flex: 1 }} />
+          <TopAlertsButton inviteCount={pendingInvites.length} />
+          <TouchableOpacity style={styles.avatarShell} activeOpacity={0.8} onPress={() => router.push('/(tabs)/profile')}>
+            {user?.avatarUrl ? (
+              <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
+            ) : (
+              <View style={styles.avatarCore}>
+                <Text style={styles.avatarText}>{getInitials(user?.name)}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
         </View>
 
         {pendingInvites.length > 0 ? (
@@ -859,10 +857,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     minHeight: 50,
-  },
-  topActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: 10,
   },
   avatarShell: {
