@@ -9,9 +9,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/components/auth-provider';
 import UserProfileCard from '@/components/user-profile-card';
 import { apiFetch, apiJson } from '@/lib/api';
-import { stripLocationMarker } from '@/lib/sidequest-location';
 import type { Quest, SideQuestActivity, TripInvite } from '@/lib/types';
-import { PRIMARY_COLOR, SECONDARY_COLOR, PRIMARY_08, PRIMARY_12, PRIMARY_20 } from '@/constants/colors';
+import { PRIMARY_COLOR, SECONDARY_COLOR } from '@/constants/colors';
 
 type ChatMsg = {
   id: string;
@@ -38,7 +37,6 @@ type TripMember = {
 export default function TripDetailsScreen() {
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView | null>(null);
-  const feedOffsets = useRef<Record<string, number>>({});
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuth();
   const [trip, setTrip] = useState<Quest | null>(null);
@@ -423,30 +421,22 @@ export default function TripDetailsScreen() {
           {activityGroups.length > 0 ? (
             <View style={styles.categoryGrid}>
               {activityGroups.map((group) => (
-                <View style={styles.categoryCardWrapper}>
-                  <TouchableOpacity
-                    key={group.key}
-                    style={styles.categoryCard}
-                    activeOpacity={0.92}
-                    onPress={() => setSelectedCategoryKey(group.key)}>
-                    <View style={styles.categoryCardHeader}>
-                      <Text style={styles.categoryEmoji}>{group.emoji}</Text>
-                      <View style={styles.categoryInfo}>
-                        <Text style={styles.categoryLabel}>{group.label}</Text>
-                        <Text style={styles.categoryItemName} numberOfLines={1}>{group.items[0]?.title ?? 'Activity'}</Text>
-                      </View>
+                <TouchableOpacity
+                  key={group.key}
+                  style={styles.categoryCard}
+                  activeOpacity={0.92}
+                  onPress={() => setSelectedCategoryKey(group.key)}>
+                  <View style={styles.categoryCardHeader}>
+                    <Text style={styles.categoryEmoji}>{group.emoji}</Text>
+                    <View style={styles.categoryInfo}>
+                      <Text style={styles.categoryLabel}>{group.label}</Text>
+                      <Text style={styles.categoryItemName} numberOfLines={1}>{group.items[0]?.title ?? 'Activity'}</Text>
                     </View>
-                    {group.items.length > 1 && (
-                      <Text style={styles.categoryCount}>+{group.items.length - 1} more</Text>
-                    )}
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.categoryCardAddButton}
-                    activeOpacity={0.8}
-                    onPress={() => router.push(`/trip/${encodeURIComponent(id)}/sidequest/new`)}>
-                    <Ionicons name="add" size={20} color="#fff" />
-                  </TouchableOpacity>
-                </View>
+                  </View>
+                  {group.items.length > 1 && (
+                    <Text style={styles.categoryCount}>+{group.items.length - 1} more</Text>
+                  )}
+                </TouchableOpacity>
               ))}
             </View>
           ) : (
@@ -813,69 +803,6 @@ async function openSpotifyLink(url: string) {
   }
 }
 
-const CATEGORY_LABELS: Record<string, { label: string; emoji: string }> = {
-  flight:     { label: 'Flyg',        emoji: '✈️' },
-  sidequest:  { label: 'Sidequest',   emoji: '🎯' },
-  food:       { label: 'Mat',         emoji: '🍽️' },
-  sight:      { label: 'Sevärdighet', emoji: '🏛️' },
-};
-
-function SideQuestFeedCard({
-  activity,
-  onPress,
-}: {
-  activity: SideQuestActivity;
-  onPress: () => void;
-}) {
-  const hidden = activity.isHiddenForViewer;
-  const hasImage = Boolean(activity.imageUrl);
-
-  return (
-    <TouchableOpacity activeOpacity={0.92} style={styles.feedCard} onPress={onPress}>
-      {hasImage ? (
-        <View style={styles.feedImageWrap}>
-          <Image source={{ uri: activity.imageUrl! }} style={styles.feedImage} blurRadius={hidden ? 18 : 0} />
-          <View style={[styles.feedImageOverlay, hidden ? styles.feedImageOverlayHidden : null]} />
-          <View style={styles.feedBadgeRow}>
-            <FeedBadge label={hidden ? 'Hidden' : activity.ownerName || 'Visible'} tone={hidden ? 'dark' : 'pink'} />
-            {activity.revealAt && !activity.isRevealed ? <FeedBadge label={formatRevealChip(activity.revealAt)} tone="light" /> : null}
-          </View>
-        </View>
-      ) : null}
-
-      <View style={styles.feedBody}>
-        <View style={styles.feedMeta}>
-          <Text style={styles.feedDate}>{formatActivityDate(activity.date)}</Text>
-          {activity.category && CATEGORY_LABELS[activity.category] ? (
-            <View style={styles.feedCategoryBadge}>
-              <Text style={styles.feedCategoryText}>
-                {CATEGORY_LABELS[activity.category].emoji} {CATEGORY_LABELS[activity.category].label}
-              </Text>
-            </View>
-          ) : null}
-        </View>
-        <Text style={styles.feedTitle}>{activity.title ?? 'Hidden aktivitet'}</Text>
-        <Text numberOfLines={2} style={styles.feedDescription}>
-          {hidden
-            ? activity.teaserVisible && activity.teaser
-              ? activity.teaser
-              : 'Locked until reveal. Tap in to see when this one opens up.'
-            : stripLocationMarker(activity.description) || 'A new surprise is waiting for the group.'}
-        </Text>
-        <View style={styles.feedFooter}>
-          {activity.commentCount > 0 && !hidden ? (
-            <View style={[styles.feedCommentBadge, { backgroundColor: PRIMARY_08 }]}>
-              <Ionicons name="chatbubble-outline" size={13} color={PRIMARY_COLOR} />
-              <Text style={[styles.feedCommentCount, { color: PRIMARY_COLOR }]}>{activity.commentCount}</Text>
-            </View>
-          ) : null}
-          <Ionicons name="chevron-forward" size={18} color="#9298a4" />
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
-}
-
 function TripMetaChip({
   icon,
   label,
@@ -890,14 +817,6 @@ function TripMetaChip({
       <Ionicons name={icon} size={15} color="#fff" />
       <Text style={styles.heroChipText}>{label}</Text>
     </TouchableOpacity>
-  );
-}
-
-function FeedBadge({ label, tone }: { label: string; tone: 'pink' | 'dark' | 'light' }) {
-  return (
-    <View style={[styles.feedBadge, tone === 'pink' ? [styles.feedBadgePink, { backgroundColor: PRIMARY_12 }] : tone === 'dark' ? styles.feedBadgeDark : styles.feedBadgeLight]}>
-      <Text style={[styles.feedBadgeText, { color: PRIMARY_COLOR }, tone === 'dark' ? styles.feedBadgeTextLight : null]}>{label}</Text>
-    </View>
   );
 }
 
@@ -1538,146 +1457,6 @@ const styles = StyleSheet.create({
     color: '#78808c',
     fontSize: 15,
     lineHeight: 23,
-  },
-  feed: {
-    marginTop: 16,
-    gap: 14,
-  },
-  feedDayLabel: {
-    marginBottom: 10,
-    color: '#8a919d',
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
-  },
-  feedDayGroup: {
-    gap: 14,
-  },
-  feedCard: {
-    borderRadius: 26,
-    overflow: 'hidden',
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#ebedf2',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.06,
-    shadowRadius: 24,
-    elevation: 4,
-  },
-  feedImageWrap: {
-    height: 174,
-    backgroundColor: '#eef1f4',
-  },
-  feedImage: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  feedPlaceholder: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#f2f4f7',
-  },
-  feedImageOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(18,22,29,0.12)',
-  },
-  feedImageOverlayHidden: {
-    backgroundColor: 'rgba(18,22,29,0.35)',
-  },
-  feedBadgeRow: {
-    position: 'absolute',
-    top: 14,
-    left: 14,
-    right: 14,
-    flexDirection: 'row',
-    gap: 8,
-    flexWrap: 'wrap',
-  },
-  feedBadge: {
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  feedBadgePink: {
-    backgroundColor: '#ffe4ec',
-  },
-  feedBadgeDark: {
-    backgroundColor: 'rgba(17,19,25,0.58)',
-  },
-  feedBadgeLight: {
-    backgroundColor: 'rgba(255,255,255,0.82)',
-  },
-  feedBadgeText: {
-    color: '#c82f61',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.7,
-  },
-  feedBadgeTextLight: {
-    color: '#fff',
-  },
-  feedBody: {
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 15,
-  },
-  feedMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    flexWrap: 'wrap',
-  },
-  feedDate: {
-    color: '#868d99',
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 1.2,
-  },
-  feedCategoryBadge: {
-    backgroundColor: '#f3f5f8',
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-  },
-  feedCategoryText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#5a6072',
-  },
-  feedTitle: {
-    marginTop: 6,
-    color: '#161821',
-    fontSize: 20,
-    fontWeight: '900',
-    letterSpacing: -0.6,
-  },
-  feedDescription: {
-    marginTop: 8,
-    color: '#6f7683',
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  feedFooter: {
-    marginTop: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  feedCommentBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#fff0f3',
-    borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  feedCommentCount: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#ff4f74',
   },
   emptyState: {
     marginTop: 18,
