@@ -46,6 +46,7 @@ const CATEGORIES: { value: string; label: string; emoji: string }[] = [
   { value: 'sidequest',   label: 'Sidequest',   emoji: '🎯' },
   { value: 'food',        label: 'Mat',         emoji: '🍽️' },
   { value: 'sight',       label: 'Sevärdighet', emoji: '🏛️' },
+  { value: 'other',       label: 'Övrigt',      emoji: '⭐' },
 ];
 
 type Props = {
