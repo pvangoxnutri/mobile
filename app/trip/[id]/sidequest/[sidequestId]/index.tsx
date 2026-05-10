@@ -126,8 +126,7 @@ export default function SideQuestDetailScreen() {
                     activeOpacity={0.9}
                     style={styles.editButtonFloating}
                     onPress={() => {
-                          const path = `/trip/${id}/sidequest/${sidequestId}/edit`;
-                          router.push(path);
+                          router.push(`/trip/${encodeURIComponent(id)}/sidequest/new?editId=${encodeURIComponent(sidequestId)}`);
                         }}>
                     <Ionicons name="create-outline" size={16} color="#fff" />
                     <Text style={styles.editButtonText}>Edit</Text>
@@ -174,8 +173,7 @@ export default function SideQuestDetailScreen() {
                       activeOpacity={0.9}
                       style={styles.editButton}
                       onPress={() => {
-                          const path = `/trip/${id}/sidequest/${sidequestId}/edit`;
-                          router.push(path);
+                          router.push(`/trip/${encodeURIComponent(id)}/sidequest/new?editId=${encodeURIComponent(sidequestId)}`);
                         }}>
                       <Ionicons name="create-outline" size={16} color="#0d90a8" />
                       <Text style={styles.editButtonTextNoImage}>Edit</Text>
