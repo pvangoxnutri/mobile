@@ -47,7 +47,9 @@ export default function HomeScreen() {
   const [joinBusy, setJoinBusy] = useState(false);
   const [joinError, setJoinError] = useState('');
   const [profileCardUserId, setProfileCardUserId] = useState<string | null>(null);
+  const [selectedTripIndex, setSelectedTripIndex] = useState(0);
   const eventFade = useRef(new Animated.Value(1)).current;
+  const carouselRef = useRef<ScrollView>(null);
   const floatingBottom = Math.max(insets.bottom, 14) + 78;
   const upcomingCardWidth = Math.min(width - 56, 320);
 
@@ -110,10 +112,15 @@ export default function HomeScreen() {
   useFocusEffect(loadInvites);
 
   const sortedTrips = useMemo(() => sortTripsByUpcomingEvent(quests, activities, now), [activities, now, quests]);
-  const featuredTrip = sortedTrips[0] ?? null;
+  const featuredTrip = sortedTrips[selectedTripIndex] ?? null;
   const countdownParts = useMemo(() => getCountdownParts(featuredTrip?.nextEventDate, now), [featuredTrip?.nextEventDate, now]);
   const featuredEvent = featuredTrip?.upcomingEvents[featuredEventIndex] ?? null;
   const allowNativeDriver = Platform.OS !== 'web';
+
+  useEffect(() => {
+    setSelectedTripIndex(0);
+    setFeaturedEventIndex(0);
+  }, [quests]);
 
   useEffect(() => {
     setFeaturedEventIndex(0);
@@ -414,12 +421,19 @@ export default function HomeScreen() {
             </View>
 
             <ScrollView
+              ref={carouselRef}
               horizontal
               showsHorizontalScrollIndicator={false}
               decelerationRate="fast"
               snapToInterval={upcomingCardWidth + 14}
               snapToAlignment="start"
               contentContainerStyle={styles.carouselContent}
+              onMomentumScrollEnd={(event) => {
+                const offset = event.nativeEvent.contentOffset.x;
+                const cardWidth = upcomingCardWidth + 14;
+                const index = Math.round(offset / cardWidth);
+                setSelectedTripIndex(Math.min(index, sortedTrips.length - 1));
+              }}
               style={styles.carousel}>
               {sortedTrips.map((entry, index) => (
                 <QuestCard
