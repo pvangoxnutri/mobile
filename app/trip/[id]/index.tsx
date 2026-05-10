@@ -440,7 +440,7 @@ export default function TripDetailsScreen() {
                       <SideQuestFeedCard
                         key={activity.id}
                         activity={activity}
-                        onPress={() => router.push(`/trip/${id}/sidequest/${activity.id}`)}
+                        onPress={() => router.push(`/trip/${id}/sidequest/${encodeURIComponent(activity.id)}`)}
                       />
                     ))}
                   </View>

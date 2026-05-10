@@ -19,7 +19,7 @@ import UserProfileCard from '@/components/user-profile-card';
 import { apiFetch, apiJson } from '@/lib/api';
 import { buildGoogleMapsSearchUrl, extractLocationQuery, extractStoredMapPlace, stripLocationMarker } from '@/lib/sidequest-location';
 import type { ActivityComment, SideQuestActivity } from '@/lib/types';
-import { PRIMARY_COLOR } from '@/constants/colors';
+import { PRIMARY_COLOR, SECONDARY_COLOR } from '@/constants/colors';
 
 export default function SideQuestDetailScreen() {
   const insets = useSafeAreaInsets();
@@ -125,7 +125,7 @@ export default function SideQuestDetailScreen() {
                   <TouchableOpacity
                     activeOpacity={0.9}
                     style={styles.editButtonFloating}
-                    onPress={() => router.push(`/trip/${id}/sidequest/${sidequestId}/edit`)}>
+                    onPress={() => router.push(`/trip/${id}/sidequest/${encodeURIComponent(sidequestId)}/edit`)}>
                     <Ionicons name="create-outline" size={16} color="#fff" />
                     <Text style={styles.editButtonText}>Edit</Text>
                   </TouchableOpacity>
@@ -170,7 +170,7 @@ export default function SideQuestDetailScreen() {
                     <TouchableOpacity
                       activeOpacity={0.9}
                       style={styles.editButton}
-                      onPress={() => router.push(`/trip/${id}/sidequest/${sidequestId}/edit`)}>
+                      onPress={() => router.push(`/trip/${id}/sidequest/${encodeURIComponent(sidequestId)}/edit`)}>
                       <Ionicons name="create-outline" size={16} color="#0d90a8" />
                       <Text style={styles.editButtonTextNoImage}>Edit</Text>
                     </TouchableOpacity>
