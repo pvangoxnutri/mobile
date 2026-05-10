@@ -42,10 +42,10 @@ export type SideQuestFormValues = {
 };
 
 const CATEGORIES: { value: string; label: string; emoji: string }[] = [
-  { value: 'flight',      label: 'Flyg',        emoji: 'âœˆï¸' },
-  { value: 'sidequest',   label: 'Sidequest',   emoji: 'ðŸŽ¯' },
-  { value: 'food',        label: 'Mat',         emoji: 'ðŸ½ï¸' },
-  { value: 'sight',       label: 'SevÃ¤rdighet', emoji: 'ðŸ›ï¸' },
+  { value: 'flight',      label: 'Flyg',        emoji: '✈️' },
+  { value: 'sidequest',   label: 'Sidequest',   emoji: '🎯' },
+  { value: 'food',        label: 'Mat',         emoji: '🍽️' },
+  { value: 'sight',       label: 'Sevärdighet', emoji: '🏛️' },
 ];
 
 type Props = {
