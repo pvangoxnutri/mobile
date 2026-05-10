@@ -24,6 +24,7 @@ export default function SettingsScreen() {
                 activeOpacity={0.88}
                 style={[styles.languageButton, language === 'sv' && styles.languageButtonActive]}
                 onPress={() => void handleLanguageChange('sv')}>
+                <Text style={styles.flagEmoji}>🇸🇪</Text>
                 <Text style={[styles.languageButtonText, language === 'sv' && styles.languageButtonTextActive]}>
                   {t('auth.language_sv')}
                 </Text>
@@ -32,6 +33,7 @@ export default function SettingsScreen() {
                 activeOpacity={0.88}
                 style={[styles.languageButton, language === 'en' && styles.languageButtonActive]}
                 onPress={() => void handleLanguageChange('en')}>
+                <Text style={styles.flagEmoji}>🇺🇸</Text>
                 <Text style={[styles.languageButtonText, language === 'en' && styles.languageButtonTextActive]}>
                   {t('auth.language_en')}
                 </Text>
@@ -76,21 +78,25 @@ const styles = StyleSheet.create({
   languageButton: {
     flex: 1,
     paddingHorizontal: 18,
-    paddingVertical: 14,
+    paddingVertical: 20,
     borderRadius: 12,
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: '#ebedf2',
     backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 8,
+  },
+  flagEmoji: {
+    fontSize: 42,
   },
   languageButtonActive: {
     backgroundColor: PRIMARY_COLOR,
     borderColor: PRIMARY_COLOR,
   },
   languageButtonText: {
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: '800',
     color: '#5a6072',
   },
   languageButtonTextActive: {
