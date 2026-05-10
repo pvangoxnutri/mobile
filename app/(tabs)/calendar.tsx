@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import TopAlertsButton from '@/components/top-alerts-button';
+import { useI18n } from '@/components/i18n-provider';
 import { apiJson } from '@/lib/api';
 import type { Quest, SideQuestActivity } from '@/lib/types';
 import { PRIMARY_COLOR, PRIMARY_08, PRIMARY_20, SECONDARY_COLOR, SECONDARY_08 } from '@/constants/colors';
@@ -29,6 +30,7 @@ type CalendarItem = {
 };
 
 export default function CalendarScreen() {
+  const { t } = useI18n();
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView | null>(null);
   const [quests, setQuests] = useState<Quest[]>([]);
@@ -72,7 +74,7 @@ export default function CalendarScreen() {
 
   useFocusEffect(loadCalendar);
 
-  const dayItemsMap = useMemo(() => buildDayItemsMap(quests, activities), [activities, quests]);
+  const dayItemsMap = useMemo(() => buildDayItemsMap(quests, activities, t), [activities, quests, t]);
   const monthTitle = useMemo(
     () => new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(monthDate),
     [monthDate],
@@ -114,8 +116,8 @@ export default function CalendarScreen() {
       <View style={styles.headerRow}>
         <View style={styles.headerTopRow}>
           <View>
-            <Text style={styles.title}>Calendar</Text>
-            <Text style={styles.titleCopy}>Everything planned across your trips, including hidden moments.</Text>
+            <Text style={styles.title}>{t('calendar.title')}</Text>
+            <Text style={styles.titleCopy}>{t('calendar.subtitle')}</Text>
           </View>
           <TopAlertsButton />
         </View>
@@ -131,8 +133,8 @@ export default function CalendarScreen() {
       </View>
 
       <View style={styles.calendarCard}>
-        <Text style={styles.calendarCardTitle}>Event dates this month</Text>
-        <Text style={styles.calendarCardCopy}>Only dates with plans are shown here, so selected day is easier to reach.</Text>
+        <Text style={styles.calendarCardTitle}>{t('calendar.eventDates.title')}</Text>
+        <Text style={styles.calendarCardCopy}>{t('calendar.eventDates.subtitle')}</Text>
 
         {visibleDates.length > 0 ? (
           <View style={styles.dateChipGrid}>
@@ -166,15 +168,15 @@ export default function CalendarScreen() {
         ) : (
           <View style={styles.emptyMonthState}>
             <Ionicons name="calendar-clear-outline" size={28} color="#b1b7c2" />
-            <Text style={styles.emptyMonthText}>No event dates in this month yet.</Text>
+            <Text style={styles.emptyMonthText}>{t('calendar.empty.noEventDates')}</Text>
           </View>
         )}
       </View>
 
       <View style={styles.planCard}>
-        <Text style={styles.planEyebrow}>SELECTED DAY</Text>
+        <Text style={styles.planEyebrow}>{t('calendar.selectedDay.heading')}</Text>
         <Text style={styles.planTitle}>{formatSelectedDate(selectedDate)}</Text>
-        <Text style={styles.planCopy}>Tap any event date above and we jump straight down here.</Text>
+        <Text style={styles.planCopy}>{t('calendar.selectedDay.hint')}</Text>
 
         {selectedItems.length > 0 ? (
           <View style={styles.planList}>
@@ -190,16 +192,16 @@ export default function CalendarScreen() {
                   }}>
                   <View style={styles.activityHeader}>
                     <View style={[styles.planTimePill, styles.planTimePillActivity, { backgroundColor: PRIMARY_08 }]}>
-                      <Text style={[styles.planTimeText, styles.planTimeTextActivity, { color: PRIMARY_COLOR }]}>{item.time?.trim() ? item.time : 'Anytime'}</Text>
+                      <Text style={[styles.planTimeText, styles.planTimeTextActivity, { color: PRIMARY_COLOR }]}>{item.time?.trim() ? item.time : t('calendar.time.anytime')}</Text>
                     </View>
-                    <Text style={styles.activityOwner}>{item.hidden ? 'Hidden' : item.ownerName || 'SideQuest'}</Text>
+                    <Text style={styles.activityOwner}>{item.hidden ? t('calendar.activity.hidden') : item.ownerName || 'SideQuest'}</Text>
                   </View>
-                  <Text style={styles.activityTitle}>{item.hidden ? 'Hidden' : item.title}</Text>
+                  <Text style={styles.activityTitle}>{item.hidden ? t('calendar.activity.hidden') : item.title}</Text>
                   <Text numberOfLines={2} style={styles.activityDescription}>
                     {item.hidden
                       ? item.teaserVisible && item.teaser
                         ? item.teaser
-                        : 'Locked until reveal. Tap in to see when it opens up.'
+                        : t('calendar.activity.lockedMessage')
                       : item.description || item.meta}
                   </Text>
                   <View style={styles.activityFooter}>
@@ -212,7 +214,7 @@ export default function CalendarScreen() {
               ) : (
                 <TouchableOpacity key={item.id} activeOpacity={0.86} style={styles.planRow} onPress={() => router.push(`/trip/${item.tripId}`)}>
                   <View style={[styles.planTimePill, styles.planTimePillTrip, { backgroundColor: SECONDARY_08 }]}>
-                    <Text style={[styles.planTimeText, { color: SECONDARY_COLOR }]}>{item.time?.trim() ? item.time : 'All day'}</Text>
+                    <Text style={[styles.planTimeText, { color: SECONDARY_COLOR }]}>{item.time?.trim() ? item.time : t('calendar.time.allDay')}</Text>
                   </View>
                   <View style={styles.planCopyWrap}>
                     <Text style={styles.planRowTitle}>{item.title}</Text>
@@ -226,7 +228,7 @@ export default function CalendarScreen() {
         ) : (
           <View style={styles.emptyDayState}>
             <Ionicons name="calendar-clear-outline" size={28} color="#b1b7c2" />
-            <Text style={styles.emptyDayText}>Nothing planned for this day yet.</Text>
+            <Text style={styles.emptyDayText}>{t('calendar.empty.nothingPlanned')}</Text>
           </View>
         )}
       </View>
@@ -236,7 +238,7 @@ export default function CalendarScreen() {
   );
 }
 
-function buildDayItemsMap(quests: Quest[], activities: SideQuestActivity[]) {
+function buildDayItemsMap(quests: Quest[], activities: SideQuestActivity[], t: (key: string) => string) {
   const map = new Map<string, CalendarItem[]>();
 
   for (const quest of quests) {
@@ -250,7 +252,7 @@ function buildDayItemsMap(quests: Quest[], activities: SideQuestActivity[]) {
         id: `trip-${quest.id}-${key}`,
         kind: 'trip',
         tripId: quest.id,
-        title: quest.title ?? 'Untitled adventure',
+        title: quest.title ?? t('calendar.untitledAdventure'),
         date: key,
         meta: quest.destination?.trim() || 'Adventure day',
       });
@@ -266,7 +268,7 @@ function buildDayItemsMap(quests: Quest[], activities: SideQuestActivity[]) {
       kind: 'activity',
       tripId: activity.tripId,
       activityId: activity.id,
-      title: activity.visibility === 'hidden' ? 'Hidden' : activity.title ?? 'Untitled plan',
+      title: activity.visibility === 'hidden' ? t('calendar.activity.hidden') : activity.title ?? 'Untitled plan',
       date: activity.date,
       time: activity.time,
       meta: activity.category?.trim() || (activity.visibility === 'hidden' ? 'Hidden SideQuest' : 'SideQuest'),
