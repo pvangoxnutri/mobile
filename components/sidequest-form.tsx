@@ -1024,7 +1024,7 @@ const styles = StyleSheet.create({
     color: '#8c5363',
   },
   revealRow: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     gap: 10,
   },
   revealCard: {
