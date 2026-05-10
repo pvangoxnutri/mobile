@@ -343,7 +343,7 @@ function getCalendarDots(items: CalendarItem[]) {
 const styles = StyleSheet.create({
   screen: {
     backgroundColor: '#fff',
-    paddingHorizontal: 20,
+    paddingHorizontal: 24,
   },
   headerRow: {
     marginBottom: 18,
