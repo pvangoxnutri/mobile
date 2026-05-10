@@ -232,18 +232,18 @@ export default function HomeScreen() {
           showsVerticalScrollIndicator={false}>
           <View style={[styles.topRow, { alignItems: 'center' }]}>
             <BrandMark size="sm" />
-            <View style={styles.topActions}>
-              <TopAlertsButton inviteCount={pendingInvites.length} />
-              <TouchableOpacity style={styles.avatarShell} activeOpacity={0.8} onPress={() => router.push('/(tabs)/profile')}>
-                {user?.avatarUrl ? (
-                  <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
-                ) : (
-                  <View style={styles.avatarCore}>
-                    <Text style={styles.avatarText}>{getInitials(user?.name)}</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity style={styles.avatarShell} activeOpacity={0.8} onPress={() => router.push('/(tabs)/profile')}>
+              {user?.avatarUrl ? (
+                <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
+              ) : (
+                <View style={styles.avatarCore}>
+                  <Text style={styles.avatarText}>{getInitials(user?.name)}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
+          <View style={{ position: 'absolute', top: Math.max(insets.top, 16) + 8, right: 20, zIndex: 10 }}>
+            <TopAlertsButton inviteCount={pendingInvites.length} />
           </View>
 
           {pendingInvites.length > 0 ? (
@@ -328,18 +328,18 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}>
         <View style={[styles.topRow, { alignItems: 'center' }]}>
           <BrandMark size="sm" />
-          <View style={styles.topActions}>
-            <TopAlertsButton inviteCount={pendingInvites.length} />
-            <TouchableOpacity style={styles.avatarShell} activeOpacity={0.8} onPress={() => router.push('/(tabs)/profile')}>
-              {user?.avatarUrl ? (
-                <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
-              ) : (
-                <View style={styles.avatarCore}>
-                  <Text style={styles.avatarText}>{getInitials(user?.name)}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity style={styles.avatarShell} activeOpacity={0.8} onPress={() => router.push('/(tabs)/profile')}>
+            {user?.avatarUrl ? (
+              <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
+            ) : (
+              <View style={styles.avatarCore}>
+                <Text style={styles.avatarText}>{getInitials(user?.name)}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
+        <View style={{ position: 'absolute', top: Math.max(insets.top, 16) + 8, right: 20, zIndex: 10 }}>
+          <TopAlertsButton inviteCount={pendingInvites.length} />
         </View>
 
         {pendingInvites.length > 0 ? (
@@ -856,13 +856,8 @@ const styles = StyleSheet.create({
   },
   topRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     alignItems: 'center',
-  },
-  topActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
   },
   avatarShell: {
     width: 56,

@@ -119,6 +119,8 @@ export default function CalendarScreen() {
             <Text style={styles.title}>{t('calendar.title')}</Text>
             <Text style={styles.titleCopy}>{t('calendar.subtitle')}</Text>
           </View>
+        </View>
+        <View style={{ position: 'absolute', top: Math.max(insets.top, 16) + 8, right: 20, zIndex: 10 }}>
           <TopAlertsButton />
         </View>
         <View style={styles.monthSwitchRow}>

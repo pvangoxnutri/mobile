@@ -340,6 +340,8 @@ export default function ProfileScreen() {
           <Ionicons name="arrow-back" size={28} color="#6d7380" />
         </TouchableOpacity>
         <Text style={styles.title}>{t('profile.title')}</Text>
+      </View>
+      <View style={{ position: 'absolute', top: Math.max(insets.top, 16) + 8, right: 20, zIndex: 10 }}>
         <TopAlertsButton />
       </View>
 
