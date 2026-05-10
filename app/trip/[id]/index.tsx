@@ -11,7 +11,7 @@ import UserProfileCard from '@/components/user-profile-card';
 import { apiFetch, apiJson } from '@/lib/api';
 import { stripLocationMarker } from '@/lib/sidequest-location';
 import type { Quest, SideQuestActivity, TripInvite } from '@/lib/types';
-import { PRIMARY_COLOR, SECONDARY_COLOR, PRIMARY_08, PRIMARY_20 } from '@/constants/colors';
+import { PRIMARY_COLOR, SECONDARY_COLOR, PRIMARY_08, PRIMARY_12, PRIMARY_20 } from '@/constants/colors';
 
 type ChatMsg = {
   id: string;
@@ -65,6 +65,7 @@ export default function TripDetailsScreen() {
   const [spotifyMessage, setSpotifyMessage] = useState('');
   const [error, setError] = useState('');
   const [profileCardUserId, setProfileCardUserId] = useState<string | null>(null);
+  const [selectedCategoryKey, setSelectedCategoryKey] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -121,7 +122,7 @@ export default function TripDetailsScreen() {
     () => Boolean(user?.id && trip?.ownerIds?.includes(user.id)),
     [trip?.ownerIds, user?.id],
   );
-  const categoryGroupings = useMemo(() => {
+  const activityGroups = useMemo(() => {
     const groups = new Map<string, { label: string; emoji: string; items: SideQuestActivity[] }>();
 
     // Initialize category groups
@@ -426,12 +427,7 @@ export default function TripDetailsScreen() {
                   key={group.key}
                   style={styles.categoryCard}
                   activeOpacity={0.92}
-                  onPress={() => {
-                    router.push({
-                      pathname: `/trip/${encodeURIComponent(id)}/category`,
-                      params: { categoryKey: group.key }
-                    });
-                  }}>
+                  onPress={() => setSelectedCategoryKey(group.key)}>
                   <View style={styles.categoryCardHeader}>
                     <Text style={styles.categoryEmoji}>{group.emoji}</Text>
                     <View style={styles.categoryInfo}>
@@ -732,6 +728,62 @@ export default function TripDetailsScreen() {
           </View>
         </Modal>
 
+        <Modal
+          visible={selectedCategoryKey !== null}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setSelectedCategoryKey(null)}>
+          <View style={styles.categoryModalOverlay}>
+            <View style={[styles.categoryModalContent, { paddingTop: Math.max(insets.top, 18) + 12 }]}>
+              <View style={styles.categoryModalHeader}>
+                <TouchableOpacity onPress={() => setSelectedCategoryKey(null)} style={styles.categoryModalCloseButton}>
+                  <Ionicons name="chevron-down" size={24} color="#161821" />
+                </TouchableOpacity>
+                <View style={{ flex: 1 }} />
+              </View>
+
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.categoryModalBody}>
+                {(() => {
+                  const selected = activityGroups.find(g => g.key === selectedCategoryKey);
+                  if (!selected) return null;
+
+                  return (
+                    <>
+                      <View style={styles.categoryModalTitleSection}>
+                        <Text style={styles.categoryModalEmoji}>{selected.emoji}</Text>
+                        <View>
+                          <Text style={styles.categoryModalLabel}>{selected.label}</Text>
+                          <Text style={styles.categoryModalCount}>{selected.items.length} activities</Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.categoryModalActivities}>
+                        {selected.items.map((activity) => (
+                          <TouchableOpacity
+                            key={activity.id}
+                            style={styles.categoryModalActivityCard}
+                            onPress={() => {
+                              setSelectedCategoryKey(null);
+                              router.push(`/trip/${encodeURIComponent(id)}/sidequest/${encodeURIComponent(activity.id)}`);
+                            }}>
+                            <View>
+                              <Text style={styles.categoryModalActivityTitle}>{activity.title}</Text>
+                              <Text style={styles.categoryModalActivityDate} numberOfLines={1}>
+                                {formatActivityDate(activity.date)}
+                              </Text>
+                            </View>
+                            <Ionicons name="chevron-forward" size={18} color="#c5cad2" />
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </>
+                  );
+                })()}
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+
         <UserProfileCard userId={profileCardUserId} onClose={() => setProfileCardUserId(null)} />
       </View>
     </>
@@ -796,7 +848,7 @@ function SideQuestFeedCard({
         </Text>
         <View style={styles.feedFooter}>
           {activity.commentCount > 0 && !hidden ? (
-            <View style={[styles.feedCommentBadge, { backgroundColor: PRIMARY_COLOR08 }]}>
+            <View style={[styles.feedCommentBadge, { backgroundColor: PRIMARY_08 }]}>
               <Ionicons name="chatbubble-outline" size={13} color={PRIMARY_COLOR} />
               <Text style={[styles.feedCommentCount, { color: PRIMARY_COLOR }]}>{activity.commentCount}</Text>
             </View>
@@ -827,7 +879,7 @@ function TripMetaChip({
 
 function FeedBadge({ label, tone }: { label: string; tone: 'pink' | 'dark' | 'light' }) {
   return (
-    <View style={[styles.feedBadge, tone === 'pink' ? [styles.feedBadgePink, { backgroundColor: PRIMARY_COLOR12 }] : tone === 'dark' ? styles.feedBadgeDark : styles.feedBadgeLight]}>
+    <View style={[styles.feedBadge, tone === 'pink' ? [styles.feedBadgePink, { backgroundColor: PRIMARY_12 }] : tone === 'dark' ? styles.feedBadgeDark : styles.feedBadgeLight]}>
       <Text style={[styles.feedBadgeText, { color: PRIMARY_COLOR }, tone === 'dark' ? styles.feedBadgeTextLight : null]}>{label}</Text>
     </View>
   );
@@ -1938,5 +1990,81 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: '#8a919d',
+  },
+  categoryModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  categoryModalContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    maxHeight: '90%',
+    paddingHorizontal: 22,
+    paddingBottom: 32,
+  },
+  categoryModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  categoryModalCloseButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f5f6f8',
+  },
+  categoryModalBody: {
+    paddingBottom: 16,
+  },
+  categoryModalTitleSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 24,
+  },
+  categoryModalEmoji: {
+    fontSize: 40,
+  },
+  categoryModalLabel: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#8a919d',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  categoryModalCount: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#161821',
+    marginTop: 4,
+  },
+  categoryModalActivities: {
+    gap: 12,
+  },
+  categoryModalActivityCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 16,
+    backgroundColor: '#f9fafc',
+    borderWidth: 1,
+    borderColor: '#ebedf2',
+  },
+  categoryModalActivityTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#161821',
+  },
+  categoryModalActivityDate: {
+    fontSize: 13,
+    color: '#8a919d',
+    marginTop: 4,
   },
 });
