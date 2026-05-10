@@ -22,7 +22,7 @@ type LanguageOption = {
 };
 
 const LANGUAGE_OPTIONS: LanguageOption[] = [
-  { code: 'en', displayName: 'English (USA)', nativeName: 'English (USA)', flagUri: 'https://flagcdn.com/w40/us.png' },
+  { code: 'en', displayName: 'English', nativeName: 'English', flagUri: 'https://flagcdn.com/w40/us.png' },
   { code: 'sv', displayName: 'Svenska', nativeName: 'Svenska', flagUri: 'https://flagcdn.com/w40/se.png' },
 ];
 
