@@ -186,10 +186,7 @@ export default function CalendarScreen() {
                   style={styles.activityCard}
                   onPress={() => {
                     const sidequestId = item.activityId ?? item.id;
-                    router.push({
-                      pathname: `/trip/${item.tripId}/sidequest/[sidequestId]`,
-                      params: { sidequestId }
-                    });
+                    router.push(`/trip/${encodeURIComponent(item.tripId)}/sidequest/${encodeURIComponent(sidequestId)}`);
                   }}>
                   <View style={styles.activityHeader}>
                     <View style={[styles.planTimePill, styles.planTimePillActivity, { backgroundColor: PRIMARY_08 }]}>
