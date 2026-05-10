@@ -15,7 +15,7 @@ export default function SettingsScreen() {
       <Stack.Screen options={{ title: 'Settings', headerShown: true }} />
       <ScrollView contentContainerStyle={styles.screen} showsVerticalScrollIndicator={false}>
         <View style={styles.container}>
-          <Text style={styles.title}>Inställningar</Text>
+          <Text style={styles.title}>{t('settings.title')}</Text>
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>{t('auth.language')}</Text>

@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 export type AppLanguage = 'en' | 'sv';
 
@@ -229,6 +229,8 @@ const dictionaries: Record<AppLanguage, Record<string, string>> = {
     'travel.overview': 'World Overview',
     'travel.countries': 'Countries',
     'travel.search_countries': 'Search countries…',
+
+    'settings.title': 'Settings',
   },
   sv: {
     'auth.tagline': 'Resan börjar här',
@@ -447,6 +449,8 @@ const dictionaries: Record<AppLanguage, Record<string, string>> = {
     'travel.overview': 'Världsöversikt',
     'travel.countries': 'Länder',
     'travel.search_countries': 'Sök länder…',
+
+    'settings.title': 'Inställningar',
   },
 };
 
@@ -470,10 +474,10 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  async function setLanguage(next: AppLanguage) {
+  const setLanguage = useCallback(async (next: AppLanguage) => {
     setLanguageState(next);
     await AsyncStorage.setItem(STORAGE_KEY, next);
-  }
+  }, []);
 
   const value = useMemo<I18nContextValue>(
     () => ({
@@ -488,7 +492,7 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
         );
       },
     }),
-    [language],
+    [language, setLanguage],
   );
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
