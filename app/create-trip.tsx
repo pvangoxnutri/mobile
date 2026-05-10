@@ -17,6 +17,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import RangeDatePicker, { formatRangeDisplay } from '@/components/range-date-picker';
 import CountryPicker from '@/components/travel-tracker/country-picker';
+import { useI18n } from '@/components/i18n-provider';
 import { apiFetch, apiJson } from '@/lib/api';
 import type { Quest } from '@/lib/types';
 import { PRIMARY_COLOR, PRIMARY_08, PRIMARY_20, SECONDARY_COLOR } from '@/constants/colors';
@@ -24,6 +25,7 @@ import { PRIMARY_COLOR, PRIMARY_08, PRIMARY_20, SECONDARY_COLOR } from '@/consta
 type MessageState = { type: 'success' | 'error'; text: string } | null;
 
 export default function CreateTripScreen() {
+  const { t } = useI18n();
   const insets = useSafeAreaInsets();
   const [title, setTitle] = useState('');
   const [destination, setDestination] = useState('');
@@ -60,17 +62,17 @@ export default function CreateTripScreen() {
     const normalizedEmail = inviteEmail.trim().toLowerCase();
 
     if (!normalizedEmail) {
-      setMessage({ type: 'error', text: 'Enter an email address first.' });
+      setMessage({ type: 'error', text: t('trip.error.emptyEmail') });
       return;
     }
 
     if (!looksLikeEmail(normalizedEmail)) {
-      setMessage({ type: 'error', text: 'That email address does not look valid.' });
+      setMessage({ type: 'error', text: t('trip.error.invalidEmail') });
       return;
     }
 
     if (pendingInvites.includes(normalizedEmail)) {
-      setMessage({ type: 'error', text: 'That person is already on the invite list.' });
+      setMessage({ type: 'error', text: t('trip.error.emailAlreadyInvited') });
       return;
     }
 
@@ -85,7 +87,7 @@ export default function CreateTripScreen() {
 
   async function handleCopyInviteCode() {
     await Clipboard.setStringAsync(inviteCode);
-    setMessage({ type: 'success', text: `Invite code ${inviteCode} copied.` });
+    setMessage({ type: 'success', text: t('trip.success.codeCopied', { code: inviteCode }) });
   }
 
   async function handleShareInviteCode() {
@@ -101,22 +103,22 @@ export default function CreateTripScreen() {
     const normalizedDestination = destination.trim();
 
     if (!normalizedTitle) {
-      setMessage({ type: 'error', text: 'Give your adventure a name first.' });
+      setMessage({ type: 'error', text: t('trip.error.emptyName') });
       return;
     }
 
     if (!normalizedDestination) {
-      setMessage({ type: 'error', text: 'Add a destination so your adventure has a home.' });
+      setMessage({ type: 'error', text: t('trip.error.emptyDestination') });
       return;
     }
 
     if (!isDateInputValid(startDate) || !isDateInputValid(endDate)) {
-      setMessage({ type: 'error', text: 'Use date format YYYY-MM-DD for both start and end.' });
+      setMessage({ type: 'error', text: t('trip.error.invalidDateFormat') });
       return;
     }
 
     if (new Date(`${endDate}T12:00:00`).getTime() < new Date(`${startDate}T12:00:00`).getTime()) {
-      setMessage({ type: 'error', text: 'End date needs to be the same day or later than start date.' });
+      setMessage({ type: 'error', text: t('trip.error.endBeforeStart') });
       return;
     }
 
@@ -159,7 +161,7 @@ export default function CreateTripScreen() {
 
       router.replace(`/trip/${trip.id}`);
     } catch (error) {
-      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Unable to create adventure right now.' });
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : t('trip.error.createFailed') });
     } finally {
       setSubmitting(false);
     }
@@ -175,7 +177,7 @@ export default function CreateTripScreen() {
           <TouchableOpacity style={styles.backButton} activeOpacity={0.8} onPress={() => router.back()}>
             <Ionicons name="arrow-back" size={28} color={PRIMARY_COLOR} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>New Adventure</Text>
+          <Text style={styles.headerTitle}>{t('trip.title')}</Text>
         </View>
 
         <Pressable style={styles.coverCard} onPress={() => void handlePickCover()}>
@@ -191,47 +193,47 @@ export default function CreateTripScreen() {
                   <Ionicons name="add" size={14} color="#fff" />
                 </View>
               </View>
-              <Text style={styles.coverLabel}>+ Add cover photo</Text>
+              <Text style={styles.coverLabel}>{t('trip.add_cover')}</Text>
             </View>
           ) : (
             <View style={styles.coverEditBadge}>
               <Ionicons name="camera-outline" size={14} color="#fff" />
-              <Text style={styles.coverEditBadgeText}>Change photo</Text>
+              <Text style={styles.coverEditBadgeText}>{t('trip.change_photo')}</Text>
             </View>
           )}
         </Pressable>
 
-        <Text style={styles.prompt}>What should we call this adventure?</Text>
+        <Text style={styles.prompt}>{t('trip.what_to_call')}</Text>
         <TextInput
           value={title}
           onChangeText={setTitle}
-          placeholder="e.g. Kyoto Nights"
+          placeholder={t('trip.trip_name_placeholder')}
           placeholderTextColor="#d8dbe2"
           style={styles.titleInput}
         />
 
-        <Text style={styles.secondaryPrompt}>Where are you going?</Text>
+        <Text style={styles.secondaryPrompt}>{t('trip.where_going')}</Text>
         <TextInput
           value={destination}
           onChangeText={setDestination}
-          placeholder="e.g. Kyoto, Japan"
+          placeholder={t('trip.destination_placeholder')}
           placeholderTextColor="#cfd3db"
           style={styles.destinationInput}
         />
 
-        <CountryPicker value={tripCountries} onChange={setTripCountries} label="Add countries" />
+        <CountryPicker value={tripCountries} onChange={setTripCountries} label={t('trip.add_countries')} />
 
         <View style={styles.section}>
           <View style={styles.sectionTitleRow}>
             <Ionicons name="calendar-outline" size={23} color={PRIMARY_COLOR} />
-            <Text style={styles.sectionTitle}>When are you going?</Text>
+            <Text style={styles.sectionTitle}>{t('trip.when_going')}</Text>
           </View>
 
           <Pressable style={styles.dateRangeCard} onPress={() => setRangePickerOpen(true)}>
             <View style={styles.dateRangeCopy}>
-              <Text style={styles.dateRangeEyebrow}>SELECT DATES</Text>
+              <Text style={styles.dateRangeEyebrow}>{t('trip.select_dates')}</Text>
               <Text style={styles.dateRangeValue}>{formatRangeDisplay(startDate, endDate)}</Text>
-              <Text style={styles.dateRangeHint}>Tap once, pick start and end in one calendar.</Text>
+              <Text style={styles.dateRangeHint}>{t('trip.dates_hint')}</Text>
             </View>
             <View style={[styles.dateRangeIcon, { backgroundColor: PRIMARY_08, borderColor: PRIMARY_20 }]}>
               <Ionicons name="calendar-outline" size={22} color={PRIMARY_COLOR} />
@@ -242,23 +244,23 @@ export default function CreateTripScreen() {
         <View style={styles.section}>
           <View style={styles.sectionTitleRow}>
             <Ionicons name="key-outline" size={23} color={SECONDARY_COLOR} />
-            <Text style={styles.sectionTitle}>Invite code</Text>
+            <Text style={styles.sectionTitle}>{t('trip.invite_code_section')}</Text>
           </View>
 
           <View style={styles.codeCard}>
             <View>
-              <Text style={styles.codeLabel}>SHARE THIS CODE</Text>
+              <Text style={styles.codeLabel}>{t('trip.share_code')}</Text>
               <Text style={styles.codeValue}>{inviteCode}</Text>
             </View>
 
             <View style={styles.codeActions}>
               <TouchableOpacity activeOpacity={0.86} style={[styles.codeActionButton, { borderColor: PRIMARY_20 }]} onPress={() => void handleCopyInviteCode()}>
                 <Ionicons name="copy-outline" size={16} color={PRIMARY_COLOR} />
-                <Text style={[styles.codeActionText, { color: PRIMARY_COLOR }]}>Copy</Text>
+                <Text style={[styles.codeActionText, { color: PRIMARY_COLOR }]}>{t('common.copy')}</Text>
               </TouchableOpacity>
               <TouchableOpacity activeOpacity={0.86} style={[styles.codeActionButton, { borderColor: PRIMARY_20 }]} onPress={() => void handleShareInviteCode()}>
                 <Ionicons name="share-social-outline" size={16} color={PRIMARY_COLOR} />
-                <Text style={[styles.codeActionText, { color: PRIMARY_COLOR }]}>Share</Text>
+                <Text style={[styles.codeActionText, { color: PRIMARY_COLOR }]}>{t('common.share')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -267,16 +269,16 @@ export default function CreateTripScreen() {
         <View style={styles.section}>
           <View style={styles.sectionTitleRow}>
             <Ionicons name="mail-open-outline" size={23} color={SECONDARY_COLOR} />
-            <Text style={styles.sectionTitle}>Invited and waiting</Text>
+            <Text style={styles.sectionTitle}>{t('trip.invited_waiting')}</Text>
           </View>
 
-          <Text style={styles.inviteHelper}>Invite by email now. They will show up here until they respond.</Text>
+          <Text style={styles.inviteHelper}>{t('trip.invite_hint')}</Text>
 
           <View style={styles.inviteComposer}>
             <TextInput
               value={inviteEmail}
               onChangeText={setInviteEmail}
-              placeholder="friend@example.com"
+              placeholder={t('trip.invites.placeholder')}
               placeholderTextColor="#b5b9c1"
               keyboardType="email-address"
               autoCapitalize="none"
@@ -284,7 +286,7 @@ export default function CreateTripScreen() {
               style={styles.inviteInput}
             />
             <TouchableOpacity activeOpacity={0.88} style={[styles.inviteAddButton, { backgroundColor: PRIMARY_COLOR }]} onPress={handleAddInvite}>
-              <Text style={styles.inviteAddButtonText}>Add</Text>
+              <Text style={styles.inviteAddButtonText}>{t('common.add')}</Text>
             </TouchableOpacity>
           </View>
 
@@ -302,7 +304,7 @@ export default function CreateTripScreen() {
           ) : (
             <View style={styles.pendingEmpty}>
               <Ionicons name="time-outline" size={18} color="#98a0ad" />
-              <Text style={styles.pendingEmptyText}>No pending invites yet</Text>
+              <Text style={styles.pendingEmptyText}>{t('trip.no_invites')}</Text>
             </View>
           )}
         </View>
@@ -317,27 +319,27 @@ export default function CreateTripScreen() {
         ) : null}
 
         <TouchableOpacity activeOpacity={0.9} style={[styles.primaryButton, { backgroundColor: PRIMARY_COLOR, shadowColor: PRIMARY_COLOR }, submitting ? styles.primaryButtonDisabled : null]} disabled={submitting} onPress={() => void handleCreateTrip()}>
-          <Text style={styles.primaryButtonText}>{submitting ? 'Starting...' : 'Start Adventure'}</Text>
+          <Text style={styles.primaryButtonText}>{submitting ? t('trip.starting') : t('trip.start_adventure')}</Text>
         </TouchableOpacity>
       </ScrollView>
 
       <View pointerEvents="box-none" style={[styles.bottomChrome, { paddingBottom: Math.max(insets.bottom, 10) + 4 }]}>
         <View style={styles.bottomBar}>
-          <BottomTab icon="compass" label="Home" onPress={() => router.replace('/(tabs)')} />
-          <BottomTab icon="calendar-clear" label="Calendar" active />
-          <BottomTab icon="notifications" label="Alerts" onPress={() => router.push('/TMP_Navbar')} />
-          <BottomTab icon="person" label="Profile" onPress={() => router.replace('/(tabs)/profile')} />
+          <BottomTab icon="compass" label={t('nav.home')} onPress={() => router.replace('/(tabs)')} />
+          <BottomTab icon="calendar-clear" label={t('nav.calendar')} active />
+          <BottomTab icon="notifications" label={t('nav.alerts')} onPress={() => router.push('/TMP_Navbar')} />
+          <BottomTab icon="person" label={t('nav.profile')} onPress={() => router.replace('/(tabs)/profile')} />
         </View>
       </View>
 
       <RangeDatePicker
         visible={rangePickerOpen}
-        title="Choose adventure dates"
-        subtitle="Tap a start date, then tap an end date. The whole trip range will highlight."
+        title={t('trip.datePicker.title')}
+        subtitle={t('trip.datePicker.subtitle')}
         startDate={startDate}
         endDate={endDate}
         minDate={getDefaultStartDate()}
-        confirmLabel="Use these dates"
+        confirmLabel={t('trip.datePicker.confirmLabel')}
         onChange={(nextStartDate, nextEndDate) => {
           setStartDate(nextStartDate);
           setEndDate(nextEndDate);
