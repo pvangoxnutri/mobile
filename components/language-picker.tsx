@@ -16,15 +16,14 @@ import { PRIMARY_COLOR } from '@/constants/colors';
 
 type LanguageOption = {
   code: AppLanguage;
-  badge: 'SV' | 'GB';
-  flagUri: string;
-  name: string;
+  displayName: string;
   nativeName: string;
+  flagUri: string;
 };
 
 const LANGUAGE_OPTIONS: LanguageOption[] = [
-  { code: 'en', badge: 'GB', name: 'English', nativeName: 'English', flagUri: 'https://flagcdn.com/w40/gb.png' },
-  { code: 'sv', badge: 'SV', name: 'Swedish', nativeName: 'Svenska', flagUri: 'https://flagcdn.com/w40/se.png' },
+  { code: 'en', displayName: 'English (USA)', nativeName: 'English (USA)', flagUri: 'https://flagcdn.com/w40/us.png' },
+  { code: 'sv', displayName: 'Svenska', nativeName: 'Svenska', flagUri: 'https://flagcdn.com/w40/se.png' },
 ];
 
 export default function LanguagePicker({
@@ -45,7 +44,7 @@ export default function LanguagePicker({
   const filtered = useMemo(() => {
     if (!normalizedQuery) return LANGUAGE_OPTIONS;
     return LANGUAGE_OPTIONS.filter((option) =>
-      `${option.name} ${option.nativeName} ${option.code} ${option.badge}`.toLowerCase().includes(normalizedQuery),
+      `${option.displayName} ${option.nativeName} ${option.code}`.toLowerCase().includes(normalizedQuery),
     );
   }, [normalizedQuery]);
 
@@ -55,7 +54,7 @@ export default function LanguagePicker({
       <Pressable style={styles.trigger} onPress={() => setOpen(true)}>
         <View style={styles.triggerLeft}>
           <Image source={{ uri: selected.flagUri }} style={styles.flagImage} />
-          <Text style={styles.triggerText}>{selected.badge}</Text>
+          <Text style={styles.triggerText}>{selected.displayName}</Text>
         </View>
         <Ionicons name="chevron-down" size={18} color="#8a8f9b" />
       </Pressable>
@@ -96,7 +95,7 @@ export default function LanguagePicker({
                     <View style={styles.optionLeft}>
                       <Image source={{ uri: option.flagUri }} style={styles.flagImage} />
                       <View>
-                        <Text style={styles.optionNative}>{option.badge}</Text>
+                        <Text style={styles.optionNative}>{option.displayName}</Text>
                         <Text style={styles.optionMeta}>{option.nativeName}</Text>
                       </View>
                     </View>
@@ -147,9 +146,9 @@ const styles = StyleSheet.create({
   },
   triggerText: {
     color: '#20232c',
-    fontSize: 14,
-    fontWeight: '800',
-    letterSpacing: 1.1,
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
   backdrop: {
     flex: 1,
