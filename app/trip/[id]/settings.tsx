@@ -162,7 +162,7 @@ export default function TripSettingsScreen() {
 
   async function removeMember(memberId: string) {
     try {
-      const response = await apiFetch(`/api/trips/${id}/members/${memberId}`, { method: 'DELETE' });
+      const response = await apiFetch(`/api/trips/${encodeURIComponent(id)}/members/${encodeURIComponent(memberId)}`, { method: 'DELETE' });
       if (!response.ok) {
         throw new Error((await response.text()) || 'Unable to remove member.');
       }
@@ -174,7 +174,7 @@ export default function TripSettingsScreen() {
 
   async function removeInvite(inviteId: string) {
     try {
-      const response = await apiFetch(`/api/trips/${id}/invites/${inviteId}`, { method: 'DELETE' });
+      const response = await apiFetch(`/api/trips/${encodeURIComponent(id)}/invites/${encodeURIComponent(inviteId)}`, { method: 'DELETE' });
       if (!response.ok) {
         throw new Error((await response.text()) || 'Unable to remove invite.');
       }
@@ -299,7 +299,7 @@ export default function TripSettingsScreen() {
                     <Text style={styles.dateRangeValue}>{formatRangeDisplay(startDate, endDate)}</Text>
                     <Text style={styles.dateRangeHint}>Tap once and adjust the whole range in one calendar.</Text>
                   </View>
-                  <View style={[styles.dateRangeIcon, { backgroundColor: PRIMARY_COLOR08 }]}>
+                  <View style={[styles.dateRangeIcon, { backgroundColor: PRIMARY_08 }]}>
                     <Ionicons name="calendar-outline" size={20} color={PRIMARY_COLOR} />
                   </View>
                 </TouchableOpacity>

@@ -24,7 +24,7 @@ export default function EditSideQuestScreen() {
       setLoading(true);
 
       void Promise.all([
-        apiJson<SideQuestActivity>(`/api/trips/${id}/activities/${sidequestId}`),
+        apiJson<SideQuestActivity>(`/api/trips/${encodeURIComponent(id)}/activities/${encodeURIComponent(sidequestId)}`),
         apiJson<Quest>(`/api/trips/${id}`),
       ])
         .then(([activityData, tripData]) => {

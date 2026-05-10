@@ -39,8 +39,8 @@ export default function SideQuestDetailScreen() {
       setLoading(true);
 
       void Promise.all([
-        apiJson<SideQuestActivity>(`/api/trips/${id}/activities/${sidequestId}`),
-        apiJson<ActivityComment[]>(`/api/trips/${id}/activities/${sidequestId}/comments`).catch(() => [] as ActivityComment[]),
+        apiJson<SideQuestActivity>(`/api/trips/${id}/activities/${encodeURIComponent(sidequestId)}`),
+        apiJson<ActivityComment[]>(`/api/trips/${id}/activities/${encodeURIComponent(sidequestId)}/comments`).catch(() => [] as ActivityComment[]),
       ])
         .then(([activityData, commentData]) => {
           if (!active) return;
@@ -69,7 +69,7 @@ export default function SideQuestDetailScreen() {
     if (!text || submitting) return;
     setSubmitting(true);
     try {
-      const response = await apiFetch(`/api/trips/${id}/activities/${sidequestId}/comments`, {
+      const response = await apiFetch(`/api/trips/${id}/activities/${encodeURIComponent(sidequestId)}/comments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text }),

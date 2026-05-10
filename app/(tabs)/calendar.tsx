@@ -142,7 +142,7 @@ export default function CalendarScreen() {
               const date = parseDateKey(dateKey);
 
               return (
-                <Pressable key={dateKey} style={[styles.dateChip, isSelected ? [styles.dateChipSelected, { backgroundColor: PRIMARY_COLOR08, borderColor: PRIMARY_COLOR20 }] : null]} onPress={() => jumpToSelectedDay(dateKey)}>
+                <Pressable key={dateKey} style={[styles.dateChip, isSelected ? [styles.dateChipSelected, { backgroundColor: PRIMARY_08, borderColor: PRIMARY_20 }] : null]} onPress={() => jumpToSelectedDay(dateKey)}>
                   <Text style={[styles.dateChipWeekday, isSelected ? [styles.dateChipWeekdaySelected, { color: PRIMARY_COLOR }] : null]}>
                     {new Intl.DateTimeFormat('en-US', { weekday: 'short' }).format(date)}
                   </Text>
@@ -184,9 +184,15 @@ export default function CalendarScreen() {
                   key={item.id}
                   activeOpacity={0.92}
                   style={styles.activityCard}
-                  onPress={() => router.push(`/trip/${item.tripId}/sidequest/${item.activityId ?? item.id}`)}>
+                  onPress={() => {
+                    const sidequestId = item.activityId ?? item.id;
+                    router.push({
+                      pathname: `/trip/${item.tripId}/sidequest/[sidequestId]`,
+                      params: { sidequestId }
+                    });
+                  }}>
                   <View style={styles.activityHeader}>
-                    <View style={[styles.planTimePill, styles.planTimePillActivity, { backgroundColor: PRIMARY_COLOR08 }]}>
+                    <View style={[styles.planTimePill, styles.planTimePillActivity, { backgroundColor: PRIMARY_08 }]}>
                       <Text style={[styles.planTimeText, styles.planTimeTextActivity, { color: PRIMARY_COLOR }]}>{item.time?.trim() ? item.time : 'Anytime'}</Text>
                     </View>
                     <Text style={styles.activityOwner}>{item.hidden ? 'Hidden' : item.ownerName || 'SideQuest'}</Text>

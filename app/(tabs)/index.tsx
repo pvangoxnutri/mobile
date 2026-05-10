@@ -145,7 +145,7 @@ export default function HomeScreen() {
   async function handleAcceptInvite(invite: PendingInvite) {
     setInviteActionBusy(invite.id);
     try {
-      const res = await apiFetch(`/api/trips/${invite.tripId}/invites/${invite.id}/accept`, { method: 'POST' });
+      const res = await apiFetch(`/api/trips/${encodeURIComponent(invite.tripId)}/invites/${encodeURIComponent(invite.id)}/accept`, { method: 'POST' });
       if (!res.ok) return;
       setPendingInvites((prev) => prev.filter((i) => i.id !== invite.id));
       loadQuests();
@@ -160,7 +160,7 @@ export default function HomeScreen() {
   async function handleDeclineInvite(invite: PendingInvite) {
     setInviteActionBusy(invite.id + '_decline');
     try {
-      const res = await apiFetch(`/api/trips/${invite.tripId}/invites/${invite.id}/decline`, { method: 'POST' });
+      const res = await apiFetch(`/api/trips/${encodeURIComponent(invite.tripId)}/invites/${encodeURIComponent(invite.id)}/decline`, { method: 'POST' });
       if (!res.ok) return;
       setPendingInvites((prev) => prev.filter((i) => i.id !== invite.id));
       loadInvites();
@@ -244,7 +244,7 @@ export default function HomeScreen() {
                 <Text style={[styles.inviteSectionTitle, { color: PRIMARY_COLOR }]}>You're invited!</Text>
               </View>
               {pendingInvites.map((invite) => (
-                <View key={invite.id} style={[styles.inviteCard, { borderColor: PRIMARY_COLOR20, backgroundColor: PRIMARY_COLOR08 }]}>
+                <View key={invite.id} style={[styles.inviteCard, { borderColor: PRIMARY_20, backgroundColor: PRIMARY_08 }]}>
                   {invite.tripImageUrl ? (
                     <Image source={{ uri: invite.tripImageUrl }} style={styles.inviteCardImage} />
                   ) : (

@@ -246,7 +246,7 @@ export default function CostSplitScreen() {
 
   async function handleDeleteExpense(expenseId: string) {
     try {
-      await apiFetch(`/api/trips/${id}/expenses/${expenseId}`, { method: 'DELETE' });
+      await apiFetch(`/api/trips/${encodeURIComponent(id)}/expenses/${encodeURIComponent(expenseId)}`, { method: 'DELETE' });
       await loadAll();
     } catch {
       // silent
@@ -284,7 +284,7 @@ export default function CostSplitScreen() {
 
   async function handleDeleteSettlement(settlementId: string) {
     try {
-      await apiFetch(`/api/trips/${id}/expenses/settlements/${settlementId}`, { method: 'DELETE' });
+      await apiFetch(`/api/trips/${encodeURIComponent(id)}/expenses/settlements/${encodeURIComponent(settlementId)}`, { method: 'DELETE' });
       await loadAll();
     } catch {
       // silent
