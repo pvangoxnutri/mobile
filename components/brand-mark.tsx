@@ -6,12 +6,12 @@ type BrandMarkProps = {
 
 const SIZE_MAP = {
   sm: {
-    fontSize: 34,
-    letterSpacing: -1.9,
-    dot: 12,
-    dotRadius: 6,
-    dotMarginBottom: 5,
-    dotMarginLeft: 4,
+    fontSize: 26,
+    letterSpacing: -1.5,
+    dot: 10,
+    dotRadius: 5,
+    dotMarginBottom: 4,
+    dotMarginLeft: 3,
   },
   md: {
     fontSize: 46,
