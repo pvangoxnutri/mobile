@@ -33,11 +33,11 @@ export default function RootLayout() {
                 <Stack.Screen name="travel-tracker" options={{ headerShown: false }} />
                 <Stack.Screen name="previous-adventures" options={{ headerShown: false }} />
                 <Stack.Screen name="share/[shareCode]" options={{ headerShown: false }} />
-                <Stack.Screen name="trip/[id]/index" options={{ headerShown: false }} />
+                <Stack.Screen name="trip/[id]" options={{ headerShown: false }} />
                 <Stack.Screen name="trip/[id]/settings" options={{ headerShown: false }} />
                 <Stack.Screen name="trip/[id]/split" options={{ headerShown: false }} />
                 <Stack.Screen name="trip/[id]/sidequest/new" options={{ headerShown: false }} />
-                <Stack.Screen name="trip/[id]/sidequest/[sidequestId]/index" options={{ headerShown: false }} />
+                <Stack.Screen name="trip/[id]/sidequest/[sidequestId]" options={{ headerShown: false }} />
                 <Stack.Screen name="trip/[id]/sidequest/[sidequestId]/edit" options={{ headerShown: false }} />
                 <Stack.Screen name="modal" options={{ presentation: 'modal', headerShown: false }} />
               </Stack>
