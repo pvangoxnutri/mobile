@@ -120,6 +120,7 @@ export default function CalendarScreen() {
               <Text style={styles.title}>{t('calendar.title')}</Text>
               <Text style={styles.titleCopy}>{t('calendar.subtitle')}</Text>
             </View>
+            <View style={{ flex: 1 }} />
             <TopAlertsButton />
           </View>
         <View style={styles.monthSwitchRow}>
