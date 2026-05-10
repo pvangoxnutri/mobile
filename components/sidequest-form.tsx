@@ -217,43 +217,8 @@ export default function SideQuestForm({
     const normalizedTitle = title.trim();
 
     if (!normalizedTitle) {
-      setMessage({ type: 'error', text: 'Ange en titel fÃ¶r aktiviteten.' });
+      setMessage({ type: 'error', text: 'Ange en titel för aktiviteten.' });
       return;
-    }
-
-    if (!isDateInputValid(date)) {
-      setMessage({ type: 'error', text: 'VÃ¤lj ett giltigt datum.' });
-      return;
-    }
-
-    if (tripStartDate && tripEndDate && !isWithinRange(date, tripStartDate, tripEndDate)) {
-      setMessage({ type: 'error', text: `Pick a SideQuest date inside the trip range: ${tripRangeText}.` });
-      return;
-    }
-
-    if (visibility === 'hidden') {
-      if (!isDateInputValid(revealDate)) {
-        setMessage({ type: 'error', text: 'Choose a valid reveal date.' });
-        return;
-      }
-
-      if (!isWithinRange(revealDate, revealRange.min, revealRange.max)) {
-        setMessage({
-          type: 'error',
-          text: `Reveal date must stay between ${formatShortDate(revealRange.min)} and ${formatShortDate(revealRange.max)}.`,
-        });
-        return;
-      }
-
-      if (!isTimeInputValid(revealTime)) {
-        setMessage({ type: 'error', text: 'Choose a valid reveal time.' });
-        return;
-      }
-
-      if (teaser.trim() && !teaserOffsetMinutes) {
-        setMessage({ type: 'error', text: 'Choose when the teaser should appear.' });
-        return;
-      }
     }
 
     setSubmitting(true);
@@ -262,12 +227,6 @@ export default function SideQuestForm({
     try {
       const uploadedImageUrl = await uploadImageIfNeeded(imageUrl, 'sidequest');
       const revealAt = visibility === 'hidden' ? combineDateAndTime(revealDate, revealTime) : null;
-
-      if (locationQuery.trim() && !locationPlace?.placeId) {
-        setMessage({ type: 'error', text: 'Choose a valid place from the map suggestions.' });
-        setSubmitting(false);
-        return;
-      }
 
       const payload = {
         title: normalizedTitle,
@@ -692,10 +651,6 @@ function toTimeInput(date: Date) {
 
 function isDateInputValid(value: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value);
-}
-
-function isTimeInputValid(value: string) {
-  return /^\d{2}:\d{2}$/.test(value);
 }
 
 function getDefaultDate() {
