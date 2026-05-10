@@ -109,20 +109,18 @@ export default function CalendarScreen() {
   }
 
   return (
-    <ScrollView
-      ref={scrollRef}
-      contentContainerStyle={[styles.screen, { paddingTop: Math.max(insets.top, 16) + 8, paddingBottom: Math.max(insets.bottom, 20) + 140 }]}
-      showsVerticalScrollIndicator={false}>
-      <View style={styles.headerRow}>
-        <View style={styles.headerTopRow}>
-          <View>
-            <Text style={styles.title}>{t('calendar.title')}</Text>
-            <Text style={styles.titleCopy}>{t('calendar.subtitle')}</Text>
+    <View style={{ flex: 1 }}>
+      <ScrollView
+        ref={scrollRef}
+        contentContainerStyle={[styles.screen, { paddingTop: Math.max(insets.top, 16) + 8, paddingBottom: Math.max(insets.bottom, 20) + 140 }]}
+        showsVerticalScrollIndicator={false}>
+        <View style={styles.headerRow}>
+          <View style={styles.headerTopRow}>
+            <View>
+              <Text style={styles.title}>{t('calendar.title')}</Text>
+              <Text style={styles.titleCopy}>{t('calendar.subtitle')}</Text>
+            </View>
           </View>
-        </View>
-        <View style={{ position: 'absolute', top: Math.max(insets.top, 16) + 8, right: 20, zIndex: 10 }}>
-          <TopAlertsButton />
-        </View>
         <View style={styles.monthSwitchRow}>
           <TouchableOpacity activeOpacity={0.84} style={styles.monthSwitchButton} onPress={() => setMonthDate((current) => addMonths(current, -1))}>
             <Ionicons name="chevron-back" size={18} color="#4f5562" />
@@ -237,6 +235,10 @@ export default function CalendarScreen() {
 
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
     </ScrollView>
+      <View style={{ position: 'absolute', top: Math.max(insets.top, 16) + 8, right: 20, zIndex: 10 }}>
+        <TopAlertsButton />
+      </View>
+    </View>
   );
 }
 

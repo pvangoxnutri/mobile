@@ -328,22 +328,20 @@ export default function ProfileScreen() {
   }
 
   return (
-    <ScrollView
-      style={styles.screen}
-      contentContainerStyle={[
-        styles.content,
-        { paddingTop: Math.max(insets.top, 16) + 8, paddingBottom: Math.max(insets.bottom, 20) + 112 },
-      ]}
-      showsVerticalScrollIndicator={false}>
-      <View style={styles.topBar}>
-        <TouchableOpacity style={styles.topButton} activeOpacity={0.8} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={28} color="#6d7380" />
-        </TouchableOpacity>
-        <Text style={styles.title}>{t('profile.title')}</Text>
-      </View>
-      <View style={{ position: 'absolute', top: Math.max(insets.top, 16) + 8, right: 20, zIndex: 10 }}>
-        <TopAlertsButton />
-      </View>
+    <View style={{ flex: 1 }}>
+      <ScrollView
+        style={styles.screen}
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: Math.max(insets.top, 16) + 8, paddingBottom: Math.max(insets.bottom, 20) + 112 },
+        ]}
+        showsVerticalScrollIndicator={false}>
+        <View style={styles.topBar}>
+          <TouchableOpacity style={styles.topButton} activeOpacity={0.8} onPress={() => router.back()}>
+            <Ionicons name="arrow-back" size={28} color="#6d7380" />
+          </TouchableOpacity>
+          <Text style={styles.title}>{t('profile.title')}</Text>
+        </View>
 
       <View style={styles.avatarSection}>
         <View style={[styles.avatarRing, { borderColor: '#ff4f74' }]}>
@@ -595,6 +593,10 @@ export default function ProfileScreen() {
         </View>
       </Modal>
     </ScrollView>
+      <View style={{ position: 'absolute', top: Math.max(insets.top, 16) + 8, right: 20, zIndex: 10 }}>
+        <TopAlertsButton />
+      </View>
+    </View>
   );
 }
 
