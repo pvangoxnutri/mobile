@@ -119,7 +119,7 @@ export default function TmpNavbarScreen() {
               onPress={() => {
                 if (!item.tripId) return;
                 if (item.sideQuestId) {
-                  router.push(`/trip/${item.tripId}/sidequest/${item.sideQuestId}`);
+                  router.push(`/trip/${encodeURIComponent(item.tripId)}/sidequest/${encodeURIComponent(item.sideQuestId)}`);
                   return;
                 }
                 router.push(`/trip/${item.tripId}`);

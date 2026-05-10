@@ -38,7 +38,6 @@ export default function RootLayout() {
                 <Stack.Screen name="trip/[id]/split" options={{ headerShown: false }} />
                 <Stack.Screen name="trip/[id]/sidequest/new" options={{ headerShown: false }} />
                 <Stack.Screen name="trip/[id]/sidequest/[sidequestId]" options={{ headerShown: false }} />
-                <Stack.Screen name="trip/[id]/sidequest/[sidequestId]/edit" options={{ headerShown: false }} />
                 <Stack.Screen name="modal" options={{ presentation: 'modal', headerShown: false }} />
               </Stack>
               <StatusBar style="dark" />
