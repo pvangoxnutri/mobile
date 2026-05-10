@@ -16,7 +16,7 @@ import type { Quest } from '@/lib/types';
 
 export default function ProfileScreen() {
   const { user, signOut, refreshProfile, deleteAccount } = useAuth();
-  const { language, setLanguage } = useI18n();
+  const { language, setLanguage, t } = useI18n();
   const insets = useSafeAreaInsets();
   const [joinedTrips, setJoinedTrips] = useState(0);
   const [createdQuests, setCreatedQuests] = useState(0);
@@ -130,7 +130,7 @@ export default function ProfileScreen() {
 
       const trimmedName = name.trim();
       if (!trimmedName) {
-        throw new Error('Name cannot be empty.');
+        throw new Error(t('profile.errors.nameCannotBeEmpty'));
       }
 
       const { error: authError } = await supabase.auth.updateUser({
@@ -148,14 +148,14 @@ export default function ProfileScreen() {
       });
 
       if (!response.ok) {
-        throw new Error((await response.text()) || 'Could not save profile.');
+        throw new Error((await response.text()) || t('profile.errors.couldNotSaveName'));
       }
 
       await refreshProfile();
       setEditingName(false);
-      setMessage({ type: 'success', text: 'Name updated.' });
+      setMessage({ type: 'success', text: t('profile.success.nameUpdated') });
     } catch (error) {
-      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Could not update name.' });
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : t('profile.errors.couldNotUpdateName') });
     } finally {
       setBusy(null);
     }
@@ -173,14 +173,14 @@ export default function ProfileScreen() {
       });
 
       if (!response.ok) {
-        throw new Error((await response.text()) || 'Could not save bio.');
+        throw new Error((await response.text()) || t('profile.errors.couldNotSaveBio'));
       }
 
       await refreshProfile();
       setEditingBio(false);
-      setMessage({ type: 'success', text: 'Bio updated.' });
+      setMessage({ type: 'success', text: t('profile.success.bioUpdated') });
     } catch (error) {
-      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Could not update bio.' });
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : t('profile.errors.couldNotUpdateBio') });
     } finally {
       setBusy(null);
     }
@@ -192,7 +192,7 @@ export default function ProfileScreen() {
       setMessage(null);
 
       if (newPassword.trim().length < 6) {
-        throw new Error('Password must be at least 6 characters.');
+        throw new Error(t('profile.password.tooShort'));
       }
 
       const { error } = await supabase.auth.updateUser({
@@ -205,9 +205,9 @@ export default function ProfileScreen() {
 
       setNewPassword('');
       setEditingPassword(false);
-      setMessage({ type: 'success', text: 'Password updated successfully.' });
+      setMessage({ type: 'success', text: t('profile.success.passwordUpdated') });
     } catch (error) {
-      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Could not update password.' });
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : t('profile.errors.couldNotUpdatePassword') });
     } finally {
       setBusy(null);
     }
@@ -220,7 +220,7 @@ export default function ProfileScreen() {
 
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
-        throw new Error('Please allow photo access to update your avatar.');
+        throw new Error(t('profile.errors.photoAccessDenied'));
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -252,7 +252,7 @@ export default function ProfileScreen() {
       });
 
       if (!uploadResponse.ok) {
-        throw new Error((await uploadResponse.text()) || 'Could not upload image.');
+        throw new Error((await uploadResponse.text()) || t('profile.errors.couldNotUploadImage'));
       }
 
       const uploadData = (await uploadResponse.json()) as { url: string };
@@ -265,7 +265,7 @@ export default function ProfileScreen() {
       });
 
       if (!profileResponse.ok) {
-        throw new Error((await profileResponse.text()) || 'Could not save avatar.');
+        throw new Error((await profileResponse.text()) || t('profile.errors.couldNotSaveAvatar'));
       }
 
       void supabase.auth.updateUser({
@@ -275,12 +275,12 @@ export default function ProfileScreen() {
       });
 
       await refreshProfile();
-      setMessage({ type: 'success', text: 'Profile image updated.' });
+      setMessage({ type: 'success', text: t('profile.success.imageUpdated') });
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
-        setMessage({ type: 'error', text: 'Image upload timed out. Check that backend is running and reachable from your phone.' });
+        setMessage({ type: 'error', text: t('profile.errors.uploadTimeout') });
       } else {
-        setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Could not update profile image.' });
+        setMessage({ type: 'error', text: error instanceof Error ? error.message : t('profile.errors.couldNotUpdateImage') });
       }
     } finally {
       setBusy(null);
@@ -300,9 +300,9 @@ export default function ProfileScreen() {
 
       await refreshProfile();
       setEditingLanguage(false);
-      setMessage({ type: 'success', text: 'Language updated.' });
+      setMessage({ type: 'success', text: t('profile.success.languageUpdated') });
     } catch (error) {
-      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Could not update language.' });
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : t('profile.errors.couldNotUpdateLanguage') });
     } finally {
       setBusy(null);
     }
@@ -320,7 +320,7 @@ export default function ProfileScreen() {
       await deleteAccount();
       router.replace('/(auth)/login');
     } catch (error) {
-      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Could not delete account.' });
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : t('profile.errors.couldNotDeleteAccount') });
     } finally {
       setBusy(null);
       setDeleteConfirmOpen(false);
@@ -339,7 +339,7 @@ export default function ProfileScreen() {
         <TouchableOpacity style={styles.topButton} activeOpacity={0.8} onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={28} color="#6d7380" />
         </TouchableOpacity>
-        <Text style={styles.title}>Profile</Text>
+        <Text style={styles.title}>{t('profile.title')}</Text>
         <TopAlertsButton />
       </View>
 
@@ -358,7 +358,7 @@ export default function ProfileScreen() {
           {busy === 'avatar' ? <ActivityIndicator size="small" color="#fff" /> : <Ionicons name="create-outline" size={18} color="#fff" />}
         </TouchableOpacity>
 
-        <Text style={styles.name}>{user?.name ?? 'SideQuest User'}</Text>
+        <Text style={styles.name}>{user?.name ?? t('profile.defaultName')}</Text>
         <Text style={styles.email}>{user?.email ?? 'user@sidequest.app'}</Text>
         {user?.bio ? <Text style={styles.bioText}>{user.bio}</Text> : null}
         {message ? (
@@ -376,25 +376,25 @@ export default function ProfileScreen() {
       </View>
 
       <View style={styles.statsRow}>
-        <StatCard value={String(joinedTrips)} label="TRIPS JOINED" accent="#10a6c0" />
-        <StatCard value={String(createdQuests)} label="SIDEQUESTS CREATED" accent="#ff4f74" />
-        <StatCard value={String(visitedCountries)} label="COUNTRIES VISITED" accent="#ff4f74" />
+        <StatCard value={String(joinedTrips)} label={t('profile.stats.tripsJoined')} accent="#10a6c0" />
+        <StatCard value={String(createdQuests)} label={t('profile.stats.sidequestsCreated')} accent="#ff4f74" />
+        <StatCard value={String(visitedCountries)} label={t('profile.stats.countriesVisited')} accent="#ff4f74" />
       </View>
 
       <SectionCard
-        title="Explore"
+        title={t('profile.sections.explore')}
         items={[
-          { icon: 'earth-outline', label: 'Travel Tracker', accent: '#10a6c0', onPress: () => router.push('/travel-tracker') },
-          { icon: 'checkmark-done-outline', label: 'Previous Adventures', accent: '#ff4f74', onPress: () => router.push('/previous-adventures') },
+          { icon: 'earth-outline', label: t('profile.explore.travelTracker'), accent: '#10a6c0', onPress: () => router.push('/travel-tracker') },
+          { icon: 'checkmark-done-outline', label: t('profile.explore.previousAdventures'), accent: '#ff4f74', onPress: () => router.push('/previous-adventures') },
         ]}
       />
 
       <SectionCard
-        title="Edit Profile"
+        title={t('profile.sections.editProfile')}
         items={[
-          { icon: 'person-circle-outline', label: 'Change name', accent: '#ff4f74', onPress: () => setEditingName(true) },
-          { icon: 'text-outline', label: 'Edit bio', accent: '#ff4f74', onPress: () => setEditingBio(true) },
-          { icon: 'camera-outline', label: busy === 'avatar' ? 'Uploading image...' : 'Change profile image', accent: '#ff4f74', onPress: () => void handleAvatarPick() },
+          { icon: 'person-circle-outline', label: t('profile.editProfile.changeName'), accent: '#ff4f74', onPress: () => setEditingName(true) },
+          { icon: 'text-outline', label: t('profile.editProfile.editBio'), accent: '#ff4f74', onPress: () => setEditingBio(true) },
+          { icon: 'camera-outline', label: busy === 'avatar' ? t('profile.editProfile.uploading') : t('profile.editProfile.changeImage'), accent: '#ff4f74', onPress: () => void handleAvatarPick() },
         ]}
       />
 
@@ -402,14 +402,14 @@ export default function ProfileScreen() {
         <View style={styles.confirmBackdrop}>
           <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setEditingName(false)} />
           <View style={styles.confirmCard}>
-            <Text style={styles.confirmTitle}>Change name</Text>
-            <TextInput value={name} onChangeText={setName} placeholder="Display name" style={[styles.input, { marginTop: 16 }]} />
+            <Text style={styles.confirmTitle}>{t('profile.modals.changeName')}</Text>
+            <TextInput value={name} onChangeText={setName} placeholder={t('profile.editProfile.displayNamePlaceholder')} style={[styles.input, { marginTop: 16 }]} />
             <View style={styles.confirmActions}>
               <TouchableOpacity style={styles.confirmCancel} activeOpacity={0.88} onPress={() => setEditingName(false)}>
                 <Text style={styles.confirmCancelText}>Cancel</Text>
               </TouchableOpacity>
               <Pressable style={[styles.confirmDelete, { backgroundColor: '#ff4f74' }]} onPress={() => void handleNameSave()} disabled={busy === 'name'}>
-                {busy === 'name' ? <ActivityIndicator color="#fff" /> : <Text style={styles.confirmDeleteText}>Save name</Text>}
+                {busy === 'name' ? <ActivityIndicator color="#fff" /> : <Text style={styles.confirmDeleteText}>{t('profile.modals.saveNameButton')}</Text>}
               </Pressable>
             </View>
           </View>
@@ -420,11 +420,11 @@ export default function ProfileScreen() {
         <View style={styles.confirmBackdrop}>
           <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setEditingBio(false)} />
           <View style={styles.confirmCard}>
-            <Text style={styles.confirmTitle}>Edit bio</Text>
+            <Text style={styles.confirmTitle}>{t('profile.modals.editBio')}</Text>
             <TextInput
               value={bio}
               onChangeText={setBio}
-              placeholder="Tell others a little about yourself..."
+              placeholder={t('profile.editProfile.bioPlaceholder')}
               style={[styles.bioInput, { marginTop: 16 }]}
               multiline
               numberOfLines={4}
@@ -435,7 +435,7 @@ export default function ProfileScreen() {
                 <Text style={styles.confirmCancelText}>Cancel</Text>
               </TouchableOpacity>
               <Pressable style={[styles.confirmDelete, { backgroundColor: '#ff4f74' }]} onPress={() => void handleBioSave()} disabled={busy === 'bio'}>
-                {busy === 'bio' ? <ActivityIndicator color="#fff" /> : <Text style={styles.confirmDeleteText}>Save bio</Text>}
+                {busy === 'bio' ? <ActivityIndicator color="#fff" /> : <Text style={styles.confirmDeleteText}>{t('profile.modals.saveBioButton')}</Text>}
               </Pressable>
             </View>
           </View>
@@ -444,13 +444,13 @@ export default function ProfileScreen() {
 
 
       <SectionCard
-        title="Account Settings"
+        title={t('profile.sections.accountSettings')}
         items={[
-          { icon: 'lock-closed-outline', label: 'Change password', accent: '#10a6c0', onPress: () => setEditingPassword(true) },
-          { icon: 'language-outline', label: 'Change language', accent: '#10a6c0', onPress: () => setEditingLanguage(true) },
+          { icon: 'lock-closed-outline', label: t('profile.accountSettings.changePassword'), accent: '#10a6c0', onPress: () => setEditingPassword(true) },
+          { icon: 'language-outline', label: t('profile.accountSettings.changeLanguage'), accent: '#10a6c0', onPress: () => setEditingLanguage(true) },
           {
             icon: 'log-out-outline',
-            label: 'Logout',
+            label: t('profile.accountSettings.logout'),
             accent: '#ff4f74',
             onPress: () => {
               void signOut().then(() => router.replace('/(auth)/login'));
@@ -458,7 +458,7 @@ export default function ProfileScreen() {
           },
           {
             icon: 'trash-outline',
-            label: busy === 'delete' ? 'Deleting account...' : 'Delete account',
+            label: busy === 'delete' ? t('profile.accountSettings.deleting') : t('profile.accountSettings.deleteAccount'),
             accent: '#d53d18',
             onPress: handleDeleteAccount,
           },
@@ -469,21 +469,21 @@ export default function ProfileScreen() {
         <View style={styles.confirmBackdrop}>
           <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setEditingPassword(false)} />
           <View style={styles.confirmCard}>
-            <Text style={styles.confirmTitle}>Change password</Text>
+            <Text style={styles.confirmTitle}>{t('profile.modals.changePassword')}</Text>
             <TextInput
               value={newPassword}
               onChangeText={setNewPassword}
-              placeholder="New password"
+              placeholder={t('profile.password.newPasswordPlaceholder')}
               secureTextEntry
               style={[styles.input, { marginTop: 16 }]}
             />
-            <Text style={[styles.helperText, { marginTop: 12 }]}>Use at least 6 characters. You will stay signed in after the update.</Text>
+            <Text style={[styles.helperText, { marginTop: 12 }]}>{t('profile.password.hint')}</Text>
             <View style={styles.confirmActions}>
               <TouchableOpacity style={styles.confirmCancel} activeOpacity={0.88} onPress={() => setEditingPassword(false)}>
                 <Text style={styles.confirmCancelText}>Cancel</Text>
               </TouchableOpacity>
               <Pressable style={[styles.confirmDelete, { backgroundColor: '#ff4f74' }]} onPress={() => void handlePasswordSave()} disabled={busy === 'password'}>
-                {busy === 'password' ? <ActivityIndicator color="#fff" /> : <Text style={styles.confirmDeleteText}>Update password</Text>}
+                {busy === 'password' ? <ActivityIndicator color="#fff" /> : <Text style={styles.confirmDeleteText}>{t('profile.modals.updatePasswordButton')}</Text>}
               </Pressable>
             </View>
           </View>
@@ -494,13 +494,13 @@ export default function ProfileScreen() {
         <View style={styles.confirmBackdrop}>
           <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setEditingLanguage(false)} />
           <View style={styles.confirmCard}>
-            <Text style={styles.confirmTitle}>Change language</Text>
+            <Text style={styles.confirmTitle}>{t('profile.modals.changeLanguage')}</Text>
             <View style={{ marginTop: 16, marginBottom: 16 }}>
               <LanguagePicker
-                label="Language"
+                label={t('auth.language')}
                 value={selectedLanguage}
                 onChange={setSelectedLanguage}
-                searchPlaceholder={language === 'sv' ? 'Sök språk' : 'Search language'}
+                searchPlaceholder={t('common.search_language')}
               />
             </View>
             <View style={styles.confirmActions}>
@@ -508,7 +508,7 @@ export default function ProfileScreen() {
                 <Text style={styles.confirmCancelText}>Cancel</Text>
               </TouchableOpacity>
               <Pressable style={[styles.confirmDelete, { backgroundColor: '#ff4f74' }]} onPress={() => void handleLanguageSave()} disabled={busy === 'language'}>
-                {busy === 'language' ? <ActivityIndicator color="#fff" /> : <Text style={styles.confirmDeleteText}>Save language</Text>}
+                {busy === 'language' ? <ActivityIndicator color="#fff" /> : <Text style={styles.confirmDeleteText}>{t('profile.modals.saveLanguageButton')}</Text>}
               </Pressable>
             </View>
           </View>
@@ -516,11 +516,11 @@ export default function ProfileScreen() {
       </Modal>
 
       <SectionCard
-        title="Notifications"
+        title={t('profile.sections.notifications')}
         items={[
           {
             icon: 'notifications-outline',
-            label: 'Notification settings',
+            label: t('profile.notifications.title'),
             accent: '#ff4f74',
             onPress: () => setEditingNotifications(true),
           },
@@ -531,28 +531,28 @@ export default function ProfileScreen() {
         <View style={styles.confirmBackdrop}>
           <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setEditingNotifications(false)} />
           <View style={styles.confirmCard}>
-            <Text style={styles.confirmTitle}>Notification settings</Text>
+            <Text style={styles.confirmTitle}>{t('profile.notifications.title')}</Text>
             <View style={{ marginTop: 16 }}>
               <NotificationSettingRow
                 icon="phone-portrait-outline"
-                title="Push notifications"
-                subtitle="Prepare alerts when someone sends a message."
+                title={t('profile.notifications.pushNotifications')}
+                subtitle={t('profile.notifications.pushHint')}
                 value={notificationPreferences.pushEnabled}
                 onValueChange={(value) => void updateNotificationPreference('pushEnabled', value)}
               />
               <View style={styles.rowDivider} />
               <NotificationSettingRow
                 icon="chatbubble-ellipses-outline"
-                title="Chat messages"
-                subtitle="Create in-app alerts for new group chat messages."
+                title={t('profile.notifications.chatMessages')}
+                subtitle={t('profile.notifications.chatHint')}
                 value={notificationPreferences.chatMessages}
                 onValueChange={(value) => void updateNotificationPreference('chatMessages', value)}
               />
               <View style={styles.rowDivider} />
               <NotificationSettingRow
                 icon="people-outline"
-                title="Chat joins"
-                subtitle="Alert when someone joins a group chat."
+                title={t('profile.notifications.chatJoins')}
+                subtitle={t('profile.notifications.joinsHint')}
                 value={notificationPreferences.chatJoins}
                 onValueChange={(value) => void updateNotificationPreference('chatJoins', value)}
               />
@@ -567,16 +567,16 @@ export default function ProfileScreen() {
       </Modal>
 
       <View style={styles.brandBlock}>
-        <Text style={styles.brandWord}>BEYOND</Text>
-        <Text style={styles.brandTagline}>THE MAP IS ONLY THE BEGINNING</Text>
+        <Text style={styles.brandWord}>{t('profile.brandTagline.beyond')}</Text>
+        <Text style={styles.brandTagline}>{t('profile.brandTagline.tagline')}</Text>
       </View>
 
       <Modal visible={deleteConfirmOpen} transparent animationType="fade" onRequestClose={() => setDeleteConfirmOpen(false)}>
         <View style={styles.confirmBackdrop}>
           <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setDeleteConfirmOpen(false)} />
           <View style={styles.confirmCard}>
-            <Text style={styles.confirmTitle}>Are you sure?</Text>
-            <Text style={styles.confirmBody}>Deleting your account removes your profile and trips. This cannot be undone.</Text>
+            <Text style={styles.confirmTitle}>{t('profile.delete.confirmTitle')}</Text>
+            <Text style={styles.confirmBody}>{t('profile.delete.confirmMessage')}</Text>
             <View style={styles.confirmActions}>
               <TouchableOpacity style={styles.confirmCancel} activeOpacity={0.88} onPress={() => setDeleteConfirmOpen(false)}>
                 <Text style={styles.confirmCancelText}>Cancel</Text>
@@ -586,7 +586,7 @@ export default function ProfileScreen() {
                 activeOpacity={0.88}
                 onPress={() => void handleDeleteAccountConfirmed()}
                 disabled={busy === 'delete'}>
-                {busy === 'delete' ? <ActivityIndicator color="#fff" /> : <Text style={styles.confirmDeleteText}>Delete account</Text>}
+                {busy === 'delete' ? <ActivityIndicator color="#fff" /> : <Text style={styles.confirmDeleteText}>{t('profile.modals.deleteAccountButton')}</Text>}
               </TouchableOpacity>
             </View>
           </View>
