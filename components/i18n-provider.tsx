@@ -42,7 +42,7 @@ const dictionaries: Record<AppLanguage, Record<string, string>> = {
     'auth.google_incomplete': 'Google sign-in did not complete.',
     'auth.google_session_incomplete': 'Google sign-in returned an incomplete session.',
     'auth.language': 'Language',
-    'auth.language_en': 'English',
+    'auth.language_en': 'English (USA)',
     'auth.language_sv': 'Svenska',
   },
   sv: {
@@ -75,7 +75,7 @@ const dictionaries: Record<AppLanguage, Record<string, string>> = {
     'auth.google_incomplete': 'Google-inloggningen slutfördes inte.',
     'auth.google_session_incomplete': 'Google-inloggningen returnerade en ofullständig session.',
     'auth.language': 'Språk',
-    'auth.language_en': 'English',
+    'auth.language_en': 'English (USA)',
     'auth.language_sv': 'Svenska',
   },
 };
