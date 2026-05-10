@@ -423,22 +423,30 @@ export default function TripDetailsScreen() {
           {activityGroups.length > 0 ? (
             <View style={styles.categoryGrid}>
               {activityGroups.map((group) => (
-                <TouchableOpacity
-                  key={group.key}
-                  style={styles.categoryCard}
-                  activeOpacity={0.92}
-                  onPress={() => setSelectedCategoryKey(group.key)}>
-                  <View style={styles.categoryCardHeader}>
-                    <Text style={styles.categoryEmoji}>{group.emoji}</Text>
-                    <View style={styles.categoryInfo}>
-                      <Text style={styles.categoryLabel}>{group.label}</Text>
-                      <Text style={styles.categoryItemName} numberOfLines={1}>{group.items[0]?.title ?? 'Activity'}</Text>
+                <View style={styles.categoryCardWrapper}>
+                  <TouchableOpacity
+                    key={group.key}
+                    style={styles.categoryCard}
+                    activeOpacity={0.92}
+                    onPress={() => setSelectedCategoryKey(group.key)}>
+                    <View style={styles.categoryCardHeader}>
+                      <Text style={styles.categoryEmoji}>{group.emoji}</Text>
+                      <View style={styles.categoryInfo}>
+                        <Text style={styles.categoryLabel}>{group.label}</Text>
+                        <Text style={styles.categoryItemName} numberOfLines={1}>{group.items[0]?.title ?? 'Activity'}</Text>
+                      </View>
                     </View>
-                  </View>
-                  {group.items.length > 1 && (
-                    <Text style={styles.categoryCount}>+{group.items.length - 1} more</Text>
-                  )}
-                </TouchableOpacity>
+                    {group.items.length > 1 && (
+                      <Text style={styles.categoryCount}>+{group.items.length - 1} more</Text>
+                    )}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.categoryCardAddButton}
+                    activeOpacity={0.8}
+                    onPress={() => router.push(`/trip/${encodeURIComponent(id)}/sidequest/new`)}>
+                    <Ionicons name="add" size={20} color="#fff" />
+                  </TouchableOpacity>
+                </View>
               ))}
             </View>
           ) : (
@@ -740,6 +748,14 @@ export default function TripDetailsScreen() {
                   <Ionicons name="chevron-down" size={24} color="#161821" />
                 </TouchableOpacity>
                 <View style={{ flex: 1 }} />
+                <TouchableOpacity
+                  onPress={() => {
+                    setSelectedCategoryKey(null);
+                    router.push(`/trip/${encodeURIComponent(id)}/sidequest/new`);
+                  }}
+                  style={styles.categoryModalAddButton}>
+                  <Ionicons name="add" size={24} color="#fff" />
+                </TouchableOpacity>
               </View>
 
               <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.categoryModalBody}>
@@ -1945,7 +1961,13 @@ const styles = StyleSheet.create({
     marginTop: 16,
     gap: 12,
   },
+  categoryCardWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
   categoryCard: {
+    flex: 1,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -1960,6 +1982,19 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 12,
     elevation: 2,
+  },
+  categoryCardAddButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: PRIMARY_COLOR,
+    shadowColor: PRIMARY_COLOR,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   categoryCardHeader: {
     flex: 1,
@@ -2017,6 +2052,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#f5f6f8',
+  },
+  categoryModalAddButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: PRIMARY_COLOR,
   },
   categoryModalBody: {
     paddingBottom: 16,
