@@ -21,7 +21,7 @@ import { fetchPlaceSuggestions, type PlaceAutocompleteSuggestion } from '@/lib/m
 import { type StoredMapPlace, withLocationMarker } from '@/lib/sidequest-location';
 import type { SideQuestActivity } from '@/lib/types';
 import { uploadImageIfNeeded } from '@/lib/uploads';
-import { PRIMARY_COLOR, PRIMARY_08, SECONDARY_COLOR } from '@/constants/colors';
+import { PRIMARY_COLOR, PRIMARY_08, PRIMARY_20, SECONDARY_COLOR } from '@/constants/colors';
 
 type PickerTarget = 'date' | 'revealDate' | 'revealTime' | null;
 type MessageState = { type: 'success' | 'error'; text: string } | null;
@@ -381,7 +381,7 @@ export default function SideQuestForm({
               <TouchableOpacity
                 key={cat.value}
                 activeOpacity={0.8}
-                style={[styles.categoryChip, active && { borderColor: PRIMARY_COLOR, backgroundColor: PRIMARY_COLOR08 }]}
+                style={[styles.categoryChip, active && { borderColor: PRIMARY_COLOR, backgroundColor: PRIMARY_08 }]}
                 onPress={() => setCategory(active ? null : cat.value)}>
                 <Text style={styles.categoryEmoji}>{cat.emoji}</Text>
                 <Text style={[styles.categoryLabel, active && { color: PRIMARY_COLOR, fontWeight: '600' }]}>{cat.label}</Text>
@@ -673,9 +673,9 @@ function VisibilityOption({
   active: boolean;
   onPress: () => void;
 }) {  return (
-    <TouchableOpacity activeOpacity={0.92} style={[styles.segmentOption, active && { borderColor: PRIMARY_COLOR20, backgroundColor: PRIMARY_COLOR08 }]} onPress={onPress}>
+    <TouchableOpacity activeOpacity={0.92} style={[styles.segmentOption, active && { borderColor: PRIMARY_20, backgroundColor: PRIMARY_08 }]} onPress={onPress}>
       <Text style={[styles.segmentTitle, active && { color: PRIMARY_COLOR }]}>{label}</Text>
-      <Text style={[styles.segmentSubtitle, active && { color: PRIMARY_COLOR20 }]}>{subtitle}</Text>
+      <Text style={[styles.segmentSubtitle, active && { color: PRIMARY_20 }]}>{subtitle}</Text>
     </TouchableOpacity>
   );
 }
