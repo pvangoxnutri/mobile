@@ -354,6 +354,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     minHeight: 50,
+    paddingTop: 1,
   },
   title: {
     fontSize: 34,
