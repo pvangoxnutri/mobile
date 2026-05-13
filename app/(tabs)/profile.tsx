@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import * as Linking from 'expo-linking';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Image, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -34,7 +35,11 @@ export default function ProfileScreen() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferences>(getDefaultNotificationPreferences());
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [busy, setBusy] = useState<'name' | 'bio' | 'password' | 'avatar' | 'language' | 'delete' | null>(null);
+  const [busy, setBusy] = useState<'name' | 'bio' | 'password' | 'avatar' | 'language' | 'delete' | 'support' | null>(null);
+  const [supportModal, setSupportModal] = useState<'bug' | 'feedback' | null>(null);
+  const [supportText, setSupportText] = useState('');
+  const [supportError, setSupportError] = useState<string | null>(null);
+  const [thanksModal, setThanksModal] = useState<'bug' | 'feedback' | null>(null);
 
   useEffect(() => {
     setName(user?.name ?? '');
@@ -327,6 +332,48 @@ export default function ProfileScreen() {
     }
   }
 
+  function openSupportModal(type: 'bug' | 'feedback') {
+    setSupportText('');
+    setSupportError(null);
+    setMessage(null);
+    setSupportModal(type);
+  }
+
+  function closeSupportModal() {
+    setSupportModal(null);
+    setSupportText('');
+    setSupportError(null);
+  }
+
+  async function handleSupportSubmit() {
+    if (!supportModal) return;
+    const trimmed = supportText.trim();
+    if (!trimmed) {
+      setSupportError(t('profile.support.emptyError'));
+      return;
+    }
+    try {
+      setBusy('support');
+      setSupportError(null);
+      const submittedType = supportModal;
+      const res = await apiFetch('/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: submittedType, message: trimmed }),
+      });
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '');
+        throw new Error(errText || t('profile.support.failed'));
+      }
+      closeSupportModal();
+      setThanksModal(submittedType);
+    } catch (err) {
+      setSupportError(err instanceof Error && err.message ? err.message : t('profile.support.failed'));
+    } finally {
+      setBusy(null);
+    }
+  }
+
   return (
     <View style={{ flex: 1 }}>
       <ScrollView
@@ -449,6 +496,56 @@ export default function ProfileScreen() {
         items={[
           { icon: 'lock-closed-outline', label: t('profile.accountSettings.changePassword'), accent: '#10a6c0', onPress: () => setEditingPassword(true) },
           { icon: 'language-outline', label: t('profile.accountSettings.changeLanguage'), accent: '#10a6c0', onPress: () => setEditingLanguage(true) },
+        ]}
+      />
+
+      <SectionCard
+        title={t('profile.support.title')}
+        items={[
+          { icon: 'alert-circle-outline', label: t('profile.support.reportIssue'), accent: '#10a6c0', onPress: () => openSupportModal('bug') },
+          { icon: 'chatbox-outline', label: t('profile.support.feedback'), accent: '#10a6c0', onPress: () => openSupportModal('feedback') },
+        ]}
+      />
+
+      <Modal visible={supportModal !== null} transparent animationType="fade" onRequestClose={closeSupportModal}>
+        <View style={styles.confirmBackdrop}>
+          <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={closeSupportModal} />
+          <View style={styles.confirmCard}>
+            <Text style={styles.confirmTitle}>
+              {supportModal === 'bug' ? t('profile.support.reportTitle') : t('profile.support.feedbackTitle')}
+            </Text>
+            <TextInput
+              value={supportText}
+              onChangeText={(text) => { setSupportText(text); if (supportError) setSupportError(null); }}
+              placeholder={supportModal === 'bug' ? t('profile.support.reportPlaceholder') : t('profile.support.feedbackPlaceholder')}
+              placeholderTextColor="#9aa0ac"
+              style={[styles.bioInput, { marginTop: 16 }]}
+              multiline
+              numberOfLines={5}
+              textAlignVertical="top"
+              autoFocus
+            />
+            {supportError ? (
+              <Text style={[styles.helperText, { color: '#d53d18', marginTop: 8 }]}>{supportError}</Text>
+            ) : null}
+            <View style={styles.confirmActions}>
+              <TouchableOpacity style={styles.confirmCancel} activeOpacity={0.88} onPress={closeSupportModal}>
+                <Text style={styles.confirmCancelText}>{t('common.cancel')}</Text>
+              </TouchableOpacity>
+              <Pressable
+                style={[styles.confirmDelete, { backgroundColor: '#10a6c0' }]}
+                onPress={() => void handleSupportSubmit()}
+                disabled={busy === 'support'}>
+                {busy === 'support' ? <ActivityIndicator color="#fff" /> : <Text style={styles.confirmDeleteText}>{t('profile.support.submit')}</Text>}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <SectionCard
+        title={t('profile.sections.accountSettings')}
+        items={[
           {
             icon: 'log-out-outline',
             label: t('profile.accountSettings.logout'),
@@ -590,6 +687,32 @@ export default function ProfileScreen() {
                 {busy === 'delete' ? <ActivityIndicator color="#fff" /> : <Text style={styles.confirmDeleteText}>{t('profile.modals.deleteAccountButton')}</Text>}
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={thanksModal !== null} transparent animationType="fade" onRequestClose={() => setThanksModal(null)}>
+        <View style={styles.confirmBackdrop}>
+          <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setThanksModal(null)} />
+          <View style={styles.thanksCard}>
+            <View style={[styles.thanksIconCircle, { backgroundColor: thanksModal === 'bug' ? '#fff1f5' : '#e6f7fa' }]}>
+              <Ionicons
+                name={thanksModal === 'bug' ? 'bug-outline' : 'heart'}
+                size={32}
+                color={thanksModal === 'bug' ? '#ff4f74' : '#10a6c0'}
+              />
+            </View>
+            <Text style={styles.thanksTitle}>
+              {thanksModal === 'bug' ? t('profile.support.thanksBugTitle') : t('profile.support.thanksFeedbackTitle')}
+            </Text>
+            <Text style={styles.thanksBody}>
+              {thanksModal === 'bug' ? t('profile.support.thanksBugBody') : t('profile.support.thanksFeedbackBody')}
+            </Text>
+            <Pressable
+              style={[styles.thanksButton, { backgroundColor: thanksModal === 'bug' ? '#ff4f74' : '#10a6c0' }]}
+              onPress={() => setThanksModal(null)}>
+              <Text style={styles.thanksButtonText}>{t('profile.support.thanksClose')}</Text>
+            </Pressable>
           </View>
         </View>
       </Modal>
@@ -1087,5 +1210,56 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: '800',
+  },
+  thanksCard: {
+    borderRadius: 24,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e7eaf0',
+    paddingHorizontal: 24,
+    paddingVertical: 28,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 18 },
+    shadowOpacity: 0.16,
+    shadowRadius: 32,
+    elevation: 12,
+  },
+  thanksIconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  thanksTitle: {
+    color: '#14161d',
+    fontSize: 24,
+    fontWeight: '900',
+    letterSpacing: -0.6,
+    textAlign: 'center',
+  },
+  thanksBody: {
+    marginTop: 10,
+    color: '#5b626f',
+    fontSize: 15,
+    lineHeight: 22,
+    textAlign: 'center',
+    paddingHorizontal: 4,
+  },
+  thanksButton: {
+    marginTop: 22,
+    alignSelf: 'stretch',
+    height: 50,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  thanksButtonText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: -0.2,
   },
 });

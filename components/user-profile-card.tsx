@@ -1,26 +1,26 @@
-﻿import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Image, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { getUserProfile } from '@/lib/api';
+import { useI18n } from '@/components/i18n-provider';
 import type { UserProfile } from '@/lib/types';
-import { PRIMARY_COLOR } from '@/constants/colors';
 
 export default function UserProfileCard({ userId, onClose }: { userId: string | null; onClose: () => void }) {
-  const insets = useSafeAreaInsets();
+  const { t } = useI18n();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [avatarFailed, setAvatarFailed] = useState(false);
 
   useEffect(() => {
     if (!userId) {
-      setProfile(null);
-      setError('');
       return;
     }
 
     let active = true;
+    setProfile(null);
+    setAvatarFailed(false);
     setLoading(true);
     setError('');
 
@@ -29,10 +29,9 @@ export default function UserProfileCard({ userId, onClose }: { userId: string | 
         if (!active) return;
         setProfile(data);
       })
-      .catch((err) => {
+      .catch(() => {
         if (!active) return;
         setError('Could not load profile');
-        console.error('Failed to load user profile:', err);
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -45,53 +44,47 @@ export default function UserProfileCard({ userId, onClose }: { userId: string | 
 
   const visible = userId !== null;
 
-  if (!visible) return null;
-
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose} />
-      <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-        <View style={[styles.card, { backgroundColor: '#fff' }]}>
+      <View style={styles.backdrop}>
+        <Pressable style={StyleSheet.absoluteFillObject} onPress={onClose} />
+        <View style={styles.card}>
+          <Pressable style={styles.closeButton} onPress={onClose} hitSlop={10}>
+            <Ionicons name="close" size={22} color="#14161d" />
+          </Pressable>
+
           {loading ? (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={PRIMARY_COLOR} />
+              <ActivityIndicator size="large" color="#ff4f74" />
             </View>
           ) : error ? (
             <View style={styles.errorContainer}>
-              <Ionicons name="alert-circle-outline" size={48} color="#14161d" />
-              <Text style={[styles.errorText, { color: '#14161d' }]}>{error}</Text>
+              <Ionicons name="alert-circle-outline" size={40} color="#d53d18" />
+              <Text style={styles.errorText}>{error}</Text>
             </View>
           ) : profile ? (
             <>
-              <Pressable style={styles.closeButton} onPress={onClose}>
-                <Ionicons name="close" size={24} color={'#14161d'} />
-              </Pressable>
-
-              <View style={styles.avatarSection}>
-                {profile.avatarUrl ? (
-                  <Image source={{ uri: profile.avatarUrl }} style={styles.avatar} />
+              <View style={styles.avatarRing}>
+                {profile.avatarUrl && profile.avatarUrl.trim() && !avatarFailed ? (
+                  <Image
+                    source={{ uri: profile.avatarUrl }}
+                    style={styles.avatar}
+                    onError={() => setAvatarFailed(true)}
+                  />
                 ) : (
-                  <View style={[styles.avatar, { backgroundColor: PRIMARY_COLOR }]}>
+                  <View style={[styles.avatar, styles.avatarFallback]}>
                     <Text style={styles.avatarInitials}>{getInitials(profile.name)}</Text>
                   </View>
                 )}
               </View>
 
-              <Text style={[styles.name, { color: '#14161d' }]}>{profile.name}</Text>
-              {profile.bio ? <Text style={[styles.bio, { color: '#14161d' }]}>{profile.bio}</Text> : null}
+              <Text style={styles.name}>{profile.name}</Text>
+              {profile.bio ? <Text style={styles.bio}>{profile.bio}</Text> : null}
 
-              <View style={styles.statsGrid}>
-                <StatCard
-                  value={String(profile.tripsJoined)}
-                  label="TRIPS JOINED"
-                  accent={PRIMARY_COLOR}
-                />
-                <StatCard
-                  value={String(profile.sidequestsCreated)}
-                  label="SIDEQUESTS CREATED"
-                  accent={PRIMARY_COLOR}
-                />
-                <StatCard value={String(profile.countriesVisited)} label="COUNTRIES VISITED" accent={PRIMARY_COLOR} />
+              <View style={styles.statsRow}>
+                <StatCard value={String(profile.tripsJoined)} label={t('profile.stats.tripsJoined')} accent="#10a6c0" />
+                <StatCard value={String(profile.sidequestsCreated)} label={t('profile.stats.sidequestsCreated')} accent="#ff4f74" />
+                <StatCard value={String(profile.countriesVisited)} label={t('profile.stats.countriesVisited')} accent="#ff4f74" />
               </View>
             </>
           ) : null}
@@ -119,95 +112,120 @@ function getInitials(name?: string | null) {
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-  },
-  container: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(12,16,26,0.5)',
+    justifyContent: 'center',
+    paddingHorizontal: 22,
   },
   card: {
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingHorizontal: 24,
-    paddingTop: 24,
-    paddingBottom: 32,
+    borderRadius: 28,
+    backgroundColor: '#fff',
+    paddingHorizontal: 22,
+    paddingTop: 36,
+    paddingBottom: 24,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 18 },
+    shadowOpacity: 0.16,
+    shadowRadius: 32,
+    elevation: 12,
   },
   closeButton: {
-    alignSelf: 'flex-end',
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
+    position: 'absolute',
+    top: 14,
+    right: 14,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
-    marginBottom: 8,
+    justifyContent: 'center',
+    backgroundColor: '#f4f6fa',
+    zIndex: 2,
   },
   loadingContainer: {
-    height: 300,
+    minHeight: 240,
+    width: '100%',
     justifyContent: 'center',
     alignItems: 'center',
   },
   errorContainer: {
-    height: 200,
+    minHeight: 200,
+    width: '100%',
     justifyContent: 'center',
     alignItems: 'center',
   },
   errorText: {
-    marginTop: 12,
+    marginTop: 10,
     fontSize: 14,
+    color: '#14161d',
   },
-  avatarSection: {
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  avatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+  avatarRing: {
+    width: 132,
+    height: 132,
+    borderRadius: 66,
+    borderWidth: 4,
+    borderColor: '#ff4f74',
     alignItems: 'center',
     justifyContent: 'center',
   },
+  avatar: {
+    width: 118,
+    height: 118,
+    borderRadius: 59,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarFallback: {
+    backgroundColor: '#1d212a',
+  },
   avatarInitials: {
     color: '#fff',
-    fontSize: 36,
-    fontWeight: '700',
+    fontSize: 34,
+    fontWeight: '900',
+    letterSpacing: -1,
   },
   name: {
-    fontSize: 22,
-    fontWeight: '700',
+    marginTop: 22,
+    color: '#151722',
+    fontSize: 26,
+    fontWeight: '900',
+    letterSpacing: -1.2,
     textAlign: 'center',
-    marginBottom: 6,
   },
   bio: {
-    fontSize: 14,
+    marginTop: 10,
+    color: '#4e5566',
+    fontSize: 15,
+    lineHeight: 22,
     textAlign: 'center',
-    marginBottom: 24,
-    lineHeight: 20,
+    paddingHorizontal: 8,
   },
-  statsGrid: {
+  statsRow: {
+    marginTop: 22,
     flexDirection: 'row',
     gap: 12,
+    alignSelf: 'stretch',
   },
   statCard: {
     flex: 1,
-    paddingVertical: 16,
-    paddingHorizontal: 8,
-    borderRadius: 12,
+    borderRadius: 22,
     borderWidth: 1,
     borderColor: '#eceef2',
-    backgroundColor: '#f9fafc',
+    backgroundColor: '#fff',
     alignItems: 'center',
+    paddingVertical: 18,
+    paddingHorizontal: 4,
   },
   statValue: {
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 4,
+    fontSize: 28,
+    fontWeight: '900',
+    letterSpacing: -1,
   },
   statLabel: {
-    fontSize: 10,
-    fontWeight: '600',
+    marginTop: 6,
     color: '#a6abb5',
-    letterSpacing: 0.5,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+    textAlign: 'center',
   },
 });
-

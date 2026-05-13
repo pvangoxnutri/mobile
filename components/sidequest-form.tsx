@@ -707,12 +707,7 @@ function getRevealRange(tripStartDate?: string | null, tripEndDate?: string | nu
 }
 
 function buildPlaceDisplay(place: StoredMapPlace) {
-  const name = place.name?.trim();
-  const address = place.address?.trim();
-  if (name && address && !address.toLowerCase().includes(name.toLowerCase())) {
-    return `${name}, ${address}`;
-  }
-  return name || address || '';
+  return place.name?.trim() || '';
 }
 
 const styles = StyleSheet.create({

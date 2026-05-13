@@ -50,6 +50,7 @@ export default function HomeScreen() {
   const [joinError, setJoinError] = useState('');
   const [profileCardUserId, setProfileCardUserId] = useState<string | null>(null);
   const [selectedTripIndex, setSelectedTripIndex] = useState(0);
+  const [failedMemberAvatars, setFailedMemberAvatars] = useState<Set<string>>(new Set());
   const eventFade = useRef(new Animated.Value(1)).current;
   const carouselRef = useRef<ScrollView>(null);
   const floatingBottom = Math.max(insets.bottom, 14) + 78;
@@ -210,6 +211,7 @@ export default function HomeScreen() {
     if (!featuredTrip) return;
     setMembersOpen(true);
     setMembersLoading(true);
+    setFailedMemberAvatars(new Set());
 
     try {
       const data = await apiJson<TripMember[]>(`/api/trips/${featuredTrip.quest.id}/members`);
@@ -415,7 +417,7 @@ export default function HomeScreen() {
 
               <View style={styles.badgeRow}>
                 <InfoBadge tone="cyan" icon="time" label={formatHeaderCountdown(featuredTrip?.nextEventDate, now)} />
-                <InfoBadge tone="pink" icon="people" label={getMembersLabel(featuredTrip?.quest)} onPress={() => void openMembers()} />
+                <InfoBadge tone="pink" icon="people" label={getMembersLabel(featuredTrip?.quest, t)} onPress={() => void openMembers()} />
               </View>
             </View>
 
@@ -497,10 +499,11 @@ export default function HomeScreen() {
         />
       </Modal>
 
-      <Modal visible={membersOpen} transparent animationType="fade" onRequestClose={() => setMembersOpen(false)}>
-        <View style={styles.modalBackdrop}>
+      <Modal visible={membersOpen} transparent animationType="slide" onRequestClose={() => setMembersOpen(false)}>
+        <View style={styles.membersBackdrop}>
           <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setMembersOpen(false)} />
-          <View style={[styles.membersCard, { paddingBottom: Math.max(insets.bottom, 18) + 16 }]}>
+          <View style={[styles.membersCard, { paddingBottom: Math.max(insets.bottom, 18) + 12 }]}>
+            <View style={styles.membersHandle} />
             <View style={styles.membersHeader}>
               <View>
                 <Text style={styles.membersEyebrow}>{t('home.members_heading')}</Text>
@@ -516,14 +519,24 @@ export default function HomeScreen() {
             ) : (
               <View style={styles.membersList}>
                 {featuredMembers.map((member) => (
-                  <Pressable key={member.id} style={styles.memberRow} onPress={() => setProfileCardUserId(member.id)}>
-                    {member.avatarUrl && member.avatarUrl.trim() ? (
-                      <Image source={{ uri: member.avatarUrl }} style={styles.memberAvatarImage} />
-                    ) : (
-                      <View style={styles.memberAvatar}>
+                  <Pressable
+                    key={member.id}
+                    style={({ pressed }: { pressed: boolean }) => [styles.memberRow, pressed ? { opacity: 0.7 } : null]}
+                    onPress={() => {
+                      setMembersOpen(false);
+                      setTimeout(() => setProfileCardUserId(member.id), 280);
+                    }}>
+                    <View style={styles.memberAvatar}>
+                      {member.avatarUrl && member.avatarUrl.trim() && !failedMemberAvatars.has(member.id) ? (
+                        <Image
+                          source={{ uri: member.avatarUrl }}
+                          style={styles.memberAvatarImage}
+                          onError={() => setFailedMemberAvatars(prev => new Set([...prev, member.id]))}
+                        />
+                      ) : (
                         <Text style={styles.memberAvatarText}>{getInitials(member.name)}</Text>
-                      </View>
-                    )}
+                      )}
+                    </View>
                     <View style={styles.memberCopy}>
                       <Text style={styles.memberName}>{member.name}</Text>
                       <Text style={styles.memberMeta}>{member.isOwner ? t('common.owner') : t('common.member')}</Text>
@@ -793,8 +806,9 @@ function formatCardCountdown(targetDate: Date, now: Date, t?: (key: string, vars
   return t ? t('home.in_days', { days }) : `IN ${days} DAYS`;
 }
 
-function getMembersLabel(quest?: Quest | null) {
+function getMembersLabel(quest?: Quest | null, t?: (key: string, vars?: Record<string, string | number>) => string) {
   const count = quest?.ownerIds?.length || 1;
+  if (t) return t('home.members_count', { count });
   return `${count} MEMBERS`;
 }
 
@@ -1181,18 +1195,35 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 22,
   },
+  membersBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(12,14,19,0.28)',
+    justifyContent: 'flex-end',
+  },
   membersCard: {
-    borderRadius: 28,
+    maxHeight: '82%',
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
     backgroundColor: '#fff',
-    padding: 20,
+    paddingTop: 10,
+    paddingHorizontal: 22,
+  },
+  membersHandle: {
+    alignSelf: 'center',
+    width: 44,
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: '#d9dde4',
+    marginBottom: 4,
   },
   membersHeader: {
+    marginTop: 14,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
   },
   membersEyebrow: {
-    color: '#97a0ad',
+    color: '#9aa2ae',
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 1.4,
@@ -1202,6 +1233,7 @@ const styles = StyleSheet.create({
     color: '#161821',
     fontSize: 24,
     fontWeight: '900',
+    letterSpacing: -0.8,
   },
   membersClose: {
     width: 38,
@@ -1217,12 +1249,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   membersList: {
-    marginTop: 18,
-    gap: 12,
+    marginTop: 14,
   },
   memberRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f3f6',
+    gap: 12,
   },
   memberAvatar: {
     width: 42,
@@ -1231,7 +1266,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#1d212a',
-    marginRight: 12,
+    overflow: 'hidden',
   },
   memberAvatarText: {
     color: '#fff',
@@ -1242,7 +1277,6 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 21,
-    marginRight: 12,
   },
   memberCopy: {
     flex: 1,
@@ -1253,9 +1287,10 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   memberMeta: {
-    marginTop: 2,
+    marginTop: 3,
     color: '#7b828e',
     fontSize: 13,
+    fontWeight: '600',
   },
 
   // ─ Pending invites section
