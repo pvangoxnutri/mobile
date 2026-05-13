@@ -658,7 +658,7 @@ export default function TripDetailsScreen() {
                             style={styles.chatAvatar}
                             activeOpacity={0.7}
                             onPress={() => message.userId && setProfileCardUserId(message.userId)}>
-                            {avatarUrl ? (
+                            {avatarUrl && avatarUrl.trim() ? (
                               <Image source={{ uri: avatarUrl }} style={styles.chatAvatarImage} />
                             ) : (
                               <Text style={styles.chatAvatarText}>{getInitials(message.userName)}</Text>

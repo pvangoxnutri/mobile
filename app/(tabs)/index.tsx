@@ -235,7 +235,7 @@ export default function HomeScreen() {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
               <TopAlertsButton inviteCount={pendingInvites.length} />
               <TouchableOpacity style={styles.avatarShell} activeOpacity={0.8} onPress={() => router.push('/(tabs)/profile')}>
-                {user?.avatarUrl ? (
+                {user?.avatarUrl && user.avatarUrl.trim() ? (
                   <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
                 ) : (
                   <View style={styles.avatarCore}>
@@ -331,7 +331,7 @@ export default function HomeScreen() {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             <TopAlertsButton inviteCount={pendingInvites.length} />
             <TouchableOpacity style={styles.avatarShell} activeOpacity={0.8} onPress={() => router.push('/(tabs)/profile')}>
-            {user?.avatarUrl ? (
+            {user?.avatarUrl && user.avatarUrl.trim() ? (
               <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
             ) : (
               <View style={styles.avatarCore}>
@@ -517,7 +517,7 @@ export default function HomeScreen() {
               <View style={styles.membersList}>
                 {featuredMembers.map((member) => (
                   <Pressable key={member.id} style={styles.memberRow} onPress={() => setProfileCardUserId(member.id)}>
-                    {member.avatarUrl ? (
+                    {member.avatarUrl && member.avatarUrl.trim() ? (
                       <Image source={{ uri: member.avatarUrl }} style={styles.memberAvatarImage} />
                     ) : (
                       <View style={styles.memberAvatar}>
