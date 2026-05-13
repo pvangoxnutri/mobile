@@ -498,7 +498,7 @@ export default function TripDetailsScreen() {
                   {members.map((member) => (
                     <View key={member.id} style={styles.personRow}>
                       <View style={styles.personAvatar}>
-                        {member.avatarUrl ? (
+                        {member.avatarUrl && member.avatarUrl.trim() ? (
                           <Image source={{ uri: member.avatarUrl }} style={styles.personAvatarImage} />
                         ) : (
                           <Text style={styles.personAvatarText}>{getInitials(member.name)}</Text>
