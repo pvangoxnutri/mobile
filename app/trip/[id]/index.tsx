@@ -430,7 +430,18 @@ export default function TripDetailsScreen() {
                     <Text style={styles.categoryEmoji}>{group.emoji}</Text>
                     <View style={styles.categoryInfo}>
                       <Text style={styles.categoryLabel}>{group.label}</Text>
-                      <Text style={styles.categoryItemName} numberOfLines={1}>Coming up: {group.items[0]?.title ?? 'Activity'}</Text>
+                      {(() => {
+                        const firstItem = group.items[0];
+                        const isHidden = firstItem && firstItem.revealAt && new Date(firstItem.revealAt).getTime() > Date.now();
+                        return isHidden ? (
+                          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <Ionicons name="lock-closed" size={14} color="#c5cad2" style={{ marginRight: 6 }} />
+                            <Text style={styles.categoryItemName}>Coming up: Hidden</Text>
+                          </View>
+                        ) : (
+                          <Text style={styles.categoryItemName} numberOfLines={1}>Coming up: {firstItem?.title ?? 'Activity'}</Text>
+                        );
+                      })()}
                     </View>
                   </View>
                   {group.items.length > 1 && (
