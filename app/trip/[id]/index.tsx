@@ -732,7 +732,7 @@ export default function TripDetailsScreen() {
           animationType="slide"
           onRequestClose={() => setSelectedCategoryKey(null)}>
           <View style={styles.categoryModalOverlay}>
-            <View style={[styles.categoryModalContent, { paddingTop: 8 }]}>
+            <View style={[styles.categoryModalContent, { paddingTop: 14 }]}>
               <View style={styles.categoryModalHeader}>
                 <TouchableOpacity onPress={() => setSelectedCategoryKey(null)} style={styles.categoryModalCloseButton}>
                   <Ionicons name="chevron-down" size={24} color="#161821" />
@@ -793,7 +793,7 @@ export default function TripDetailsScreen() {
                               ) : (
                                 <>
                                   <View>
-                                    <Text style={styles.categoryModalActivityTitle}>1 hidden guest</Text>
+                                    <Text style={styles.categoryModalActivityTitle}>1 hidden sidequest</Text>
                                     <Text style={styles.categoryModalActivityDate} numberOfLines={1}>
                                       {formatTimeUntilReveal(activity.revealAt)}
                                     </Text>
