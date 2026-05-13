@@ -764,23 +764,49 @@ export default function TripDetailsScreen() {
                       </View>
 
                       <View style={styles.categoryModalActivities}>
-                        {selected.items.map((activity) => (
-                          <TouchableOpacity
-                            key={activity.id}
-                            style={styles.categoryModalActivityCard}
-                            onPress={() => {
-                              setSelectedCategoryKey(null);
-                              router.push(`/trip/${encodeURIComponent(id)}/sidequest/${encodeURIComponent(activity.id)}`);
-                            }}>
-                            <View>
-                              <Text style={styles.categoryModalActivityTitle}>{activity.title}</Text>
-                              <Text style={styles.categoryModalActivityDate} numberOfLines={1}>
-                                {formatActivityDate(activity.date)}
-                              </Text>
-                            </View>
-                            <Ionicons name="chevron-forward" size={18} color="#c5cad2" />
-                          </TouchableOpacity>
-                        ))}
+                        {selected.items.map((activity) => {
+                          const isRevealed = !activity.revealAt || new Date(activity.revealAt).getTime() <= Date.now();
+                          const isDisabled = !isRevealed;
+
+                          return (
+                            <TouchableOpacity
+                              key={activity.id}
+                              style={[styles.categoryModalActivityCard, isDisabled && styles.categoryModalActivityCardHidden]}
+                              activeOpacity={isDisabled ? 0.5 : 0.7}
+                              disabled={isDisabled}
+                              onPress={() => {
+                                if (!isDisabled) {
+                                  setSelectedCategoryKey(null);
+                                  router.push(`/trip/${encodeURIComponent(id)}/sidequest/${encodeURIComponent(activity.id)}`);
+                                }
+                              }}>
+                              {isRevealed ? (
+                                <>
+                                  <View>
+                                    <Text style={styles.categoryModalActivityTitle}>{activity.title}</Text>
+                                    <Text style={styles.categoryModalActivityDate} numberOfLines={1}>
+                                      {formatActivityDate(activity.date)}
+                                    </Text>
+                                  </View>
+                                  <Ionicons name="chevron-forward" size={18} color="#c5cad2" />
+                                </>
+                              ) : (
+                                <>
+                                  <View style={styles.categoryModalActivityLockSection}>
+                                    <Ionicons name="lock-closed" size={18} color="#c5cad2" />
+                                    <View style={{ marginLeft: 10 }}>
+                                      <Text style={styles.categoryModalActivityTitle}>Hidden until reveal</Text>
+                                      <Text style={styles.categoryModalActivityDate} numberOfLines={1}>
+                                        Reveals {formatActivityRevealDate(activity.revealAt)}
+                                      </Text>
+                                    </View>
+                                  </View>
+                                  <Ionicons name="lock-closed" size={18} color="#c5cad2" />
+                                </>
+                              )}
+                            </TouchableOpacity>
+                          );
+                        })}
                       </View>
                     </>
                   );
@@ -828,6 +854,11 @@ function formatTripDateRange(startDate?: string, endDate?: string) {
 
 function formatActivityDate(date: string) {
   return new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(`${date}T12:00:00`));
+}
+
+function formatActivityRevealDate(revealAt?: string | null) {
+  if (!revealAt) return 'soon';
+  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(revealAt));
 }
 
 function formatRevealChip(value: string) {
@@ -1871,6 +1902,14 @@ const styles = StyleSheet.create({
   categoryModalActivityCard: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
+    opacity: 1,
+  },
+  categoryModalActivityCardHidden: {
+    opacity: 0.6,
+  },
+  categoryModalActivityLockSection: {
+    flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 14,
     paddingVertical: 12,
