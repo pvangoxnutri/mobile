@@ -429,7 +429,7 @@ export default function TripDetailsScreen() {
                   <View style={styles.categoryCardHeader}>
                     <Text style={styles.categoryEmoji}>{group.emoji}</Text>
                     <View style={styles.categoryInfo}>
-                      <Text style={styles.categoryLabel}>{group.label}</Text>
+                      <Text style={styles.categoryLabel}>Coming up: {group.label}</Text>
                       <Text style={styles.categoryItemName} numberOfLines={1}>{group.items[0]?.title ?? 'Activity'}</Text>
                     </View>
                   </View>
