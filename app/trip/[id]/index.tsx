@@ -791,18 +791,15 @@ export default function TripDetailsScreen() {
                                   <Ionicons name="chevron-forward" size={18} color="#c5cad2" />
                                 </>
                               ) : (
-                                <>
-                                  <View style={styles.categoryModalActivityLockSection}>
-                                    <Ionicons name="lock-closed" size={18} color="#c5cad2" />
-                                    <View style={{ marginLeft: 10 }}>
-                                      <Text style={styles.categoryModalActivityTitle}>Hidden until reveal</Text>
-                                      <Text style={styles.categoryModalActivityDate} numberOfLines={1}>
-                                        Reveals {formatActivityRevealDate(activity.revealAt)}
-                                      </Text>
-                                    </View>
-                                  </View>
+                                <View style={styles.categoryModalActivityLockSection}>
                                   <Ionicons name="lock-closed" size={18} color="#c5cad2" />
-                                </>
+                                  <View style={{ marginLeft: 10 }}>
+                                    <Text style={styles.categoryModalActivityTitle}>Hidden until reveal</Text>
+                                    <Text style={styles.categoryModalActivityDate} numberOfLines={1}>
+                                      Reveals {formatActivityRevealDate(activity.revealAt)}
+                                    </Text>
+                                  </View>
+                                </View>
                               )}
                             </TouchableOpacity>
                           );
@@ -1853,7 +1850,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 6,
   },
   categoryModalCloseButton: {
     width: 42,
@@ -1872,7 +1869,7 @@ const styles = StyleSheet.create({
     backgroundColor: PRIMARY_COLOR,
   },
   categoryModalBody: {
-    paddingBottom: 16,
+    paddingBottom: 8,
   },
   categoryModalTitleSection: {
     flexDirection: 'row',
