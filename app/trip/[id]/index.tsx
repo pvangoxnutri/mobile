@@ -732,7 +732,7 @@ export default function TripDetailsScreen() {
           animationType="slide"
           onRequestClose={() => setSelectedCategoryKey(null)}>
           <View style={styles.categoryModalOverlay}>
-            <View style={[styles.categoryModalContent, { paddingTop: Math.max(insets.top, 18) + 6 }]}>
+            <View style={[styles.categoryModalContent, { paddingTop: Math.max(insets.top, 18) + 2 }]}>
               <View style={styles.categoryModalHeader}>
                 <TouchableOpacity onPress={() => setSelectedCategoryKey(null)} style={styles.categoryModalCloseButton}>
                   <Ionicons name="chevron-down" size={24} color="#161821" />
@@ -1850,7 +1850,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: 2,
   },
   categoryModalCloseButton: {
     width: 42,
@@ -1869,7 +1869,7 @@ const styles = StyleSheet.create({
     backgroundColor: PRIMARY_COLOR,
   },
   categoryModalBody: {
-    paddingBottom: 8,
+    paddingBottom: 4,
   },
   categoryModalTitleSection: {
     flexDirection: 'row',
