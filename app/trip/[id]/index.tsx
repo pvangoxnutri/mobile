@@ -732,7 +732,7 @@ export default function TripDetailsScreen() {
           animationType="slide"
           onRequestClose={() => setSelectedCategoryKey(null)}>
           <View style={styles.categoryModalOverlay}>
-            <View style={[styles.categoryModalContent, { paddingTop: insets.top + 4 }]}>
+            <View style={[styles.categoryModalContent, { paddingTop: 8 }]}>
               <View style={styles.categoryModalHeader}>
                 <TouchableOpacity onPress={() => setSelectedCategoryKey(null)} style={styles.categoryModalCloseButton}>
                   <Ionicons name="chevron-down" size={24} color="#161821" />
