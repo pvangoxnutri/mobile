@@ -791,15 +791,17 @@ export default function TripDetailsScreen() {
                                   <Ionicons name="chevron-forward" size={18} color="#c5cad2" />
                                 </>
                               ) : (
-                                <View style={styles.categoryModalActivityLockSection}>
-                                  <Ionicons name="lock-closed" size={18} color="#c5cad2" />
-                                  <View style={{ marginLeft: 10 }}>
-                                    <Text style={styles.categoryModalActivityTitle}>Hidden until reveal</Text>
+                                <>
+                                  <View>
+                                    <Text style={styles.categoryModalActivityTitle}>1 hidden guest</Text>
                                     <Text style={styles.categoryModalActivityDate} numberOfLines={1}>
-                                      Reveals {formatActivityRevealDate(activity.revealAt)}
+                                      {formatTimeUntilReveal(activity.revealAt)}
                                     </Text>
                                   </View>
-                                </View>
+                                  <View style={styles.lockedBadge}>
+                                    <Text style={styles.lockedBadgeText}>LOCKED</Text>
+                                  </View>
+                                </>
                               )}
                             </TouchableOpacity>
                           );
@@ -856,6 +858,23 @@ function formatActivityDate(date: string) {
 function formatActivityRevealDate(revealAt?: string | null) {
   if (!revealAt) return 'soon';
   return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(revealAt));
+}
+
+function formatTimeUntilReveal(revealAt?: string | null) {
+  if (!revealAt) return 'Reveals soon';
+  const now = Date.now();
+  const reveal = new Date(revealAt).getTime();
+  const diffMs = reveal - now;
+
+  if (diffMs <= 0) return 'Revealed';
+
+  const hours = Math.floor(diffMs / (1000 * 60 * 60));
+  const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+
+  if (hours > 0) {
+    return `Reveals in ${hours} h ${minutes} m`;
+  }
+  return `Reveals in ${minutes} m`;
 }
 
 function formatRevealChip(value: string) {
@@ -1915,6 +1934,18 @@ const styles = StyleSheet.create({
     backgroundColor: '#f9fafc',
     borderWidth: 1,
     borderColor: '#ebedf2',
+  },
+  lockedBadge: {
+    backgroundColor: '#f5f6f8',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  lockedBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#8a919d',
+    letterSpacing: 0.5,
   },
   categoryModalActivityTitle: {
     fontSize: 15,
