@@ -498,7 +498,11 @@ export default function TripDetailsScreen() {
                   {members.map((member) => (
                     <View key={member.id} style={styles.personRow}>
                       <View style={styles.personAvatar}>
-                        <Text style={styles.personAvatarText}>{getInitials(member.name)}</Text>
+                        {member.avatarUrl ? (
+                          <Image source={{ uri: member.avatarUrl }} style={styles.personAvatarImage} />
+                        ) : (
+                          <Text style={styles.personAvatarText}>{getInitials(member.name)}</Text>
+                        )}
                       </View>
                       <View style={styles.personCopy}>
                         <Text style={styles.personName}>{member.name}</Text>
@@ -1390,6 +1394,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: '#1d212a',
     marginRight: 12,
+  },
+  personAvatarImage: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
   },
   pendingAvatar: {
     backgroundColor: '#f3f5f8',
