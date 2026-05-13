@@ -1,14 +1,16 @@
 import { FontAwesome, Ionicons } from '@expo/vector-icons';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
+import * as ImagePicker from 'expo-image-picker';
 import * as Linking from 'expo-linking';
 import { useFocusEffect } from '@react-navigation/native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Image, Modal, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Image, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/components/auth-provider';
 import UserProfileCard from '@/components/user-profile-card';
 import { apiFetch, apiJson } from '@/lib/api';
+import { uploadImageIfNeeded } from '@/lib/uploads';
 import type { Quest, SideQuestActivity, TripInvite } from '@/lib/types';
 import { PRIMARY_COLOR, SECONDARY_COLOR } from '@/constants/colors';
 
@@ -17,6 +19,7 @@ type ChatMsg = {
   userId?: string | null;
   userName: string;
   text: string;
+  imageUrl?: string | null;
   isSystem: boolean;
   createdAt: string;
 };
@@ -52,6 +55,9 @@ export default function TripDetailsScreen() {
   const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
   const [chatDraft, setChatDraft] = useState('');
   const [chatSending, setChatSending] = useState(false);
+  const [chatPendingImage, setChatPendingImage] = useState<string | null>(null);
+  const [chatImageUploading, setChatImageUploading] = useState(false);
+  const [chatFullscreenImage, setChatFullscreenImage] = useState<string | null>(null);
   const [chatPresence, setChatPresence] = useState<ChatPresenceUser[]>([]);
   const [chatUnread, setChatUnread] = useState(false);
   const lastChatTimestampRef = useRef<string | null>(null);
@@ -64,6 +70,7 @@ export default function TripDetailsScreen() {
   const [error, setError] = useState('');
   const [profileCardUserId, setProfileCardUserId] = useState<string | null>(null);
   const [selectedCategoryKey, setSelectedCategoryKey] = useState<string | null>(null);
+  const [failedAvatars, setFailedAvatars] = useState<Set<string>>(new Set());
 
   useFocusEffect(
     useCallback(() => {
@@ -273,18 +280,53 @@ export default function TripDetailsScreen() {
     } catch {}
   }
 
+  function closeChat() {
+    Keyboard.dismiss();
+    setChatOpen(false);
+  }
+
+  async function handlePickChatImage() {
+    if (chatImageUploading || chatSending) return;
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        setError('Photo library access is required to attach images.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.85,
+      });
+      if (result.canceled || !result.assets[0]) return;
+      setChatPendingImage(result.assets[0].uri);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not open the photo library.');
+    }
+  }
+
   async function handleSendChat() {
     const trimmed = chatDraft.trim();
-    if (!trimmed || chatSending) return;
+    const hasImage = chatPendingImage !== null;
+    if ((!trimmed && !hasImage) || chatSending || chatImageUploading) return;
     setChatSending(true);
     try {
+      let uploadedImageUrl: string | null = null;
+      if (hasImage && chatPendingImage) {
+        setChatImageUploading(true);
+        try {
+          uploadedImageUrl = await uploadImageIfNeeded(chatPendingImage, 'chat');
+        } finally {
+          setChatImageUploading(false);
+        }
+      }
       const msg = await apiJson<ChatMsg>(`/api/trips/${id}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: trimmed }),
+        body: JSON.stringify({ text: trimmed, imageUrl: uploadedImageUrl }),
       });
       setChatMessages((prev) => [...prev, msg]);
       setChatDraft('');
+      setChatPendingImage(null);
       lastChatTimestampRef.current = msg.createdAt;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to send message right now.');
@@ -496,10 +538,20 @@ export default function TripDetailsScreen() {
                 <View style={styles.peopleSection}>
                   <Text style={styles.peopleSectionTitle}>Travelers</Text>
                   {members.map((member) => (
-                    <View key={member.id} style={styles.personRow}>
+                    <Pressable
+                      key={member.id}
+                      style={({ pressed }: { pressed: boolean }) => [styles.personRow, pressed ? { opacity: 0.7 } : null]}
+                      onPress={() => {
+                        setPeopleSheetOpen(false);
+                        setTimeout(() => setProfileCardUserId(member.id), 280);
+                      }}>
                       <View style={styles.personAvatar}>
-                        {member.avatarUrl && member.avatarUrl.trim() ? (
-                          <Image source={{ uri: member.avatarUrl }} style={styles.personAvatarImage} />
+                        {member.avatarUrl && member.avatarUrl.trim() && !failedAvatars.has(member.id) ? (
+                          <Image
+                            source={{ uri: member.avatarUrl }}
+                            style={styles.personAvatarImage}
+                            onError={() => setFailedAvatars(prev => new Set([...prev, member.id]))}
+                          />
                         ) : (
                           <Text style={styles.personAvatarText}>{getInitials(member.name)}</Text>
                         )}
@@ -508,7 +560,7 @@ export default function TripDetailsScreen() {
                         <Text style={styles.personName}>{member.name}</Text>
                         <Text style={styles.personMeta}>{member.isOwner ? 'Owner' : 'Member'}</Text>
                       </View>
-                    </View>
+                    </Pressable>
                   ))}
                   {canManageTrip ? (
                     <View style={styles.inviteInlineWrap}>
@@ -597,16 +649,19 @@ export default function TripDetailsScreen() {
           </View>
         </Modal>
 
-        <Modal visible={chatOpen} transparent animationType="fade" onRequestClose={() => setChatOpen(false)}>
+        <Modal visible={chatOpen} transparent animationType="fade" onRequestClose={closeChat}>
           <View style={styles.chatModalBackdrop}>
-            <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setChatOpen(false)} />
+            <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={closeChat} />
+            <KeyboardAvoidingView
+              style={styles.chatKeyboardAvoider}
+              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
             <View style={[styles.chatPanel, { paddingTop: Math.max(insets.top, 18) + 14, paddingBottom: Math.max(insets.bottom, 18) + 14 }]}>
               <View style={styles.chatPanelHeader}>
                 <View style={styles.chatPanelHeaderLeft}>
                   <Text style={styles.chatPanelEyebrow}>GROUP CHAT</Text>
                   <Text style={styles.chatPanelTitle}>{trip?.title ?? 'Adventure chat'}</Text>
                 </View>
-                <TouchableOpacity style={styles.chatPanelClose} activeOpacity={0.88} onPress={() => setChatOpen(false)}>
+                <TouchableOpacity style={styles.chatPanelClose} activeOpacity={0.88} onPress={closeChat}>
                   <Ionicons name="close" size={20} color="#161821" />
                 </TouchableOpacity>
               </View>
@@ -648,9 +703,16 @@ export default function TripDetailsScreen() {
                         <Text style={styles.chatSystemLabel}>{message.text}</Text>
                       ) : ownMessage ? (
                         <View style={styles.chatMessageWrapOwn}>
-                          <View style={[styles.chatBubbleCard, styles.chatBubbleCardOwn, { backgroundColor: PRIMARY_COLOR }]}>
-                            <Text style={[styles.chatBubbleText, styles.chatBubbleTextOwn]}>{message.text}</Text>
-                          </View>
+                          {message.imageUrl ? (
+                            <Pressable onPress={() => setChatFullscreenImage(message.imageUrl ?? null)}>
+                              <Image source={{ uri: message.imageUrl }} style={styles.chatMessageImage} />
+                            </Pressable>
+                          ) : null}
+                          {message.text ? (
+                            <View style={[styles.chatBubbleCard, styles.chatBubbleCardOwn, { backgroundColor: PRIMARY_COLOR }]}>
+                              <Text style={[styles.chatBubbleText, styles.chatBubbleTextOwn]}>{message.text}</Text>
+                            </View>
+                          ) : null}
                         </View>
                       ) : (
                         <View style={styles.chatMessageRow}>
@@ -658,17 +720,28 @@ export default function TripDetailsScreen() {
                             style={styles.chatAvatar}
                             activeOpacity={0.7}
                             onPress={() => message.userId && setProfileCardUserId(message.userId)}>
-                            {avatarUrl && avatarUrl.trim() ? (
-                              <Image source={{ uri: avatarUrl }} style={styles.chatAvatarImage} />
+                            {avatarUrl && avatarUrl.trim() && !failedAvatars.has(message.userId || '') ? (
+                              <Image
+                                source={{ uri: avatarUrl }}
+                                style={styles.chatAvatarImage}
+                                onError={() => message.userId && setFailedAvatars(prev => new Set([...prev, message.userId!]))}
+                              />
                             ) : (
                               <Text style={styles.chatAvatarText}>{getInitials(message.userName)}</Text>
                             )}
                           </TouchableOpacity>
                           <View style={styles.chatMessageContent}>
                             <Text style={styles.chatAuthor}>{message.userName}</Text>
-                            <View style={styles.chatBubbleCard}>
-                              <Text style={styles.chatBubbleText}>{message.text}</Text>
-                            </View>
+                            {message.imageUrl ? (
+                              <Pressable onPress={() => setChatFullscreenImage(message.imageUrl ?? null)}>
+                                <Image source={{ uri: message.imageUrl }} style={styles.chatMessageImage} />
+                              </Pressable>
+                            ) : null}
+                            {message.text ? (
+                              <View style={styles.chatBubbleCard}>
+                                <Text style={styles.chatBubbleText}>{message.text}</Text>
+                              </View>
+                            ) : null}
                           </View>
                         </View>
                       )}
@@ -677,23 +750,53 @@ export default function TripDetailsScreen() {
                 })}
               </ScrollView>
 
+              {chatPendingImage ? (
+                <View style={styles.chatPendingImageWrap}>
+                  <Image source={{ uri: chatPendingImage }} style={styles.chatPendingImage} />
+                  <TouchableOpacity
+                    style={styles.chatPendingImageRemove}
+                    activeOpacity={0.85}
+                    onPress={() => setChatPendingImage(null)}>
+                    <Ionicons name="close" size={14} color="#fff" />
+                  </TouchableOpacity>
+                  {chatImageUploading ? (
+                    <View style={styles.chatPendingImageUploading}>
+                      <Text style={styles.chatPendingImageUploadingText}>Uploading…</Text>
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
               <View style={styles.chatComposer}>
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  style={styles.chatAttachButton}
+                  disabled={chatSending || chatImageUploading}
+                  onPress={() => void handlePickChatImage()}>
+                  <Ionicons name="image-outline" size={22} color={chatSending || chatImageUploading ? '#c2c8d2' : '#161821'} />
+                </TouchableOpacity>
                 <TextInput
                   value={chatDraft}
                   onChangeText={setChatDraft}
+                  onFocus={() => setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: true }), 250)}
                   placeholder="Send a message to the group"
                   placeholderTextColor="#afb5bf"
                   style={styles.chatInput}
+                  multiline
                 />
                 <TouchableOpacity
                   activeOpacity={0.9}
-                  style={[styles.chatSendButton, { backgroundColor: PRIMARY_COLOR }, !chatDraft.trim() || chatSending ? styles.chatSendButtonDisabled : null]}
-                  disabled={!chatDraft.trim() || chatSending}
+                  style={[
+                    styles.chatSendButton,
+                    { backgroundColor: PRIMARY_COLOR },
+                    (!chatDraft.trim() && !chatPendingImage) || chatSending || chatImageUploading ? styles.chatSendButtonDisabled : null,
+                  ]}
+                  disabled={(!chatDraft.trim() && !chatPendingImage) || chatSending || chatImageUploading}
                   onPress={() => void handleSendChat()}>
                   <Ionicons name="send" size={16} color="#fff" />
                 </TouchableOpacity>
               </View>
             </View>
+            </KeyboardAvoidingView>
           </View>
         </Modal>
 
@@ -831,6 +934,17 @@ export default function TripDetailsScreen() {
         </Modal>
 
         <UserProfileCard userId={profileCardUserId} onClose={() => setProfileCardUserId(null)} />
+
+        <Modal visible={chatFullscreenImage !== null} transparent animationType="fade" onRequestClose={() => setChatFullscreenImage(null)}>
+          <Pressable style={styles.chatFullscreenBackdrop} onPress={() => setChatFullscreenImage(null)}>
+            {chatFullscreenImage ? (
+              <Image source={{ uri: chatFullscreenImage }} style={styles.chatFullscreenImage} resizeMode="contain" />
+            ) : null}
+            <TouchableOpacity style={[styles.chatFullscreenClose, { top: Math.max(insets.top, 16) + 8 }]} onPress={() => setChatFullscreenImage(null)}>
+              <Ionicons name="close" size={24} color="#fff" />
+            </TouchableOpacity>
+          </Pressable>
+        </Modal>
       </View>
     </>
   );
@@ -1601,6 +1715,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 14,
   },
+  chatKeyboardAvoider: {
+    flex: 1,
+  },
   chatPanel: {
     flex: 1,
     borderRadius: 30,
@@ -1802,6 +1919,77 @@ const styles = StyleSheet.create({
   },
   chatSendButtonDisabled: {
     opacity: 0.55,
+  },
+  chatMessageImage: {
+    width: 220,
+    height: 220,
+    borderRadius: 16,
+    marginBottom: 6,
+    backgroundColor: '#eef0f4',
+  },
+  chatFullscreenBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.92)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chatFullscreenImage: {
+    width: '100%',
+    height: '100%',
+  },
+  chatFullscreenClose: {
+    position: 'absolute',
+    right: 18,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chatAttachButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f1f3f6',
+  },
+  chatPendingImageWrap: {
+    marginTop: 8,
+    alignSelf: 'flex-start',
+    width: 96,
+    height: 96,
+    borderRadius: 14,
+    overflow: 'hidden',
+    position: 'relative',
+    backgroundColor: '#eef0f4',
+  },
+  chatPendingImage: {
+    width: '100%',
+    height: '100%',
+  },
+  chatPendingImageRemove: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(12,14,19,0.7)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chatPendingImageUploading: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(12,14,19,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chatPendingImageUploadingText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
   },
   categoryGrid: {
     marginTop: 16,
