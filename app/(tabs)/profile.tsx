@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as Linking from 'expo-linking';
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Image, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/components/auth-provider';
 import { useI18n, type AppLanguage } from '@/components/i18n-provider';
@@ -447,7 +447,7 @@ export default function ProfileScreen() {
       />
 
       <Modal visible={editingName} transparent animationType="fade" onRequestClose={() => setEditingName(false)}>
-        <View style={styles.confirmBackdrop}>
+        <KeyboardAvoidingView style={styles.confirmBackdrop} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setEditingName(false)} />
           <View style={styles.confirmCard}>
             <Text style={styles.confirmTitle}>{t('profile.modals.changeName')}</Text>
@@ -461,11 +461,11 @@ export default function ProfileScreen() {
               </Pressable>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal visible={editingBio} transparent animationType="fade" onRequestClose={() => setEditingBio(false)}>
-        <View style={styles.confirmBackdrop}>
+        <KeyboardAvoidingView style={styles.confirmBackdrop} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setEditingBio(false)} />
           <View style={styles.confirmCard}>
             <Text style={styles.confirmTitle}>{t('profile.modals.editBio')}</Text>
@@ -487,7 +487,7 @@ export default function ProfileScreen() {
               </Pressable>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
 
@@ -508,7 +508,7 @@ export default function ProfileScreen() {
       />
 
       <Modal visible={supportModal !== null} transparent animationType="fade" onRequestClose={closeSupportModal}>
-        <View style={styles.confirmBackdrop}>
+        <KeyboardAvoidingView style={styles.confirmBackdrop} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={closeSupportModal} />
           <View style={styles.confirmCard}>
             <Text style={styles.confirmTitle}>
@@ -540,7 +540,7 @@ export default function ProfileScreen() {
               </Pressable>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <SectionCard
@@ -564,7 +564,7 @@ export default function ProfileScreen() {
       />
 
       <Modal visible={editingPassword} transparent animationType="fade" onRequestClose={() => setEditingPassword(false)}>
-        <View style={styles.confirmBackdrop}>
+        <KeyboardAvoidingView style={styles.confirmBackdrop} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setEditingPassword(false)} />
           <View style={styles.confirmCard}>
             <Text style={styles.confirmTitle}>{t('profile.modals.changePassword')}</Text>
@@ -585,11 +585,11 @@ export default function ProfileScreen() {
               </Pressable>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal visible={editingLanguage} transparent animationType="fade" onRequestClose={() => setEditingLanguage(false)}>
-        <View style={styles.confirmBackdrop}>
+        <KeyboardAvoidingView style={styles.confirmBackdrop} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setEditingLanguage(false)} />
           <View style={styles.confirmCard}>
             <Text style={styles.confirmTitle}>{t('profile.modals.changeLanguage')}</Text>
@@ -610,7 +610,7 @@ export default function ProfileScreen() {
               </Pressable>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <SectionCard
@@ -626,7 +626,7 @@ export default function ProfileScreen() {
       />
 
       <Modal visible={editingNotifications} transparent animationType="fade" onRequestClose={() => setEditingNotifications(false)}>
-        <View style={styles.confirmBackdrop}>
+        <KeyboardAvoidingView style={styles.confirmBackdrop} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setEditingNotifications(false)} />
           <View style={styles.confirmCard}>
             <Text style={styles.confirmTitle}>{t('profile.notifications.title')}</Text>
@@ -661,7 +661,7 @@ export default function ProfileScreen() {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <View style={styles.brandBlock}>
@@ -670,7 +670,7 @@ export default function ProfileScreen() {
       </View>
 
       <Modal visible={deleteConfirmOpen} transparent animationType="fade" onRequestClose={() => setDeleteConfirmOpen(false)}>
-        <View style={styles.confirmBackdrop}>
+        <KeyboardAvoidingView style={styles.confirmBackdrop} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setDeleteConfirmOpen(false)} />
           <View style={styles.confirmCard}>
             <Text style={styles.confirmTitle}>{t('profile.delete.confirmTitle')}</Text>
@@ -688,11 +688,11 @@ export default function ProfileScreen() {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal visible={thanksModal !== null} transparent animationType="fade" onRequestClose={() => setThanksModal(null)}>
-        <View style={styles.confirmBackdrop}>
+        <KeyboardAvoidingView style={styles.confirmBackdrop} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setThanksModal(null)} />
           <View style={styles.thanksCard}>
             <View style={[styles.thanksIconCircle, { backgroundColor: thanksModal === 'bug' ? '#fff1f5' : '#e6f7fa' }]}>
@@ -714,7 +714,7 @@ export default function ProfileScreen() {
               <Text style={styles.thanksButtonText}>{t('profile.support.thanksClose')}</Text>
             </Pressable>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </ScrollView>
     </View>

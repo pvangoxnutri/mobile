@@ -11,7 +11,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useMemo, useState } from 'react';
 import {
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -91,7 +93,7 @@ export default function CountryPicker({ value, onChange, label = 'Countries' }: 
 
       {/* â”€â”€ Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <Modal visible={open} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setOpen(false)}>
-        <View style={[styles.modal, { paddingTop: Math.max(insets.top, 16) }]}>
+        <KeyboardAvoidingView style={[styles.modal, { paddingTop: Math.max(insets.top, 16) }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           {/* Header */}
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Select countries</Text>
@@ -119,7 +121,7 @@ export default function CountryPicker({ value, onChange, label = 'Countries' }: 
               style={styles.searchInput}
               value={search}
               onChangeText={setSearch}
-              placeholder="Search countriesâ€¦"
+              placeholder="Search countries..."
               placeholderTextColor="#B0B7C3"
               autoCapitalize="none"
               autoCorrect={false}
@@ -152,7 +154,7 @@ export default function CountryPicker({ value, onChange, label = 'Countries' }: 
               );
             })}
           </ScrollView>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </>
   );

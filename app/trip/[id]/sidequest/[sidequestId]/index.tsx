@@ -6,6 +6,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
+  KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
@@ -98,8 +99,10 @@ export default function SideQuestDetailScreen() {
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView
         contentContainerStyle={[styles.screen, { paddingTop: Math.max(insets.top, 18) + 4, paddingBottom: Math.max(insets.bottom, 24) + 34 }]}
+        keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <TouchableOpacity style={styles.backButton} activeOpacity={0.88} onPress={() => router.back()}>
@@ -274,6 +277,7 @@ export default function SideQuestDetailScreen() {
           </>
         ) : null}
       </ScrollView>
+      </KeyboardAvoidingView>
 
       <UserProfileCard userId={profileCardUserId} onClose={() => setProfileCardUserId(null)} />
     </>

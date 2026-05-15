@@ -4,7 +4,9 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -97,10 +99,17 @@ export default function CostSplitScreen() {
   });
 
   const [expandedBalanceUser, setExpandedBalanceUser] = useState<string | null>(null);
+  const [expandedDebtKey, setExpandedDebtKey] = useState<string | null>(null);
 
   const [settlingDebt, setSettlingDebt] = useState<Debt | null>(null);
   const [settleSubmitting, setSettleSubmitting] = useState(false);
   const [settleError, setSettleError] = useState('');
+  const [settledKeys, setSettledKeys] = useState<Set<string>>(new Set());
+
+  const [deletingExpenseId, setDeletingExpenseId] = useState<string | null>(null);
+  const [deletingSettlementId, setDeletingSettlementId] = useState<string | null>(null);
+  const [deletingBusy, setDeletingBusy] = useState(false);
+  const [actionError, setActionError] = useState('');
 
   const loadAll = useCallback(async () => {
     if (!id) return;
@@ -244,26 +253,40 @@ export default function CostSplitScreen() {
     }
   }
 
-  async function handleDeleteExpense(expenseId: string) {
+  function debtKey(d: Debt) {
+    return `${d.fromUserId}|${d.toUserId}|${d.amount.toFixed(2)}`;
+  }
+
+  async function handleConfirmDeleteExpense() {
+    if (!deletingExpenseId) return;
+    setDeletingBusy(true);
+    setActionError('');
     try {
-      await apiFetch(`/api/trips/${encodeURIComponent(id)}/expenses/${encodeURIComponent(expenseId)}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/trips/${encodeURIComponent(id)}/expenses/${encodeURIComponent(deletingExpenseId)}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error((await res.text()) || 'Unable to remove expense.');
+      setDeletingExpenseId(null);
       await loadAll();
-    } catch {
-      // silent
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Unable to remove expense.');
+    } finally {
+      setDeletingBusy(false);
     }
   }
 
-  async function handleSettleDebt(debt: Debt) {
+  function handleSettleDebt(debt: Debt) {
+    if (settledKeys.has(debtKey(debt))) return;
     setSettlingDebt(debt);
     setSettleError('');
   }
 
   async function handleConfirmSettle() {
     if (!settlingDebt) return;
+    const key = debtKey(settlingDebt);
     setSettleSubmitting(true);
     setSettleError('');
+    setSettledKeys((prev) => new Set([...prev, key]));
     try {
-      await apiFetch(`/api/trips/${id}/expenses/settlements`, {
+      const res = await apiFetch(`/api/trips/${id}/expenses/settlements`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -273,23 +296,55 @@ export default function CostSplitScreen() {
           note: 'Settled via Cost Split',
         }),
       });
+      if (!res.ok) throw new Error((await res.text()) || 'Unable to record settlement.');
       setSettlingDebt(null);
       await loadAll();
+      setSettledKeys((prev) => {
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      });
     } catch (err) {
       setSettleError(err instanceof Error ? err.message : 'Unable to record settlement.');
+      setSettledKeys((prev) => {
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      });
     } finally {
       setSettleSubmitting(false);
     }
   }
 
-  async function handleDeleteSettlement(settlementId: string) {
+  async function handleConfirmDeleteSettlement() {
+    if (!deletingSettlementId) return;
+    setDeletingBusy(true);
+    setActionError('');
     try {
-      await apiFetch(`/api/trips/${encodeURIComponent(id)}/expenses/settlements/${encodeURIComponent(settlementId)}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/trips/${encodeURIComponent(id)}/expenses/settlements/${encodeURIComponent(deletingSettlementId)}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error((await res.text()) || 'Unable to remove settlement.');
+      setDeletingSettlementId(null);
       await loadAll();
-    } catch {
-      // silent
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Unable to remove settlement.');
+    } finally {
+      setDeletingBusy(false);
     }
   }
+
+  function expensesBetween(fromUserId: string, toUserId: string) {
+    return expenses.filter((e) => {
+      const fromIsParticipant = e.participants.some((p) => p.userId === fromUserId);
+      const toIsPayer = e.payers.some((p) => p.userId === toUserId);
+      const toIsParticipant = e.participants.some((p) => p.userId === toUserId);
+      const fromIsPayer = e.payers.some((p) => p.userId === fromUserId);
+      return (fromIsParticipant && toIsPayer) || (toIsParticipant && fromIsPayer);
+    });
+  }
+
+  const tripCurrencies = Array.from(new Set(expenses.map((e) => e.currency).filter(Boolean)));
+  const commonCurrency = tripCurrencies.length === 1 ? tripCurrencies[0] : '';
+  const hasMixedCurrencies = tripCurrencies.length > 1;
 
   return (
     <View style={styles.screen}>
@@ -363,13 +418,18 @@ export default function CostSplitScreen() {
                     </View>
                     <View style={styles.expenseMeta}>
                       <Text style={styles.expenseMetaText}>
-                        Paid by {expense.payers.map((p) => p.userName).join(', ')}
+                        {expense.payers.length === 1
+                          ? `Paid by ${expense.payers[0].userName}`
+                          : `Paid by ${expense.payers.map((p) => `${p.userName} (${expense.currency} ${formatAmount(p.amount)})`).join(', ')}`}
+                      </Text>
+                      <Text style={styles.expenseMetaText}>
+                        Split between {expense.participants.length} · {expense.splitMode}
                       </Text>
                     </View>
                     <TouchableOpacity
                       style={styles.deleteButton}
                       activeOpacity={0.8}
-                      onPress={() => void handleDeleteExpense(expense.id)}>
+                      onPress={() => { setActionError(''); setDeletingExpenseId(expense.id); }}>
                       <Ionicons name="trash-outline" size={16} color="#d95f6a" />
                       <Text style={styles.deleteButtonText}>Remove</Text>
                     </TouchableOpacity>
@@ -388,24 +448,46 @@ export default function CostSplitScreen() {
               {balancesData?.balances && balancesData.balances.length > 0 ? (
                 <>
                   <Text style={styles.sectionLabel}>NET BALANCES</Text>
-                  {balancesData.balances.map((bal) => {
+                  <Text style={styles.sectionHelperText}>
+                    Tap a name to see which expenses make up their balance.
+                  </Text>
+                  {[...balancesData.balances]
+                    .sort((a, b) => {
+                      const aSettled = Math.abs(a.net) < 0.005;
+                      const bSettled = Math.abs(b.net) < 0.005;
+                      if (aSettled !== bSettled) return aSettled ? 1 : -1;
+                      return Math.abs(b.net) - Math.abs(a.net);
+                    })
+                    .map((bal) => {
                     const isExpanded = expandedBalanceUser === bal.userId;
                     const userExpenses = expenses.filter((e) =>
-                      e.participants.some((p) => p.userId === bal.userId)
+                      e.participants.some((p) => p.userId === bal.userId) ||
+                      e.payers.some((p) => p.userId === bal.userId)
                     );
+                    const isSettled = Math.abs(bal.net) < 0.005;
+                    const netLabel = isSettled ? 'Settled up' : bal.net > 0 ? 'is owed' : 'owes';
                     return (
                       <View key={bal.userId}>
                         <TouchableOpacity
                           activeOpacity={0.8}
-                          style={styles.balanceCard}
+                          style={[styles.balanceCard, isSettled ? styles.balanceCardSettled : null]}
                           onPress={() => setExpandedBalanceUser(isExpanded ? null : bal.userId)}>
-                          <View style={styles.balanceAvatar}>
+                          <View style={[styles.balanceAvatar, isSettled ? styles.balanceAvatarSettled : null]}>
                             <Text style={styles.balanceAvatarText}>{getInitials(bal.userName)}</Text>
                           </View>
-                          <Text style={styles.balanceName}>{bal.userName}</Text>
-                          <Text style={[styles.balanceNet, bal.net >= 0 ? styles.balancePositive : styles.balanceNegative]}>
-                            {bal.net >= 0 ? '+' : ''}{formatAmount(bal.net)}
-                          </Text>
+                          <View style={styles.balanceNameCol}>
+                            <Text style={styles.balanceName}>{bal.userName}</Text>
+                            <Text style={[styles.balanceStatusLabel, isSettled ? styles.balanceStatusLabelSettled : null]}>
+                              {netLabel}
+                            </Text>
+                          </View>
+                          {isSettled ? (
+                            <Ionicons name="checkmark-circle" size={20} color="#27b371" />
+                          ) : (
+                            <Text style={[styles.balanceNet, bal.net > 0 ? styles.balancePositive : styles.balanceNegative]}>
+                              {commonCurrency ? `${commonCurrency} ` : ''}{formatAmount(Math.abs(bal.net))}
+                            </Text>
+                          )}
                           <Ionicons
                             name={isExpanded ? 'chevron-up' : 'chevron-down'}
                             size={16}
@@ -460,7 +542,9 @@ export default function CostSplitScreen() {
                                 <Text style={styles.debtName}>{debt.fromUserName}</Text> pays{' '}
                                 <Text style={styles.debtName}>{debt.toUserName}</Text>
                               </Text>
-                              <Text style={[styles.debtAmount, { color: PRIMARY_COLOR }]}>{formatAmount(debt.amount)}</Text>
+                              <Text style={[styles.debtAmount, { color: PRIMARY_COLOR }]}>
+                                {commonCurrency ? `${commonCurrency} ` : ''}{formatAmount(debt.amount)}
+                              </Text>
                             </View>
                           </View>
                         </View>
@@ -491,47 +575,132 @@ export default function CostSplitScreen() {
               style={styles.tabContent}
               contentContainerStyle={[styles.tabContentInner, { paddingBottom: Math.max(insets.bottom, 24) + 40 }]}
               showsVerticalScrollIndicator={false}>
-              {balancesData?.simplifiedDebts && balancesData.simplifiedDebts.length > 0 ? (
-                <>
-                  <Text style={styles.sectionLabel}>OUTSTANDING</Text>
-                  {balancesData.simplifiedDebts.map((debt, i) => (
-                    <View key={i} style={styles.settleCard}>
-                      <View style={styles.settleCardRow}>
-                        <View style={styles.debtAvatar}>
-                          <Text style={styles.debtAvatarText}>{getInitials(debt.fromUserName)}</Text>
-                        </View>
-                        <View style={styles.debtArrow}>
-                          <Ionicons name="arrow-forward" size={14} color="#8a909b" />
-                        </View>
-                        <View style={styles.debtAvatar}>
-                          <Text style={styles.debtAvatarText}>{getInitials(debt.toUserName)}</Text>
-                        </View>
-                        <View style={styles.debtCopy}>
-                          <Text style={styles.debtText}>
-                            <Text style={styles.debtName}>{debt.fromUserName}</Text>
-                            {' → '}
-                            <Text style={styles.debtName}>{debt.toUserName}</Text>
-                          </Text>
-                          <Text style={styles.debtAmount}>{formatAmount(debt.amount)}</Text>
-                        </View>
-                      </View>
-                      <TouchableOpacity
-                        style={[styles.markSettledButton, { backgroundColor: PRIMARY_COLOR }]}
-                        activeOpacity={0.88}
-                        onPress={() => handleSettleDebt(debt)}>
-                        <Ionicons name="checkmark-circle-outline" size={16} color="#fff" />
-                        <Text style={styles.markSettledButtonText}>Mark as Settled</Text>
-                      </TouchableOpacity>
+              {(() => {
+                const outstanding = (balancesData?.simplifiedDebts ?? []).filter((d) => !settledKeys.has(debtKey(d)));
+                if (outstanding.length === 0) {
+                  return (
+                    <View style={styles.allSettledWrap}>
+                      <Ionicons name="checkmark-circle-outline" size={40} color="#27b371" />
+                      <Text style={styles.allSettledTitle}>All settled up!</Text>
+                      <Text style={styles.emptyCopy}>No outstanding debts to settle.</Text>
                     </View>
-                  ))}
-                </>
-              ) : (
-                <View style={styles.allSettledWrap}>
-                  <Ionicons name="checkmark-circle-outline" size={40} color="#27b371" />
-                  <Text style={styles.allSettledTitle}>All settled up!</Text>
-                  <Text style={styles.emptyCopy}>No outstanding debts to settle.</Text>
-                </View>
-              )}
+                  );
+                }
+                return (
+                  <>
+                    <Text style={styles.sectionLabel}>OUTSTANDING</Text>
+                    {hasMixedCurrencies ? (
+                      <View style={styles.warningCard}>
+                        <Ionicons name="alert-circle-outline" size={16} color="#b46b00" />
+                        <Text style={styles.warningCardText}>
+                          Multiple currencies detected ({tripCurrencies.join(', ')}). Amounts shown are aggregated raw — convert manually before settling.
+                        </Text>
+                      </View>
+                    ) : null}
+                    {outstanding.map((debt) => {
+                      const key = debtKey(debt);
+                      const expanded = expandedDebtKey === key;
+                      const isBusy = settleSubmitting && settlingDebt && debtKey(settlingDebt) === key;
+                      const related = expensesBetween(debt.fromUserId, debt.toUserId);
+                      return (
+                        <View key={key} style={styles.settleCard}>
+                          <View style={styles.settleCardRow}>
+                            <View style={styles.debtAvatar}>
+                              <Text style={styles.debtAvatarText}>{getInitials(debt.fromUserName)}</Text>
+                            </View>
+                            <View style={styles.debtArrow}>
+                              <Ionicons name="arrow-forward" size={14} color="#8a909b" />
+                            </View>
+                            <View style={styles.debtAvatar}>
+                              <Text style={styles.debtAvatarText}>{getInitials(debt.toUserName)}</Text>
+                            </View>
+                            <View style={styles.debtCopy}>
+                              <Text style={styles.debtText}>
+                                <Text style={styles.debtName}>{debt.fromUserName}</Text>
+                                {' owes '}
+                                <Text style={styles.debtName}>{debt.toUserName}</Text>
+                              </Text>
+                              <Text style={[styles.debtAmount, { color: PRIMARY_COLOR }]}>
+                                {commonCurrency ? `${commonCurrency} ` : ''}{formatAmount(debt.amount)}
+                              </Text>
+                            </View>
+                          </View>
+
+                          <TouchableOpacity
+                            activeOpacity={0.85}
+                            style={styles.whyButton}
+                            onPress={() => setExpandedDebtKey(expanded ? null : key)}>
+                            <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={14} color={PRIMARY_COLOR} />
+                            <Text style={[styles.whyButtonText, { color: PRIMARY_COLOR }]}>
+                              {expanded ? 'Hide breakdown' : `Why? (${related.length} expense${related.length === 1 ? '' : 's'})`}
+                            </Text>
+                          </TouchableOpacity>
+
+                          {expanded ? (
+                            <View style={styles.breakdownWrap}>
+                              {related.length === 0 ? (
+                                <Text style={styles.breakdownEmpty}>
+                                  This debt comes from earlier settlements between {debt.fromUserName} and {debt.toUserName}.
+                                </Text>
+                              ) : (
+                                related.map((e) => {
+                                  const fromShare = e.participants.find((p) => p.userId === debt.fromUserId)?.amount ?? 0;
+                                  const toPaid = e.payers.find((p) => p.userId === debt.toUserId)?.amount ?? 0;
+                                  const toShare = e.participants.find((p) => p.userId === debt.toUserId)?.amount ?? 0;
+                                  const fromPaid = e.payers.find((p) => p.userId === debt.fromUserId)?.amount ?? 0;
+                                  return (
+                                    <View key={e.id} style={styles.breakdownRow}>
+                                      <View style={styles.breakdownHeader}>
+                                        <Text style={styles.breakdownDesc} numberOfLines={1}>{e.description}</Text>
+                                        <Text style={styles.breakdownDate}>{formatDate(e.date)}</Text>
+                                      </View>
+                                      {toPaid > 0 && fromShare > 0 ? (
+                                        <Text style={styles.breakdownLine}>
+                                          <Text style={styles.breakdownName}>{debt.toUserName}</Text> paid{' '}
+                                          <Text style={styles.breakdownBold}>{e.currency} {formatAmount(toPaid)}</Text>
+                                          {' · '}
+                                          <Text style={styles.breakdownName}>{debt.fromUserName}</Text>'s share{' '}
+                                          <Text style={styles.breakdownBold}>{e.currency} {formatAmount(fromShare)}</Text>
+                                        </Text>
+                                      ) : null}
+                                      {fromPaid > 0 && toShare > 0 ? (
+                                        <Text style={styles.breakdownLine}>
+                                          <Text style={styles.breakdownName}>{debt.fromUserName}</Text> paid{' '}
+                                          <Text style={styles.breakdownBold}>{e.currency} {formatAmount(fromPaid)}</Text>
+                                          {' · '}
+                                          <Text style={styles.breakdownName}>{debt.toUserName}</Text>'s share{' '}
+                                          <Text style={styles.breakdownBold}>{e.currency} {formatAmount(toShare)}</Text>
+                                        </Text>
+                                      ) : null}
+                                    </View>
+                                  );
+                                })
+                              )}
+                            </View>
+                          ) : null}
+
+                          <TouchableOpacity
+                            style={[
+                              styles.markSettledButton,
+                              { backgroundColor: PRIMARY_COLOR },
+                              isBusy ? styles.submitButtonDisabled : null,
+                            ]}
+                            activeOpacity={0.88}
+                            disabled={isBusy || settleSubmitting || settlingDebt !== null}
+                            onPress={() => handleSettleDebt(debt)}>
+                            {isBusy ? (
+                              <ActivityIndicator size="small" color="#fff" />
+                            ) : (
+                              <Ionicons name="checkmark-circle-outline" size={16} color="#fff" />
+                            )}
+                            <Text style={styles.markSettledButtonText}>{isBusy ? 'Settling…' : 'Mark as Settled'}</Text>
+                          </TouchableOpacity>
+                        </View>
+                      );
+                    })}
+                  </>
+                );
+              })()}
 
               {settlements.length > 0 ? (
                 <>
@@ -550,13 +719,13 @@ export default function CostSplitScreen() {
                             <Text style={styles.debtName}>{s.toUserName}</Text>
                           </Text>
                           <Text style={styles.settlementHistoryDate}>
-                            {formatDate(s.createdAt.slice(0, 10))} · {formatAmount(s.amount)}
+                            {formatDate(s.createdAt.slice(0, 10))} · {commonCurrency ? `${commonCurrency} ` : ''}{formatAmount(s.amount)}
                           </Text>
                         </View>
                         <TouchableOpacity
                           style={styles.deleteSmallButton}
                           activeOpacity={0.8}
-                          onPress={() => void handleDeleteSettlement(s.id)}>
+                          onPress={() => { setActionError(''); setDeletingSettlementId(s.id); }}>
                           <Ionicons name="close-circle-outline" size={20} color="#d95f6a" />
                         </TouchableOpacity>
                       </View>
@@ -581,7 +750,7 @@ export default function CostSplitScreen() {
 
       {/* Add Expense Modal */}
       <Modal visible={addModalOpen} transparent animationType="slide" onRequestClose={() => setAddModalOpen(false)}>
-        <View style={styles.modalBackdrop}>
+        <KeyboardAvoidingView style={styles.modalBackdrop} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setAddModalOpen(false)} />
           <View style={[styles.modalCard, { paddingBottom: Math.max(insets.bottom, 18) + 12, zIndex: 1 }]}>
             <View style={styles.modalHandle} />
@@ -775,7 +944,7 @@ export default function CostSplitScreen() {
               </TouchableOpacity>
             </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Confirm Settle Modal */}
@@ -783,9 +952,13 @@ export default function CostSplitScreen() {
         visible={settlingDebt !== null}
         transparent
         animationType="fade"
-        onRequestClose={() => setSettlingDebt(null)}>
+        onRequestClose={() => !settleSubmitting && setSettlingDebt(null)}>
         <View style={styles.confirmBackdrop}>
-          <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setSettlingDebt(null)} />
+          <TouchableOpacity
+            style={StyleSheet.absoluteFillObject}
+            activeOpacity={1}
+            onPress={() => !settleSubmitting && setSettlingDebt(null)}
+          />
           <View style={styles.confirmCard}>
             <Text style={styles.confirmTitle}>Mark as Settled</Text>
             {settlingDebt ? (
@@ -793,7 +966,9 @@ export default function CostSplitScreen() {
                 Record that{' '}
                 <Text style={styles.confirmBold}>{settlingDebt.fromUserName}</Text> has paid{' '}
                 <Text style={styles.confirmBold}>{settlingDebt.toUserName}</Text>{' '}
-                <Text style={styles.confirmBold}>{formatAmount(settlingDebt.amount)}</Text>?
+                <Text style={styles.confirmBold}>
+                  {commonCurrency ? `${commonCurrency} ` : ''}{formatAmount(settlingDebt.amount)}
+                </Text>?
               </Text>
             ) : null}
             {settleError ? <Text style={styles.submitError}>{settleError}</Text> : null}
@@ -801,6 +976,7 @@ export default function CostSplitScreen() {
               <TouchableOpacity
                 style={styles.confirmCancelButton}
                 activeOpacity={0.88}
+                disabled={settleSubmitting}
                 onPress={() => setSettlingDebt(null)}>
                 <Text style={styles.confirmCancelText}>Cancel</Text>
               </TouchableOpacity>
@@ -809,7 +985,87 @@ export default function CostSplitScreen() {
                 activeOpacity={0.9}
                 disabled={settleSubmitting}
                 onPress={() => void handleConfirmSettle()}>
-                <Text style={styles.confirmOkText}>{settleSubmitting ? 'Saving...' : 'Confirm'}</Text>
+                {settleSubmitting ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.confirmOkText}>Confirm</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Confirm Delete Expense */}
+      <Modal
+        visible={deletingExpenseId !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => !deletingBusy && setDeletingExpenseId(null)}>
+        <View style={styles.confirmBackdrop}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFillObject}
+            activeOpacity={1}
+            onPress={() => !deletingBusy && setDeletingExpenseId(null)}
+          />
+          <View style={styles.confirmCard}>
+            <Text style={styles.confirmTitle}>Remove this expense?</Text>
+            <Text style={styles.confirmBody}>
+              This will permanently delete the expense and recalculate everyone&apos;s balance.
+            </Text>
+            {actionError ? <Text style={styles.submitError}>{actionError}</Text> : null}
+            <View style={styles.confirmButtons}>
+              <TouchableOpacity
+                style={styles.confirmCancelButton}
+                activeOpacity={0.88}
+                disabled={deletingBusy}
+                onPress={() => setDeletingExpenseId(null)}>
+                <Text style={styles.confirmCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.confirmOkButton, { backgroundColor: '#d95f6a' }, deletingBusy && styles.submitButtonDisabled]}
+                activeOpacity={0.9}
+                disabled={deletingBusy}
+                onPress={() => void handleConfirmDeleteExpense()}>
+                {deletingBusy ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.confirmOkText}>Remove</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Confirm Delete Settlement */}
+      <Modal
+        visible={deletingSettlementId !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => !deletingBusy && setDeletingSettlementId(null)}>
+        <View style={styles.confirmBackdrop}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFillObject}
+            activeOpacity={1}
+            onPress={() => !deletingBusy && setDeletingSettlementId(null)}
+          />
+          <View style={styles.confirmCard}>
+            <Text style={styles.confirmTitle}>Undo this settlement?</Text>
+            <Text style={styles.confirmBody}>
+              The debt will reappear as outstanding.
+            </Text>
+            {actionError ? <Text style={styles.submitError}>{actionError}</Text> : null}
+            <View style={styles.confirmButtons}>
+              <TouchableOpacity
+                style={styles.confirmCancelButton}
+                activeOpacity={0.88}
+                disabled={deletingBusy}
+                onPress={() => setDeletingSettlementId(null)}>
+                <Text style={styles.confirmCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.confirmOkButton, { backgroundColor: '#d95f6a' }, deletingBusy && styles.submitButtonDisabled]}
+                activeOpacity={0.9}
+                disabled={deletingBusy}
+                onPress={() => void handleConfirmDeleteSettlement()}>
+                {deletingBusy ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.confirmOkText}>Undo</Text>}
               </TouchableOpacity>
             </View>
           </View>
@@ -955,6 +1211,12 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     marginTop: 4,
   },
+  sectionHelperText: {
+    fontSize: 12.5,
+    color: '#8a909b',
+    marginBottom: 12,
+    marginTop: -4,
+  },
   expenseCard: {
     borderRadius: 18,
     borderWidth: 1,
@@ -1052,11 +1314,19 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#4a5068',
   },
-  balanceName: {
+  balanceNameCol: {
     flex: 1,
+  },
+  balanceName: {
     fontSize: 15,
     fontWeight: '700',
     color: '#161821',
+  },
+  balanceStatusLabel: {
+    marginTop: 2,
+    fontSize: 12,
+    color: '#8a909b',
+    fontWeight: '600',
   },
   balanceNet: {
     fontSize: 17,
@@ -1068,6 +1338,19 @@ const styles = StyleSheet.create({
   },
   balanceNegative: {
     color: '#d95f6a',
+  },
+  balanceNeutral: {
+    color: '#8a909b',
+  },
+  balanceCardSettled: {
+    backgroundColor: '#f7faf8',
+  },
+  balanceAvatarSettled: {
+    backgroundColor: '#dff1e6',
+  },
+  balanceStatusLabelSettled: {
+    color: '#27b371',
+    fontWeight: '700',
   },
   balanceExpenseList: {
     backgroundColor: '#f7f8fa',
@@ -1191,6 +1474,82 @@ const styles = StyleSheet.create({
     backgroundColor: '#ff4f74',
     borderRadius: 12,
     paddingVertical: 10,
+  },
+  warningCard: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'flex-start',
+    backgroundColor: '#fff7e6',
+    borderWidth: 1,
+    borderColor: '#ffd8a3',
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 10,
+  },
+  warningCardText: {
+    flex: 1,
+    color: '#7a4d00',
+    fontSize: 12.5,
+    fontWeight: '600',
+    lineHeight: 18,
+  },
+  whyButton: {
+    marginTop: 10,
+    marginBottom: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 6,
+  },
+  whyButtonText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    letterSpacing: -0.2,
+  },
+  breakdownWrap: {
+    backgroundColor: '#f7f8fa',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10,
+    gap: 10,
+  },
+  breakdownEmpty: {
+    color: '#7b828e',
+    fontSize: 12.5,
+    fontStyle: 'italic',
+  },
+  breakdownRow: {
+    gap: 4,
+  },
+  breakdownHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 8,
+  },
+  breakdownDesc: {
+    flex: 1,
+    color: '#161821',
+    fontSize: 13.5,
+    fontWeight: '700',
+  },
+  breakdownDate: {
+    color: '#9aa2ae',
+    fontSize: 11.5,
+    fontWeight: '600',
+  },
+  breakdownLine: {
+    color: '#5a606e',
+    fontSize: 12.5,
+    lineHeight: 18,
+  },
+  breakdownName: {
+    color: '#161821',
+    fontWeight: '700',
+  },
+  breakdownBold: {
+    color: '#161821',
+    fontWeight: '800',
   },
   markSettledButtonText: {
     color: '#fff',

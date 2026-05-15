@@ -1,18 +1,14 @@
-﻿/**
- * WorldOverview â€” continent-based summary used as the world map placeholder.
- *
- * Architecture contract:
- *   props: { statusMap, onContinentPress }
- *
- * When a real interactive map is plugged in, replace this file's default
- * export while keeping the same props interface so the parent screen needs
- * no changes.
+/**
+ * WorldOverview - continent-based summary grid.
+ * Each card shows a continent with an illustrative icon, a soft watermark,
+ * a checkmark badge when visited, and a slim progress bar.
  */
 
 import { TouchableOpacity, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { COUNTRIES, CONTINENT_ORDER, inContinent, type Continent, type StatusMap } from './country-data';
-import { PRIMARY_COLOR, PRIMARY_12, PRIMARY_20, SECONDARY_COLOR } from '@/constants/colors';
+import { PRIMARY_COLOR } from '@/constants/colors';
 
 interface ContinentStats {
   continent: Continent;
@@ -24,19 +20,24 @@ interface ContinentStats {
 
 interface WorldOverviewProps {
   statusMap: StatusMap;
-  /** Called when the user taps a continent card â€” parent can use to filter the list */
   onContinentPress: (continent: Continent | null) => void;
   activeContinentFilter: Continent | null;
 }
 
-// Rough geographic emoji / icon for each continent
-const CONTINENT_META: Record<Continent, { emoji: string; color: string; lightBg: string }> = {
-  Europe:          { emoji: 'ðŸ°', color: '#3B82F6', lightBg: '#EFF6FF' },
-  Asia:            { emoji: 'ðŸ¯', color: '#8B5CF6', lightBg: '#F5F3FF' },
-  Africa:          { emoji: 'ðŸŒ', color: '#F59E0B', lightBg: '#FFFBEB' },
-  'North America': { emoji: 'ðŸ—½', color: '#10B981', lightBg: '#ECFDF5' },
-  'South America': { emoji: 'ðŸŒ¿', color: '#06B6D4', lightBg: '#ECFEFF' },
-  Oceania:         { emoji: 'ðŸŒŠ', color: '#F97316', lightBg: '#FFF7ED' },
+interface ContinentMeta {
+  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  color: string;
+  lightBg: string;
+  shortName: string;
+}
+
+const CONTINENT_META: Record<Continent, ContinentMeta> = {
+  Europe:          { icon: 'castle',             color: '#7C6FE0', lightBg: '#EFEEFB', shortName: 'Europe' },
+  Asia:            { icon: 'torii-gate',         color: '#E47A8B', lightBg: '#FCEEF1', shortName: 'Asia' },
+  Africa:          { icon: 'tree',               color: '#D4943C', lightBg: '#FBF1DE', shortName: 'Africa' },
+  'North America': { icon: 'image-filter-hdr',   color: '#5A6472', lightBg: '#EEF0F4', shortName: 'N. America' },
+  'South America': { icon: 'palm-tree',          color: '#A57DC8', lightBg: '#F3ECF8', shortName: 'S. America' },
+  Oceania:         { icon: 'waves',              color: '#5DA9D1', lightBg: '#E6F1F8', shortName: 'Oceania' },
 };
 
 function buildStats(statusMap: StatusMap): ContinentStats[] {
@@ -49,255 +50,164 @@ function buildStats(statusMap: StatusMap): ContinentStats[] {
   });
 }
 
-export default function WorldOverview({ statusMap, onContinentPress, activeContinentFilter }: WorldOverviewProps) {  const { width } = useWindowDimensions();
+export default function WorldOverview({ statusMap, onContinentPress, activeContinentFilter }: WorldOverviewProps) {
+  const { width } = useWindowDimensions();
   const stats = buildStats(statusMap);
-  const cardWidth = (width - 40 - 10) / 2; // 2 columns, 20px side padding, 10px gap
-
-  const totalVisited = Object.values(statusMap).filter((s) => s === 'visited').length;
-  const totalPlanned = Object.values(statusMap).filter((s) => s === 'planned').length;
-  const totalLiving  = Object.values(statusMap).filter((s) => s === 'living').length;
-  const totalCountries = COUNTRIES.length;
+  const cardWidth = (width - 40 - 12) / 2; // 2 columns, 20px side padding, 12px gap
 
   return (
-    <View>
-      {/* â”€â”€ Global progress banner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-      <View style={[styles.progressBanner, { borderColor: PRIMARY_20 }]}>
-        <View style={styles.progressRow}>
-          <View style={styles.progressItem}>
-            <Text style={[styles.progressValue, { color: PRIMARY_COLOR }]}>{totalVisited}</Text>
-            <Text style={styles.progressLabel}>visited</Text>
-          </View>
-          <View style={styles.progressDivider} />
-          <View style={styles.progressItem}>
-            <Text style={[styles.progressValue, { color: SECONDARY_COLOR }]}>{totalPlanned}</Text>
-            <Text style={styles.progressLabel}>planned</Text>
-          </View>
-          <View style={styles.progressDivider} />
-          <View style={styles.progressItem}>
-            <Text style={[styles.progressValue, { color: '#D97706' }]}>{totalLiving}</Text>
-            <Text style={styles.progressLabel}>living</Text>
-          </View>
-          <View style={styles.progressDivider} />
-          <View style={styles.progressItem}>
-            <Text style={[styles.progressValue, { color: '#A0A7B3' }]}>{totalCountries - totalVisited - totalPlanned - totalLiving}</Text>
-            <Text style={styles.progressLabel}>unexplored</Text>
-          </View>
-        </View>
+    <View style={styles.grid}>
+      {stats.map((s) => {
+        const meta = CONTINENT_META[s.continent];
+        const isActive = activeContinentFilter === s.continent;
+        const hasVisited = s.visited > 0 || s.living;
+        const progressPct = Math.round(((s.visited + s.planned) / s.total) * 100);
 
-        {/* Progress track */}
-        <View style={styles.track}>
-          {totalVisited > 0 ? (
-            <View style={[styles.trackFill, { flex: totalVisited, backgroundColor: PRIMARY_COLOR }]} />
-          ) : null}
-          {totalPlanned > 0 ? (
-            <View style={[styles.trackFill, { flex: totalPlanned, backgroundColor: SECONDARY_COLOR }]} />
-          ) : null}
-          {totalLiving > 0 ? (
-            <View style={[styles.trackFill, { flex: totalLiving, backgroundColor: '#D97706' }]} />
-          ) : null}
-          <View style={[styles.trackFill, { flex: Math.max(totalCountries - totalVisited - totalPlanned - totalLiving, 0), backgroundColor: '#EEF0F4' }]} />
-        </View>
-      </View>
+        return (
+          <TouchableOpacity
+            key={s.continent}
+            style={[
+              styles.card,
+              { width: cardWidth },
+              isActive && { borderColor: meta.color, borderWidth: 2 },
+            ]}
+            activeOpacity={0.85}
+            onPress={() => onContinentPress(isActive ? null : s.continent)}>
 
-      {/* â”€â”€ All-continents chip â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-      <TouchableOpacity
-        style={[styles.allChip, activeContinentFilter === null && { backgroundColor: PRIMARY_12, borderColor: PRIMARY_20 }]}
-        activeOpacity={0.75}
-        onPress={() => onContinentPress(null)}>
-        <Text style={[styles.allChipText, activeContinentFilter === null && { color: PRIMARY_COLOR }]}>ðŸŒ  All continents</Text>
-      </TouchableOpacity>
+            {/* Background watermark icon */}
+            <View pointerEvents="none" style={styles.watermark}>
+              <MaterialCommunityIcons
+                name={meta.icon}
+                size={130}
+                color={meta.color}
+                style={{ opacity: 0.10 }}
+              />
+            </View>
 
-      {/* â”€â”€ 2-column continent grid â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-      <View style={styles.grid}>
-        {stats.map((s) => {
-          const meta = CONTINENT_META[s.continent];
-          const isActive = activeContinentFilter === s.continent;
-          const hasActivity = s.visited > 0 || s.planned > 0 || s.living;
-
-          return (
-            <TouchableOpacity
-              key={s.continent}
-              style={[
-                styles.continentCard,
-                { width: cardWidth },
-                isActive && { borderColor: meta.color, backgroundColor: meta.lightBg },
-              ]}
-              activeOpacity={0.78}
-              onPress={() => onContinentPress(isActive ? null : s.continent)}>
-
-              {/* Emoji icon */}
-              <Text style={styles.continentEmoji}>{meta.emoji}</Text>
-
-              {/* Name */}
-              <Text style={styles.continentName} numberOfLines={1}>{s.continent}</Text>
-
-              {/* Stats row */}
-              <View style={styles.cardStatsRow}>
-                {s.visited > 0 ? (
-                  <View style={[styles.miniTag, { backgroundColor: meta.lightBg }]}>
-                    <View style={[styles.miniDot, { backgroundColor: meta.color }]} />
-                    <Text style={[styles.miniTagText, { color: meta.color }]}>{s.visited}</Text>
-                  </View>
-                ) : null}
-                {s.living ? (
-                  <View style={[styles.miniTag, { backgroundColor: '#FEF3C7' }]}>
-                    <Text style={styles.miniTagText}>ðŸ </Text>
-                  </View>
-                ) : null}
+            {/* Foreground icon tile + checkmark badge */}
+            <View style={styles.iconTileWrap}>
+              <View style={[styles.iconTile, { backgroundColor: meta.lightBg }]}>
+                <MaterialCommunityIcons name={meta.icon} size={26} color={meta.color} />
               </View>
+              {hasVisited ? (
+                <View style={styles.checkBadge}>
+                  <Ionicons name="checkmark" size={11} color="#fff" />
+                </View>
+              ) : null}
+            </View>
 
-              {/* Progress bar */}
-              <View style={styles.cardTrack}>
+            {/* Name */}
+            <Text style={styles.cardName} numberOfLines={1}>{meta.shortName}</Text>
+
+            {/* Stats row */}
+            <View style={styles.statsRow}>
+              <Text style={[styles.statsValue, hasVisited && { color: PRIMARY_COLOR }]}>
+                {s.visited}
+              </Text>
+              <Text style={styles.statsOf}> of {s.total}</Text>
+            </View>
+
+            {/* Progress bar */}
+            <View style={styles.track}>
+              {progressPct > 0 ? (
                 <View
                   style={[
-                    styles.cardTrackFill,
-                    { width: `${Math.round(((s.visited + s.planned) / s.total) * 100)}%`, backgroundColor: meta.color },
+                    styles.trackFill,
+                    { width: `${progressPct}%`, backgroundColor: PRIMARY_COLOR },
                   ]}
                 />
-              </View>
-
-              <Text style={styles.cardMeta}>
-                {hasActivity ? `${s.visited + s.planned} / ${s.total}` : `${s.total} countries`}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+              ) : null}
+            </View>
+          </TouchableOpacity>
+        );
+      })}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  progressBanner: {
-    borderRadius: 20,
-    borderWidth: 1,
-    backgroundColor: '#fff',
-    paddingHorizontal: 18,
-    paddingVertical: 16,
-    marginBottom: 14,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 12,
-    elevation: 3,
-  },
-  progressRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  progressItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  progressValue: {
-    fontSize: 26,
-    fontWeight: '900',
-    letterSpacing: -1,
-  },
-  progressLabel: {
-    marginTop: 2,
-    fontSize: 11,
-    color: '#9AA2AE',
-    fontWeight: '600',
-    letterSpacing: 0.4,
-  },
-  progressDivider: {
-    width: 1,
-    height: 36,
-    backgroundColor: '#EDF0F5',
-  },
-  track: {
-    flexDirection: 'row',
-    height: 6,
-    borderRadius: 3,
-    overflow: 'hidden',
-    gap: 1,
-  },
-  trackFill: {
-    borderRadius: 3,
-  },
-  allChip: {
-    alignSelf: 'flex-start',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#E8EAF0',
-    backgroundColor: '#F6F7FA',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    marginBottom: 12,
-  },
-  allChipText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#6B7280',
-  },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 12,
   },
-  continentCard: {
+  card: {
     borderRadius: 22,
-    borderWidth: 1.5,
-    borderColor: '#ECEEF3',
+    borderWidth: 1,
+    borderColor: '#ECE7DD',
     backgroundColor: '#fff',
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 14,
+    overflow: 'hidden',
+    minHeight: 150,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
+    shadowOpacity: 0.05,
     shadowRadius: 12,
     elevation: 3,
   },
-  continentEmoji: {
-    fontSize: 28,
-    marginBottom: 8,
+  watermark: {
+    position: 'absolute',
+    right: -18,
+    top: -8,
   },
-  continentName: {
-    fontSize: 14,
+  iconTileWrap: {
+    width: 48,
+    height: 48,
+    marginBottom: 14,
+  },
+  iconTile: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: PRIMARY_COLOR,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  cardName: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#141720',
+    letterSpacing: -0.4,
+    marginBottom: 4,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    marginBottom: 10,
+  },
+  statsValue: {
+    fontSize: 15,
     fontWeight: '800',
     color: '#141720',
     letterSpacing: -0.3,
-    marginBottom: 6,
   },
-  cardStatsRow: {
-    flexDirection: 'row',
-    gap: 5,
-    marginBottom: 10,
-    minHeight: 22,
+  statsOf: {
+    fontSize: 13,
+    color: '#8A909D',
+    fontWeight: '500',
   },
-  miniTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    borderRadius: 8,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-  },
-  miniDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  miniTagText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  cardTrack: {
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#EEF0F4',
+  track: {
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: '#ECE7DD',
     overflow: 'hidden',
-    marginBottom: 6,
   },
-  cardTrackFill: {
-    height: 4,
-    borderRadius: 2,
-  },
-  cardMeta: {
-    fontSize: 11,
-    color: '#9AA2AE',
-    fontWeight: '600',
+  trackFill: {
+    height: 2,
+    borderRadius: 1,
   },
 });
-

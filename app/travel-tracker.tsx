@@ -4,6 +4,8 @@ import { router } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -26,11 +28,12 @@ import {
 } from '@/components/travel-tracker/country-data';
 import { apiJson } from '@/lib/api';
 import type { Quest } from '@/lib/types';
-import { PRIMARY_COLOR, PRIMARY_08, PRIMARY_12, SECONDARY_COLOR, SECONDARY_08, SECONDARY_12 } from '@/constants/colors';
+import { PRIMARY_COLOR, PRIMARY_12, SECONDARY_COLOR, SECONDARY_12 } from '@/constants/colors';
 
 type Filter = 'all' | 'visited' | 'planned' | 'living';
 
 const STORAGE_KEY = 'travel_tracker_status_map';
+const TOTAL_CONTINENTS = 6;
 
 const STATUS_LABEL: Record<CountryStatus, string> = {
   none: '',
@@ -41,8 +44,10 @@ const STATUS_LABEL: Record<CountryStatus, string> = {
 
 export default function TravelTrackerScreen() {
   const insets = useSafeAreaInsets();
+  const scrollRef = useRef<ScrollView>(null);
+  const searchInputRef = useRef<TextInput>(null);
+  const listAnchorY = useRef(0);
 
-  // ── State ──────────────────────────────────────────────────────────────────
   const [statusMap, setStatusMap] = useState<StatusMap>({});
   const [tripDerivedMap, setTripDerivedMap] = useState<StatusMap>({});
   const [ready, setReady] = useState(false);
@@ -52,7 +57,6 @@ export default function TravelTrackerScreen() {
   const [sheetCountry, setSheetCountry] = useState<Country | null>(null);
   const [sheetVisible, setSheetVisible] = useState(false);
 
-  // ── Persistence ────────────────────────────────────────────────────────────
   useEffect(() => {
     void AsyncStorage.getItem(STORAGE_KEY)
       .then((raw) => { if (raw) setStatusMap(JSON.parse(raw) as StatusMap); })
@@ -60,7 +64,6 @@ export default function TravelTrackerScreen() {
       .finally(() => setReady(true));
   }, []);
 
-  // ── Load trips and derive country statuses ─────────────────────────────────
   useEffect(() => {
     void apiJson<Quest[]>('/api/trips')
       .then((trips) => {
@@ -70,7 +73,6 @@ export default function TravelTrackerScreen() {
           if (!trip.countries?.length) continue;
           const status: CountryStatus = trip.endDate < today ? 'visited' : 'planned';
           for (const code of trip.countries) {
-            // "visited" beats "planned" if a country appears in multiple trips
             if (!derived[code] || (derived[code] === 'planned' && status === 'visited')) {
               derived[code] = status;
             }
@@ -86,24 +88,25 @@ export default function TravelTrackerScreen() {
     void AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(statusMap));
   }, [statusMap, ready]);
 
-  // ── Derived ────────────────────────────────────────────────────────────────
-  // Merge: manual statusMap overrides trip-derived status
   const mergedMap = useMemo<StatusMap>(() => ({ ...tripDerivedMap, ...statusMap }), [tripDerivedMap, statusMap]);
   const entries = useMemo(() => buildEntries(mergedMap), [mergedMap]);
-
-  const livingCountry = useMemo(
-    () => COUNTRIES.find((c) => mergedMap[c.code] === 'living') ?? null,
-    [mergedMap],
-  );
 
   const visitedCount = useMemo(
     () => Object.values(mergedMap).filter((s) => s === 'visited').length,
     [mergedMap],
   );
-  const plannedCount = useMemo(
-    () => Object.values(mergedMap).filter((s) => s === 'planned').length,
-    [mergedMap],
-  );
+
+  const continentsVisited = useMemo(() => {
+    const set = new Set<Continent>();
+    COUNTRIES.forEach((c) => {
+      const s = mergedMap[c.code];
+      if (s === 'visited' || s === 'living') {
+        set.add(c.continent);
+        if (c.continent2) set.add(c.continent2);
+      }
+    });
+    return set.size;
+  }, [mergedMap]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -117,7 +120,6 @@ export default function TravelTrackerScreen() {
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [entries, filter, continentFilter, search]);
 
-  // ── Handlers ───────────────────────────────────────────────────────────────
   function openSheet(country: Country) {
     setSheetCountry(country);
     setSheetVisible(true);
@@ -127,7 +129,6 @@ export default function TravelTrackerScreen() {
     if (!sheetCountry) return;
     setStatusMap((prev) => {
       const next = { ...prev };
-      // Enforce single living country
       if (status === 'living') {
         Object.keys(next).forEach((code) => {
           if (next[code] === 'living') delete next[code];
@@ -145,11 +146,14 @@ export default function TravelTrackerScreen() {
 
   function handleContinentFilter(continent: Continent | null) {
     setContinentFilter(continent);
-    // Sync list filter to "all" when selecting a continent
     setFilter('all');
   }
 
-  // ── Filter tab press animation ─────────────────────────────────────────────
+  function handleAddPress() {
+    scrollRef.current?.scrollTo({ y: Math.max(listAnchorY.current - 12, 0), animated: true });
+    setTimeout(() => searchInputRef.current?.focus(), 350);
+  }
+
   const filterScaleAnims = useRef<Record<Filter, Animated.Value>>({
     all: new Animated.Value(1),
     visited: new Animated.Value(1),
@@ -168,8 +172,10 @@ export default function TravelTrackerScreen() {
 
   return (
     <>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView
-        style={[styles.screen, { backgroundColor: '#F7F8FA' }]}
+        ref={scrollRef}
+        style={[styles.screen, { backgroundColor: '#F7F3EC' }]}
         contentContainerStyle={[
           styles.content,
           { paddingTop: Math.max(insets.top, 16) + 8, paddingBottom: Math.max(insets.bottom, 20) + 112 },
@@ -177,130 +183,135 @@ export default function TravelTrackerScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled">
 
-        {/* ── Header ─────────────────────────────────────────────────────── */}
-        <View style={styles.topBar}>
-          <TouchableOpacity style={styles.backButton} activeOpacity={0.8} onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={26} color="#6D7380" />
+        {/* Back navigation */}
+        <TouchableOpacity style={styles.backRow} activeOpacity={0.7} onPress={() => router.back()}>
+          <Ionicons name="chevron-back" size={22} color="#1B1E28" />
+          <Text style={styles.backText}>Profile</Text>
+        </TouchableOpacity>
+
+        {/* Title block */}
+        <Text style={styles.bigTitle}>Travel{'\n'}Tracker</Text>
+
+        {/* Dark stats card */}
+        <View style={styles.heroCard}>
+          <View style={styles.heroStat}>
+            <Text style={styles.heroStatLabel}>VISITED</Text>
+            <View style={styles.heroStatValueRow}>
+              <Text style={styles.heroStatBig}>{visitedCount}</Text>
+              <Text style={styles.heroStatSmall}>countries</Text>
+            </View>
+          </View>
+
+          <View style={styles.heroDivider} />
+
+          <View style={styles.heroStat}>
+            <Text style={styles.heroStatLabel}>CONTINENTS</Text>
+            <View style={styles.heroStatValueRow}>
+              <Text style={styles.heroStatBig}>{continentsVisited}</Text>
+              <Text style={styles.heroStatSmall}>of {TOTAL_CONTINENTS}</Text>
+            </View>
+          </View>
+
+          <TouchableOpacity style={styles.addButton} activeOpacity={0.85} onPress={handleAddPress}>
+            <Ionicons name="add" size={18} color="#fff" />
+            <Text style={styles.addButtonText}>Add</Text>
           </TouchableOpacity>
-          <View style={styles.headerText}>
-            <Text style={styles.title}>Travel Tracker</Text>
-            <Text style={styles.subtitle}>Where you've been, where you're going</Text>
-          </View>
         </View>
 
-        {/* ── Stats strip ────────────────────────────────────────────────── */}
-        <View style={styles.statsStrip}>
-          <StatPill
-            value={visitedCount}
-            label="Visited"
-            color={PRIMARY_COLOR}
-            bg={PRIMARY_08}
-            icon="checkmark-circle"
-          />
-          <StatPill
-            value={plannedCount}
-            label="Planned"
-            color={SECONDARY_COLOR}
-            bg={SECONDARY_08}
-            icon="bookmark"
-          />
-          <View style={[styles.livingPill, livingCountry && { backgroundColor: '#FEF3C7', borderColor: '#FCD34D' }]}>
-            <Text style={styles.livingPillFlag}>
-              {livingCountry ? getCountryFlag(livingCountry) : '🏠'}
-            </Text>
-            <Text style={[styles.livingPillText, { color: livingCountry ? '#D97706' : '#9AA2AE' }]} numberOfLines={1}>
-              {livingCountry ? livingCountry.name : 'Set home'}
-            </Text>
-          </View>
-        </View>
-
-        {/* ── World overview ──────────────────────────────────────────────── */}
-        <SectionHeader title="World Overview" />
+        {/* By Continent grid */}
+        <Text style={styles.sectionEyebrow}>BY CONTINENT</Text>
         <WorldOverview
           statusMap={mergedMap}
           onContinentPress={handleContinentFilter}
           activeContinentFilter={continentFilter}
         />
 
-        {/* ── Filter tabs + search ────────────────────────────────────────── */}
-        <SectionHeader title="Countries" style={{ marginTop: 28 }} />
+        {/* Countries section anchor */}
+        <View onLayout={(e) => { listAnchorY.current = e.nativeEvent.layout.y; }}>
+          <Text style={[styles.sectionEyebrow, { marginTop: 28 }]}>COUNTRIES</Text>
 
-        <View style={styles.filterRow}>
-          {(['all', 'visited', 'planned', 'living'] as Filter[]).map((f) => {
-            const isActive = filter === f && !continentFilter;
-            return (
-              <Animated.View key={f} style={{ transform: [{ scale: filterScaleAnims[f] }] }}>
-                <TouchableOpacity
-                  style={[
-                    styles.filterChip,
-                    isActive && { backgroundColor: PRIMARY_COLOR, borderColor: PRIMARY_COLOR },
-                  ]}
-                  activeOpacity={0.8}
-                  onPress={() => pressFilter(f)}>
-                  <Text style={[styles.filterChipText, isActive && { color: '#fff' }]}>
-                    {f.charAt(0).toUpperCase() + f.slice(1)}
-                  </Text>
-                </TouchableOpacity>
-              </Animated.View>
-            );
-          })}
-        </View>
-
-        <View style={styles.searchWrap}>
-          <Ionicons name="search-outline" size={18} color="#9AA2AE" style={styles.searchIcon} />
-          <TextInput
-            style={styles.searchInput}
-            value={search}
-            onChangeText={setSearch}
-            placeholder="Search countries…"
-            placeholderTextColor="#B0B7C3"
-            autoCapitalize="none"
-            autoCorrect={false}
-            returnKeyType="search"
-          />
-          {search.length > 0 ? (
-            <TouchableOpacity onPress={() => setSearch('')} hitSlop={8}>
-              <Ionicons name="close-circle" size={18} color="#B0B7C3" />
-            </TouchableOpacity>
-          ) : null}
-        </View>
-
-        {/* ── Country list ────────────────────────────────────────────────── */}
-        <View style={styles.countryList}>
-          {filtered.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyEmoji}>🌐</Text>
-              <Text style={styles.emptyText}>No countries match your filter</Text>
-            </View>
-          ) : (
-            filtered.map((entry, index) => {
-              const fromTrip = !statusMap[entry.code] && !!tripDerivedMap[entry.code];
+          <View style={styles.filterRow}>
+            {(['all', 'visited', 'planned', 'living'] as Filter[]).map((f) => {
+              const isActive = filter === f && !continentFilter;
               return (
-                <View key={entry.code}>
-                  {index > 0 ? <View style={styles.rowDivider} /> : null}
+                <Animated.View key={f} style={{ transform: [{ scale: filterScaleAnims[f] }] }}>
                   <TouchableOpacity
-                    style={styles.countryRow}
-                    activeOpacity={0.75}
-                    onPress={() => openSheet(entry)}>
-                    <Text style={styles.flagEmoji}>{getCountryFlag(entry)}</Text>
-                    <View style={styles.countryNameWrap}>
-                      <Text style={styles.countryName} numberOfLines={1}>{entry.name}</Text>
-                      {fromTrip ? <Text style={styles.fromTripLabel}>✈ from trip</Text> : null}
-                    </View>
-                    {entry.status !== 'none' ? (
-                      <StatusBadge status={entry.status} />
-                    ) : (
-                      <Ionicons name="chevron-forward" size={18} color="#C8CDD8" />
-                    )}
+                    style={[
+                      styles.filterChip,
+                      isActive && { backgroundColor: PRIMARY_COLOR, borderColor: PRIMARY_COLOR },
+                    ]}
+                    activeOpacity={0.8}
+                    onPress={() => pressFilter(f)}>
+                    <Text style={[styles.filterChipText, isActive && { color: '#fff' }]}>
+                      {f.charAt(0).toUpperCase() + f.slice(1)}
+                    </Text>
                   </TouchableOpacity>
-                </View>
+                </Animated.View>
               );
-            })
-          )}
+            })}
+          </View>
+
+          <View style={styles.searchWrap}>
+            <Ionicons name="search-outline" size={18} color="#9AA2AE" />
+            <TextInput
+              ref={searchInputRef}
+              style={styles.searchInput}
+              value={search}
+              onChangeText={setSearch}
+              placeholder="Search countries..."
+              placeholderTextColor="#B0B7C3"
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="search"
+            />
+            {search.length > 0 ? (
+              <TouchableOpacity onPress={() => setSearch('')} hitSlop={8}>
+                <Ionicons name="close-circle" size={18} color="#B0B7C3" />
+              </TouchableOpacity>
+            ) : null}
+          </View>
+
+          <View style={styles.countryList}>
+            {filtered.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Ionicons name="globe-outline" size={40} color="#9AA2AE" style={{ marginBottom: 10 }} />
+                <Text style={styles.emptyText}>No countries match your filter</Text>
+              </View>
+            ) : (
+              filtered.map((entry, index) => {
+                const fromTrip = !statusMap[entry.code] && !!tripDerivedMap[entry.code];
+                return (
+                  <View key={entry.code}>
+                    {index > 0 ? <View style={styles.rowDivider} /> : null}
+                    <TouchableOpacity
+                      style={styles.countryRow}
+                      activeOpacity={0.75}
+                      onPress={() => openSheet(entry)}>
+                      <Text style={styles.flagEmoji}>{getCountryFlag(entry)}</Text>
+                      <View style={styles.countryNameWrap}>
+                        <Text style={styles.countryName} numberOfLines={1}>{entry.name}</Text>
+                        {fromTrip ? (
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                            <Ionicons name="airplane" size={11} color="#9AA2AE" />
+                            <Text style={styles.fromTripLabel}>from trip</Text>
+                          </View>
+                        ) : null}
+                      </View>
+                      {entry.status !== 'none' ? (
+                        <StatusBadge status={entry.status} />
+                      ) : (
+                        <Ionicons name="chevron-forward" size={18} color="#C8CDD8" />
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                );
+              })
+            )}
+          </View>
         </View>
       </ScrollView>
+      </KeyboardAvoidingView>
 
-      {/* ── Status bottom sheet ─────────────────────────────────────────────── */}
       <StatusSheet
         country={sheetCountry}
         currentStatus={sheetCountry ? (statusMap[sheetCountry.code] ?? 'none') : 'none'}
@@ -309,30 +320,6 @@ export default function TravelTrackerScreen() {
         onClose={() => setSheetVisible(false)}
       />
     </>
-  );
-}
-
-// ── Sub-components ─────────────────────────────────────────────────────────────
-
-function StatPill({
-  value,
-  label,
-  color,
-  bg,
-  icon,
-}: {
-  value: number;
-  label: string;
-  color: string;
-  bg: string;
-  icon: keyof typeof Ionicons.glyphMap;
-}) {
-  return (
-    <View style={[styles.statPill, { backgroundColor: bg }]}>
-      <Ionicons name={icon} size={16} color={color} />
-      <Text style={[styles.statPillValue, { color }]}>{value}</Text>
-      <Text style={[styles.statPillLabel, { color }]}>{label}</Text>
-    </View>
   );
 }
 
@@ -352,115 +339,118 @@ function StatusBadge({ status }: { status: CountryStatus }) {
   );
 }
 
-function SectionHeader({ title, style }: { title: string; style?: object }) {
-  return (
-    <View style={[styles.sectionHeaderRow, style]}>
-      <Text style={styles.sectionHeaderText}>{title.toUpperCase()}</Text>
-      <View style={styles.sectionHeaderLine} />
-    </View>
-  );
-}
-
-// ── Styles ─────────────────────────────────────────────────────────────────────
-
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-  },
+  screen: { flex: 1 },
   content: {
     flexGrow: 1,
     paddingHorizontal: 20,
   },
-  topBar: {
+
+  // Back nav
+  backRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 14,
-    marginBottom: 24,
-  },
-  backButton: {
-    width: 42,
-    height: 42,
     alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 2,
+    alignSelf: 'flex-start',
+    marginBottom: 18,
+    paddingVertical: 4,
+    paddingRight: 8,
   },
-  headerText: {
-    flex: 1,
+  backText: {
+    fontSize: 16,
+    color: '#1B1E28',
+    fontWeight: '500',
+    marginLeft: 2,
   },
-  title: {
-    fontSize: 28,
+
+  // Title
+  eyebrow: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: PRIMARY_COLOR,
+    letterSpacing: 2.2,
+    marginBottom: 8,
+  },
+  bigTitle: {
+    fontSize: 44,
     fontWeight: '900',
     color: '#141720',
-    letterSpacing: -1.1,
-  },
-  subtitle: {
-    marginTop: 4,
-    fontSize: 14,
-    color: '#8A909D',
-    lineHeight: 20,
+    lineHeight: 50,
+    letterSpacing: -1.4,
+    marginBottom: 22,
   },
 
-  // Stats strip
-  statsStrip: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 28,
-  },
-  statPill: {
+  // Dark hero card
+  heroCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    backgroundColor: '#1B1E28',
+    borderRadius: 24,
+    paddingHorizontal: 22,
+    paddingVertical: 20,
+    marginBottom: 30,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 18,
+    elevation: 8,
+    overflow: 'hidden',
   },
-  statPillValue: {
-    fontSize: 17,
+  heroStat: {
+    flex: 1,
+  },
+  heroStatLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#9AA2AE',
+    letterSpacing: 1.6,
+    marginBottom: 6,
+  },
+  heroStatValueRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 6,
+  },
+  heroStatBig: {
+    fontSize: 30,
     fontWeight: '900',
-    letterSpacing: -0.5,
+    color: '#fff',
+    letterSpacing: -1.2,
   },
-  statPillLabel: {
-    fontSize: 13,
-    fontWeight: '600',
+  heroStatSmall: {
+    fontSize: 12,
+    color: '#C8CDD8',
+    fontWeight: '500',
   },
-  livingPill: {
-    flex: 1,
+  heroDivider: {
+    width: 1,
+    height: 38,
+    backgroundColor: '#2E323D',
+    marginHorizontal: 16,
+  },
+  addButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#E8EAF0',
-    backgroundColor: '#F6F7FA',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    gap: 4,
+    backgroundColor: PRIMARY_COLOR,
+    borderRadius: 22,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    marginLeft: 14,
   },
-  livingPillFlag: {
-    fontSize: 16,
-  },
-  livingPillText: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: '600',
+  addButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#fff',
+    letterSpacing: -0.2,
   },
 
-  // Section header
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 14,
-  },
-  sectionHeaderText: {
+  // Section eyebrow
+  sectionEyebrow: {
     fontSize: 11,
     fontWeight: '800',
     color: '#9AA2AE',
     letterSpacing: 2,
-  },
-  sectionHeaderLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#ECEEF3',
+    marginBottom: 14,
   },
 
   // Filter chips
@@ -502,9 +492,6 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 2,
   },
-  searchIcon: {
-    flexShrink: 0,
-  },
   searchInput: {
     flex: 1,
     fontSize: 15,
@@ -541,9 +528,7 @@ const styles = StyleSheet.create({
     width: 34,
     textAlign: 'center',
   },
-  countryNameWrap: {
-    flex: 1,
-  },
+  countryNameWrap: { flex: 1 },
   countryName: {
     fontSize: 16,
     color: '#1B1E28',
@@ -572,10 +557,6 @@ const styles = StyleSheet.create({
   emptyState: {
     alignItems: 'center',
     paddingVertical: 40,
-  },
-  emptyEmoji: {
-    fontSize: 40,
-    marginBottom: 10,
   },
   emptyText: {
     fontSize: 15,

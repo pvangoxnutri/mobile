@@ -5,13 +5,13 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Linking from 'expo-linking';
 import { useFocusEffect } from '@react-navigation/native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Image, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Animated, Image, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/components/auth-provider';
 import UserProfileCard from '@/components/user-profile-card';
 import { apiFetch, apiJson } from '@/lib/api';
 import { uploadImageIfNeeded } from '@/lib/uploads';
-import type { Quest, SideQuestActivity, TripInvite } from '@/lib/types';
+import type { Quest, SideQuestActivity, TripInvite, LinkPreview } from '@/lib/types';
 import { PRIMARY_COLOR, SECONDARY_COLOR } from '@/constants/colors';
 
 type ChatMsg = {
@@ -22,6 +22,7 @@ type ChatMsg = {
   imageUrl?: string | null;
   isSystem: boolean;
   createdAt: string;
+  linkPreview?: LinkPreview | null;
 };
 
 type ChatPresenceUser = {
@@ -71,6 +72,9 @@ export default function TripDetailsScreen() {
   const [profileCardUserId, setProfileCardUserId] = useState<string | null>(null);
   const [selectedCategoryKey, setSelectedCategoryKey] = useState<string | null>(null);
   const [failedAvatars, setFailedAvatars] = useState<Set<string>>(new Set());
+  const chatInputOpacityRef = useRef(new Animated.Value(0.5)).current;
+  const inviteEmailOpacityRef = useRef(new Animated.Value(0.5)).current;
+  const spotifyUrlOpacityRef = useRef(new Animated.Value(0.5)).current;
 
   useFocusEffect(
     useCallback(() => {
@@ -153,6 +157,21 @@ export default function TripDetailsScreen() {
     return Array.from(groups.entries())
       .filter(([_, group]) => group.items.length > 0)
       .map(([key, group]) => ({ key, ...group }));
+  }, [sortedActivities]);
+
+  const activityDayGroups = useMemo(() => {
+    const map = new Map<string, SideQuestActivity[]>();
+    for (const a of sortedActivities) {
+      const key = a.date.slice(0, 10);
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(a);
+    }
+    return Array.from(map.entries())
+      .map(([date, items]) => ({
+        date,
+        items: items.sort((x, y) => (x.time ?? '').localeCompare(y.time ?? '')),
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date));
   }, [sortedActivities]);
 
   const memberAvatarMap = useMemo(() => {
@@ -385,6 +404,11 @@ export default function TripDetailsScreen() {
           <View style={styles.heroCard}>
             {trip?.imageUrl ? <Image source={{ uri: trip.imageUrl }} style={styles.heroImage} /> : null}
             <View style={styles.heroOverlay} />
+            <View style={styles.heroPatternRow}>
+              {[0, 1, 2, 3, 4, 5].map((i) => (
+                <View key={i} style={styles.heroPatternCell} />
+              ))}
+            </View>
             <View style={styles.heroBody}>
               <Text style={styles.heroEyebrow}>{trip?.destination ?? 'Upcoming adventure'}</Text>
               <Text style={styles.heroTitle}>{trip?.title ?? 'Loading adventure...'}</Text>
@@ -396,102 +420,112 @@ export default function TripDetailsScreen() {
             </View>
           </View>
 
-          <View style={styles.spotifyCard}>
-            <View style={styles.spotifyHeader}>
-              <View style={styles.spotifyIconWrap}>
-                <FontAwesome name="spotify" size={16} color="#1db954" />
-              </View>
-              <View style={styles.spotifyCopy}>
-                <Text style={styles.spotifyLabel}>Spotify</Text>
-                <Text style={styles.spotifyHint}>{trip?.spotifyUrl ? 'Linked for this trip' : 'Not linked'}</Text>
-              </View>
+          <View style={styles.spotifyRow}>
+            <View style={styles.spotifyRowIcon}>
+              <FontAwesome name="spotify" size={18} color="#fff" />
             </View>
-
-            {trip?.spotifyUrl ? (
-              <>
-                <Text numberOfLines={1} ellipsizeMode="middle" style={styles.spotifyUrlText}>
-                  {formatSpotifyDisplayUrl(trip.spotifyUrl)}
-                </Text>
-                <View style={styles.spotifyActions}>
-                  <TouchableOpacity activeOpacity={0.9} style={styles.spotifyPrimaryButton} onPress={() => void openSpotifyLink(trip.spotifyUrl!)}>
-                    <Ionicons name="play-circle-outline" size={16} color="#167a3a" />
-                    <Text style={styles.spotifyPrimaryButtonText}>Open</Text>
+            <View style={styles.spotifyRowBody}>
+              <Text style={styles.spotifyRowTitle}>Spotify</Text>
+              <Text style={styles.spotifyRowSubtitle}>{trip?.spotifyUrl ? 'Linked for this trip' : 'No playlist linked yet'}</Text>
+            </View>
+            <View style={styles.spotifyRowButtons}>
+              {trip?.spotifyUrl ? (
+                <>
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    style={[styles.spotifyRowBtn, styles.spotifyRowBtnPrimary]}
+                    onPress={() => void openSpotifyLink(trip.spotifyUrl!)}>
+                    <Ionicons name="play" size={11} color="#1cb35b" />
+                    <Text style={styles.spotifyRowBtnPrimaryText}>Open</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    activeOpacity={0.88}
-                    style={styles.spotifyGhostButton}
+                    activeOpacity={0.85}
+                    style={[styles.spotifyRowBtn, styles.spotifyRowBtnGhost]}
                     onPress={() => {
                       setSpotifyUrlDraft(trip.spotifyUrl ?? '');
                       setSpotifyMessage('');
                       setSpotifyModalOpen(true);
                     }}>
-                    <Ionicons name="create-outline" size={16} color="#1d232e" />
-                    <Text style={styles.spotifyGhostButtonText}>Change</Text>
+                    <Ionicons name="pencil" size={11} color="#161821" />
+                    <Text style={styles.spotifyRowBtnGhostText}>Change</Text>
                   </TouchableOpacity>
-                </View>
-              </>
-            ) : (
-              <TouchableOpacity
-                activeOpacity={0.9}
-                style={styles.spotifyEmptyButton}
-                onPress={() => {
-                  setSpotifyUrlDraft('');
-                  setSpotifyMessage('');
-                  setSpotifyModalOpen(true);
-                }}>
-                <Ionicons name="add-circle-outline" size={18} color="#1db954" />
-                <Text style={styles.spotifyEmptyButtonText}>Add Spotify link</Text>
-              </TouchableOpacity>
-            )}
-
-            {spotifyMessage ? <Text style={styles.spotifyMessage}>{spotifyMessage}</Text> : null}
+                </>
+              ) : (
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  style={[styles.spotifyRowBtn, styles.spotifyRowBtnPrimary]}
+                  onPress={() => {
+                    setSpotifyUrlDraft('');
+                    setSpotifyMessage('');
+                    setSpotifyModalOpen(true);
+                  }}>
+                  <Ionicons name="add" size={13} color="#1cb35b" />
+                  <Text style={styles.spotifyRowBtnPrimaryText}>Add</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
+          {spotifyMessage ? <Text style={styles.spotifyMessage}>{spotifyMessage}</Text> : null}
 
-          <TouchableOpacity style={styles.costSplitCard} onPress={() => router.push(`/trip/${id}/split`)}>
-            <Ionicons name="wallet-outline" size={18} color={PRIMARY_COLOR} />
-            <Text style={styles.costSplitLabel}>Cost Split</Text>
-            <Ionicons name="chevron-forward" size={18} color="#b2b7c0" />
+          <TouchableOpacity style={styles.costSplitRow} activeOpacity={0.86} onPress={() => router.push(`/trip/${id}/split`)}>
+            <View style={styles.costSplitRowIcon}>
+              <Ionicons name="calculator-outline" size={18} color={PRIMARY_COLOR} />
+            </View>
+            <Text style={styles.costSplitRowLabel}>Cost Split</Text>
+            <Ionicons name="chevron-forward" size={20} color="#b2b7c0" />
           </TouchableOpacity>
 
 
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionEyebrow}>SIDEQUEST FEED</Text>
-            <Text style={styles.sectionTitle}>What the group will discover</Text>
-            <Text style={styles.sectionCopy}>A playful stream of hidden and public moments for this trip.</Text>
+            <Text style={styles.sectionTitle}>What the group{'\n'}will discover</Text>
+            <Text style={styles.sectionCopy}>Group plans, day by day.</Text>
           </View>
 
-          {activityGroups.length > 0 ? (
-            <View style={styles.categoryGrid}>
-              {activityGroups.map((group) => (
-                <TouchableOpacity
-                  key={group.key}
-                  style={styles.categoryCard}
-                  activeOpacity={0.92}
-                  onPress={() => setSelectedCategoryKey(group.key)}>
-                  <View style={styles.categoryCardHeader}>
-                    <Text style={styles.categoryEmoji}>{group.emoji}</Text>
-                    <View style={styles.categoryInfo}>
-                      <Text style={styles.categoryLabel}>{group.label}</Text>
-                      {(() => {
-                        const firstItem = group.items[0];
-                        const isHidden = firstItem && firstItem.revealAt && new Date(firstItem.revealAt).getTime() > Date.now();
-                        return isHidden ? (
-                          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                            <Ionicons name="lock-closed" size={14} color="#c5cad2" style={{ marginRight: 6 }} />
-                            <Text style={styles.categoryItemName}>Coming up: Hidden</Text>
+          {activityDayGroups.length > 0 ? (
+            activityDayGroups.map((group) => (
+              <View key={group.date} style={styles.dayGroup}>
+                <View style={styles.dayHeader}>
+                  <Text style={styles.dayHeaderText}>{formatDayHeaderDate(group.date)}</Text>
+                  <Text style={styles.dayHeaderDay}>Day {dayNumberRelative(group.date, trip?.startDate)}</Text>
+                  <View style={styles.dayHeaderLine} />
+                </View>
+                {group.items.map((activity) => {
+                  const hidden = activity.isHiddenForViewer;
+                  const timeLabel = formatActivityTimeShort(activity.time);
+                  return (
+                    <TouchableOpacity
+                      key={activity.id}
+                      activeOpacity={0.86}
+                      style={styles.timelineRow}
+                      onPress={() => router.push(`/trip/${id}/sidequest/${activity.id}`)}>
+                      <View style={styles.timelineIconWrap}>
+                        {hidden ? (
+                          <View style={[styles.timelineIcon, styles.timelineIconHidden]}>
+                            <Ionicons name="lock-closed" size={18} color="#fff" />
                           </View>
+                        ) : activity.imageUrl ? (
+                          <Image source={{ uri: activity.imageUrl }} style={styles.timelineIcon} />
                         ) : (
-                          <Text style={styles.categoryItemName} numberOfLines={1}>Coming up: {firstItem?.title ?? 'Activity'}</Text>
-                        );
-                      })()}
-                    </View>
-                  </View>
-                  {group.items.length > 1 && (
-                    <Text style={styles.categoryCount}>+{group.items.length - 1} more</Text>
-                  )}
-                </TouchableOpacity>
-              ))}
-            </View>
+                          <View style={[styles.timelineIcon, { backgroundColor: PRIMARY_COLOR }]}>
+                            <Ionicons name="sparkles" size={18} color="#fff" />
+                          </View>
+                        )}
+                      </View>
+                      <View style={styles.timelineBody}>
+                        <Text style={styles.timelineTitle} numberOfLines={1}>
+                          {hidden ? 'Hidden quest' : (activity.title?.trim() || 'Activity')}
+                        </Text>
+                        <Text style={styles.timelineSubtitle} numberOfLines={1}>
+                          {hidden ? formatTimeUntilReveal(activity.revealAt) : formatActivityAuthorSubtitle(activity)}
+                        </Text>
+                      </View>
+                      {timeLabel ? <Text style={styles.timelineTime}>{timeLabel}</Text> : null}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            ))
           ) : (
             <View style={styles.emptyState}>
               <View style={styles.emptyIconCircle}>
@@ -584,16 +618,32 @@ export default function TripDetailsScreen() {
                       {inviteComposerOpen ? (
                         <View style={styles.inviteInlineComposer}>
                           <View style={styles.inviteComposer}>
-                            <TextInput
-                              value={inviteEmail}
-                              onChangeText={setInviteEmail}
-                              placeholder="friend@example.com"
-                              placeholderTextColor="#afb5bf"
-                              keyboardType="email-address"
-                              autoCapitalize="none"
-                              autoCorrect={false}
-                              style={styles.inviteInput}
-                            />
+                            <Animated.View style={[{ opacity: inviteEmailOpacityRef }]}>
+                              <TextInput
+                                value={inviteEmail}
+                                onChangeText={setInviteEmail}
+                                onFocus={() => {
+                                  Animated.timing(inviteEmailOpacityRef, {
+                                    toValue: 1,
+                                    duration: 300,
+                                    useNativeDriver: false,
+                                  }).start();
+                                }}
+                                onBlur={() => {
+                                  Animated.timing(inviteEmailOpacityRef, {
+                                    toValue: 0.5,
+                                    duration: 300,
+                                    useNativeDriver: false,
+                                  }).start();
+                                }}
+                                placeholder="friend@example.com"
+                                placeholderTextColor="#afb5bf"
+                                keyboardType="email-address"
+                                autoCapitalize="none"
+                                autoCorrect={false}
+                                style={styles.inviteInput}
+                              />
+                            </Animated.View>
                             <TouchableOpacity
                               activeOpacity={0.9}
                               style={[styles.inviteAddButton, { backgroundColor: PRIMARY_COLOR }, inviteSubmitting ? styles.inviteAddButtonDisabled : null]}
@@ -708,11 +758,14 @@ export default function TripDetailsScreen() {
                               <Image source={{ uri: message.imageUrl }} style={styles.chatMessageImage} />
                             </Pressable>
                           ) : null}
-                          {message.text ? (
-                            <View style={[styles.chatBubbleCard, styles.chatBubbleCardOwn, { backgroundColor: PRIMARY_COLOR }]}>
-                              <Text style={[styles.chatBubbleText, styles.chatBubbleTextOwn]}>{message.text}</Text>
-                            </View>
-                          ) : null}
+                          <View style={[styles.chatBubbleCard, styles.chatBubbleCardOwn, { backgroundColor: PRIMARY_COLOR }]}>
+                            {message.text ? (
+                              <ChatMessageText text={message.text} isOwn={true} />
+                            ) : null}
+                            {message.linkPreview ? (
+                              <LinkPreviewCardInline preview={message.linkPreview} isOwn={true} />
+                            ) : null}
+                          </View>
                         </View>
                       ) : (
                         <View style={styles.chatMessageRow}>
@@ -737,11 +790,14 @@ export default function TripDetailsScreen() {
                                 <Image source={{ uri: message.imageUrl }} style={styles.chatMessageImage} />
                               </Pressable>
                             ) : null}
-                            {message.text ? (
-                              <View style={styles.chatBubbleCard}>
-                                <Text style={styles.chatBubbleText}>{message.text}</Text>
-                              </View>
-                            ) : null}
+                            <View style={styles.chatBubbleCard}>
+                              {message.text ? (
+                                <ChatMessageText text={message.text} isOwn={false} />
+                              ) : null}
+                              {message.linkPreview ? (
+                                <LinkPreviewCardInline preview={message.linkPreview} isOwn={false} />
+                              ) : null}
+                            </View>
                           </View>
                         </View>
                       )}
@@ -774,15 +830,31 @@ export default function TripDetailsScreen() {
                   onPress={() => void handlePickChatImage()}>
                   <Ionicons name="image-outline" size={22} color={chatSending || chatImageUploading ? '#c2c8d2' : '#161821'} />
                 </TouchableOpacity>
-                <TextInput
-                  value={chatDraft}
-                  onChangeText={setChatDraft}
-                  onFocus={() => setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: true }), 250)}
-                  placeholder="Send a message to the group"
-                  placeholderTextColor="#afb5bf"
-                  style={styles.chatInput}
-                  multiline
-                />
+                <Animated.View style={[{ opacity: chatInputOpacityRef }]}>
+                  <TextInput
+                    value={chatDraft}
+                    onChangeText={setChatDraft}
+                    onFocus={() => {
+                      Animated.timing(chatInputOpacityRef, {
+                        toValue: 1,
+                        duration: 300,
+                        useNativeDriver: false,
+                      }).start();
+                      setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: true }), 250);
+                    }}
+                    onBlur={() => {
+                      Animated.timing(chatInputOpacityRef, {
+                        toValue: 0.5,
+                        duration: 300,
+                        useNativeDriver: false,
+                      }).start();
+                    }}
+                    placeholder="Send a message to the group"
+                    placeholderTextColor="#afb5bf"
+                    style={styles.chatInput}
+                    multiline
+                  />
+                </Animated.View>
                 <TouchableOpacity
                   activeOpacity={0.9}
                   style={[
@@ -803,6 +875,7 @@ export default function TripDetailsScreen() {
         <Modal visible={spotifyModalOpen} transparent animationType="fade" onRequestClose={() => setSpotifyModalOpen(false)}>
           <View style={styles.sheetBackdrop}>
             <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setSpotifyModalOpen(false)} />
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1, justifyContent: 'flex-end' }}>
             <View style={[styles.sheetCard, { paddingBottom: Math.max(insets.bottom, 18) + 12 }]}>
               <View style={styles.sheetHandle} />
               <View style={styles.sheetHeader}>
@@ -817,16 +890,32 @@ export default function TripDetailsScreen() {
 
               <View style={styles.spotifySheetBody}>
                 <Text style={styles.spotifySheetCopy}>Paste a public Spotify playlist, album, or track link that everyone can use.</Text>
-                <TextInput
-                  value={spotifyUrlDraft}
-                  onChangeText={setSpotifyUrlDraft}
-                  placeholder="https://open.spotify.com/..."
-                  placeholderTextColor="#a3a9b4"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  keyboardType="url"
-                  style={styles.spotifyInput}
-                />
+                <Animated.View style={[{ opacity: spotifyUrlOpacityRef }]}>
+                  <TextInput
+                    value={spotifyUrlDraft}
+                    onChangeText={setSpotifyUrlDraft}
+                    onFocus={() => {
+                      Animated.timing(spotifyUrlOpacityRef, {
+                        toValue: 1,
+                        duration: 300,
+                        useNativeDriver: false,
+                      }).start();
+                    }}
+                    onBlur={() => {
+                      Animated.timing(spotifyUrlOpacityRef, {
+                        toValue: 0.5,
+                        duration: 300,
+                        useNativeDriver: false,
+                      }).start();
+                    }}
+                    placeholder="https://open.spotify.com/..."
+                    placeholderTextColor="#a3a9b4"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    keyboardType="url"
+                    style={styles.spotifyInput}
+                  />
+                </Animated.View>
                 <View style={styles.spotifySheetButtons}>
                   <TouchableOpacity activeOpacity={0.88} style={styles.spotifySheetSecondaryButton} onPress={() => void handleSaveTripSpotify(null)}>
                     <Text style={styles.spotifySheetSecondaryButtonText}>Remove</Text>
@@ -841,6 +930,7 @@ export default function TripDetailsScreen() {
                 </View>
               </View>
             </View>
+            </KeyboardAvoidingView>
           </View>
         </Modal>
 
@@ -957,6 +1047,74 @@ async function openSpotifyLink(url: string) {
   }
 }
 
+const URL_REGEX = /https?:\/\/[^\s]+/g;
+
+function ChatMessageText({ text, isOwn }: { text: string; isOwn: boolean }) {
+  const parts = text.split(URL_REGEX);
+  const urls = text.match(URL_REGEX) || [];
+
+  let urlIndex = 0;
+
+  return (
+    <Text>
+      {parts.map((part, i) => {
+        const hasUrl = urlIndex < urls.length;
+        const elements: React.ReactNode[] = [];
+
+        if (part) {
+          elements.push(
+            <Text key={`text-${i}`} style={[styles.chatBubbleText, isOwn && styles.chatBubbleTextOwn]}>
+              {part}
+            </Text>
+          );
+        }
+
+        if (hasUrl) {
+          const url = urls[urlIndex++];
+          elements.push(
+            <Text
+              key={`link-${i}`}
+              style={[styles.chatBubbleText, isOwn && styles.chatBubbleTextOwn, isOwn ? styles.chatBubbleLink : styles.chatBubbleLinkOther]}
+              onPress={() => openSpotifyLink(url)}>
+              {url}
+            </Text>
+          );
+        }
+
+        return elements;
+      })}
+    </Text>
+  );
+}
+
+function LinkPreviewCardInline({ preview, isOwn }: { preview: LinkPreview; isOwn?: boolean }) {
+  return (
+    <TouchableOpacity
+      activeOpacity={0.85}
+      onPress={() => openSpotifyLink(preview.url)}
+      style={[styles.linkPreviewInline, isOwn && styles.linkPreviewInlineOwn]}>
+      {preview.imageUrl ? (
+        <Image source={{ uri: preview.imageUrl }} style={styles.linkPreviewInlineImage} />
+      ) : null}
+      <View style={styles.linkPreviewInlineContent}>
+        {preview.title ? (
+          <Text style={[styles.linkPreviewInlineTitle, isOwn && styles.linkPreviewInlineTitleOwn]} numberOfLines={2}>
+            {preview.title}
+          </Text>
+        ) : null}
+        {preview.description ? (
+          <Text style={[styles.linkPreviewInlineDescription, isOwn && styles.linkPreviewInlineDescriptionOwn]} numberOfLines={1}>
+            {preview.description}
+          </Text>
+        ) : null}
+        <Text style={[styles.linkPreviewInlineUrl, isOwn && styles.linkPreviewInlineUrlOwn]} numberOfLines={1}>
+          {preview.url.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')}
+        </Text>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
 function TripMetaChip({
   icon,
   label,
@@ -984,6 +1142,34 @@ function formatActivityDate(date: string) {
   return new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(`${date}T12:00:00`));
 }
 
+function formatDayHeaderDate(dateIso: string) {
+  const d = new Date(`${dateIso.slice(0, 10)}T12:00:00`);
+  if (isNaN(d.getTime())) return '';
+  const weekday = new Intl.DateTimeFormat('en-US', { weekday: 'short' }).format(d);
+  const monthDay = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(d);
+  return `${weekday} · ${monthDay}`;
+}
+
+function dayNumberRelative(dateIso: string, tripStartIso?: string) {
+  if (!tripStartIso) return 1;
+  const d = new Date(`${dateIso.slice(0, 10)}T12:00:00`);
+  const start = new Date(`${tripStartIso.slice(0, 10)}T12:00:00`);
+  if (isNaN(d.getTime()) || isNaN(start.getTime())) return 1;
+  const diff = Math.round((d.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+  return Math.max(1, diff + 1);
+}
+
+function formatActivityTimeShort(time?: string | null) {
+  if (!time) return '';
+  return time.slice(0, 5);
+}
+
+function formatActivityAuthorSubtitle(activity: SideQuestActivity) {
+  const name = activity.ownerName?.trim() || '';
+  if (name && activity.commentCount > 0) return `${name} · ${activity.commentCount}`;
+  return name;
+}
+
 function formatActivityRevealDate(revealAt?: string | null) {
   if (!revealAt) return 'soon';
   return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(revealAt));
@@ -997,9 +1183,13 @@ function formatTimeUntilReveal(revealAt?: string | null) {
 
   if (diffMs <= 0) return 'Revealed';
 
-  const hours = Math.floor(diffMs / (1000 * 60 * 60));
+  const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
   const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
 
+  if (days > 0) {
+    return `Reveals in ${days} d ${hours} h ${minutes} m`;
+  }
   if (hours > 0) {
     return `Reveals in ${hours} h ${minutes} m`;
   }
@@ -1089,28 +1279,45 @@ const styles = StyleSheet.create({
   },
   heroOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(17,19,25,0.30)',
+    backgroundColor: 'rgba(17,19,25,0.42)',
+  },
+  heroPatternRow: {
+    position: 'absolute',
+    top: 14,
+    left: 18,
+    right: 18,
+    flexDirection: 'row',
+    gap: 6,
+  },
+  heroPatternCell: {
+    flex: 1,
+    height: 38,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255,255,255,0.10)',
   },
   heroBody: {
     padding: 22,
   },
   heroEyebrow: {
-    color: 'rgba(255,255,255,0.92)',
+    color: '#ffd0c0',
     fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 1.1,
+    fontWeight: '700',
+    letterSpacing: -0.2,
   },
   heroTitle: {
-    marginTop: 8,
+    marginTop: 4,
     color: '#fff',
     fontSize: 34,
     fontWeight: '900',
-    letterSpacing: -1.2,
+    letterSpacing: -1.4,
+    lineHeight: 38,
   },
   heroDate: {
-    marginTop: 8,
-    color: 'rgba(255,255,255,0.90)',
-    fontSize: 16,
+    marginTop: 6,
+    color: '#fbe4d8',
+    fontSize: 14,
+    fontWeight: '600',
+    letterSpacing: -0.2,
   },
   heroMetaRow: {
     flexDirection: 'row',
@@ -1130,6 +1337,33 @@ const styles = StyleSheet.create({
     borderColor: '#eaedf2',
     backgroundColor: '#ffffff',
   },
+  costSplitRow: {
+    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 16,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: '#eceef2',
+    backgroundColor: '#fff',
+  },
+  costSplitRowIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: '#fff0f4',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  costSplitRowLabel: {
+    flex: 1,
+    color: '#161821',
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+  },
   costSplitLabel: {
     flex: 1,
     marginLeft: 12,
@@ -1140,16 +1374,19 @@ const styles = StyleSheet.create({
   heroChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 7,
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: 'rgba(0,0,0,0.32)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
   },
   heroChipText: {
     color: '#fff',
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: '700',
+    letterSpacing: -0.2,
   },
   spotifyCard: {
     marginTop: 14,
@@ -1159,6 +1396,70 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     paddingHorizontal: 12,
     paddingVertical: 10,
+  },
+  spotifyRow: {
+    marginTop: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    padding: 14,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: '#eceef2',
+    backgroundColor: '#fff',
+  },
+  spotifyRowIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#1cb35b',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  spotifyRowBody: {
+    flex: 1,
+  },
+  spotifyRowTitle: {
+    color: '#161821',
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+  },
+  spotifyRowSubtitle: {
+    marginTop: 2,
+    color: '#8a909d',
+    fontSize: 12.5,
+    fontWeight: '600',
+  },
+  spotifyRowButtons: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  spotifyRowBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+  },
+  spotifyRowBtnPrimary: {
+    backgroundColor: '#e7f8ef',
+  },
+  spotifyRowBtnPrimaryText: {
+    color: '#1cb35b',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  spotifyRowBtnGhost: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e4e7ee',
+  },
+  spotifyRowBtnGhostText: {
+    color: '#161821',
+    fontSize: 12,
+    fontWeight: '700',
   },
   spotifyHeader: {
     flexDirection: 'row',
@@ -1629,15 +1930,17 @@ const styles = StyleSheet.create({
   sectionTitle: {
     marginTop: 8,
     color: '#161821',
-    fontSize: 26,
+    fontSize: 30,
     fontWeight: '900',
-    letterSpacing: -0.9,
+    letterSpacing: -1.2,
+    lineHeight: 34,
   },
   sectionCopy: {
     marginTop: 8,
     color: '#78808c',
-    fontSize: 15,
-    lineHeight: 23,
+    fontSize: 14,
+    lineHeight: 22,
+    fontWeight: '500',
   },
   emptyState: {
     marginTop: 18,
@@ -1886,6 +2189,60 @@ const styles = StyleSheet.create({
   chatBubbleTextOwn: {
     color: '#fff',
   },
+  chatBubbleLink: {
+    color: '#fff',
+    textDecorationLine: 'underline',
+  },
+  chatBubbleLinkOther: {
+    color: '#ff4f74',
+    textDecorationLine: 'underline',
+  },
+  linkPreviewInline: {
+    flexDirection: 'row',
+    borderRadius: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+    overflow: 'hidden',
+    marginTop: 8,
+  },
+  linkPreviewInlineOwn: {
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  linkPreviewInlineImage: {
+    width: 70,
+    height: 70,
+    backgroundColor: '#eef0f4',
+  },
+  linkPreviewInlineContent: {
+    flex: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    justifyContent: 'center',
+  },
+  linkPreviewInlineTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#161821',
+    marginBottom: 2,
+  },
+  linkPreviewInlineTitleOwn: {
+    color: '#fff',
+  },
+  linkPreviewInlineDescription: {
+    fontSize: 12,
+    color: '#8a909d',
+    marginBottom: 3,
+  },
+  linkPreviewInlineDescriptionOwn: {
+    color: 'rgba(255, 255, 255, 0.8)',
+  },
+  linkPreviewInlineUrl: {
+    fontSize: 11,
+    color: '#a4aab4',
+    fontWeight: '500',
+  },
+  linkPreviewInlineUrlOwn: {
+    color: 'rgba(255, 255, 255, 0.6)',
+  },
   chatMeta: {
     marginTop: 4,
     color: '#9aa2ae',
@@ -1990,6 +2347,74 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 12,
     fontWeight: '700',
+  },
+  dayGroup: {
+    marginTop: 22,
+  },
+  dayHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 8,
+  },
+  dayHeaderText: {
+    color: '#161821',
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+  },
+  dayHeaderDay: {
+    color: '#9aa2ae',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  dayHeaderLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#eceef2',
+    marginLeft: 4,
+  },
+  timelineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingVertical: 12,
+  },
+  timelineTime: {
+    color: '#8a909d',
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  timelineIconWrap: {
+    width: 42,
+    height: 42,
+  },
+  timelineIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timelineIconHidden: {
+    backgroundColor: '#1d212a',
+  },
+  timelineBody: {
+    flex: 1,
+    minWidth: 0,
+  },
+  timelineTitle: {
+    color: '#161821',
+    fontSize: 17,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+  },
+  timelineSubtitle: {
+    marginTop: 3,
+    color: '#8a909d',
+    fontSize: 14,
+    fontWeight: '500',
   },
   categoryGrid: {
     marginTop: 16,

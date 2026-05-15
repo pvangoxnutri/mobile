@@ -2,9 +2,11 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   Image,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   Share,
@@ -18,6 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import RangeDatePicker, { formatRangeDisplay } from '@/components/range-date-picker';
 import CountryPicker from '@/components/travel-tracker/country-picker';
 import { useI18n } from '@/components/i18n-provider';
+import { UnsavedChangesModal, useUnsavedChanges } from '@/components/unsaved-changes';
 import { apiFetch, apiJson } from '@/lib/api';
 import type { Quest } from '@/lib/types';
 import { PRIMARY_COLOR, PRIMARY_08, PRIMARY_20, SECONDARY_COLOR } from '@/constants/colors';
@@ -39,8 +42,20 @@ export default function CreateTripScreen() {
   const [pendingInvites, setPendingInvites] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<MessageState>(null);
+  const initialStartDate = useRef(startDate);
+  const initialEndDate = useRef(endDate);
 
   const contentBottomPadding = useMemo(() => Math.max(insets.bottom, 18) + 184, [insets.bottom]);
+
+  const isDirty = Boolean(
+    title.trim() ||
+    destination.trim() ||
+    tripCountries.length > 0 ||
+    coverImage ||
+    pendingInvites.length > 0 ||
+    startDate !== initialStartDate.current ||
+    endDate !== initialEndDate.current
+  );
 
   async function handlePickCover() {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -98,28 +113,28 @@ export default function CreateTripScreen() {
     });
   }
 
-  async function handleCreateTrip() {
+  async function saveTrip(): Promise<Quest | null> {
     const normalizedTitle = title.trim();
     const normalizedDestination = destination.trim();
 
     if (!normalizedTitle) {
       setMessage({ type: 'error', text: t('trip.error.emptyName') });
-      return;
+      return null;
     }
 
     if (!normalizedDestination) {
       setMessage({ type: 'error', text: t('trip.error.emptyDestination') });
-      return;
+      return null;
     }
 
     if (!isDateInputValid(startDate) || !isDateInputValid(endDate)) {
       setMessage({ type: 'error', text: t('trip.error.invalidDateFormat') });
-      return;
+      return null;
     }
 
     if (new Date(`${endDate}T12:00:00`).getTime() < new Date(`${startDate}T12:00:00`).getTime()) {
       setMessage({ type: 'error', text: t('trip.error.endBeforeStart') });
-      return;
+      return null;
     }
 
     setSubmitting(true);
@@ -159,22 +174,39 @@ export default function CreateTripScreen() {
         );
       }
 
-      router.replace(`/trip/${trip.id}`);
+      return trip;
     } catch (error) {
       setMessage({ type: 'error', text: error instanceof Error ? error.message : t('trip.error.createFailed') });
+      return null;
     } finally {
       setSubmitting(false);
     }
   }
 
+  async function handleCreateTrip() {
+    const trip = await saveTrip();
+    if (trip) {
+      router.replace(`/trip/${trip.id}`);
+    }
+  }
+
+  const unsaved = useUnsavedChanges({
+    isDirty,
+    onSave: async () => {
+      const trip = await saveTrip();
+      return trip !== null;
+    },
+  });
+
   return (
-    <View style={styles.screen}>
+    <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={[styles.content, { paddingTop: Math.max(insets.top, 14) + 6, paddingBottom: contentBottomPadding }]}
+        keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} activeOpacity={0.8} onPress={() => router.back()}>
+          <TouchableOpacity style={styles.backButton} activeOpacity={0.8} onPress={unsaved.requestBack}>
             <Ionicons name="arrow-back" size={28} color={PRIMARY_COLOR} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>{t('trip.title')}</Text>
@@ -346,7 +378,16 @@ export default function CreateTripScreen() {
         }}
         onClose={() => setRangePickerOpen(false)}
       />
-    </View>
+
+      <UnsavedChangesModal
+        visible={unsaved.modalOpen}
+        busy={unsaved.busy}
+        hasSave={true}
+        onSave={unsaved.handleSave}
+        onDiscard={unsaved.handleDiscard}
+        onCancel={unsaved.handleCancel}
+      />
+    </KeyboardAvoidingView>
   );
 }
 

@@ -8,6 +8,8 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
   Share,
   StyleSheet,
@@ -20,6 +22,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/components/auth-provider';
 import RangeDatePicker, { formatRangeDisplay } from '@/components/range-date-picker';
 import CountryPicker from '@/components/travel-tracker/country-picker';
+import { UnsavedChangesModal, useUnsavedChanges } from '@/components/unsaved-changes';
 import { apiFetch, apiJson } from '@/lib/api';
 import type { Quest, TripInvite } from '@/lib/types';
 import { uploadImageIfNeeded } from '@/lib/uploads';
@@ -58,6 +61,17 @@ export default function TripSettingsScreen() {
   const [confirmingLeave, setConfirmingLeave] = useState(false);
 
   const canManageTrip = Boolean(user?.id && trip?.ownerIds?.includes(user.id));
+
+  const isDirty = Boolean(
+    trip && (
+      title.trim() !== (trip.title ?? '').trim() ||
+      destination.trim() !== (trip.destination ?? '').trim() ||
+      startDate !== trip.startDate ||
+      endDate !== trip.endDate ||
+      JSON.stringify(tripCountries) !== JSON.stringify(trip.countries ?? []) ||
+      (imageUrl ?? null) !== (trip.imageUrl ?? null)
+    )
+  );
 
   const loadTrip = useCallback(() => {
     let active = true;
@@ -112,8 +126,8 @@ export default function TripSettingsScreen() {
     }
   }
 
-  async function handleSave() {
-    if (!trip) return;
+  async function handleSave(): Promise<boolean> {
+    if (!trip) return false;
 
     setSaving(true);
     setMessage(null);
@@ -140,12 +154,19 @@ export default function TripSettingsScreen() {
 
       setMessage({ type: 'success', text: 'Trip settings updated.' });
       loadTrip();
+      return true;
     } catch (error) {
       setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Unable to save trip settings.' });
+      return false;
     } finally {
       setSaving(false);
     }
   }
+
+  const unsaved = useUnsavedChanges({
+    isDirty,
+    onSave: async () => await handleSave(),
+  });
 
   function confirmRemoveMember(member: TripMember) {
     Alert.alert('Remove member', `Remove ${member.name} from this trip?`, [
@@ -257,12 +278,13 @@ export default function TripSettingsScreen() {
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
-      <View style={styles.screen}>
+      <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
           contentContainerStyle={[styles.content, { paddingTop: Math.max(insets.top, 18) + 4, paddingBottom: Math.max(insets.bottom, 24) + 40 }]}
+          keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
           <View style={styles.header}>
-            <TouchableOpacity style={styles.backButton} activeOpacity={0.88} onPress={() => router.back()}>
+            <TouchableOpacity style={styles.backButton} activeOpacity={0.88} onPress={unsaved.requestBack}>
               <Ionicons name="arrow-back" size={24} color="#11131a" />
             </TouchableOpacity>
             <Text style={styles.headerTitle}>Trip settings</Text>
@@ -477,7 +499,16 @@ export default function TripSettingsScreen() {
           }}
           onClose={() => setRangePickerOpen(false)}
         />
-      </View>
+      </KeyboardAvoidingView>
+
+      <UnsavedChangesModal
+        visible={unsaved.modalOpen}
+        busy={unsaved.busy || saving}
+        hasSave={canManageTrip}
+        onSave={unsaved.handleSave}
+        onDiscard={unsaved.handleDiscard}
+        onCancel={unsaved.handleCancel}
+      />
     </>
   );
 }

@@ -2,9 +2,10 @@
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from 'react';
 import {
   Image,
+  KeyboardAvoidingView,
   Modal,
   Platform,
   ScrollView,
@@ -57,15 +58,20 @@ type Props = {
   tripEndDate?: string | null;
   initialValues?: Partial<SideQuestFormValues>;
   initialImageUrl?: string | null;
+  onDirtyChange?: (dirty: boolean) => void;
+};
+
+export type SideQuestFormHandle = {
+  submitSilently: () => Promise<boolean>;
 };
 
 const TEASER_OPTIONS = [
-  { label: '2h before', value: 120 },
-  { label: '12h before', value: 720 },
-  { label: '1 day before', value: 1440 },
+  { label: '2h innan', value: 120 },
+  { label: '12h innan', value: 720 },
+  { label: '1 dag innan', value: 1440 },
 ];
 
-export default function SideQuestForm({
+function SideQuestFormInner({
   mode,
   tripId,
   sideQuestId,
@@ -73,7 +79,9 @@ export default function SideQuestForm({
   tripEndDate,
   initialValues,
   initialImageUrl,
-}: Props) {  const insets = useSafeAreaInsets();
+  onDirtyChange,
+}: Props, ref: Ref<SideQuestFormHandle>) {
+  const insets = useSafeAreaInsets();
   const [title, setTitle] = useState(initialValues?.title ?? '');
   const [description, setDescription] = useState(initialValues?.description ?? '');
   const [category, setCategory] = useState<string | null>(initialValues?.category ?? null);
@@ -94,29 +102,39 @@ export default function SideQuestForm({
   const [submitting, setSubmitting] = useState(false);
 
   const bottomPadding = useMemo(() => Math.max(insets.bottom, 18) + 60, [insets.bottom]);
-  const revealAtPreview = visibility === 'hidden' ? formatRevealPreview(revealDate, revealTime) : 'Reveal instantly';
+  const revealAtPreview = visibility === 'hidden' ? formatRevealPreview(revealDate, revealTime) : 'Avslöjas direkt';
   const tripRangeText =
-    tripStartDate && tripEndDate ? `${formatShortDate(tripStartDate)} - ${formatShortDate(tripEndDate)}` : 'Trip dates loading';
+    tripStartDate && tripEndDate ? `${formatShortDate(tripStartDate)} – ${formatShortDate(tripEndDate)}` : 'Laddar resans datum';
   const selectedDateOutOfRange =
     tripStartDate && tripEndDate ? !isWithinRange(date, tripStartDate, tripEndDate) : false;
   const revealRange = useMemo(() => getRevealRange(tripStartDate, tripEndDate, date), [date, tripEndDate, tripStartDate]);
   const revealDateOutOfRange =
     visibility === 'hidden' ? !isWithinRange(revealDate, revealRange.min, revealRange.max) : false;
 
+  // Only clamp revealDate when transitioning into Hidden, or when the valid
+  // range shifts (e.g. user picked a different activity date). Skip re-runs
+  // triggered by our own setRevealDate so the value doesn't bounce visibly.
+  const prevVisibilityRef = useRef(visibility);
+  const prevRangeRef = useRef(`${revealRange.min}|${revealRange.max}`);
   useEffect(() => {
     if (visibility !== 'hidden') {
+      prevVisibilityRef.current = visibility;
       return;
     }
+    const visibilityChanged = prevVisibilityRef.current !== 'hidden';
+    const rangeKey = `${revealRange.min}|${revealRange.max}`;
+    const rangeChanged = prevRangeRef.current !== rangeKey;
+    prevVisibilityRef.current = visibility;
+    prevRangeRef.current = rangeKey;
+    if (!visibilityChanged && !rangeChanged) return;
 
     if (!isDateInputValid(revealDate) || revealDate < revealRange.min) {
       setRevealDate(revealRange.min);
-      return;
-    }
-
-    if (revealDate > revealRange.max) {
+    } else if (revealDate > revealRange.max) {
       setRevealDate(revealRange.max);
     }
-  }, [revealDate, revealRange.max, revealRange.min, visibility]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibility, revealRange.min, revealRange.max]);
 
   useEffect(() => {
     const query = locationQuery.trim();
@@ -143,7 +161,7 @@ export default function SideQuestForm({
         })
         .catch((err) => {
           setLocationSuggestions([]);
-          setLocationError(err instanceof Error ? err.message : 'Could not load map suggestions.');
+          setLocationError(err instanceof Error ? err.message : 'Kunde inte ladda kartförslag.');
         })
         .finally(() => setLocationLoading(false));
     }, 260);
@@ -154,7 +172,7 @@ export default function SideQuestForm({
   async function handlePickImage() {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      setMessage({ type: 'error', text: 'Photo permission is needed to add an image.' });
+      setMessage({ type: 'error', text: 'Fototillstånd krävs för att lägga till en bild.' });
       return;
     }
 
@@ -188,7 +206,7 @@ export default function SideQuestForm({
       setLocationError('');
       setMessage(null);
     } catch {
-      setLocationError('Could not load details for that place.');
+      setLocationError('Kunde inte ladda detaljer för platsen.');
     }
   }
 
@@ -214,12 +232,12 @@ export default function SideQuestForm({
     setRevealTime(toTimeInput(selectedDate));
   }
 
-  async function handleSubmit() {
+  async function saveActivity(): Promise<{ id: string } | null> {
     const normalizedTitle = title.trim();
 
-    if (!normalizedTitle) {
+    if (!normalizedTitle && visibility !== 'hidden') {
       setMessage({ type: 'error', text: 'Ange en titel för aktiviteten.' });
-      return;
+      return null;
     }
 
     setSubmitting(true);
@@ -258,7 +276,7 @@ export default function SideQuestForm({
           throw new Error((await response.text()) || 'Kunde inte uppdatera aktiviteten.');
         }
 
-        router.replace(`/trip/${tripId}/sidequest/${sideQuestId}`);
+        return { id: sideQuestId };
       } else {
         const response = await apiJson<SideQuestActivity>(`/api/trips/${tripId}/activities`, {
           method: 'POST',
@@ -266,14 +284,62 @@ export default function SideQuestForm({
           body: JSON.stringify(payload),
         });
 
-        router.replace(`/trip/${tripId}/sidequest/${response.id}`);
+        return { id: response.id };
       }
     } catch (error) {
       setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Kunde inte spara aktiviteten.' });
+      return null;
     } finally {
       setSubmitting(false);
     }
   }
+
+  async function handleSubmit() {
+    const saved = await saveActivity();
+    if (saved) {
+      router.replace(`/trip/${tripId}/sidequest/${saved.id}`);
+    }
+  }
+
+  useImperativeHandle(ref, () => ({
+    submitSilently: async () => {
+      const saved = await saveActivity();
+      return saved !== null;
+    },
+  }));
+
+  const initialDateForDirty = initialValues?.date ?? '';
+  const initialTitleForDirty = initialValues?.title ?? '';
+  const initialDescForDirty = initialValues?.description ?? '';
+  const initialCategoryForDirty = initialValues?.category ?? null;
+  const initialVisibilityForDirty = initialValues?.visibility ?? 'public';
+  const initialTeaserForDirty = initialValues?.teaser ?? '';
+  const initialImageForDirty = initialValues?.imageUrl ?? initialImageUrl ?? null;
+  const initialLocationQueryForDirty = initialValues?.locationQuery ?? '';
+
+  const dirty = mode === 'edit'
+    ? (
+        title.trim() !== initialTitleForDirty.trim() ||
+        description.trim() !== initialDescForDirty.trim() ||
+        category !== initialCategoryForDirty ||
+        visibility !== initialVisibilityForDirty ||
+        teaser.trim() !== initialTeaserForDirty.trim() ||
+        (imageUrl ?? null) !== (initialImageForDirty ?? null) ||
+        locationQuery.trim() !== initialLocationQueryForDirty.trim() ||
+        date !== initialDateForDirty
+      )
+    : (
+        title.trim() !== '' ||
+        description.trim() !== '' ||
+        category !== null ||
+        teaser.trim() !== '' ||
+        imageUrl !== null ||
+        locationQuery.trim() !== ''
+      );
+
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
 
   const pickerValue = useMemo(() => {
     if (pickerTarget === 'date') {
@@ -288,6 +354,7 @@ export default function SideQuestForm({
   }, [date, pickerTarget, revealDate, revealRange.min, revealTime]);
 
   return (
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
     <ScrollView
       style={styles.scroll}
       contentContainerStyle={[styles.content, { paddingBottom: bottomPadding }]}
@@ -301,32 +368,32 @@ export default function SideQuestForm({
             <View style={styles.coverIconCircle}>
               <Ionicons name="image-outline" size={30} color="#fff" />
             </View>
-            <Text style={styles.coverTitle}>Add an optional cover</Text>
-            <Text style={styles.coverCopy}>Make the SideQuest feel exciting in the feed.</Text>
+            <Text style={styles.coverTitle}>Lägg till omslag (valfritt)</Text>
+            <Text style={styles.coverCopy}>Få aktiviteten att kännas spännande i flödet.</Text>
           </View>
         ) : (
           <View style={styles.coverBadgeRow}>
             <View style={styles.coverBadge}>
               <Ionicons name="camera-outline" size={14} color="#fff" />
-              <Text style={styles.coverBadgeText}>Change photo</Text>
+              <Text style={styles.coverBadgeText}>Ändra bild</Text>
             </View>
             <TouchableOpacity
               activeOpacity={0.88}
               style={[styles.coverBadge, styles.coverBadgeGhost]}
               onPress={() => setImageUrl(null)}>
               <Ionicons name="trash-outline" size={14} color="#fff" />
-              <Text style={styles.coverBadgeText}>Remove</Text>
+              <Text style={styles.coverBadgeText}>Ta bort</Text>
             </TouchableOpacity>
           </View>
         )}
       </TouchableOpacity>
 
       <View style={styles.block}>
-        <Text style={styles.label}>Title</Text>
+        <Text style={styles.label}>Titel</Text>
         <TextInput
           value={title}
           onChangeText={setTitle}
-          placeholder="e.g. Rooftop ramen mission"
+          placeholder="t.ex. Ramen på taket"
           placeholderTextColor="#b7bcc7"
           style={styles.titleInput}
         />
@@ -352,11 +419,11 @@ export default function SideQuestForm({
       </View>
 
       <View style={styles.block}>
-        <Text style={styles.label}>Description</Text>
+        <Text style={styles.label}>Beskrivning</Text>
         <TextInput
           value={description}
           onChangeText={setDescription}
-          placeholder="A little hint, vibe, or secret plan for the group."
+          placeholder="En ledtråd, känsla eller hemlig plan för gruppen."
           placeholderTextColor="#b7bcc7"
           multiline
           textAlignVertical="top"
@@ -365,7 +432,7 @@ export default function SideQuestForm({
       </View>
 
       <View style={styles.block}>
-        <Text style={styles.label}>Place</Text>
+        <Text style={styles.label}>Plats</Text>
         <TextInput
           value={locationQuery}
           onChangeText={(value) => {
@@ -374,12 +441,12 @@ export default function SideQuestForm({
               setLocationPlace(null);
             }
           }}
-          placeholder="e.g. Sagrada Familia, Barcelona"
+          placeholder="t.ex. Sagrada Familia, Barcelona"
           placeholderTextColor="#b7bcc7"
           style={styles.input}
         />
-        <Text style={styles.helperText}>Search and choose a real Google Maps place.</Text>
-        {locationLoading ? <Text style={styles.locationStatus}>Searching places...</Text> : null}
+        <Text style={styles.helperText}>Sök och välj en plats från Google Maps.</Text>
+        {locationLoading ? <Text style={styles.locationStatus}>Söker platser...</Text> : null}
         {locationError ? <Text style={styles.locationError}>{locationError}</Text> : null}
         {locationSuggestions.length > 0 ? (
           <View style={styles.locationSuggestions}>
@@ -401,7 +468,7 @@ export default function SideQuestForm({
       </View>
 
       <View style={styles.block}>
-        <Text style={styles.label}>When does it happen?</Text>
+        <Text style={styles.label}>När händer det?</Text>
         {Platform.OS === 'web' ? (
           <View style={[styles.selectionCard, selectedDateOutOfRange ? styles.selectionCardError : null]}>
             <View style={{ flex: 1 }}>
@@ -409,7 +476,7 @@ export default function SideQuestForm({
               <TextInput
                 value={date}
                 onChangeText={setDate}
-                placeholder="Ã…Ã…Ã…Ã…-MM-DD"
+                placeholder="ÅÅÅÅ-MM-DD"
                 placeholderTextColor="#b7bcc7"
                 style={styles.webDateInput}
                 keyboardType="numbers-and-punctuation"
@@ -439,11 +506,11 @@ export default function SideQuestForm({
       </View>
 
       <View style={styles.block}>
-        <Text style={styles.label}>Visibility</Text>
+        <Text style={styles.label}>Synlighet</Text>
         <View style={styles.segmented}>
           <VisibilityOption
-            label="Public"
-            subtitle="Everyone sees it right away"
+            label="Synlig"
+            subtitle="Alla ser den direkt"
             active={visibility === 'public'}
             onPress={() => {
               setVisibility('public');
@@ -451,8 +518,8 @@ export default function SideQuestForm({
             }}
           />
           <VisibilityOption
-            label="Hidden"
-            subtitle="Keep it secret until reveal"
+            label="Dold"
+            subtitle="Hemlig tills avslöjandet"
             active={visibility === 'hidden'}
             onPress={() => setVisibility('hidden')}
           />
@@ -462,21 +529,24 @@ export default function SideQuestForm({
       {visibility === 'hidden' ? (
         <>
           <View style={styles.block}>
-            <Text style={styles.label}>Reveal schedule</Text>
+            <Text style={styles.label}>Avslöjandeschema</Text>
             <View style={styles.revealRow}>
               {Platform.OS === 'web' ? (
                 <View style={[styles.selectionCard, styles.revealCard, revealDateOutOfRange ? styles.selectionCardError : null]}>
-                  <Text style={styles.selectionEyebrow}>REVEAL DATE</Text>
-                  <TextInput
-                    value={revealDate}
-                    onChangeText={setRevealDate}
-                    placeholder="Ã…Ã…Ã…Ã…-MM-DD"
-                    placeholderTextColor="#b7bcc7"
-                    style={styles.webDateInput}
-                    keyboardType="numbers-and-punctuation"
-                    maxLength={10}
-                  />
-                  <Text style={styles.selectionHint} numberOfLines={1}>{`${formatShortDate(revealRange.min)} â€“ ${formatShortDate(revealRange.max)}`}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.selectionEyebrow}>AVSLÖJANDEDATUM</Text>
+                    <TextInput
+                      value={revealDate}
+                      onChangeText={setRevealDate}
+                      placeholder="ÅÅÅÅ-MM-DD"
+                      placeholderTextColor="#b7bcc7"
+                      style={styles.webDateInput}
+                      keyboardType="numbers-and-punctuation"
+                      maxLength={10}
+                    />
+                    <Text style={styles.selectionHint} numberOfLines={1}>{`${formatShortDate(revealRange.min)} – ${formatShortDate(revealRange.max)}`}</Text>
+                  </View>
+                  <Ionicons name="calendar-outline" size={22} color="#5f6570" />
                 </View>
               ) : (
                 <TouchableOpacity
@@ -488,27 +558,36 @@ export default function SideQuestForm({
                     revealDateOutOfRange ? styles.selectionCardError : null,
                   ]}
                   onPress={() => setPickerTarget('revealDate')}>
-                  <Text style={styles.selectionEyebrow}>REVEAL DATE</Text>
-                  <Text style={styles.selectionValueSmall} numberOfLines={1}>{formatShortDate(revealDate)}</Text>
-                  <Text style={styles.selectionHint} numberOfLines={1}>{`${formatShortDate(revealRange.min)} â€“ ${formatShortDate(revealRange.max)}`}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.selectionEyebrow}>AVSLÖJANDEDATUM</Text>
+                    <Text style={styles.selectionValue} numberOfLines={1}>{formatShortDate(revealDate)}</Text>
+                    <Text style={styles.selectionHint} numberOfLines={1}>{`${formatShortDate(revealRange.min)} – ${formatShortDate(revealRange.max)}`}</Text>
+                  </View>
+                  <Ionicons name="calendar-outline" size={22} color="#5f6570" />
                 </TouchableOpacity>
               )}
               {Platform.OS === 'web' ? (
                 <View style={[styles.selectionCard, styles.revealCard]}>
-                  <Text style={styles.selectionEyebrow}>REVEAL TIME</Text>
-                  <TextInput
-                    value={revealTime}
-                    onChangeText={setRevealTime}
-                    placeholder="HH:MM"
-                    placeholderTextColor="#b7bcc7"
-                    style={styles.webDateInput}
-                    maxLength={5}
-                  />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.selectionEyebrow}>AVSLÖJANDETID</Text>
+                    <TextInput
+                      value={revealTime}
+                      onChangeText={setRevealTime}
+                      placeholder="HH:MM"
+                      placeholderTextColor="#b7bcc7"
+                      style={styles.webDateInput}
+                      maxLength={5}
+                    />
+                  </View>
+                  <Ionicons name="time-outline" size={22} color="#5f6570" />
                 </View>
               ) : (
                 <TouchableOpacity activeOpacity={0.92} style={[styles.selectionCard, styles.revealCard, pickerTarget === 'revealTime' ? styles.selectionCardActive : null]} onPress={() => setPickerTarget('revealTime')}>
-                  <Text style={styles.selectionEyebrow}>REVEAL TIME</Text>
-                  <Text style={styles.selectionValueSmall} numberOfLines={1}>{formatTime(revealTime)}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.selectionEyebrow}>AVSLÖJANDETID</Text>
+                    <Text style={styles.selectionValue} numberOfLines={1}>{formatTime(revealTime)}</Text>
+                  </View>
+                  <Ionicons name="time-outline" size={22} color="#5f6570" />
                 </TouchableOpacity>
               )}
             </View>
@@ -523,7 +602,7 @@ export default function SideQuestForm({
             <TextInput
               value={teaser}
               onChangeText={setTeaser}
-              placeholder="Optional clue for the group before reveal"
+              placeholder="Frivillig ledtråd till gruppen innan avslöjandet"
               placeholderTextColor="#b7bcc7"
               style={styles.input}
             />
@@ -542,7 +621,7 @@ export default function SideQuestForm({
                 ))}
               </View>
             ) : (
-              <Text style={styles.helperText}>Add a teaser only if you want to drip-feed suspense before reveal.</Text>
+              <Text style={styles.helperText}>Lägg bara till en ledtråd om du vill bygga spänning innan avslöjandet.</Text>
             )}
           </View>
         </>
@@ -556,14 +635,14 @@ export default function SideQuestForm({
       ) : null}
 
       <TouchableOpacity activeOpacity={0.92} style={[styles.primaryButton, { backgroundColor: PRIMARY_COLOR, shadowColor: PRIMARY_COLOR }, submitting ? styles.primaryButtonDisabled : null]} disabled={submitting} onPress={() => void handleSubmit()}>
-        <Text style={styles.primaryButtonText}>{submitting ? 'Sparar...' : mode === 'edit' ? 'Spara Ã¤ndringar' : 'LÃ¤gg till aktivitet'}</Text>
+        <Text style={styles.primaryButtonText}>{submitting ? 'Sparar...' : mode === 'edit' ? 'Spara ändringar' : 'Lägg till aktivitet'}</Text>
       </TouchableOpacity>
 
       {Platform.OS !== 'web' ? (
         <PickerSheet
           visible={pickerTarget !== null}
           title={getPickerTitle(pickerTarget)}
-          subtitle={pickerTarget === 'date' ? `TillÃ¥tet intervall: ${tripRangeText}` : pickerTarget === 'revealDate' ? 'VÃ¤lj nÃ¤r aktiviteten ska avslÃ¶jas.' : 'VÃ¤lj avslÃ¶jandetid.'}
+          subtitle={pickerTarget === 'date' ? `Tillåtet intervall: ${tripRangeText}` : pickerTarget === 'revealDate' ? 'Välj när aktiviteten ska avslöjas.' : 'Välj avslöjandetid.'}
           onClose={() => setPickerTarget(null)}>
           {pickerTarget ? (
             <DateTimePicker
@@ -589,6 +668,7 @@ export default function SideQuestForm({
         </PickerSheet>
       ) : null}
     </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -614,7 +694,7 @@ function PickerSheet({
           <Text style={styles.modalSubtitle}>{subtitle}</Text>
           <View style={styles.modalPickerWrap}>{children}</View>
           <TouchableOpacity activeOpacity={0.9} style={[styles.doneButton, { backgroundColor: PRIMARY_COLOR }]} onPress={onClose}>
-            <Text style={styles.doneButtonText}>Done</Text>
+            <Text style={styles.doneButtonText}>Klar</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -664,19 +744,19 @@ function formatDateParts(year: number, month: number, day: number) {
 }
 
 function formatLongDate(value: string) {
-  return new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'long', day: 'numeric' }).format(new Date(`${value}T12:00:00`));
+  return new Intl.DateTimeFormat('sv-SE', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(`${value}T12:00:00`));
 }
 
 function formatShortDate(value: string) {
-  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(`${value}T12:00:00`));
+  return new Intl.DateTimeFormat('sv-SE', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(`${value}T12:00:00`));
 }
 
 function formatTime(value: string) {
-  return new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(new Date(`2026-01-01T${value}:00`));
+  return new Intl.DateTimeFormat('sv-SE', { hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(`2026-01-01T${value}:00`));
 }
 
 function formatRevealPreview(date: string, time: string) {
-  return `Reveals ${formatShortDate(date)} at ${formatTime(time)}`;
+  return `Avslöjas ${formatShortDate(date)} kl ${formatTime(time)}`;
 }
 
 function combineDateAndTime(date: string, time: string) {
@@ -692,10 +772,10 @@ function isWithinRange(value: string, min: string, max: string) {
 }
 
 function getPickerTitle(target: PickerTarget) {
-  if (target === 'date') return 'Choose SideQuest date';
-  if (target === 'revealDate') return 'Choose reveal date';
-  if (target === 'revealTime') return 'Choose reveal time';
-  return 'Choose date';
+  if (target === 'date') return 'Välj aktivitetsdatum';
+  if (target === 'revealDate') return 'Välj avslöjandedatum';
+  if (target === 'revealTime') return 'Välj avslöjandetid';
+  return 'Välj datum';
 }
 
 function getRevealRange(tripStartDate?: string | null, tripEndDate?: string | null, sideQuestDate?: string | null) {
@@ -709,6 +789,9 @@ function getRevealRange(tripStartDate?: string | null, tripEndDate?: string | nu
 function buildPlaceDisplay(place: StoredMapPlace) {
   return place.name?.trim() || '';
 }
+
+const SideQuestForm = forwardRef<SideQuestFormHandle, Props>(SideQuestFormInner);
+export default SideQuestForm;
 
 const styles = StyleSheet.create({
   scroll: {

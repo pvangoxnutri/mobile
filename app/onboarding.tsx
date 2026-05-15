@@ -6,6 +6,8 @@ import {
   ActivityIndicator,
   Animated,
   Image,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -145,7 +147,7 @@ export default function OnboardingScreen() {
   return (
     <>
       <Stack.Screen options={{ headerShown: false, gestureEnabled: false }} />
-      <View style={[styles.screen, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+      <KeyboardAvoidingView style={[styles.screen, { paddingTop: insets.top, paddingBottom: insets.bottom }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         {/* ── Top bar ─────────────────────────────────────── */}
         <View style={styles.topBar}>
           <View style={styles.stepPill}>
@@ -210,7 +212,7 @@ export default function OnboardingScreen() {
             )}
           </Pressable>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </>
   );
 }

@@ -147,3 +147,10 @@ export interface Settlement {
   note?: string | null;
   createdAt: string;
 }
+
+export interface LinkPreview {
+  url: string;
+  title?: string | null;
+  description?: string | null;
+  imageUrl?: string | null;
+}

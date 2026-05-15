@@ -1,10 +1,11 @@
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import SideQuestForm, { type SideQuestFormValues } from '@/components/sidequest-form';
+import SideQuestForm, { type SideQuestFormHandle, type SideQuestFormValues } from '@/components/sidequest-form';
+import { UnsavedChangesModal, useUnsavedChanges } from '@/components/unsaved-changes';
 import { apiJson } from '@/lib/api';
 import { extractLocationQuery, extractStoredMapPlace, stripLocationMarker } from '@/lib/sidequest-location';
 import type { Quest, SideQuestActivity } from '@/lib/types';
@@ -17,7 +18,17 @@ export default function NewSideQuestScreen() {
   const [activity, setActivity] = useState<SideQuestActivity | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [isDirty, setIsDirty] = useState(false);
+  const formRef = useRef<SideQuestFormHandle>(null);
   const isEditMode = !!editId;
+
+  const unsaved = useUnsavedChanges({
+    isDirty,
+    onSave: async () => {
+      const ok = await formRef.current?.submitSilently();
+      return ok ?? false;
+    },
+  });
 
   useFocusEffect(
     useCallback(() => {
@@ -83,7 +94,7 @@ export default function NewSideQuestScreen() {
       <Stack.Screen options={{ headerShown: false }} />
       <View style={styles.screen}>
         <View style={[styles.header, { paddingTop: Math.max(insets.top, 18) + 4 }]}>
-          <TouchableOpacity style={styles.backButton} activeOpacity={0.88} onPress={() => router.back()}>
+          <TouchableOpacity style={styles.backButton} activeOpacity={0.88} onPress={unsaved.requestBack}>
             <Ionicons name="arrow-back" size={24} color="#11131a" />
           </TouchableOpacity>
           <View>
@@ -104,6 +115,7 @@ export default function NewSideQuestScreen() {
           </View>
         ) : trip && (isEditMode ? activity && initialValues : true) ? (
           <SideQuestForm
+            ref={formRef}
             mode={isEditMode ? 'edit' : 'create'}
             tripId={id}
             sideQuestId={editId}
@@ -111,8 +123,18 @@ export default function NewSideQuestScreen() {
             tripEndDate={trip.endDate}
             initialValues={isEditMode ? initialValues : undefined}
             initialImageUrl={isEditMode ? activity?.imageUrl : undefined}
+            onDirtyChange={setIsDirty}
           />
         ) : null}
+
+        <UnsavedChangesModal
+          visible={unsaved.modalOpen}
+          busy={unsaved.busy}
+          hasSave={true}
+          onSave={unsaved.handleSave}
+          onDiscard={unsaved.handleDiscard}
+          onCancel={unsaved.handleCancel}
+        />
       </View>
     </>
   );

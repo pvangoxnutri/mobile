@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Image, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, Animated, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BrandMark from '@/components/brand-mark';
 import { useAuth } from '@/components/auth-provider';
@@ -25,6 +25,7 @@ type TripWithEvent = {
   nextEventDate: Date;
   nextEventLabel: string;
   upcomingEvents: { label: string; date: Date }[];
+  isOngoing?: boolean;
 };
 
 export default function HomeScreen() {
@@ -446,8 +447,8 @@ export default function HomeScreen() {
                   key={entry.quest.id}
                   id={entry.quest.id}
                   title={entry.quest.title ?? t('home.defaultTripName')}
-                  badge={formatCardCountdown(entry.nextEventDate, now, t)}
-                  badgeTone={index % 2 === 0 ? 'pink' : 'cyan'}
+                  badge={entry.isOngoing ? 'NOW' : formatCardCountdown(entry.nextEventDate, now, t)}
+                  badgeTone={entry.isOngoing ? 'pink' : index % 2 === 0 ? 'pink' : 'cyan'}
                   imageUrl={entry.quest.imageUrl}
                   cardWidth={upcomingCardWidth}
                 />
@@ -467,10 +468,14 @@ export default function HomeScreen() {
             onPress={() => featuredTrip && router.push(`/trip/${featuredTrip.quest.id}`)}>
             <View style={styles.activeQuestDot} />
             <View style={styles.activeQuestTextBlock}>
-              <Text style={styles.activeQuestLabel}>COUNTDOWN</Text>
+              <Text style={styles.activeQuestLabel}>{featuredTrip?.isOngoing ? 'ON ADVENTURE' : 'COUNTDOWN'}</Text>
               <Text style={styles.activeQuestTitle}>{featuredTrip?.nextEventLabel ?? t('home.no_upcoming_event')}</Text>
               <Text style={styles.activeQuestMeta}>
-                {featuredTrip ? `${countdownParts[0].value}d ${countdownParts[1].value}h ${countdownParts[2].value}m` : t('common.create_trip_hint')}
+                {!featuredTrip
+                  ? t('common.create_trip_hint')
+                  : featuredTrip.isOngoing
+                  ? 'Happening now'
+                  : `${countdownParts[0].value}d ${countdownParts[1].value}h ${countdownParts[2].value}m`}
               </Text>
             </View>
           </TouchableOpacity>
@@ -686,7 +691,7 @@ function JoinModal({
   t?: (key: string, vars?: Record<string, string | number>) => string;
 }) {
   return (
-    <View style={styles.modalBackdrop}>
+    <KeyboardAvoidingView style={styles.modalBackdrop} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={onClose} />
       <View style={[styles.joinCard, { paddingBottom: Math.max(insets.bottom, 18) + 8 }]}>
         <View style={styles.joinHeader}>
@@ -721,7 +726,7 @@ function JoinModal({
           {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.joinButtonText}>{t ? t('home.join_adventure') : 'Join Adventure'}</Text>}
         </Pressable>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -755,10 +760,25 @@ function getTripWithEvent(quest: Quest, activities: SideQuestActivity[], now: Da
   }
 
   const tripStart = new Date(`${quest.startDate}T12:00:00`);
-  if (tripStart.getTime() < today.getTime()) {
+  const tripEnd = new Date(`${quest.endDate}T12:00:00`);
+
+  // Ongoing trip — show with today as the anchor date
+  if (tripStart.getTime() <= today.getTime() && tripEnd.getTime() >= today.getTime()) {
+    return {
+      quest,
+      nextEventDate: today,
+      nextEventLabel: quest.title?.trim() || 'Ongoing adventure',
+      upcomingEvents: [{ label: quest.title?.trim() || 'Ongoing adventure', date: today }],
+      isOngoing: true,
+    };
+  }
+
+  // Trip fully in the past — skip
+  if (tripEnd.getTime() < today.getTime()) {
     return null;
   }
 
+  // Upcoming trip
   return {
     quest,
     nextEventDate: tripStart,
@@ -802,7 +822,7 @@ function formatHeaderCountdown(targetDate: Date | undefined, now: Date) {
 function formatCardCountdown(targetDate: Date, now: Date, t?: (key: string, vars?: Record<string, string | number>) => string) {
   const diff = Math.max(0, targetDate.getTime() - now.getTime());
   const days = Math.ceil(diff / 86400000);
-  if (days <= 1) return t ? t('home.up_next') : 'UP NEXT';
+  if (days <= 1) return t ? t('home.ongoing') : 'ONGOING';
   return t ? t('home.in_days', { days }) : `IN ${days} DAYS`;
 }
 

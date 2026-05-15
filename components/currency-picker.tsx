@@ -2,7 +2,9 @@
 import { useMemo, useState } from 'react';
 import {
   FlatList,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   StyleSheet,
   Text,
   TextInput,
@@ -74,7 +76,7 @@ const CURRENCIES: Currency[] = [
   { code: 'MMK', name: 'Myanmar Kyat',          flag: flag('MM') },
   { code: 'KHR', name: 'Cambodian Riel',        flag: flag('KH') },
   { code: 'LAK', name: 'Lao Kip',              flag: flag('LA') },
-  { code: 'MNT', name: 'Mongolian TÃ¶grÃ¶g',      flag: flag('MN') },
+  { code: 'MNT', name: 'Mongolian Tögrög',      flag: flag('MN') },
   { code: 'AED', name: 'UAE Dirham',            flag: flag('AE') },
   { code: 'SAR', name: 'Saudi Riyal',           flag: flag('SA') },
   { code: 'QAR', name: 'Qatari Riyal',          flag: flag('QA') },
@@ -127,7 +129,7 @@ export function CurrencyPicker({ value, onChange }: Props) {  const insets = use
       </TouchableOpacity>
 
       <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
-        <View style={styles.backdrop}>
+        <KeyboardAvoidingView style={styles.backdrop} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setOpen(false)} />
           <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 16) + 8, zIndex: 1 }]}>
             <View style={styles.handle} />
@@ -169,7 +171,7 @@ export function CurrencyPicker({ value, onChange }: Props) {  const insets = use
               )}
             />
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </>
   );
