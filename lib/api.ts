@@ -85,6 +85,10 @@ export async function getSharedTrip(shareCode: string) {
   return apiJson<any>(`/api/trips/share/${shareCode}`);
 }
 
+export async function copySharedTrip(shareCode: string) {
+  return apiJson<any>(`/api/trips/share/${shareCode}/copy`, { method: 'POST' });
+}
+
 // ── User endpoints ──
 
 export async function getUserProfile(userId: string) {

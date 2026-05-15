@@ -1,19 +1,22 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View, Pressable, Share as RNShare } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View, Pressable, Share as RNShare, Alert } from 'react-native';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getSharedTrip } from '@/lib/api';
+import { getSharedTrip, copySharedTrip } from '@/lib/api';
+import { useAuth } from '@/components/auth-provider';
 import { PRIMARY_COLOR, SECONDARY_COLOR, PRIMARY_08, PRIMARY_20 } from '@/constants/colors';
 
 export default function SharedAdventureScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
   const { shareCode } = useLocalSearchParams<{ shareCode: string }>();
   const [trip, setTrip] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [copying, setCopying] = useState(false);
 
   useEffect(() => {
     if (!shareCode) {
@@ -47,6 +50,35 @@ export default function SharedAdventureScreen() {
       });
     } catch (error) {
       console.error('Failed to share:', error);
+    }
+  }
+
+  async function handleCopy() {
+    if (!user) {
+      Alert.alert('Sign in required', 'You need to sign in to save this adventure to your account.', [
+        { text: 'OK' }
+      ]);
+      return;
+    }
+
+    setCopying(true);
+    try {
+      const newTrip = await copySharedTrip(shareCode!);
+      Alert.alert('Adventure saved!', `"${newTrip.title}" has been added to your adventures.`, [
+        {
+          text: 'View',
+          onPress: () => router.push(`/trip/${newTrip.id}`),
+        },
+        {
+          text: 'Back',
+          onPress: () => router.back(),
+        },
+      ]);
+    } catch (error) {
+      Alert.alert('Failed to save', 'Could not save this adventure. Please try again.');
+      console.error('Failed to copy trip:', error);
+    } finally {
+      setCopying(false);
     }
   }
 
@@ -128,7 +160,22 @@ export default function SharedAdventureScreen() {
         )}
 
         <Pressable
-          style={[styles.shareButton, { backgroundColor: PRIMARY_COLOR }]}
+          style={[styles.copyButton, { backgroundColor: PRIMARY_COLOR }]}
+          onPress={handleCopy}
+          disabled={copying}
+        >
+          {copying ? (
+            <ActivityIndicator color={'#fff'} size="small" />
+          ) : (
+            <>
+              <Ionicons name="copy" size={18} color={'#fff'} />
+              <Text style={[styles.copyText, { color: '#fff' }]}>Save adventure</Text>
+            </>
+          )}
+        </Pressable>
+
+        <Pressable
+          style={[styles.shareButton, { backgroundColor: SECONDARY_COLOR }]}
           onPress={handleShare}
         >
           <Ionicons name="share-social" size={18} color={'#fff'} />
@@ -202,6 +249,20 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   spotifyText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  copyButton: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  copyText: {
     fontSize: 14,
     fontWeight: '600',
   },
