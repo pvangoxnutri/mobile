@@ -133,11 +133,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(() => {
+    } = supabase.auth.onAuthStateChange((event) => {
+      console.log('[AUTH] state change:', event);
       queueMicrotask(async () => {
         try {
           await refreshProfile();
-        } catch {
+        } catch (refreshError) {
+          console.warn('[AUTH] refreshProfile failed:', refreshError instanceof Error ? refreshError.message : refreshError);
           setUser(null);
         } finally {
           setLoading(false);
@@ -153,6 +155,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   async function signIn(email: string, password: string): Promise<UserInfo | null> {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
+      console.warn('[AUTH] signIn error:', error.message);
       throw error;
     }
     return refreshProfile();

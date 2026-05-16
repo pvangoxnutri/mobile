@@ -2,7 +2,7 @@ import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { supabase } from '@/lib/supabase';
 
-const remoteDevApiUrl = 'https://massachusetts-shine-broad-publicity.trycloudflare.com';
+const PRODUCTION_API_URL = 'https://api.sidequesttravel.app';
 
 function inferApiBaseUrl() {
   const configuredUrl = process.env.EXPO_PUBLIC_API_URL;
@@ -20,18 +20,18 @@ function inferApiBaseUrl() {
     Constants.manifest2?.extra?.expoGo?.debuggerHost;
 
   const host = hostUri?.split(':')[0];
-  if (host) {
-    if (host.includes('exp.direct')) {
-      return remoteDevApiUrl;
-    }
-
+  if (host && !host.includes('exp.direct')) {
     return `http://${host}:5079`;
   }
 
-  return remoteDevApiUrl;
+  return PRODUCTION_API_URL;
 }
 
 export const API_URL = inferApiBaseUrl();
+
+if (__DEV__) {
+  console.log('[API] Base URL:', API_URL);
+}
 
 export async function apiFetch(path: string, options: RequestInit = {}) {
   const headers = new Headers(options.headers);
@@ -42,16 +42,27 @@ export async function apiFetch(path: string, options: RequestInit = {}) {
     headers.set('Authorization', `Bearer ${token}`);
   }
 
-  const response = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers,
-  });
+  const method = (options.method ?? 'GET').toUpperCase();
 
-  if (response.status === 401) {
-    await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+  try {
+    const response = await fetch(`${API_URL}${path}`, {
+      ...options,
+      headers,
+    });
+
+    if (response.status === 401) {
+      console.warn(`[API] 401 ${method} ${path} - signing out locally`);
+      await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+    } else if (!response.ok) {
+      console.warn(`[API] ${response.status} ${method} ${path}`);
+    }
+
+    return response;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`[API] Network error ${method} ${path}: ${message}`);
+    throw error;
   }
-
-  return response;
 }
 
 export async function apiJson<T>(path: string, options: RequestInit = {}) {

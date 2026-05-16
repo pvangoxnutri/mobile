@@ -1,17 +1,40 @@
 {
   "expo": {
-    "name": "sidequest.mobile",
-    "slug": "sidequest.mobile",
+    "name": "SideQuest",
+    "slug": "sidequestmobile",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": ["sidequestmobile", "sidequest"],
+    "scheme": "sidequest",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0,
+      "url": "https://u.expo.dev/4ddeded0-671f-4051-b28a-bd745342de87"
+    },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "app.sidequesttravel.mobile",
+      "buildNumber": "1",
+      "associatedDomains": [
+        "applinks:sidequesttravel.app",
+        "applinks:www.sidequesttravel.app"
+      ],
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "LSApplicationQueriesSchemes": [
+          "spotify"
+        ]
+      }
     },
     "android": {
+      "package": "app.sidequesttravel.mobile",
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -19,7 +42,27 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "sidequesttravel.app"
+            },
+            {
+              "scheme": "https",
+              "host": "www.sidequesttravel.app"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ]
     },
     "web": {
       "output": "static",
@@ -44,6 +87,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "4ddeded0-671f-4051-b28a-bd745342de87"
+      }
+    },
+    "owner": "vangopo"
   }
 }
