@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, Image, Pressable, StyleSheet, Text, TouchableOpacity, View, Share as RNShare } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Image, Pressable, StyleSheet, Text, TouchableOpacity, View, Share as RNShare } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { getCompletedTrips, shareTrip } from '@/lib/api';
+import { getCompletedTrips, revokeTripShare, shareTrip } from '@/lib/api';
 import { useAuth } from '@/components/auth-provider';
 import type { Quest } from '@/lib/types';
 
@@ -13,6 +13,7 @@ export default function PreviousAdventuresScreen() {
   const [trips, setTrips] = useState<Quest[]>([]);
   const [loading, setLoading] = useState(true);
   const [sharingId, setSharingId] = useState<string | null>(null);
+  const [revokingId, setRevokingId] = useState<string | null>(null);
 
   useEffect(() => {
     loadCompletedTrips();
@@ -33,6 +34,10 @@ export default function PreviousAdventuresScreen() {
     try {
       setSharingId(trip.id);
       const result = await shareTrip(trip.id);
+      // Reflect the new share state locally so the Stop-sharing button appears.
+      setTrips((prev) =>
+        prev.map((t) => (t.id === trip.id ? { ...t, shareCode: result.shareCode } : t)),
+      );
       await RNShare.share({
         message: `Check out my adventure: ${trip.title} in ${trip.destination}!`,
         url: result.shareUrl || undefined,
@@ -42,6 +47,39 @@ export default function PreviousAdventuresScreen() {
       console.error('Failed to share:', error);
     } finally {
       setSharingId(null);
+    }
+  }
+
+  function confirmRevoke(trip: Quest) {
+    Alert.alert(
+      'Stop sharing this adventure?',
+      'The public link will stop working. People who already saved a copy keep theirs.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Stop sharing',
+          style: 'destructive',
+          onPress: () => void handleRevoke(trip),
+        },
+      ],
+    );
+  }
+
+  async function handleRevoke(trip: Quest) {
+    try {
+      setRevokingId(trip.id);
+      const res = await revokeTripShare(trip.id);
+      if (!res.ok && res.status !== 204) {
+        throw new Error(`Revoke failed (${res.status})`);
+      }
+      setTrips((prev) =>
+        prev.map((t) => (t.id === trip.id ? { ...t, shareCode: null } : t)),
+      );
+    } catch (error) {
+      console.error('Failed to revoke share:', error);
+      Alert.alert('Could not stop sharing', 'Please try again in a moment.');
+    } finally {
+      setRevokingId(null);
     }
   }
 
@@ -97,16 +135,33 @@ export default function PreviousAdventuresScreen() {
                     {item.startDate} – {item.endDate}
                   </Text>
                 </View>
-                <Pressable
-                  style={[styles.shareButton, sharingId === item.id && styles.shareButtonDisabled]}
-                  onPress={() => handleShare(item)}
-                  disabled={sharingId === item.id}>
-                  {sharingId === item.id ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    <Ionicons name="share-social" size={18} color="#fff" />
-                  )}
-                </Pressable>
+                <View style={styles.actionRow}>
+                  {item.shareCode ? (
+                    <Pressable
+                      style={[styles.revokeButton, revokingId === item.id && styles.shareButtonDisabled]}
+                      onPress={() => confirmRevoke(item)}
+                      disabled={revokingId === item.id}
+                      accessibilityLabel="Stop sharing">
+                      {revokingId === item.id ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <Ionicons name="link" size={16} color="#fff" />
+                      )}
+                    </Pressable>
+                  ) : null}
+
+                  <Pressable
+                    style={[styles.shareButton, sharingId === item.id && styles.shareButtonDisabled]}
+                    onPress={() => handleShare(item)}
+                    disabled={sharingId === item.id}
+                    accessibilityLabel="Share">
+                    {sharingId === item.id ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <Ionicons name="share-social" size={18} color="#fff" />
+                    )}
+                  </Pressable>
+                </View>
               </View>
             )}
             keyExtractor={(item) => item.id}
@@ -194,17 +249,30 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: 'rgba(255,255,255,0.8)',
   },
-  shareButton: {
+  actionRow: {
     position: 'absolute',
     bottom: 16,
     right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    zIndex: 3,
+  },
+  shareButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
     backgroundColor: '#ff4f74',
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 3,
+  },
+  revokeButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(20,22,29,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   shareButtonDisabled: {
     opacity: 0.6,

@@ -92,6 +92,10 @@ export async function shareTrip(tripId: string) {
   );
 }
 
+export async function revokeTripShare(tripId: string) {
+  return apiFetch(`/api/trips/${tripId}/share`, { method: 'DELETE' });
+}
+
 export async function getSharedTrip(shareCode: string) {
   return apiJson<any>(`/api/trips/share/${shareCode}`);
 }
