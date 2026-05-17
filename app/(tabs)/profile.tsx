@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as Linking from 'expo-linking';
+import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -504,6 +505,24 @@ export default function ProfileScreen() {
         items={[
           { icon: 'alert-circle-outline', label: t('profile.support.reportIssue'), accent: '#10a6c0', onPress: () => openSupportModal('bug') },
           { icon: 'chatbox-outline', label: t('profile.support.feedback'), accent: '#10a6c0', onPress: () => openSupportModal('feedback') },
+        ]}
+      />
+
+      <SectionCard
+        title="Legal"
+        items={[
+          {
+            icon: 'shield-checkmark-outline',
+            label: 'Privacy Policy',
+            accent: '#10a6c0',
+            onPress: () => void WebBrowser.openBrowserAsync('https://sidequesttravel.app/privacy'),
+          },
+          {
+            icon: 'document-text-outline',
+            label: 'Terms of Service',
+            accent: '#10a6c0',
+            onPress: () => void WebBrowser.openBrowserAsync('https://sidequesttravel.app/terms'),
+          },
         ]}
       />
 

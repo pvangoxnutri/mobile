@@ -265,6 +265,24 @@ export default function LoginScreen() {
             </>
           )}
         </Pressable>
+
+        <View style={styles.legalConsent}>
+          <Text style={styles.legalConsentText}>
+            By continuing you agree to our{' '}
+            <Text
+              style={styles.legalLink}
+              onPress={() => void WebBrowser.openBrowserAsync('https://sidequesttravel.app/privacy')}>
+              Privacy Policy
+            </Text>
+            {' '}and{' '}
+            <Text
+              style={styles.legalLink}
+              onPress={() => void WebBrowser.openBrowserAsync('https://sidequesttravel.app/terms')}>
+              Terms of Service
+            </Text>
+            .
+          </Text>
+        </View>
       </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -469,6 +487,20 @@ const styles = StyleSheet.create({
     color: '#20222a',
     fontSize: 15,
     fontWeight: '700',
+  },
+  legalConsent: {
+    marginTop: 18,
+    paddingHorizontal: 8,
+  },
+  legalConsentText: {
+    textAlign: 'center',
+    color: '#8a909b',
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  legalLink: {
+    color: '#20222a',
+    textDecorationLine: 'underline',
   },
   googleGlyph: {
     width: 20,
