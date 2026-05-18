@@ -6,6 +6,11 @@ import { supabase } from '@/lib/supabase';
 
 const PRODUCTION_API_URL = 'https://api.sidequesttravel.app';
 
+// Network requests must never hang the UI. If a request is still pending after
+// this many ms (cold start, dead socket, slow DB), AbortController forces it
+// to reject with a TIMEOUT error so callers can clear their loading state.
+const DEFAULT_TIMEOUT_MS = 15000;
+
 function inferApiBaseUrl() {
   const configuredUrl = process.env.EXPO_PUBLIC_API_URL;
   if (configuredUrl) {
@@ -36,7 +41,7 @@ export const API_URL = inferApiBaseUrl();
 console.log('[API] Base URL:', API_URL);
 addDebugLog({ level: 'info', source: 'API', message: `Base URL: ${API_URL}` });
 
-export async function apiFetch(path: string, options: RequestInit = {}) {
+export async function apiFetch(path: string, options: RequestInit = {}, timeoutMs = DEFAULT_TIMEOUT_MS) {
   const headers = new Headers(options.headers);
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
@@ -47,11 +52,14 @@ export async function apiFetch(path: string, options: RequestInit = {}) {
   }
 
   const method = (options.method ?? 'GET').toUpperCase();
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const response = await fetch(`${API_URL}${path}`, {
       ...options,
       headers,
+      signal: controller.signal,
     });
 
     if (response.status === 401) {
@@ -75,10 +83,18 @@ export async function apiFetch(path: string, options: RequestInit = {}) {
 
     return response;
   } catch (error) {
+    if (controller.signal.aborted) {
+      const timeoutMessage = `TIMEOUT after ${timeoutMs}ms`;
+      console.error(`[API] ${method} ${path} → ${timeoutMessage} (auth: ${auth})`);
+      addDebugLog({ level: 'error', source: 'API', method, path, auth, message: timeoutMessage });
+      throw new Error(`Request timed out after ${Math.round(timeoutMs / 1000)}s. Check your connection and try again.`);
+    }
     const message = error instanceof Error ? error.message : String(error);
     console.error(`[API] ${method} ${path} → NETWORK_ERROR (auth: ${auth}): ${message}`);
     addDebugLog({ level: 'error', source: 'API', method, path, auth, message: `NETWORK_ERROR: ${message}` });
     throw error;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 

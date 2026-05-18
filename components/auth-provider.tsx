@@ -44,6 +44,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     console.log(`[AUTH] sync POST /api/auth/sync starting (token: ${auth})`);
     addDebugLog({ level: 'info', source: 'AUTH', method: 'POST', path: '/api/auth/sync', auth, message: 'starting' });
 
+    // Hard cap so a hung request cannot keep AuthGate stuck on the spinner.
+    const timeoutMs = 15000;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
     try {
       const response = await fetch(`${API_URL}/api/auth/sync`, {
         method: 'POST',
@@ -55,6 +60,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           name: userData.user?.user_metadata?.name ?? userData.user?.email ?? '',
           avatarUrl: userData.user?.user_metadata?.avatar_url ?? null,
         }),
+        signal: controller.signal,
       });
 
       console.log(`[AUTH] sync POST /api/auth/sync → ${response.status}`);
@@ -79,10 +85,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       return (await response.json()) as UserInfo;
     } catch (err) {
+      if (controller.signal.aborted) {
+        console.warn(`[AUTH] sync timed out after ${timeoutMs}ms, using fallback profile`);
+        addDebugLog({ level: 'error', source: 'AUTH', method: 'POST', path: '/api/auth/sync', auth, message: `TIMEOUT after ${timeoutMs}ms (using fallback)` });
+        return fallbackProfile;
+      }
       const message = err instanceof Error ? err.message : String(err);
       console.warn('[AUTH] syncProfileWithBackend failed, using fallback profile:', message);
       addDebugLog({ level: 'error', source: 'AUTH', method: 'POST', path: '/api/auth/sync', auth, message: `sync failed: ${message} (using fallback)` });
       return fallbackProfile;
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
 
