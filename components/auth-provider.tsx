@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { apiFetch, API_URL } from '@/lib/api';
 import { normalizeLanguage, useI18n, type AppLanguage } from '@/components/i18n-provider';
@@ -23,6 +23,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const { setLanguage } = useI18n();
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<UserInfo | null>(null);
+  // Dedupe concurrent refreshProfile calls. The mount IIFE and the
+  // INITIAL_SESSION onAuthStateChange event both fire at startup, causing
+  // two parallel POSTs to /api/auth/sync that iOS/Railway sometimes drops
+  // with "Network request failed".
+  const inFlightRefresh = useRef<Promise<UserInfo | null> | null>(null);
 
   function buildFallbackUser(rawUser: Awaited<ReturnType<typeof supabase.auth.getUser>>['data']['user']): UserInfo {
     return {
@@ -91,35 +96,51 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return fallbackProfile;
       }
       const message = err instanceof Error ? err.message : String(err);
-      console.warn('[AUTH] syncProfileWithBackend failed, using fallback profile:', message);
-      addDebugLog({ level: 'error', source: 'AUTH', method: 'POST', path: '/api/auth/sync', auth, message: `sync failed: ${message} (using fallback)` });
+      const errType = err instanceof Error ? err.constructor.name : typeof err;
+      console.warn(`[AUTH] syncProfileWithBackend failed (${errType}), using fallback profile:`, message);
+      addDebugLog({ level: 'error', source: 'AUTH', method: 'POST', path: '/api/auth/sync', auth, message: `sync failed (${errType}): ${message} (using fallback)` });
       return fallbackProfile;
     } finally {
       clearTimeout(timeoutId);
     }
   }
 
-  const refreshProfile = useCallback(async () => {
-    const { data, error } = await supabase.auth.getSession();
-
-    const sessionState = data.session ? 'yes' : 'no';
-    console.log(`[AUTH] session: ${sessionState}${error ? ` (error: ${error.message})` : ''}`);
-    addDebugLog({
-      level: error ? 'warn' : 'info',
-      source: 'AUTH',
-      message: `session: ${sessionState}${error ? ` (error: ${error.message})` : ''}`,
-    });
-
-    if (error || !data.session) {
-      setUser(null);
-      return null;
+  const refreshProfile = useCallback(async (): Promise<UserInfo | null> => {
+    if (inFlightRefresh.current) {
+      console.log('[AUTH] refreshProfile: awaiting in-flight call');
+      addDebugLog({ level: 'info', source: 'AUTH', message: 'refreshProfile: awaiting in-flight call' });
+      return inFlightRefresh.current;
     }
 
-    const profile = await syncProfileWithBackend(data.session.access_token);
-    const { data: userData } = await supabase.auth.getUser();
-    await setLanguage(normalizeLanguage(userData.user?.user_metadata?.language as string | undefined));
-    setUser(profile);
-    return profile;
+    const runner = (async (): Promise<UserInfo | null> => {
+      const { data, error } = await supabase.auth.getSession();
+
+      const sessionState = data.session ? 'yes' : 'no';
+      console.log(`[AUTH] session: ${sessionState}${error ? ` (error: ${error.message})` : ''}`);
+      addDebugLog({
+        level: error ? 'warn' : 'info',
+        source: 'AUTH',
+        message: `session: ${sessionState}${error ? ` (error: ${error.message})` : ''}`,
+      });
+
+      if (error || !data.session) {
+        setUser(null);
+        return null;
+      }
+
+      const profile = await syncProfileWithBackend(data.session.access_token);
+      const { data: userData } = await supabase.auth.getUser();
+      await setLanguage(normalizeLanguage(userData.user?.user_metadata?.language as string | undefined));
+      setUser(profile);
+      return profile;
+    })();
+
+    inFlightRefresh.current = runner;
+    try {
+      return await runner;
+    } finally {
+      inFlightRefresh.current = null;
+    }
   }, [setLanguage]);
 
   useEffect(() => {
