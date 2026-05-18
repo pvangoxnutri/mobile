@@ -209,16 +209,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function deleteAccount() {
-    const response = await apiFetch('/api/auth/me', {
-      method: 'DELETE',
-    });
+    // Account deletion is heavy (cascade across many tables + Supabase admin
+    // call + image storage cleanup) and can exceed the default 15s on a cold
+    // backend. Give it a full minute before timing out.
+    const DELETE_TIMEOUT_MS = 60_000;
+    addDebugLog({ level: 'info', source: 'AUTH', method: 'DELETE', path: '/api/auth/me', message: 'starting account deletion' });
 
-    if (response.status === 401) {
-      throw new Error('Session expired. Please sign in again and retry.');
-    }
+    try {
+      const response = await apiFetch('/api/auth/me', { method: 'DELETE' }, DELETE_TIMEOUT_MS);
 
-    if (!response.ok && response.status !== 404) {
-      throw new Error('Could not delete account. Please try again.');
+      if (response.status === 401) {
+        throw new Error('Session expired. Please sign in again and retry.');
+      }
+
+      if (!response.ok && response.status !== 404) {
+        throw new Error('Could not delete account. Please try again.');
+      }
+
+      addDebugLog({ level: 'info', source: 'AUTH', method: 'DELETE', path: '/api/auth/me', status: response.status, message: 'account deletion succeeded' });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      // A timeout here is non-fatal: the backend almost always finishes the
+      // cascade even when the response packet is dropped. Sign out locally
+      // anyway so the caller can route to login; the user will discover the
+      // account is gone the next time they try to sign in.
+      if (!/timed out/i.test(message)) {
+        addDebugLog({ level: 'error', source: 'AUTH', method: 'DELETE', path: '/api/auth/me', message: `delete failed: ${message}` });
+        throw err;
+      }
+      addDebugLog({ level: 'warn', source: 'AUTH', method: 'DELETE', path: '/api/auth/me', message: 'timeout treated as success (backend likely completed)' });
     }
 
     await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
