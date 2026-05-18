@@ -6,14 +6,6 @@ import { getEmailAuthRedirectUrl } from '@/lib/auth-redirect';
 import { supabase } from '@/lib/supabase';
 import type { UserInfo } from '@/lib/types';
 
-const DEV_AUTO_LOGIN =
-  __DEV__ && process.env.EXPO_PUBLIC_DISABLE_DEV_AUTO_LOGIN !== '1'
-    ? {
-        email: 'sidequestdebugd357b453@gmail.com',
-        password: 'SideQuest123!',
-      }
-    : null;
-
 type AuthContextValue = {
   loading: boolean;
   user: UserInfo | null;
@@ -30,7 +22,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const { setLanguage } = useI18n();
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<UserInfo | null>(null);
-  const [devLoginTried, setDevLoginTried] = useState(false);
 
   function buildFallbackUser(rawUser: Awaited<ReturnType<typeof supabase.auth.getUser>>['data']['user']): UserInfo {
     return {
@@ -70,7 +61,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       return (await response.json()) as UserInfo;
-    } catch {
+    } catch (err) {
+      console.warn('[AUTH] syncProfileWithBackend failed, using fallback profile:', err instanceof Error ? err.message : err);
       return fallbackProfile;
     }
   }
@@ -90,40 +82,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return profile;
   }, [setLanguage]);
 
-  const tryDevAutoLogin = useCallback(async () => {
-    if (!DEV_AUTO_LOGIN) {
-      return false;
-    }
-
-    const { data } = await supabase.auth.getSession();
-    if (data.session) {
-      return true;
-    }
-
-    const { error } = await supabase.auth.signInWithPassword({
-      email: DEV_AUTO_LOGIN.email,
-      password: DEV_AUTO_LOGIN.password,
-    });
-
-    if (error) {
-      console.warn('Dev auto-login failed:', error.message);
-      return false;
-    }
-
-    return true;
-  }, []);
-
   useEffect(() => {
     void (async () => {
       try {
-        const profile = await refreshProfile();
-        if (!profile && !devLoginTried) {
-          setDevLoginTried(true);
-          const signedIn = await tryDevAutoLogin();
-          if (signedIn) {
-            await refreshProfile();
-          }
-        }
+        await refreshProfile();
       } catch {
         setUser(null);
       } finally {
@@ -150,7 +112,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       subscription.unsubscribe();
     };
-  }, [devLoginTried, refreshProfile, tryDevAutoLogin]);
+  }, [refreshProfile]);
 
   async function signIn(email: string, password: string): Promise<UserInfo | null> {
     const { error } = await supabase.auth.signInWithPassword({ email, password });

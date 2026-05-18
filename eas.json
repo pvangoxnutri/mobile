@@ -16,7 +16,9 @@
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://api.sidequesttravel.app",
-        "EXPO_PUBLIC_WEB_URL": "https://sidequesttravel.app"
+        "EXPO_PUBLIC_WEB_URL": "https://sidequesttravel.app",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://eumlblwtjrrhzarvjvqq.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_j6KiiazUquomvOmx8cJEdA_9QSyaT9K"
       },
       "channel": "development"
     },
@@ -32,7 +34,9 @@
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://api.sidequesttravel.app",
-        "EXPO_PUBLIC_WEB_URL": "https://sidequesttravel.app"
+        "EXPO_PUBLIC_WEB_URL": "https://sidequesttravel.app",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://eumlblwtjrrhzarvjvqq.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_j6KiiazUquomvOmx8cJEdA_9QSyaT9K"
       }
     },
     "production": {
@@ -44,7 +48,8 @@
       "env": {
         "EXPO_PUBLIC_API_URL": "https://api.sidequesttravel.app",
         "EXPO_PUBLIC_WEB_URL": "https://sidequesttravel.app",
-        "EXPO_PUBLIC_DISABLE_DEV_AUTO_LOGIN": "1"
+        "EXPO_PUBLIC_SUPABASE_URL": "https://eumlblwtjrrhzarvjvqq.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_j6KiiazUquomvOmx8cJEdA_9QSyaT9K"
       }
     }
   },

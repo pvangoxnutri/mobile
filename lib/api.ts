@@ -10,18 +10,20 @@ function inferApiBaseUrl() {
     return configuredUrl;
   }
 
-  if (Platform.OS === 'web') {
-    return 'http://localhost:5079';
-  }
+  if (__DEV__) {
+    if (Platform.OS === 'web') {
+      return 'http://localhost:5079';
+    }
 
-  const hostUri =
-    Constants.expoConfig?.hostUri ??
-    Constants.expoGoConfig?.debuggerHost ??
-    Constants.manifest2?.extra?.expoGo?.debuggerHost;
+    const hostUri =
+      Constants.expoConfig?.hostUri ??
+      Constants.expoGoConfig?.debuggerHost ??
+      Constants.manifest2?.extra?.expoGo?.debuggerHost;
 
-  const host = hostUri?.split(':')[0];
-  if (host && !host.includes('exp.direct')) {
-    return `http://${host}:5079`;
+    const host = hostUri?.split(':')[0];
+    if (host && !host.includes('exp.direct')) {
+      return `http://${host}:5079`;
+    }
   }
 
   return PRODUCTION_API_URL;
