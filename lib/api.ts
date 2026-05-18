@@ -1,6 +1,7 @@
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { Platform } from 'react-native';
+import { addDebugLog } from '@/lib/debug-log-store';
 import { supabase } from '@/lib/supabase';
 
 const PRODUCTION_API_URL = 'https://api.sidequesttravel.app';
@@ -33,6 +34,7 @@ function inferApiBaseUrl() {
 export const API_URL = inferApiBaseUrl();
 
 console.log('[API] Base URL:', API_URL);
+addDebugLog({ level: 'info', source: 'API', message: `Base URL: ${API_URL}` });
 
 export async function apiFetch(path: string, options: RequestInit = {}) {
   const headers = new Headers(options.headers);
@@ -54,6 +56,7 @@ export async function apiFetch(path: string, options: RequestInit = {}) {
 
     if (response.status === 401) {
       console.warn(`[API] ${method} ${path} → 401 (auth: ${auth}) — signing out`);
+      addDebugLog({ level: 'warn', source: 'API', method, path, status: 401, auth, message: 'signing out' });
       await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
       router.replace('/(auth)/login');
     } else if (!response.ok) {
@@ -64,14 +67,17 @@ export async function apiFetch(path: string, options: RequestInit = {}) {
         bodySnippet = '<unreadable>';
       }
       console.warn(`[API] ${method} ${path} → ${response.status} (auth: ${auth}) body: ${bodySnippet}`);
+      addDebugLog({ level: 'warn', source: 'API', method, path, status: response.status, auth, body: bodySnippet });
     } else {
       console.log(`[API] ${method} ${path} → ${response.status} (auth: ${auth})`);
+      addDebugLog({ level: 'info', source: 'API', method, path, status: response.status, auth });
     }
 
     return response;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(`[API] ${method} ${path} → NETWORK_ERROR (auth: ${auth}): ${message}`);
+    addDebugLog({ level: 'error', source: 'API', method, path, auth, message: `NETWORK_ERROR: ${message}` });
     throw error;
   }
 }

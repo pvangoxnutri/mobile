@@ -3,6 +3,7 @@ import { ActivityIndicator, View } from 'react-native';
 import { apiFetch, API_URL } from '@/lib/api';
 import { normalizeLanguage, useI18n, type AppLanguage } from '@/components/i18n-provider';
 import { getEmailAuthRedirectUrl } from '@/lib/auth-redirect';
+import { addDebugLog } from '@/lib/debug-log-store';
 import { supabase } from '@/lib/supabase';
 import type { UserInfo } from '@/lib/types';
 
@@ -39,7 +40,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data: userData } = await supabase.auth.getUser();
     const fallbackProfile = buildFallbackUser(userData.user);
 
-    console.log(`[AUTH] sync POST /api/auth/sync starting (token: ${accessToken ? 'yes' : 'no'})`);
+    const auth: 'yes' | 'no' = accessToken ? 'yes' : 'no';
+    console.log(`[AUTH] sync POST /api/auth/sync starting (token: ${auth})`);
+    addDebugLog({ level: 'info', source: 'AUTH', method: 'POST', path: '/api/auth/sync', auth, message: 'starting' });
 
     try {
       const response = await fetch(`${API_URL}/api/auth/sync`, {
@@ -55,6 +58,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       console.log(`[AUTH] sync POST /api/auth/sync → ${response.status}`);
+      const level = response.ok ? 'info' : 'warn';
+      addDebugLog({ level, source: 'AUTH', method: 'POST', path: '/api/auth/sync', status: response.status, auth });
 
       if (response.status === 401) {
         throw new Error((await response.text()) || 'Could not sync auth session.');
@@ -68,12 +73,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           bodySnippet = '<unreadable>';
         }
         console.warn(`[AUTH] sync non-OK body: ${bodySnippet}`);
+        addDebugLog({ level: 'warn', source: 'AUTH', method: 'POST', path: '/api/auth/sync', status: response.status, auth, body: bodySnippet, message: 'using fallback profile' });
         return fallbackProfile;
       }
 
       return (await response.json()) as UserInfo;
     } catch (err) {
-      console.warn('[AUTH] syncProfileWithBackend failed, using fallback profile:', err instanceof Error ? err.message : err);
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn('[AUTH] syncProfileWithBackend failed, using fallback profile:', message);
+      addDebugLog({ level: 'error', source: 'AUTH', method: 'POST', path: '/api/auth/sync', auth, message: `sync failed: ${message} (using fallback)` });
       return fallbackProfile;
     }
   }
@@ -81,7 +89,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const refreshProfile = useCallback(async () => {
     const { data, error } = await supabase.auth.getSession();
 
-    console.log(`[AUTH] session: ${data.session ? 'yes' : 'no'}${error ? ` (error: ${error.message})` : ''}`);
+    const sessionState = data.session ? 'yes' : 'no';
+    console.log(`[AUTH] session: ${sessionState}${error ? ` (error: ${error.message})` : ''}`);
+    addDebugLog({
+      level: error ? 'warn' : 'info',
+      source: 'AUTH',
+      message: `session: ${sessionState}${error ? ` (error: ${error.message})` : ''}`,
+    });
 
     if (error || !data.session) {
       setUser(null);
@@ -97,6 +111,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     console.log('[AUTH] mount: restoring session...');
+    addDebugLog({ level: 'info', source: 'AUTH', message: 'mount: restoring session' });
     void (async () => {
       try {
         await refreshProfile();
@@ -111,6 +126,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event) => {
       console.log('[AUTH] state change:', event);
+      addDebugLog({ level: 'info', source: 'AUTH', message: `state change: ${event}` });
       queueMicrotask(async () => {
         try {
           await refreshProfile();

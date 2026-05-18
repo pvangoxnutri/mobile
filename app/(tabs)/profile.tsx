@@ -438,6 +438,8 @@ export default function ProfileScreen() {
         items={[
           { icon: 'earth-outline', label: t('profile.explore.travelTracker'), accent: '#10a6c0', onPress: () => router.push('/travel-tracker') },
           { icon: 'checkmark-done-outline', label: t('profile.explore.previousAdventures'), accent: '#ff4f74', onPress: () => router.push('/previous-adventures') },
+          // TEMPORARY: diagnostic viewer — remove once API/auth issue is resolved
+          { icon: 'bug-outline', label: 'Debug Logs (temp)', accent: '#c47b00', onPress: () => router.push('/debug-logs' as never) },
         ]}
       />
 
