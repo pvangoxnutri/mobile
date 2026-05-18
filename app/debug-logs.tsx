@@ -4,7 +4,9 @@
 
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
+import Constants from 'expo-constants';
 import { router } from 'expo-router';
+import * as Updates from 'expo-updates';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, ScrollView, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,6 +18,27 @@ import {
   subscribeDebugLogs,
   type DebugLogEntry,
 } from '@/lib/debug-log-store';
+
+function getBuildInfo() {
+  const appVersion = Constants.expoConfig?.version ?? 'unknown';
+  const iosBuild = Constants.expoConfig?.ios?.buildNumber;
+  const androidVersionCode = Constants.expoConfig?.android?.versionCode;
+  const nativeBuild = Platform.OS === 'ios' ? iosBuild : androidVersionCode?.toString();
+  const runtimeVersion = Updates.runtimeVersion ?? 'unknown';
+  const channel = Updates.channel ?? 'embedded';
+  const updateId = Updates.updateId ?? 'embedded (no OTA loaded)';
+  const createdAt = Updates.createdAt ? Updates.createdAt.toISOString() : 'n/a';
+  const isEmbedded = Updates.isEmbeddedLaunch;
+  return {
+    appVersion,
+    nativeBuild: nativeBuild ?? 'n/a',
+    runtimeVersion,
+    channel,
+    updateId,
+    createdAt,
+    isEmbedded,
+  };
+}
 
 function levelColor(level: DebugLogEntry['level']): string {
   switch (level) {
@@ -32,6 +55,7 @@ export default function DebugLogsScreen() {
   const insets = useSafeAreaInsets();
   const [entries, setEntries] = useState<DebugLogEntry[]>(() => getDebugLogs());
   const [copyState, setCopyState] = useState<'idle' | 'copying' | 'copied'>('idle');
+  const buildInfo = getBuildInfo();
 
   useEffect(() => {
     return subscribeDebugLogs(() => {
@@ -39,10 +63,23 @@ export default function DebugLogsScreen() {
     });
   }, []);
 
+  function formatPayload() {
+    const header = [
+      `app version: ${buildInfo.appVersion} (native build ${buildInfo.nativeBuild})`,
+      `runtimeVersion: ${buildInfo.runtimeVersion}`,
+      `channel: ${buildInfo.channel}`,
+      `updateId: ${buildInfo.updateId}`,
+      `update createdAt: ${buildInfo.createdAt}`,
+      `isEmbeddedLaunch: ${buildInfo.isEmbedded}`,
+      '',
+    ].join('\n');
+    return header + formatDebugLogsAsText();
+  }
+
   async function handleCopy() {
     setCopyState('copying');
     try {
-      await Clipboard.setStringAsync(formatDebugLogsAsText());
+      await Clipboard.setStringAsync(formatPayload());
       setCopyState('copied');
       setTimeout(() => setCopyState('idle'), 1500);
     } catch {
@@ -52,7 +89,7 @@ export default function DebugLogsScreen() {
 
   async function handleShare() {
     try {
-      await Share.share({ message: formatDebugLogsAsText() });
+      await Share.share({ message: formatPayload() });
     } catch {
       // user dismissed
     }
@@ -72,6 +109,33 @@ export default function DebugLogsScreen() {
           <Text style={styles.title}>Debug Logs</Text>
           <Text style={styles.subtitle}>Temporary diagnostics · {entries.length} entries</Text>
         </View>
+      </View>
+
+      <View style={styles.buildCard}>
+        <Text style={styles.buildLine} selectable>
+          <Text style={styles.buildLabel}>App: </Text>
+          {buildInfo.appVersion} (build {buildInfo.nativeBuild})
+        </Text>
+        <Text style={styles.buildLine} selectable>
+          <Text style={styles.buildLabel}>Runtime: </Text>
+          {buildInfo.runtimeVersion}
+        </Text>
+        <Text style={styles.buildLine} selectable>
+          <Text style={styles.buildLabel}>Channel: </Text>
+          {buildInfo.channel}
+        </Text>
+        <Text style={styles.buildLine} selectable>
+          <Text style={styles.buildLabel}>Update: </Text>
+          {buildInfo.updateId}
+        </Text>
+        <Text style={styles.buildLine} selectable>
+          <Text style={styles.buildLabel}>Published: </Text>
+          {buildInfo.createdAt}
+        </Text>
+        <Text style={styles.buildLine} selectable>
+          <Text style={styles.buildLabel}>Embedded: </Text>
+          {buildInfo.isEmbedded ? 'yes (no OTA applied)' : 'no (running OTA)'}
+        </Text>
       </View>
 
       <View style={styles.actionsRow}>
@@ -146,6 +210,25 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#6b7280',
     marginTop: 2,
+  },
+  buildCard: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: '#f9fafb',
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#e5e7eb',
+    gap: 2,
+  },
+  buildLine: {
+    fontSize: 11,
+    color: '#1f2937',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  buildLabel: {
+    fontWeight: '700',
+    color: '#6b7280',
   },
   actionsRow: {
     flexDirection: 'row',
