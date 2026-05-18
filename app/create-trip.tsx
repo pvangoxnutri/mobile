@@ -45,7 +45,7 @@ export default function CreateTripScreen() {
   const initialStartDate = useRef(startDate);
   const initialEndDate = useRef(endDate);
 
-  const contentBottomPadding = useMemo(() => Math.max(insets.bottom, 18) + 184, [insets.bottom]);
+  const contentBottomPadding = useMemo(() => Math.max(insets.bottom, 18) + 32, [insets.bottom]);
 
   const isDirty = Boolean(
     title.trim() ||
@@ -355,15 +355,6 @@ export default function CreateTripScreen() {
         </TouchableOpacity>
       </ScrollView>
 
-      <View pointerEvents="box-none" style={[styles.bottomChrome, { paddingBottom: Math.max(insets.bottom, 10) + 4 }]}>
-        <View style={styles.bottomBar}>
-          <BottomTab icon="compass" label={t('nav.home')} onPress={() => router.replace('/(tabs)')} />
-          <BottomTab icon="calendar-clear" label={t('nav.calendar')} active />
-          <BottomTab icon="notifications" label={t('nav.alerts')} onPress={() => router.push('/TMP_Navbar')} />
-          <BottomTab icon="person" label={t('nav.profile')} onPress={() => router.replace('/(tabs)/profile')} />
-        </View>
-      </View>
-
       <RangeDatePicker
         visible={rangePickerOpen}
         title={t('trip.datePicker.title')}
@@ -388,27 +379,6 @@ export default function CreateTripScreen() {
         onCancel={unsaved.handleCancel}
       />
     </KeyboardAvoidingView>
-  );
-}
-
-function BottomTab({
-  icon,
-  label,
-  active,
-  onPress,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  active?: boolean;
-  onPress?: () => void;
-}) {
-  return (
-    <Pressable style={styles.bottomTab} onPress={onPress}>
-      <View style={[active ? styles.bottomTabActiveIcon : styles.bottomTabIcon, active && { backgroundColor: PRIMARY_COLOR, shadowColor: PRIMARY_COLOR }]}>
-        <Ionicons name={icon} size={22} color={active ? '#fff' : '#7a7e87'} />
-      </View>
-      <Text style={[styles.bottomTabLabel, active && { color: PRIMARY_COLOR, fontWeight: '700' }]}>{label}</Text>
-    </Pressable>
   );
 }
 
@@ -839,63 +809,5 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '900',
     letterSpacing: -0.9,
-  },
-  bottomChrome: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    paddingHorizontal: 16,
-    backgroundColor: 'transparent',
-  },
-  bottomBar: {
-    borderRadius: 36,
-    backgroundColor: 'rgba(255,255,255,0.98)',
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingTop: 12,
-    paddingBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.08,
-    shadowRadius: 20,
-    elevation: 10,
-  },
-  bottomTab: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 68,
-  },
-  bottomTabIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  bottomTabActiveIcon: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#ff4f74',
-    shadowColor: '#ff4f74',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.28,
-    shadowRadius: 20,
-    elevation: 8,
-  },
-  bottomTabLabel: {
-    marginTop: 6,
-    color: '#70757f',
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  bottomTabLabelActive: {
-    color: '#ff4f74',
-    fontWeight: '700',
   },
 });
