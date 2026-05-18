@@ -1,18 +1,27 @@
 import * as Linking from 'expo-linking';
 import { router } from 'expo-router';
-import { useEffect } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useAuth } from '@/components/auth-provider';
 import { supabase } from '@/lib/supabase';
 import { PRIMARY_COLOR } from '@/constants/colors';
 
+const CALLBACK_TIMEOUT_MS = 10000;
+
 export default function AuthCallbackScreen() {
   const { refreshProfile } = useAuth();
+  const [timedOut, setTimedOut] = useState(false);
 
   useEffect(() => {
+    const timer = setTimeout(() => {
+      console.warn('[AUTH_CALLBACK] Timed out after 10s — showing fallback UI');
+      setTimedOut(true);
+    }, CALLBACK_TIMEOUT_MS);
+
     void (async () => {
       try {
         const url = await Linking.getInitialURL();
+        console.log('[AUTH_CALLBACK] Processing callback URL');
         const params = readAuthParams(url);
         const authError = params.get('error_description') ?? params.get('error');
 
@@ -29,24 +38,36 @@ export default function AuthCallbackScreen() {
             access_token: accessToken,
             refresh_token: refreshToken,
           });
-
-          if (error) {
-            throw error;
-          }
+          if (error) throw error;
         } else if (code) {
           const { error } = await supabase.auth.exchangeCodeForSession(code);
-          if (error) {
-            throw error;
-          }
+          if (error) throw error;
         }
 
         const profile = await refreshProfile();
+        console.log('[AUTH_CALLBACK] Success, profile:', profile ? 'found' : 'none');
         router.replace(profile ? '/(tabs)' : '/(auth)/login');
+      } catch (err) {
+        console.error('[AUTH_CALLBACK] Failed:', err instanceof Error ? err.message : err);
+        router.replace('/(auth)/login');
       } finally {
-        return;
+        clearTimeout(timer);
       }
     })();
+
+    return () => clearTimeout(timer);
   }, [refreshProfile]);
+
+  if (timedOut) {
+    return (
+      <View style={styles.screen}>
+        <Text style={styles.timeoutText}>Sign-in is taking too long.</Text>
+        <TouchableOpacity style={styles.timeoutButton} onPress={() => router.replace('/(auth)/login')}>
+          <Text style={styles.timeoutButtonText}>Back to sign in</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.screen}>
@@ -79,5 +100,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#fff',
+  },
+  timeoutText: {
+    color: '#666b76',
+    fontSize: 16,
+    marginBottom: 20,
+  },
+  timeoutButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    backgroundColor: PRIMARY_COLOR,
+  },
+  timeoutButtonText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700',
   },
 });

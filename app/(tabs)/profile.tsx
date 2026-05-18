@@ -86,8 +86,9 @@ export default function ProfileScreen() {
         }
         setTripDerivedVisited(derived);
       })
-      .catch(() => {
+      .catch((err: unknown) => {
         if (!active) return;
+        console.warn('[PROFILE] Failed to load trips for stats:', err instanceof Error ? err.message : err);
         setJoinedTrips(0);
         setCreatedQuests(0);
       });
@@ -100,7 +101,9 @@ export default function ProfileScreen() {
   useEffect(() => {
     void AsyncStorage.getItem('travel_tracker_status_map')
       .then((raw) => { if (raw) setManualStatusMap(JSON.parse(raw) as Record<string, string>); })
-      .catch(() => {});
+      .catch((err: unknown) => {
+        console.warn('[PROFILE] Failed to load travel status from storage:', err instanceof Error ? err.message : err);
+      });
   }, []);
 
   const visitedCountries = useMemo(() => {

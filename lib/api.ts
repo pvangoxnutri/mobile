@@ -1,4 +1,5 @@
 import Constants from 'expo-constants';
+import { router } from 'expo-router';
 import { Platform } from 'react-native';
 import { supabase } from '@/lib/supabase';
 
@@ -53,8 +54,9 @@ export async function apiFetch(path: string, options: RequestInit = {}) {
     });
 
     if (response.status === 401) {
-      console.warn(`[API] 401 ${method} ${path} - signing out locally`);
+      console.warn(`[API] 401 ${method} ${path} - session expired, signing out and redirecting to login`);
       await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+      router.replace('/(auth)/login');
     } else if (!response.ok) {
       console.warn(`[API] ${response.status} ${method} ${path}`);
     }

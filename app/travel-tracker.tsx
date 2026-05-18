@@ -80,7 +80,9 @@ export default function TravelTrackerScreen() {
         }
         setTripDerivedMap(derived);
       })
-      .catch(() => {});
+      .catch((err: unknown) => {
+        console.warn('[TRAVEL_TRACKER] Failed to load trip-derived countries:', err instanceof Error ? err.message : err);
+      });
   }, []);
 
   useEffect(() => {

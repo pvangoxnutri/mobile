@@ -76,7 +76,8 @@ export default function HomeScreen() {
           tripList.map(async (trip) => {
             try {
               return await apiJson<SideQuestActivity[]>(`/api/trips/${trip.id}/activities`);
-            } catch {
+            } catch (err) {
+              console.warn(`[HOME] loadActivities failed for trip ${trip.id}:`, err instanceof Error ? err.message : err);
               return [];
             }
           }),
@@ -109,7 +110,9 @@ export default function HomeScreen() {
   const loadInvites = useCallback(() => {
     void apiJson<PendingInvite[]>('/api/trips/invites/me')
       .then(setPendingInvites)
-      .catch(() => {});
+      .catch((err: unknown) => {
+        console.warn('[HOME] loadInvites failed:', err instanceof Error ? err.message : err);
+      });
   }, []);
 
   useFocusEffect(loadQuests);
@@ -161,8 +164,8 @@ export default function HomeScreen() {
       setPendingInvites((prev) => prev.filter((i) => i.id !== invite.id));
       loadQuests();
       loadInvites();
-    } catch {
-      // silently ignore
+    } catch (err) {
+      console.error('[HOME] handleAcceptInvite failed:', err instanceof Error ? err.message : err);
     } finally {
       setInviteActionBusy(null);
     }
@@ -175,8 +178,8 @@ export default function HomeScreen() {
       if (!res.ok) return;
       setPendingInvites((prev) => prev.filter((i) => i.id !== invite.id));
       loadInvites();
-    } catch {
-      // silently ignore
+    } catch (err) {
+      console.error('[HOME] handleDeclineInvite failed:', err instanceof Error ? err.message : err);
     } finally {
       setInviteActionBusy(null);
     }
@@ -217,7 +220,8 @@ export default function HomeScreen() {
     try {
       const data = await apiJson<TripMember[]>(`/api/trips/${featuredTrip.quest.id}/members`);
       setFeaturedMembers(data);
-    } catch {
+    } catch (err) {
+      console.warn('[HOME] openMembers failed:', err instanceof Error ? err.message : err);
       setFeaturedMembers([]);
     } finally {
       setMembersLoading(false);
