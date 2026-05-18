@@ -32,14 +32,13 @@ function inferApiBaseUrl() {
 
 export const API_URL = inferApiBaseUrl();
 
-if (__DEV__) {
-  console.log('[API] Base URL:', API_URL);
-}
+console.log('[API] Base URL:', API_URL);
 
 export async function apiFetch(path: string, options: RequestInit = {}) {
   const headers = new Headers(options.headers);
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
+  const auth = token ? 'yes' : 'no';
 
   if (token) {
     headers.set('Authorization', `Bearer ${token}`);
@@ -54,17 +53,25 @@ export async function apiFetch(path: string, options: RequestInit = {}) {
     });
 
     if (response.status === 401) {
-      console.warn(`[API] 401 ${method} ${path} - session expired, signing out and redirecting to login`);
+      console.warn(`[API] ${method} ${path} → 401 (auth: ${auth}) — signing out`);
       await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
       router.replace('/(auth)/login');
     } else if (!response.ok) {
-      console.warn(`[API] ${response.status} ${method} ${path}`);
+      let bodySnippet = '';
+      try {
+        bodySnippet = (await response.clone().text()).slice(0, 200);
+      } catch {
+        bodySnippet = '<unreadable>';
+      }
+      console.warn(`[API] ${method} ${path} → ${response.status} (auth: ${auth}) body: ${bodySnippet}`);
+    } else {
+      console.log(`[API] ${method} ${path} → ${response.status} (auth: ${auth})`);
     }
 
     return response;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error(`[API] Network error ${method} ${path}: ${message}`);
+    console.error(`[API] ${method} ${path} → NETWORK_ERROR (auth: ${auth}): ${message}`);
     throw error;
   }
 }

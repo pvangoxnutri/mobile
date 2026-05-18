@@ -140,6 +140,7 @@ export default function CreateTripScreen() {
     setSubmitting(true);
     setMessage(null);
 
+    console.log('[CREATE-TRIP] submitting...');
     try {
       let uploadedImageUrl: string | null = null;
 

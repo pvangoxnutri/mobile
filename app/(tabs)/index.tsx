@@ -67,6 +67,7 @@ export default function HomeScreen() {
     setLoading(true);
     setError('');
 
+    console.log('[HOME] loading trips...');
     void apiJson<Quest[]>('/api/trips')
       .then(async (data) => {
         if (!active) return;

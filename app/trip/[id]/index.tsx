@@ -81,6 +81,7 @@ export default function TripDetailsScreen() {
       let active = true;
 
       async function run() {
+        console.log(`[TRIP-DETAIL] loading trip ${id}...`);
         try {
           const [tripData, memberData, inviteData, activityData] = await Promise.all([
             apiJson<Quest>(`/api/trips/${id}`),

@@ -39,6 +39,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data: userData } = await supabase.auth.getUser();
     const fallbackProfile = buildFallbackUser(userData.user);
 
+    console.log(`[AUTH] sync POST /api/auth/sync starting (token: ${accessToken ? 'yes' : 'no'})`);
+
     try {
       const response = await fetch(`${API_URL}/api/auth/sync`, {
         method: 'POST',
@@ -52,11 +54,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }),
       });
 
+      console.log(`[AUTH] sync POST /api/auth/sync → ${response.status}`);
+
       if (response.status === 401) {
         throw new Error((await response.text()) || 'Could not sync auth session.');
       }
 
       if (!response.ok) {
+        let bodySnippet = '';
+        try {
+          bodySnippet = (await response.clone().text()).slice(0, 200);
+        } catch {
+          bodySnippet = '<unreadable>';
+        }
+        console.warn(`[AUTH] sync non-OK body: ${bodySnippet}`);
         return fallbackProfile;
       }
 
@@ -69,6 +80,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const refreshProfile = useCallback(async () => {
     const { data, error } = await supabase.auth.getSession();
+
+    console.log(`[AUTH] session: ${data.session ? 'yes' : 'no'}${error ? ` (error: ${error.message})` : ''}`);
 
     if (error || !data.session) {
       setUser(null);
@@ -83,6 +96,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [setLanguage]);
 
   useEffect(() => {
+    console.log('[AUTH] mount: restoring session...');
     void (async () => {
       try {
         await refreshProfile();
