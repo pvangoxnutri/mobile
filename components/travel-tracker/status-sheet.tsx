@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { getCountryFlag, type Country, type CountryStatus } from './country-data';
 import { PRIMARY_COLOR, PRIMARY_12, SECONDARY_COLOR, SECONDARY_12 } from '@/constants/colors';
+import { useI18n } from '@/components/i18n-provider';
 
 interface StatusSheetProps {
   country: Country | null;
@@ -22,7 +23,9 @@ interface Option {
   color: string;
 }
 
-export default function StatusSheet({ country, currentStatus, visible, onSelect, onClose }: StatusSheetProps) {  const insets = useSafeAreaInsets();
+export default function StatusSheet({ country, currentStatus, visible, onSelect, onClose }: StatusSheetProps) {
+  const { t } = useI18n();
+  const insets = useSafeAreaInsets();
   const slideAnim = useRef(new Animated.Value(300)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -41,10 +44,10 @@ export default function StatusSheet({ country, currentStatus, visible, onSelect,
   }, [visible, slideAnim, fadeAnim]);
 
   const options: Option[] = [
-    { status: 'visited', label: 'Visited', icon: 'checkmark-circle', bg: PRIMARY_12, color: PRIMARY_COLOR },
-    { status: 'planned', label: 'Planning to visit', icon: 'bookmark', bg: SECONDARY_12, color: SECONDARY_COLOR },
-    { status: 'living', label: 'I live here', icon: 'home', bg: '#FEF3C7', color: '#D97706' },
-    { status: 'none', label: 'Clear status', icon: 'close-circle-outline', bg: '#F4F5F7', color: '#8A909D' },
+    { status: 'visited', label: t('travel.status.visited'), icon: 'checkmark-circle', bg: PRIMARY_12, color: PRIMARY_COLOR },
+    { status: 'planned', label: t('travel.status.planning'), icon: 'bookmark', bg: SECONDARY_12, color: SECONDARY_COLOR },
+    { status: 'living', label: t('travel.status.living'), icon: 'home', bg: '#FEF3C7', color: '#D97706' },
+    { status: 'none', label: t('travel.status.clear'), icon: 'close-circle-outline', bg: '#F4F5F7', color: '#8A909D' },
   ];
 
   if (!country) return null;

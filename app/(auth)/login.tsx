@@ -1,6 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import {
   ActivityIndicator,
@@ -21,10 +20,8 @@ import LanguagePicker from '@/components/language-picker';
 import { supabase } from '@/lib/supabase';
 import { PRIMARY_COLOR } from '@/constants/colors';
 
-WebBrowser.maybeCompleteAuthSession();
-
 export default function LoginScreen() {
-  const { signIn, signUp, refreshProfile } = useAuth();
+  const { signIn, signUp } = useAuth();
   const { language, setLanguage, t } = useI18n();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ reset?: string }>();
@@ -32,16 +29,27 @@ export default function LoginScreen() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
-  const [googleBusy, setGoogleBusy] = useState(false);
   const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
   const [selectedLanguage, setSelectedLanguage] = useState<AppLanguage>(language);
+  // Tracks whether the user explicitly changed the language on the login
+  // screen. We only push the picker value to user_metadata when this is true,
+  // so we don't overwrite a returning user's saved preference with the
+  // device-locale default they never touched.
+  const [userChangedLanguage, setUserChangedLanguage] = useState(false);
 
   useEffect(() => {
     setSelectedLanguage(language);
   }, [language]);
+
+  function handleLanguageChange(next: AppLanguage) {
+    setSelectedLanguage(next);
+    setUserChangedLanguage(true);
+    void setLanguage(next);
+  }
 
   const cooldownSeconds = cooldownUntil ? Math.max(0, Math.ceil((cooldownUntil - Date.now()) / 1000)) : 0;
 
@@ -67,12 +75,23 @@ export default function LoginScreen() {
 
       if (mode === 'signin') {
         const profile = await signIn(email.trim(), password);
+        if (userChangedLanguage) {
+          // Persist the picker value to Supabase user_metadata so the
+          // preference syncs across devices on the next sign-in.
+          await supabase.auth.updateUser({ data: { language: selectedLanguage } }).catch(() => {});
+          await setLanguage(selectedLanguage);
+        }
         router.replace(profile && !profile.hasCompletedOnboarding ? '/onboarding' : '/(tabs)');
         return;
       }
 
       if (cooldownSeconds > 0) {
         setError(t('auth.wait_before_retry', { seconds: cooldownSeconds }));
+        return;
+      }
+
+      if (password !== confirmPassword) {
+        setError(t('auth.passwords_mismatch'));
         return;
       }
 
@@ -95,72 +114,6 @@ export default function LoginScreen() {
   }
 
   const resetMessage = params.reset === '1' ? t('auth.reset_done') : '';
-
-  async function handleGoogleLogin() {
-    try {
-      setGoogleBusy(true);
-      setError('');
-      setNotice('');
-
-      const redirectTo = Linking.createURL('/auth-callback');
-      const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo,
-          skipBrowserRedirect: true,
-        },
-      });
-
-      if (oauthError) {
-        throw oauthError;
-      }
-
-      if (!data?.url) {
-        throw new Error(t('auth.google_start_failed'));
-      }
-
-      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
-
-      if (result.type === 'cancel' || result.type === 'dismiss') {
-        return;
-      }
-
-      if (result.type !== 'success') {
-        throw new Error(t('auth.google_incomplete'));
-      }
-
-      const params = readAuthParams(result.url);
-      const authError = params.get('error_description') ?? params.get('error');
-      if (authError) {
-        throw new Error(authError);
-      }
-
-      const access_token = params.get('access_token');
-      const refresh_token = params.get('refresh_token');
-      const code = params.get('code');
-
-      if (access_token && refresh_token) {
-        const { error: sessionError } = await supabase.auth.setSession({ access_token, refresh_token });
-        if (sessionError) {
-          throw sessionError;
-        }
-      } else if (code) {
-        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-        if (exchangeError) {
-          throw exchangeError;
-        }
-      } else {
-        throw new Error(t('auth.google_session_incomplete'));
-      }
-
-      const profile = await refreshProfile();
-      router.replace(profile && !profile.hasCompletedOnboarding ? '/onboarding' : '/(tabs)');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t('auth.google_failed'));
-    } finally {
-      setGoogleBusy(false);
-    }
-  }
 
   return (
     <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -185,20 +138,18 @@ export default function LoginScreen() {
             ? t('auth.intro_signin')
             : t('auth.intro_signup')}
         </Text>
+        <View style={styles.fieldBlock}>
+          <LanguagePicker
+            label={t('auth.language')}
+            value={selectedLanguage}
+            onChange={handleLanguageChange}
+            searchPlaceholder={language === 'sv' ? 'Sök språk' : 'Search language'}
+          />
+        </View>
         {mode === 'signup' ? (
           <View style={styles.fieldBlock}>
             <Text style={styles.fieldLabel}>{t('auth.full_name')}</Text>
             <TextInput style={styles.input} placeholder={t('auth.full_name_placeholder')} value={name} onChangeText={setName} />
-          </View>
-        ) : null}
-        {mode === 'signup' ? (
-          <View style={styles.fieldBlock}>
-            <LanguagePicker
-              label={t('auth.language')}
-              value={selectedLanguage}
-              onChange={setSelectedLanguage}
-              searchPlaceholder={language === 'sv' ? 'Sök språk' : 'Search language'}
-            />
           </View>
         ) : null}
         <View style={styles.fieldBlock}>
@@ -222,6 +173,18 @@ export default function LoginScreen() {
             onChangeText={setPassword}
           />
         </View>
+        {mode === 'signup' ? (
+          <View style={styles.fieldBlock}>
+            <Text style={styles.fieldLabel}>{t('auth.password_confirm')}</Text>
+            <TextInput
+              style={styles.input}
+              placeholder={t('auth.password_confirm_placeholder')}
+              secureTextEntry
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+            />
+          </View>
+        ) : null}
 
         {resetMessage ? <Text style={styles.success}>{resetMessage}</Text> : null}
         {notice ? <Text style={styles.success}>{notice}</Text> : null}
@@ -231,9 +194,15 @@ export default function LoginScreen() {
         ) : null}
 
         <Pressable
-          style={[styles.primaryButton, { backgroundColor: PRIMARY_COLOR }, busy || (mode === 'signup' && cooldownSeconds > 0) ? styles.primaryButtonDisabled : null]}
+          style={[
+            styles.primaryButton,
+            { backgroundColor: PRIMARY_COLOR },
+            busy || (mode === 'signup' && (cooldownSeconds > 0 || password === '' || confirmPassword === '' || password !== confirmPassword))
+              ? styles.primaryButtonDisabled
+              : null,
+          ]}
           onPress={() => void handleSubmit()}
-          disabled={busy || (mode === 'signup' && cooldownSeconds > 0)}>
+          disabled={busy || (mode === 'signup' && (cooldownSeconds > 0 || password === '' || confirmPassword === '' || password !== confirmPassword))}>
           {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>{mode === 'signin' ? t('auth.btn_signin') : t('auth.btn_signup')}</Text>}
         </Pressable>
 
@@ -247,23 +216,6 @@ export default function LoginScreen() {
           <Text style={styles.secondaryButtonText}>
             {mode === 'signin' ? t('auth.need_account') : t('auth.have_account')}
           </Text>
-        </Pressable>
-
-        <View style={styles.separatorRow}>
-          <View style={styles.separatorLine} />
-          <Text style={styles.separatorText}>OR</Text>
-          <View style={styles.separatorLine} />
-        </View>
-
-        <Pressable style={styles.googleButton} onPress={() => void handleGoogleLogin()} disabled={busy || googleBusy}>
-          {googleBusy ? (
-            <ActivityIndicator color="#20222a" />
-          ) : (
-            <>
-              <GoogleGlyph />
-              <Text style={styles.googleButtonText}>{t('auth.continue_google')}</Text>
-            </>
-          )}
         </Pressable>
 
         <View style={styles.legalConsent}>
@@ -286,32 +238,6 @@ export default function LoginScreen() {
       </View>
       </ScrollView>
     </KeyboardAvoidingView>
-  );
-}
-
-function readAuthParams(url: string) {
-  const [, queryPart = ''] = url.split('?');
-  const [queryString, hashString = ''] = queryPart.split('#');
-  const hashParams = new URLSearchParams(hashString);
-  const queryParams = new URLSearchParams(queryString);
-
-  if (hashParams.toString()) {
-    return hashParams;
-  }
-
-  return queryParams;
-}
-
-function GoogleGlyph() {
-  return (
-    <View style={styles.googleGlyph}>
-      <View style={[styles.googleArc, styles.googleArcBlue]} />
-      <View style={[styles.googleArc, styles.googleArcRed]} />
-      <View style={[styles.googleArc, styles.googleArcYellow]} />
-      <View style={[styles.googleArc, styles.googleArcGreen]} />
-      <View style={styles.googleCenterCut} />
-      <View style={styles.googleBar} />
-    </View>
   );
 }
 
@@ -454,40 +380,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
   },
-  separatorRow: {
-    marginTop: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  separatorLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#ececf0',
-  },
-  separatorText: {
-    color: '#a8acb7',
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 2,
-  },
-  googleButton: {
-    marginTop: 16,
-    height: 54,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#e8ebf1',
-    backgroundColor: '#fff',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-  },
-  googleButtonText: {
-    color: '#20222a',
-    fontSize: 15,
-    fontWeight: '700',
-  },
   legalConsent: {
     marginTop: 18,
     paddingHorizontal: 8,
@@ -501,58 +393,5 @@ const styles = StyleSheet.create({
   legalLink: {
     color: '#20222a',
     textDecorationLine: 'underline',
-  },
-  googleGlyph: {
-    width: 20,
-    height: 20,
-    position: 'relative',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  googleArc: {
-    position: 'absolute',
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 4,
-  },
-  googleArcBlue: {
-    borderColor: '#4285F4',
-    borderTopColor: 'transparent',
-    borderLeftColor: 'transparent',
-    transform: [{ rotate: '45deg' }],
-  },
-  googleArcRed: {
-    borderColor: '#EA4335',
-    borderBottomColor: 'transparent',
-    borderLeftColor: 'transparent',
-    transform: [{ rotate: '-35deg' }],
-  },
-  googleArcYellow: {
-    borderColor: '#FBBC05',
-    borderTopColor: 'transparent',
-    borderRightColor: 'transparent',
-    transform: [{ rotate: '135deg' }],
-  },
-  googleArcGreen: {
-    borderColor: '#34A853',
-    borderTopColor: 'transparent',
-    borderRightColor: 'transparent',
-    transform: [{ rotate: '215deg' }],
-  },
-  googleCenterCut: {
-    position: 'absolute',
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#fff',
-  },
-  googleBar: {
-    position: 'absolute',
-    right: 1,
-    width: 9,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#4285F4',
   },
 });

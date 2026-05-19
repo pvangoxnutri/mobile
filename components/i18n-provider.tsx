@@ -30,17 +30,15 @@ const dictionaries: Record<AppLanguage, Record<string, string>> = {
     'auth.forgot_password': 'Forgot password?',
     'auth.need_account': 'Need an account? Sign up',
     'auth.have_account': 'Already have an account? Sign in',
-    'auth.continue_google': 'Continue with Google',
     'auth.notice_check_email': 'Check your email to verify your account, then sign in.',
     'auth.reset_done': 'Your password was changed. Sign in with the new one.',
     'auth.cooldown': 'You can request a new verification email in {seconds}s.',
     'auth.wait_before_retry': 'Please wait {seconds}s before requesting another verification email.',
     'auth.rate_limit': 'Too many email attempts right now. Wait a moment before trying again.',
     'auth.generic_error': 'Something went wrong.',
-    'auth.google_failed': 'Google sign-in failed.',
-    'auth.google_start_failed': 'Could not start Google sign-in.',
-    'auth.google_incomplete': 'Google sign-in did not complete.',
-    'auth.google_session_incomplete': 'Google sign-in returned an incomplete session.',
+    'auth.password_confirm': 'Confirm password',
+    'auth.password_confirm_placeholder': 'Re-enter your password',
+    'auth.passwords_mismatch': 'Passwords do not match.',
     'auth.language': 'Language',
     'auth.language_en': 'English',
     'auth.language_sv': 'Svenska',
@@ -249,6 +247,10 @@ const dictionaries: Record<AppLanguage, Record<string, string>> = {
     'travel.overview': 'World Overview',
     'travel.countries': 'Countries',
     'travel.search_countries': 'Search countries…',
+    'travel.status.visited': 'Visited',
+    'travel.status.planning': 'Planning to visit',
+    'travel.status.living': 'I live here',
+    'travel.status.clear': 'Clear status',
 
     'settings.title': 'Settings',
   },
@@ -270,17 +272,15 @@ const dictionaries: Record<AppLanguage, Record<string, string>> = {
     'auth.forgot_password': 'Glömt lösenord?',
     'auth.need_account': 'Har du inget konto? Registrera dig',
     'auth.have_account': 'Har du redan konto? Logga in',
-    'auth.continue_google': 'Fortsätt med Google',
     'auth.notice_check_email': 'Kolla din e-post för att verifiera kontot och logga sedan in.',
     'auth.reset_done': 'Lösenordet har ändrats. Logga in med det nya.',
     'auth.cooldown': 'Du kan begära nytt verifieringsmail om {seconds}s.',
     'auth.wait_before_retry': 'Vänta {seconds}s innan du begär ett nytt verifieringsmail.',
     'auth.rate_limit': 'För många e-postförsök just nu. Vänta en stund och försök igen.',
     'auth.generic_error': 'Något gick fel.',
-    'auth.google_failed': 'Google-inloggning misslyckades.',
-    'auth.google_start_failed': 'Kunde inte starta Google-inloggning.',
-    'auth.google_incomplete': 'Google-inloggningen slutfördes inte.',
-    'auth.google_session_incomplete': 'Google-inloggningen returnerade en ofullständig session.',
+    'auth.password_confirm': 'Bekräfta lösenord',
+    'auth.password_confirm_placeholder': 'Ange ditt lösenord igen',
+    'auth.passwords_mismatch': 'Lösenorden matchar inte.',
     'auth.language': 'Språk',
     'auth.language_en': 'English',
     'auth.language_sv': 'Svenska',
@@ -489,6 +489,10 @@ const dictionaries: Record<AppLanguage, Record<string, string>> = {
     'travel.overview': 'Världsöversikt',
     'travel.countries': 'Länder',
     'travel.search_countries': 'Sök länder…',
+    'travel.status.visited': 'Besökt',
+    'travel.status.planning': 'Planerar att besöka',
+    'travel.status.living': 'Jag bor här',
+    'travel.status.clear': 'Rensa status',
 
     'settings.title': 'Inställningar',
   },
@@ -506,8 +510,20 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let active = true;
     void AsyncStorage.getItem(STORAGE_KEY).then((stored) => {
-      if (!active || !stored) return;
-      setLanguageState(normalizeLanguage(stored));
+      if (!active) return;
+      if (stored) {
+        setLanguageState(normalizeLanguage(stored));
+        return;
+      }
+      // No stored preference yet: fall back to the device locale on first
+      // launch so a Swedish-locale device starts in Swedish without forcing
+      // the user to find the picker.
+      try {
+        const deviceLocale = Intl.DateTimeFormat().resolvedOptions().locale;
+        setLanguageState(normalizeLanguage(deviceLocale));
+      } catch {
+        // Intl unavailable: keep the 'en' default already in state.
+      }
     });
     return () => {
       active = false;

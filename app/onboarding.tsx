@@ -18,7 +18,10 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/components/auth-provider';
+import { useI18n, type AppLanguage } from '@/components/i18n-provider';
+import LanguagePicker from '@/components/language-picker';
 import { apiFetch } from '@/lib/api';
+import { supabase } from '@/lib/supabase';
 import { PRIMARY_COLOR, PRIMARY_08 } from '@/constants/colors';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -41,9 +44,15 @@ const PURPOSES = [
 export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
   const { refreshProfile, user } = useAuth();
+  const { language, setLanguage, t } = useI18n();
 
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const progressAnim = useRef(new Animated.Value(1)).current;
+
+  async function handleLanguageChange(next: AppLanguage) {
+    await setLanguage(next);
+    await supabase.auth.updateUser({ data: { language: next } }).catch(() => {});
+  }
 
   const [step, setStep] = useState(1);
   const [busy, setBusy] = useState(false);
@@ -161,6 +170,16 @@ export default function OnboardingScreen() {
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
             <Text style={styles.skipText}>Skip</Text>
           </TouchableOpacity>
+        </View>
+
+        {/* ── Language ────────────────────────────────────── */}
+        <View style={styles.languageRow}>
+          <LanguagePicker
+            label={t('auth.language')}
+            value={language}
+            onChange={(next) => void handleLanguageChange(next)}
+            searchPlaceholder={language === 'sv' ? 'Sök språk' : 'Search language'}
+          />
         </View>
 
         {/* ── Progress bar ────────────────────────────────── */}
@@ -388,6 +407,11 @@ const styles = StyleSheet.create({
   },
 
   // ─ Progress
+  languageRow: {
+    paddingHorizontal: 22,
+    paddingTop: 6,
+    paddingBottom: 14,
+  },
   progressTrack: {
     height: 3,
     backgroundColor: '#eef0f4',
