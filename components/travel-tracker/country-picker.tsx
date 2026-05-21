@@ -25,6 +25,12 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { COUNTRIES, getCountryFlag } from './country-data';
+import {
+  compareCountriesByLocalizedName,
+  getLocalizedContinentName,
+  getLocalizedCountryName,
+} from './country-i18n';
+import { useI18n } from '@/components/i18n-provider';
 import { PRIMARY_COLOR, SECONDARY_COLOR, SECONDARY_08, SECONDARY_12, SECONDARY_20 } from '@/constants/colors';
 
 interface CountryPickerProps {
@@ -33,7 +39,9 @@ interface CountryPickerProps {
   label?: string;
 }
 
-export default function CountryPicker({ value, onChange, label = 'Countries' }: CountryPickerProps) {  const insets = useSafeAreaInsets();
+export default function CountryPicker({ value, onChange, label = 'Countries' }: CountryPickerProps) {
+  const { language } = useI18n();
+  const insets = useSafeAreaInsets();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
 
@@ -42,18 +50,23 @@ export default function CountryPicker({ value, onChange, label = 'Countries' }: 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return COUNTRIES;
-    return COUNTRIES.filter((c) => c.name.toLowerCase().includes(q) || c.code.toLowerCase().includes(q));
-  }, [search]);
+    return COUNTRIES.filter((c) =>
+      getLocalizedCountryName(c, language).toLowerCase().includes(q) ||
+      c.name.toLowerCase().includes(q) ||
+      c.code.toLowerCase().includes(q),
+    );
+  }, [search, language]);
 
-  // Sort: selected first, then alphabetical
+  // Sort: selected first, then alphabetical by the localized name (so
+  // Swedish Å/Ö go to the end on sv, but mid-alphabet on en).
   const sorted = useMemo(
     () => [...filtered].sort((a, b) => {
       const aS = selectedSet.has(a.code) ? 0 : 1;
       const bS = selectedSet.has(b.code) ? 0 : 1;
       if (aS !== bS) return aS - bS;
-      return a.name.localeCompare(b.name);
+      return compareCountriesByLocalizedName(a, b, language);
     }),
-    [filtered, selectedSet],
+    [filtered, selectedSet, language],
   );
 
   function toggle(code: string) {
@@ -65,7 +78,7 @@ export default function CountryPicker({ value, onChange, label = 'Countries' }: 
   }
 
   const selectedCountries = COUNTRIES.filter((c) => selectedSet.has(c.code))
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .sort((a, b) => compareCountriesByLocalizedName(a, b, language));
 
   return (
     <>
@@ -84,7 +97,7 @@ export default function CountryPicker({ value, onChange, label = 'Countries' }: 
           {selectedCountries.map((c) => (
             <TouchableOpacity key={c.code} style={[styles.chip, { backgroundColor: SECONDARY_12, borderColor: SECONDARY_20 }]} activeOpacity={0.75} onPress={() => toggle(c.code)}>
               <Text style={styles.chipFlag}>{getCountryFlag(c)}</Text>
-              <Text style={[styles.chipName, { color: SECONDARY_COLOR }]} numberOfLines={1}>{c.name}</Text>
+              <Text style={[styles.chipName, { color: SECONDARY_COLOR }]} numberOfLines={1}>{getLocalizedCountryName(c, language)}</Text>
               <Ionicons name="close" size={13} color={SECONDARY_COLOR} />
             </TouchableOpacity>
           ))}
@@ -143,8 +156,8 @@ export default function CountryPicker({ value, onChange, label = 'Countries' }: 
                   <TouchableOpacity style={styles.row} activeOpacity={0.7} onPress={() => toggle(country.code)}>
                     <Text style={styles.rowFlag}>{getCountryFlag(country)}</Text>
                     <View style={styles.rowText}>
-                      <Text style={[styles.rowName, selected && { color: PRIMARY_COLOR, fontWeight: '700' }]}>{country.name}</Text>
-                      <Text style={styles.rowContinent}>{country.continent}</Text>
+                      <Text style={[styles.rowName, selected && { color: PRIMARY_COLOR, fontWeight: '700' }]}>{getLocalizedCountryName(country, language)}</Text>
+                      <Text style={styles.rowContinent}>{getLocalizedContinentName(country.continent, language)}</Text>
                     </View>
                     <View style={[styles.checkbox, selected && { backgroundColor: PRIMARY_COLOR, borderColor: PRIMARY_COLOR }]}>
                       {selected ? <Ionicons name="checkmark" size={14} color="#fff" /> : null}

@@ -4,6 +4,7 @@ import { Animated, Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { getCountryFlag, type Country, type CountryStatus } from './country-data';
+import { getLocalizedContinentName, getLocalizedCountryName } from './country-i18n';
 import { PRIMARY_COLOR, PRIMARY_12, SECONDARY_COLOR, SECONDARY_12 } from '@/constants/colors';
 import { useI18n } from '@/components/i18n-provider';
 
@@ -24,7 +25,7 @@ interface Option {
 }
 
 export default function StatusSheet({ country, currentStatus, visible, onSelect, onClose }: StatusSheetProps) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const insets = useSafeAreaInsets();
   const slideAnim = useRef(new Animated.Value(300)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -66,8 +67,8 @@ export default function StatusSheet({ country, currentStatus, visible, onSelect,
         <View style={styles.countryHeader}>
           <Text style={styles.flagText}>{getCountryFlag(country)}</Text>
           <View style={styles.countryInfo}>
-            <Text style={styles.countryName}>{country.name}</Text>
-            <Text style={styles.continentLabel}>{country.continent}</Text>
+            <Text style={styles.countryName}>{getLocalizedCountryName(country, language)}</Text>
+            <Text style={styles.continentLabel}>{getLocalizedContinentName(country.continent, language)}</Text>
           </View>
         </View>
 

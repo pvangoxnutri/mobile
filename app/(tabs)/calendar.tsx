@@ -148,11 +148,13 @@ export default function CalendarScreen() {
 
         {/* Header */}
         <View style={styles.headerTopRow}>
-          <View style={{ flex: 1 }}>
+          <View style={{ flex: 1, paddingRight: 60 }}>
             <Text style={styles.eyebrow}>YOUR PLAN</Text>
             <Text style={styles.bigTitle}>Calendar</Text>
             <Text style={styles.titleCopy}>Everything planned across your trips, hidden moments included.</Text>
           </View>
+        </View>
+        <View style={[styles.alertsAnchor, { top: Math.max(insets.top, 16) + 8 }]}>
           <TopAlertsButton />
         </View>
 
@@ -454,6 +456,13 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 12,
     marginBottom: 18,
+  },
+  // Absolute-positioned so the alerts icon sits at the exact same X/Y on
+  // every tab that uses it, independent of per-page header layout.
+  alertsAnchor: {
+    position: 'absolute',
+    right: 20,
+    zIndex: 10,
   },
   eyebrow: {
     fontSize: 12,

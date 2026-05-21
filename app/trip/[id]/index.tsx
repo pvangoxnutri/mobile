@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Image, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/components/auth-provider';
+import { useI18n } from '@/components/i18n-provider';
 import UserProfileCard from '@/components/user-profile-card';
 import { apiFetch, apiJson } from '@/lib/api';
 import { uploadImageIfNeeded } from '@/lib/uploads';
@@ -43,6 +44,7 @@ export default function TripDetailsScreen() {
   const scrollRef = useRef<ScrollView | null>(null);
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuth();
+  const { t } = useI18n();
   const [trip, setTrip] = useState<Quest | null>(null);
   const [members, setMembers] = useState<TripMember[]>([]);
   const [invites, setInvites] = useState<TripInvite[]>([]);
@@ -256,7 +258,8 @@ export default function TripDetailsScreen() {
   async function handleCopyInviteCode() {
     if (!trip?.inviteCode) return;
     await Clipboard.setStringAsync(trip.inviteCode);
-    setInviteMessage(`Invite code ${trip.inviteCode} copied.`);
+    setInviteMessage(t('trip.success.codeCopied', { code: trip.inviteCode }));
+    setTimeout(() => setInviteMessage(''), 2500);
   }
 
   async function handleShareInvite() {

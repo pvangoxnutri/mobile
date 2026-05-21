@@ -20,6 +20,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/components/auth-provider';
+import { useI18n } from '@/components/i18n-provider';
 import RangeDatePicker, { formatRangeDisplay } from '@/components/range-date-picker';
 import CountryPicker from '@/components/travel-tracker/country-picker';
 import { UnsavedChangesModal, useUnsavedChanges } from '@/components/unsaved-changes';
@@ -41,6 +42,7 @@ export default function TripSettingsScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuth();
+  const { t } = useI18n();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [trip, setTrip] = useState<Quest | null>(null);
@@ -263,7 +265,8 @@ export default function TripSettingsScreen() {
   async function handleCopyInviteCode() {
     if (!trip?.inviteCode) return;
     await Clipboard.setStringAsync(trip.inviteCode);
-    setInviteMessage(`Invite code ${trip.inviteCode} copied.`);
+    setInviteMessage(t('trip.success.codeCopied', { code: trip.inviteCode }));
+    setTimeout(() => setInviteMessage(''), 2500);
   }
 
   async function handleShareInvite() {

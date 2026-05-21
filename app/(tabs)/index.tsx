@@ -586,21 +586,23 @@ function FloatingFab({
         {open ? (
           <View style={styles.fabMenu}>
             <TouchableOpacity
-              activeOpacity={0.9}
-              style={[styles.fabMenuButton, styles.fabMenuButtonPrimary, { backgroundColor: PRIMARY_COLOR, borderColor: PRIMARY_COLOR }]}
+              activeOpacity={0.88}
+              style={[styles.fabMenuButton, styles.fabMenuButtonPrimary, { backgroundColor: PRIMARY_COLOR }]}
               onPress={() => {
                 onDismiss();
                 router.push('/create-trip');
               }}>
-              <Text style={styles.fabMenuButtonPrimaryText}>{t ? t('home.create_adventure') : 'Create Adventure'}</Text>
-              <View style={styles.fabMenuIconCircle}>
-                <Ionicons name="add" size={14} color="#fff" />
+              <View style={[styles.fabMenuIconWrap, { backgroundColor: 'rgba(255,255,255,0.18)' }]}>
+                <Ionicons name="add" size={20} color="#fff" />
               </View>
+              <Text style={styles.fabMenuButtonPrimaryText} numberOfLines={1}>{t ? t('home.create_adventure') : 'Create Adventure'}</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity activeOpacity={0.9} style={styles.fabMenuButton} onPress={onJoin}>
-              <Text style={[styles.fabMenuButtonText, { color: PRIMARY_COLOR }]}>{t ? t('home.join_adventure') : 'Join Adventure'}</Text>
-              <Ionicons name="person-add-outline" size={15} color={PRIMARY_COLOR} />
+            <TouchableOpacity activeOpacity={0.88} style={[styles.fabMenuButton, styles.fabMenuButtonSecondary, { borderColor: PRIMARY_COLOR }]} onPress={onJoin}>
+              <View style={[styles.fabMenuIconWrap, { backgroundColor: PRIMARY_08 }]}>
+                <Ionicons name="person-add" size={18} color={PRIMARY_COLOR} />
+              </View>
+              <Text style={[styles.fabMenuButtonText, { color: PRIMARY_COLOR }]} numberOfLines={1}>{t ? t('home.join_adventure') : 'Join Adventure'}</Text>
             </TouchableOpacity>
 
             <View style={styles.fabMenuCaret} />
@@ -1158,59 +1160,63 @@ const styles = StyleSheet.create({
   },
   fabMenu: {
     position: 'relative',
-    width: 172,
-    marginBottom: 12,
-    borderRadius: 20,
+    width: 240,
+    marginBottom: 14,
+    borderRadius: 22,
     backgroundColor: '#fff',
-    padding: 10,
+    padding: 12,
+    gap: 8,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: 0.12,
-    shadowRadius: 24,
-    elevation: 12,
+    shadowOffset: { width: 0, height: 18 },
+    shadowOpacity: 0.16,
+    shadowRadius: 28,
+    elevation: 14,
   },
   fabMenuButton: {
-    minHeight: 42,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: '#ffd0db',
-    backgroundColor: '#fff',
+    minHeight: 56,
+    borderRadius: 16,
     paddingHorizontal: 14,
+    paddingVertical: 10,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 12,
   },
   fabMenuButtonPrimary: {
-    backgroundColor: '#d5004f',
-    borderColor: '#d5004f',
-    marginBottom: 8,
+    // backgroundColor applied inline via PRIMARY_COLOR for theme consistency
+    borderWidth: 1.5,
+    borderColor: 'transparent', // match secondary's footprint so both buttons render at identical height
+  },
+  fabMenuButtonSecondary: {
+    backgroundColor: '#fff',
+    borderWidth: 1.5,
+    // borderColor applied inline via PRIMARY_COLOR
   },
   fabMenuButtonPrimaryText: {
     color: '#fff',
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: '800',
     letterSpacing: -0.2,
+    flex: 1,
   },
   fabMenuButtonText: {
-    color: '#ff4f74',
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: '700',
     letterSpacing: -0.2,
+    flex: 1,
   },
-  fabMenuIconCircle: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+  fabMenuIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.22)',
   },
   fabMenuCaret: {
     position: 'absolute',
-    right: 22,
-    bottom: -8,
-    width: 16,
-    height: 16,
+    right: 26,
+    bottom: -7,
+    width: 14,
+    height: 14,
     backgroundColor: '#fff',
     transform: [{ rotate: '45deg' }],
   },

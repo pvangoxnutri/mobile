@@ -8,6 +8,8 @@ import { TouchableOpacity, StyleSheet, Text, View, useWindowDimensions } from 'r
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { COUNTRIES, CONTINENT_ORDER, inContinent, type Continent, type StatusMap } from './country-data';
+import { getLocalizedContinentShortName } from './country-i18n';
+import { useI18n } from '@/components/i18n-provider';
 import { PRIMARY_COLOR } from '@/constants/colors';
 
 interface ContinentStats {
@@ -55,6 +57,8 @@ export default function WorldOverview({ statusMap, onContinentPress, activeConti
   const stats = buildStats(statusMap);
   const cardWidth = (width - 40 - 12) / 2; // 2 columns, 20px side padding, 12px gap
 
+  const { language } = useI18n();
+
   return (
     <View style={styles.grid}>
       {stats.map((s) => {
@@ -97,7 +101,7 @@ export default function WorldOverview({ statusMap, onContinentPress, activeConti
             </View>
 
             {/* Name */}
-            <Text style={styles.cardName} numberOfLines={1}>{meta.shortName}</Text>
+            <Text style={styles.cardName} numberOfLines={1}>{getLocalizedContinentShortName(s.continent, language)}</Text>
 
             {/* Stats row */}
             <View style={styles.statsRow}>

@@ -392,6 +392,9 @@ export default function ProfileScreen() {
             <Ionicons name="arrow-back" size={28} color="#6d7380" />
           </TouchableOpacity>
           <Text style={styles.title}>{t('profile.title')}</Text>
+          <View style={styles.topButton} />
+        </View>
+        <View style={[styles.alertsAnchor, { top: Math.max(insets.top, 16) + 8 }]}>
           <TopAlertsButton />
         </View>
 
@@ -834,6 +837,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     minHeight: 50,
+  },
+  // Absolute-positioned so the alerts icon sits at the exact same X/Y on
+  // every tab that uses it, independent of per-page header layout.
+  alertsAnchor: {
+    position: 'absolute',
+    right: 20,
+    zIndex: 10,
   },
   topButton: {
     width: 42,
