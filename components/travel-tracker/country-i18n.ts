@@ -1,16 +1,31 @@
-import countries from 'i18n-iso-countries';
+// Use the JSON locale files from i18n-iso-countries directly. The library's
+// own entry-node.js does dynamic require() calls that Metro can't follow at
+// bundle time, which broke `eas update`. Importing the JSON directly avoids
+// the whole library wrapper — we only need a code → name lookup.
 import enLocale from 'i18n-iso-countries/langs/en.json';
 import svLocale from 'i18n-iso-countries/langs/sv.json';
 
 import type { AppLanguage } from '@/components/i18n-provider';
 import type { Continent, Country } from './country-data';
 
-countries.registerLocale(enLocale);
-countries.registerLocale(svLocale);
+// The JSON files have shape: { locale: "en", countries: { "SE": "Sweden", "US": ["United States of America", "USA", ...] } }
+// Some entries are an array of alternative names; we pick the first.
+type LocaleData = { locale: string; countries: Record<string, string | string[]> };
+const LOCALE_DICTS: Record<AppLanguage, LocaleData> = {
+  en: enLocale as LocaleData,
+  sv: svLocale as LocaleData,
+};
 
-// UK subdivisions: not ISO 3166-1 standalone, so i18n-iso-countries can't
-// resolve them. Provide explicit Swedish names; English already lives on
-// country-data.ts and is used as the fallback.
+function lookupCountryName(code: string, language: AppLanguage): string | undefined {
+  const entry = LOCALE_DICTS[language]?.countries?.[code];
+  if (Array.isArray(entry)) return entry[0];
+  if (typeof entry === 'string') return entry;
+  return undefined;
+}
+
+// UK subdivisions: not ISO 3166-1 standalone, so the country dictionary
+// doesn't have them. Provide explicit Swedish names; English already lives
+// on country-data.ts and is used as the fallback.
 const SUBDIVISION_NAMES_SV: Record<string, string> = {
   'GB-ENG': 'England',
   'GB-SCT': 'Skottland',
@@ -63,7 +78,7 @@ export function getLocalizedCountryName(country: Country, language: AppLanguage)
     }
     return country.name;
   }
-  return countries.getName(country.code, language) ?? country.name;
+  return lookupCountryName(country.code, language) ?? country.name;
 }
 
 export function getLocalizedContinentName(continent: Continent, language: AppLanguage): string {
