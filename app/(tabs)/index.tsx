@@ -10,7 +10,7 @@ import { useI18n } from '@/components/i18n-provider';
 import TopAlertsButton from '@/components/top-alerts-button';
 import UserProfileCard from '@/components/user-profile-card';
 import { apiFetch, apiJson } from '@/lib/api';
-import type { PendingInvite, Quest, SideQuestActivity } from '@/lib/types';
+import type { PendingInvite, Quest, SideQuestActivity, TripEvent } from '@/lib/types';
 import { PRIMARY_COLOR, PRIMARY_08, PRIMARY_20, SECONDARY_COLOR } from '@/constants/colors';
 
 type TripMember = {
@@ -52,10 +52,15 @@ export default function HomeScreen() {
   const [profileCardUserId, setProfileCardUserId] = useState<string | null>(null);
   const [selectedTripIndex, setSelectedTripIndex] = useState(0);
   const [failedMemberAvatars, setFailedMemberAvatars] = useState<Set<string>>(new Set());
+  const [homeMembers, setHomeMembers] = useState<TripMember[]>([]);
+  const [tripEvents, setTripEvents] = useState<TripEvent[]>([]);
   const eventFade = useRef(new Animated.Value(1)).current;
   const carouselRef = useRef<ScrollView>(null);
   const floatingBottom = Math.max(insets.bottom, 14) + 78;
-  const upcomingCardWidth = Math.min(width - 56, 320);
+  // Hero card fills the viewport leaving ~24px peek of the next card on the
+  // right, signalling "swipe for more". snapToInterval below locks one card
+  // per page.
+  const upcomingCardWidth = width - 48;
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 30000);
@@ -116,8 +121,17 @@ export default function HomeScreen() {
       });
   }, []);
 
+  const loadTripEvents = useCallback(() => {
+    void apiJson<TripEvent[]>('/api/trips/events/me')
+      .then(setTripEvents)
+      .catch((err: unknown) => {
+        console.warn('[HOME] loadTripEvents failed:', err instanceof Error ? err.message : err);
+      });
+  }, []);
+
   useFocusEffect(loadQuests);
   useFocusEffect(loadInvites);
+  useFocusEffect(loadTripEvents);
 
   const sortedTrips = useMemo(() => sortTripsByUpcomingEvent(quests, activities, now), [activities, now, quests]);
   const featuredTrip = sortedTrips[selectedTripIndex] ?? null;
@@ -132,6 +146,27 @@ export default function HomeScreen() {
 
   useEffect(() => {
     setFeaturedEventIndex(0);
+  }, [featuredTrip?.quest.id]);
+
+  // Load members for the featured trip so the BigHeroCard can show avatar
+  // overlay. Re-fires when the user swipes to a different trip.
+  useEffect(() => {
+    if (!featuredTrip) {
+      setHomeMembers([]);
+      return;
+    }
+    let active = true;
+    void apiJson<TripMember[]>(`/api/trips/${featuredTrip.quest.id}/members`)
+      .then((data) => {
+        if (active) setHomeMembers(data);
+      })
+      .catch((err: unknown) => {
+        console.warn('[HOME] homeMembers load failed:', err instanceof Error ? err.message : err);
+        if (active) setHomeMembers([]);
+      });
+    return () => {
+      active = false;
+    };
   }, [featuredTrip?.quest.id]);
 
   useEffect(() => {
@@ -411,27 +446,7 @@ export default function HomeScreen() {
           </View>
         ) : (
           <>
-            <View style={styles.hero}>
-              <Text style={styles.heroTitle}>{featuredTrip?.quest.title?.trim() || t('home.defaultTripName')}</Text>
-
-              <View style={styles.dateRow}>
-                <Ionicons name="calendar-clear-outline" size={25} color="#4f5461" />
-                <Animated.Text style={[styles.dateText, { opacity: eventFade }]}>
-                  {featuredEvent?.label ?? featuredTrip?.nextEventLabel ?? t('home.no_upcoming_event')}
-                </Animated.Text>
-              </View>
-
-              <View style={styles.badgeRow}>
-                <InfoBadge tone="cyan" icon="time" label={formatHeaderCountdown(featuredTrip?.nextEventDate, now)} />
-                <InfoBadge tone="pink" icon="people" label={getMembersLabel(featuredTrip?.quest, t)} onPress={() => void openMembers()} />
-              </View>
-            </View>
-
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionLabel}>{t('home.upcoming')}</Text>
-              <View style={styles.sectionLine} />
-            </View>
-
+            {/* ── BigHero rail ────────────────────────────────────────────── */}
             <ScrollView
               ref={carouselRef}
               horizontal
@@ -439,53 +454,74 @@ export default function HomeScreen() {
               decelerationRate="fast"
               snapToInterval={upcomingCardWidth + 14}
               snapToAlignment="start"
-              contentContainerStyle={styles.carouselContent}
+              contentContainerStyle={styles.bigHeroContent}
               onMomentumScrollEnd={(event) => {
                 const offset = event.nativeEvent.contentOffset.x;
                 const cardWidth = upcomingCardWidth + 14;
                 const index = Math.round(offset / cardWidth);
                 setSelectedTripIndex(Math.min(index, sortedTrips.length - 1));
               }}
-              style={styles.carousel}>
-              {sortedTrips.map((entry, index) => (
-                <QuestCard
+              style={styles.bigHeroScroll}>
+              {sortedTrips.map((entry) => (
+                <BigHeroCard
                   key={entry.quest.id}
-                  id={entry.quest.id}
-                  title={entry.quest.title ?? t('home.defaultTripName')}
-                  badge={entry.isOngoing ? 'NOW' : formatCardCountdown(entry.nextEventDate, now, t)}
-                  badgeTone={entry.isOngoing ? 'pink' : index % 2 === 0 ? 'pink' : 'cyan'}
-                  imageUrl={entry.quest.imageUrl}
-                  cardWidth={upcomingCardWidth}
+                  trip={entry}
+                  width={upcomingCardWidth}
+                  activities={activities.filter((a) => a.tripId === entry.quest.id)}
+                  members={entry.quest.id === featuredTrip?.quest.id ? homeMembers : []}
+                  failedAvatars={failedMemberAvatars}
+                  onAvatarError={(id) => setFailedMemberAvatars((prev) => new Set([...prev, id]))}
+                  now={now}
+                  t={t}
                 />
               ))}
             </ScrollView>
+
+            {/* ── Dashes pagination + swipe hint ──────────────────────────── */}
+            {sortedTrips.length > 1 ? (
+              <View style={styles.dashRow}>
+                <View style={styles.dashes}>
+                  {sortedTrips.map((entry, index) => (
+                    <View
+                      key={entry.quest.id}
+                      style={[styles.dash, index === selectedTripIndex && styles.dashActive]}
+                    />
+                  ))}
+                </View>
+                <View style={styles.swipeHint}>
+                  <Text style={styles.swipeHintText}>{t('home.swipe_for_more')}</Text>
+                  <Ionicons name="arrow-forward" size={14} color="#8a909e" />
+                </View>
+              </View>
+            ) : null}
+
+            {/* ── ACTIVITY feed ───────────────────────────────────────────── */}
+            <ActivityFeedCard
+              tripId={featuredTrip?.quest.id}
+              events={tripEvents}
+              activities={activities.filter((a) => a.tripId === featuredTrip?.quest.id)}
+              members={homeMembers}
+              failedAvatars={failedMemberAvatars}
+              onAvatarError={(id) => setFailedMemberAvatars((prev) => new Set([...prev, id]))}
+              now={now}
+              t={t}
+            />
+
+            {/* ── UP NEXT row ─────────────────────────────────────────────── */}
+            <UpNextRow
+              trip={featuredTrip}
+              activities={activities.filter((a) => a.tripId === featuredTrip?.quest.id)}
+              now={now}
+              t={t}
+            />
           </>
         )}
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
       </ScrollView>
 
-      {!loading ? (
-        <View pointerEvents="box-none" style={[styles.countdownWrap, { bottom: floatingBottom }]}>
-          <TouchableOpacity
-            activeOpacity={featuredTrip ? 0.85 : 1}
-            disabled={!featuredTrip}
-            style={styles.activeQuestCard}
-            onPress={() => featuredTrip && router.push(`/trip/${featuredTrip.quest.id}`)}>
-            <View style={styles.activeQuestDot} />
-            <View style={styles.activeQuestTextBlock}>
-              <Text style={styles.activeQuestLabel}>{featuredTrip?.isOngoing ? 'ON ADVENTURE' : 'COUNTDOWN'}</Text>
-              <Text style={styles.activeQuestTitle}>{featuredTrip?.nextEventLabel ?? t('home.no_upcoming_event')}</Text>
-              <Text style={styles.activeQuestMeta}>
-                {!featuredTrip
-                  ? t('common.create_trip_hint')
-                  : featuredTrip.isOngoing
-                  ? 'Happening now'
-                  : `${countdownParts[0].value}d ${countdownParts[1].value}h ${countdownParts[2].value}m`}
-              </Text>
-            </View>
-          </TouchableOpacity>
-        </View>
-      ) : null}
+      {/* Bottom-floating countdown card removed: the new BigHeroCard already
+          surfaces day-of-trip, time-left, member avatars and an Enter button
+          right on the photo. */}
 
       <FloatingFab
         open={fabOpen}
@@ -674,6 +710,412 @@ function QuestCard({
         <Text style={[styles.questCardBadgeText, badgeTone === 'cyan' ? styles.questCardBadgeTextDark : null]}>{badge}</Text>
       </View>
       <Text style={styles.questCardTitle}>{title}</Text>
+    </TouchableOpacity>
+  );
+}
+
+// ── Hero card helpers ────────────────────────────────────────────────────────
+
+function getTripDayInfo(startDateStr?: string, endDateStr?: string, now: Date = new Date()) {
+  if (!startDateStr || !endDateStr) return null;
+  const start = new Date(startDateStr);
+  const end = new Date(endDateStr);
+  const ms = 24 * 60 * 60 * 1000;
+  const totalDays = Math.max(1, Math.round((end.getTime() - start.getTime()) / ms) + 1);
+  const todayMid = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startMid = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  const dayOfTrip = Math.floor((todayMid.getTime() - startMid.getTime()) / ms) + 1;
+  return { dayOfTrip, totalDays };
+}
+
+function formatTimeLeft(targetDateStr?: string, now: Date = new Date()): string | null {
+  if (!targetDateStr) return null;
+  const target = new Date(targetDateStr);
+  const targetEnd = new Date(target.getFullYear(), target.getMonth(), target.getDate(), 23, 59, 59);
+  const diffMs = targetEnd.getTime() - now.getTime();
+  if (diffMs <= 0) return null;
+  const days = Math.floor(diffMs / (24 * 60 * 60 * 1000));
+  const hours = Math.floor((diffMs % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+  return `${days}d ${hours}h left`;
+}
+
+function formatRelativeTime(dateStr: string, now: Date): string {
+  const date = new Date(dateStr);
+  const diffMs = now.getTime() - date.getTime();
+  const sec = Math.floor(diffMs / 1000);
+  const min = Math.floor(sec / 60);
+  const hour = Math.floor(min / 60);
+  const day = Math.floor(hour / 24);
+  if (sec < 60) return 'just now';
+  if (min < 60) return `${min} min ago`;
+  if (hour < 24) return `${hour}h ago`;
+  if (day < 7) return `${day}d ago`;
+  return date.toLocaleDateString();
+}
+
+function categoryIonicon(category?: string | null): keyof typeof Ionicons.glyphMap {
+  switch ((category ?? '').toLowerCase()) {
+    case 'food': return 'cafe-outline';
+    case 'sight': return 'sunny-outline';
+    case 'sport': return 'fitness-outline';
+    case 'transport': return 'airplane-outline';
+    case 'stay': return 'bed-outline';
+    case 'nightlife': return 'wine-outline';
+    default: return 'star-outline';
+  }
+}
+
+// ── BigHeroCard ──────────────────────────────────────────────────────────────
+
+function BigHeroCard({
+  trip,
+  width,
+  activities,
+  members,
+  failedAvatars,
+  onAvatarError,
+  now,
+  t,
+}: {
+  trip: TripWithEvent;
+  width: number;
+  activities: SideQuestActivity[];
+  members: TripMember[];
+  failedAvatars: Set<string>;
+  onAvatarError: (id: string) => void;
+  now: Date;
+  t: (key: string, vars?: Record<string, string | number>) => string;
+}) {
+  const quest = trip.quest;
+  const isOngoing = trip.isOngoing;
+  const dayInfo = getTripDayInfo(quest.startDate, quest.endDate, now);
+  const sealedCount = activities.filter((a) => a.isHidden && !a.isRevealed).length;
+  const timeLeft = isOngoing
+    ? formatTimeLeft(quest.endDate, now)
+    : formatTimeLeft(quest.startDate, now);
+  const visibleAvatars = members.slice(0, 3);
+  const cardHeight = Math.min(width * 1.5, 540);
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.94}
+      onPress={() => router.push(`/trip/${quest.id}`)}
+      style={[styles.bigHeroCard, { width, height: cardHeight }]}>
+      {quest.imageUrl ? (
+        <Image source={{ uri: quest.imageUrl }} style={styles.bigHeroImage} resizeMode="cover" />
+      ) : (
+        <View style={[styles.bigHeroImage, styles.bigHeroImageFallback]} />
+      )}
+
+      {/* Faked bottom gradient via stacked semi-transparent layers — works
+          without expo-linear-gradient and reads close enough on top of any
+          photo for the white text to stay legible. */}
+      <View pointerEvents="none" style={styles.bigHeroGradient1} />
+      <View pointerEvents="none" style={styles.bigHeroGradient2} />
+      <View pointerEvents="none" style={styles.bigHeroGradient3} />
+
+      {/* Top row */}
+      <View style={styles.bigHeroTopRow}>
+        {quest.destination ? (
+          <View style={styles.bigHeroLocPill}>
+            <Ionicons name="location" size={12} color="#fff" />
+            <Text style={styles.bigHeroLocText} numberOfLines={1}>{quest.destination}</Text>
+          </View>
+        ) : <View />}
+        {isOngoing ? (
+          <View style={styles.bigHeroLivePill}>
+            <View style={styles.bigHeroLiveDot} />
+            <Text style={styles.bigHeroLiveText}>LIVE</Text>
+          </View>
+        ) : timeLeft ? (
+          <View style={styles.bigHeroUpcomingPill}>
+            <Text style={styles.bigHeroUpcomingText}>{timeLeft.toUpperCase()}</Text>
+          </View>
+        ) : null}
+      </View>
+
+      {/* Bottom content */}
+      <View style={styles.bigHeroBottom}>
+        {dayInfo && isOngoing ? (
+          <Text style={styles.bigHeroDayLine}>
+            Day {dayInfo.dayOfTrip} of {dayInfo.totalDays}
+            {timeLeft ? ` · ${timeLeft}` : ''}
+          </Text>
+        ) : null}
+        <Text style={styles.bigHeroTitle} numberOfLines={2}>
+          {quest.title?.trim() || t('home.defaultTripName')}
+        </Text>
+
+        <View style={styles.bigHeroFooter}>
+          {visibleAvatars.length > 0 ? (
+            <View style={styles.bigHeroAvatars}>
+              {visibleAvatars.map((member, idx) => (
+                <View
+                  key={member.id}
+                  style={[
+                    styles.bigHeroAvatar,
+                    { marginLeft: idx === 0 ? 0 : -12, zIndex: visibleAvatars.length - idx },
+                  ]}>
+                  {member.avatarUrl && member.avatarUrl.trim() && !failedAvatars.has(member.id) ? (
+                    <Image
+                      source={{ uri: member.avatarUrl }}
+                      style={styles.bigHeroAvatarImage}
+                      onError={() => onAvatarError(member.id)}
+                    />
+                  ) : (
+                    <Text style={styles.bigHeroAvatarText}>{getInitials(member.name)}</Text>
+                  )}
+                </View>
+              ))}
+            </View>
+          ) : null}
+
+          {sealedCount > 0 ? (
+            <View style={styles.bigHeroSealed}>
+              <Ionicons name="lock-closed" size={12} color="rgba(255,255,255,0.92)" />
+              <Text style={styles.bigHeroSealedText}>{sealedCount} sealed</Text>
+            </View>
+          ) : null}
+
+          <View style={{ flex: 1 }} />
+          <View style={styles.bigHeroEnter}>
+            <Text style={styles.bigHeroEnterText}>{t('home.enter') || 'Enter'}</Text>
+            <Ionicons name="arrow-forward" size={13} color="#14161d" />
+          </View>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+// ── ActivityFeedCard ─────────────────────────────────────────────────────────
+// Shows the most recent things happening for the featured trip: trip events
+// (member joined / left) and a synthesized "X plans tomorrow" row when there
+// are activities scheduled for tomorrow.
+
+function ActivityFeedCard({
+  tripId,
+  events,
+  activities,
+  members,
+  failedAvatars,
+  onAvatarError,
+  now,
+  t,
+}: {
+  tripId?: string;
+  events: TripEvent[];
+  activities: SideQuestActivity[];
+  members: TripMember[];
+  failedAvatars: Set<string>;
+  onAvatarError: (id: string) => void;
+  now: Date;
+  t: (key: string, vars?: Record<string, string | number>) => string;
+}) {
+  if (!tripId) return null;
+
+  const tripEvents = events.filter((e) => e.tripId === tripId).slice(0, 3);
+
+  // Tomorrow's plans (synthesized row)
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowStr = tomorrow.toISOString().slice(0, 10);
+  const plansTomorrow = activities.filter((a) => a.date === tomorrowStr);
+  const sealedTomorrow = plansTomorrow.filter((a) => a.isHidden && !a.isRevealed).length;
+  const firstPlanTomorrow = plansTomorrow.find((a) => !a.isHidden) ?? plansTomorrow[0];
+
+  const totalNew = tripEvents.length + (plansTomorrow.length > 0 ? 1 : 0);
+  if (totalNew === 0) return null;
+
+  function eventLabel(e: TripEvent): string {
+    if (e.type === 'member_joined') return t('home.activity.joined', { name: e.actorName });
+    if (e.type === 'member_left') return t('home.activity.left', { name: e.actorName });
+    return e.actorName;
+  }
+
+  function findMember(name: string): TripMember | undefined {
+    return members.find((m) => m.name === name);
+  }
+
+  return (
+    <View style={styles.activityCard}>
+      <View style={styles.activityHeader}>
+        <View style={styles.activityHeaderLeft}>
+          <View style={styles.activityHeaderDot} />
+          <Text style={styles.activityHeaderLabel}>{t('home.activity.heading')}</Text>
+        </View>
+        <Text style={styles.activityHeaderCount}>{totalNew} {t('home.activity.new_suffix')}</Text>
+      </View>
+
+      {tripEvents.map((event, index) => {
+        const member = findMember(event.actorName);
+        return (
+          <View key={event.id} style={[styles.activityRow, index > 0 && styles.activityRowBorder]}>
+            <View style={styles.activityAvatar}>
+              {member?.avatarUrl && !failedAvatars.has(member.id) ? (
+                <Image
+                  source={{ uri: member.avatarUrl }}
+                  style={styles.activityAvatarImage}
+                  onError={() => onAvatarError(member.id)}
+                />
+              ) : (
+                <Text style={styles.activityAvatarText}>{getInitials(event.actorName)}</Text>
+              )}
+            </View>
+            <View style={styles.activityTextBlock}>
+              <Text style={styles.activityTitle}>
+                <Text style={styles.activityTitleBold}>{event.actorName}</Text>{' '}
+                {event.type === 'member_joined' ? t('home.activity.joined_verb') : t('home.activity.left_verb')}
+              </Text>
+              <Text style={styles.activityMeta}>{formatRelativeTime(event.createdAt, now)}</Text>
+            </View>
+          </View>
+        );
+      })}
+
+      {plansTomorrow.length > 0 ? (
+        <View style={[styles.activityRow, tripEvents.length > 0 && styles.activityRowBorder]}>
+          <View style={[styles.activityAvatar, styles.activityAvatarMuted]}>
+            <Ionicons name={categoryIonicon(firstPlanTomorrow?.category)} size={16} color="#8a909e" />
+          </View>
+          <View style={styles.activityTextBlock}>
+            <Text style={styles.activityTitle}>
+              <Text style={styles.activityTitleBold}>{plansTomorrow.length} {t('home.activity.plans')}</Text> {t('home.activity.tomorrow')}
+            </Text>
+            <Text style={styles.activityMeta}>
+              {firstPlanTomorrow?.title ?? ''}
+              {sealedTomorrow > 0 ? ` · +${sealedTomorrow} sealed` : ''}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color="#bbc0c8" />
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+// ── UpNextRow + UpNextCard ───────────────────────────────────────────────────
+
+function UpNextRow({
+  trip,
+  activities,
+  now,
+  t,
+}: {
+  trip: TripWithEvent | null;
+  activities: SideQuestActivity[];
+  now: Date;
+  t: (key: string, vars?: Record<string, string | number>) => string;
+}) {
+  if (!trip) return null;
+
+  // Pick the next 3 upcoming activities (today or future), sorted by date+time
+  const todayStr = now.toISOString().slice(0, 10);
+  const upcoming = activities
+    .filter((a) => a.date >= todayStr)
+    .sort((a, b) => {
+      const cmp = a.date.localeCompare(b.date);
+      if (cmp !== 0) return cmp;
+      return (a.time ?? '').localeCompare(b.time ?? '');
+    })
+    .slice(0, 3);
+
+  if (upcoming.length === 0) return null;
+
+  return (
+    <View style={styles.upNextWrap}>
+      <View style={styles.upNextHeader}>
+        <Text style={styles.upNextHeading}>{t('home.up_next')}</Text>
+        <TouchableOpacity activeOpacity={0.7} onPress={() => router.push(`/trip/${trip.quest.id}`)}>
+          <Text style={styles.upNextSeeAll}>{t('home.see_all')}</Text>
+        </TouchableOpacity>
+      </View>
+      <View style={styles.upNextRow}>
+        {upcoming.map((activity) => (
+          <UpNextCard
+            key={activity.id}
+            activity={activity}
+            tripId={trip.quest.id}
+            now={now}
+            t={t}
+          />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function UpNextCard({
+  activity,
+  tripId,
+  now,
+  t,
+}: {
+  activity: SideQuestActivity;
+  tripId: string;
+  now: Date;
+  t: (key: string, vars?: Record<string, string | number>) => string;
+}) {
+  const isSealed = activity.isHidden && !activity.isRevealed;
+  const todayStr = now.toISOString().slice(0, 10);
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowStr = tomorrow.toISOString().slice(0, 10);
+
+  const dateLabel =
+    activity.date === todayStr ? t('home.today') :
+    activity.date === tomorrowStr ? t('home.tomorrow') :
+    new Date(activity.date).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' });
+
+  const timeLabel = activity.time ? ` · ${activity.time}` : '';
+
+  // Time-until-reveal for sealed
+  function formatUnlockTimer(revealAtStr?: string | null): string | null {
+    if (!revealAtStr) return null;
+    const reveal = new Date(revealAtStr);
+    const diffMs = reveal.getTime() - now.getTime();
+    if (diffMs <= 0) return null;
+    const hours = Math.floor(diffMs / (60 * 60 * 1000));
+    const mins = Math.floor((diffMs % (60 * 60 * 1000)) / (60 * 1000));
+    return `${hours}:${String(mins).padStart(2, '0')}`;
+  }
+  const unlockTimer = isSealed ? formatUnlockTimer(activity.revealAt) : null;
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.88}
+      onPress={() => router.push(`/trip/${tripId}/sidequest/${activity.id}`)}
+      style={[styles.upNextCard, isSealed && styles.upNextCardSealed]}>
+      <View style={[styles.upNextImageBox, isSealed && styles.upNextImageBoxSealed]}>
+        {!isSealed && activity.imageUrl ? (
+          <Image source={{ uri: activity.imageUrl }} style={styles.upNextImage} resizeMode="cover" />
+        ) : null}
+        <View style={[styles.upNextIconBadge, isSealed && styles.upNextIconBadgeSealed]}>
+          <Ionicons
+            name={isSealed ? 'lock-closed' : categoryIonicon(activity.category)}
+            size={14}
+            color={isSealed ? '#8a909e' : '#14161d'}
+          />
+        </View>
+      </View>
+
+      <View style={styles.upNextBody}>
+        <Text style={styles.upNextDate} numberOfLines={1}>
+          {isSealed && unlockTimer
+            ? `${t('home.upnext.unlocks')} · ${unlockTimer}`
+            : `${dateLabel}${timeLabel}`}
+        </Text>
+        <Text style={styles.upNextTitle} numberOfLines={1}>
+          {isSealed ? (activity.title ?? t('home.upnext.sealed_title')) : activity.title}
+        </Text>
+        {isSealed && activity.teaser ? (
+          <Text style={styles.upNextTeaser} numberOfLines={1}>"{activity.teaser}"</Text>
+        ) : (
+          <Text style={styles.upNextCreator} numberOfLines={1}>
+            {activity.ownerName ? `${t('home.upnext.by')} ${activity.ownerName.split(' ')[0]}` : ''}
+          </Text>
+        )}
+      </View>
     </TouchableOpacity>
   );
 }
@@ -1025,6 +1467,410 @@ const styles = StyleSheet.create({
   carouselContent: {
     paddingRight: 22,
     gap: 14,
+  },
+
+  // ── BigHeroCard ─────────────────────────────────────────────────────────
+  bigHeroScroll: {
+    marginTop: 8,
+    marginRight: -22,
+  },
+  bigHeroContent: {
+    paddingRight: 22,
+    gap: 14,
+  },
+  bigHeroCard: {
+    borderRadius: 32,
+    overflow: 'hidden',
+    backgroundColor: '#2a2a2a',
+    position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 14 },
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    elevation: 10,
+  },
+  bigHeroImage: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  bigHeroImageFallback: {
+    backgroundColor: '#3a2c26',
+  },
+  // Stacked gradient fakes — bottom heaviest, fading up
+  bigHeroGradient1: {
+    position: 'absolute',
+    left: 0, right: 0, bottom: 0,
+    height: '40%',
+    backgroundColor: 'rgba(0,0,0,0.55)',
+  },
+  bigHeroGradient2: {
+    position: 'absolute',
+    left: 0, right: 0, bottom: '40%',
+    height: '20%',
+    backgroundColor: 'rgba(0,0,0,0.28)',
+  },
+  bigHeroGradient3: {
+    position: 'absolute',
+    left: 0, right: 0, bottom: '60%',
+    height: '15%',
+    backgroundColor: 'rgba(0,0,0,0.12)',
+  },
+  bigHeroTopRow: {
+    position: 'absolute',
+    top: 18, left: 18, right: 18,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  bigHeroLocPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 100,
+    backgroundColor: 'rgba(0,0,0,0.42)',
+    maxWidth: '70%',
+  },
+  bigHeroLocText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  bigHeroLivePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 100,
+    backgroundColor: 'rgba(20,22,29,0.7)',
+  },
+  bigHeroLiveDot: {
+    width: 8, height: 8,
+    borderRadius: 4,
+    backgroundColor: '#3ddc8c',
+  },
+  bigHeroLiveText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
+  bigHeroUpcomingPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 100,
+    backgroundColor: 'rgba(20,22,29,0.7)',
+  },
+  bigHeroUpcomingText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
+  bigHeroBottom: {
+    position: 'absolute',
+    left: 22, right: 22, bottom: 22,
+  },
+  bigHeroDayLine: {
+    color: 'rgba(255,255,255,0.92)',
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 6,
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+  bigHeroTitle: {
+    color: '#fff',
+    fontSize: 32,
+    fontWeight: '800',
+    letterSpacing: -0.8,
+    lineHeight: 36,
+    marginBottom: 18,
+    textShadowColor: 'rgba(0,0,0,0.45)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 6,
+  },
+  bigHeroFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  bigHeroAvatars: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  bigHeroAvatar: {
+    width: 32, height: 32,
+    borderRadius: 16,
+    backgroundColor: '#fff1f5',
+    borderWidth: 2,
+    borderColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  bigHeroAvatarImage: {
+    width: '100%', height: '100%',
+  },
+  bigHeroAvatarText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: PRIMARY_COLOR,
+  },
+  bigHeroSealed: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  bigHeroSealedText: {
+    color: 'rgba(255,255,255,0.92)',
+    fontSize: 12,
+    fontWeight: '600',
+    textShadowColor: 'rgba(0,0,0,0.45)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  bigHeroEnter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 100,
+    backgroundColor: '#fff',
+  },
+  bigHeroEnterText: {
+    color: '#14161d',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+
+  // ── Dashes pagination ──────────────────────────────────────────────────
+  dashRow: {
+    marginTop: 14,
+    paddingHorizontal: 22,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  dashes: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  dash: {
+    width: 16, height: 3,
+    borderRadius: 2,
+    backgroundColor: '#d8dce3',
+  },
+  dashActive: {
+    width: 28,
+    backgroundColor: '#14161d',
+  },
+  swipeHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  swipeHintText: {
+    color: '#8a909e',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+
+  // ── Activity feed card ─────────────────────────────────────────────────
+  activityCard: {
+    marginTop: 22,
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    paddingVertical: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  activityHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 8,
+  },
+  activityHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  activityHeaderDot: {
+    width: 7, height: 7,
+    borderRadius: 4,
+    backgroundColor: '#3ddc8c',
+  },
+  activityHeaderLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#14161d',
+    letterSpacing: 1.4,
+  },
+  activityHeaderCount: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#8a909e',
+  },
+  activityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 12,
+  },
+  activityRowBorder: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#eef0f4',
+  },
+  activityAvatar: {
+    width: 36, height: 36,
+    borderRadius: 18,
+    backgroundColor: '#fff1f5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  activityAvatarMuted: {
+    backgroundColor: '#f4f5f7',
+  },
+  activityAvatarImage: {
+    width: '100%', height: '100%',
+  },
+  activityAvatarText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: PRIMARY_COLOR,
+  },
+  activityTextBlock: {
+    flex: 1,
+  },
+  activityTitle: {
+    fontSize: 13,
+    color: '#14161d',
+    fontWeight: '500',
+    lineHeight: 18,
+  },
+  activityTitleBold: {
+    fontWeight: '800',
+  },
+  activityMeta: {
+    fontSize: 11,
+    color: '#8a909e',
+    marginTop: 2,
+  },
+
+  // ── Up Next row ────────────────────────────────────────────────────────
+  upNextWrap: {
+    marginTop: 24,
+  },
+  upNextHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  upNextHeading: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#14161d',
+    letterSpacing: 1.4,
+  },
+  upNextSeeAll: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#8a909e',
+  },
+  upNextRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  upNextCard: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
+  },
+  upNextCardSealed: {
+    backgroundColor: '#ece7df',
+  },
+  upNextImageBox: {
+    height: 110,
+    backgroundColor: '#e6e2d8',
+    position: 'relative',
+  },
+  upNextImageBoxSealed: {
+    backgroundColor: '#ece7df',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  upNextImage: {
+    width: '100%', height: '100%',
+  },
+  upNextIconBadge: {
+    position: 'absolute',
+    top: 8, left: 8,
+    width: 28, height: 28,
+    borderRadius: 14,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+  },
+  upNextIconBadgeSealed: {
+    position: 'absolute',
+    top: '40%',
+    left: '50%',
+    transform: [{ translateX: -14 }],
+    width: 28, height: 28,
+    backgroundColor: 'rgba(255,255,255,0.85)',
+  },
+  upNextBody: {
+    padding: 10,
+  },
+  upNextDate: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#8a909e',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  upNextTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#14161d',
+    letterSpacing: -0.2,
+  },
+  upNextCreator: {
+    fontSize: 11,
+    color: '#8a909e',
+    marginTop: 4,
+    fontWeight: '500',
+  },
+  upNextTeaser: {
+    fontSize: 11,
+    color: '#6e7480',
+    marginTop: 4,
+    fontStyle: 'italic',
   },
   questCard: {
     height: 220,
