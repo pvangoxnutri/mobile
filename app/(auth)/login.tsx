@@ -169,6 +169,15 @@ export default function LoginScreen() {
             style={styles.input}
             placeholder={mode === 'signin' ? t('auth.password_signin_placeholder') : t('auth.password_signup_placeholder')}
             secureTextEntry
+            autoCapitalize="none"
+            autoCorrect={false}
+            // Explicit content types prevent the iOS QuickType "Use strong
+            // password" suggestion from locking up the field after dismissal.
+            // signin → fetch saved passwords; signup → new password slot so
+            // Keychain can save it after sign-up.
+            textContentType={mode === 'signin' ? 'password' : 'newPassword'}
+            autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
+            passwordRules={mode === 'signup' ? 'minlength: 6;' : undefined}
             value={password}
             onChangeText={setPassword}
           />
@@ -180,6 +189,11 @@ export default function LoginScreen() {
               style={styles.input}
               placeholder={t('auth.password_confirm_placeholder')}
               secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
+              textContentType="newPassword"
+              autoComplete="new-password"
+              passwordRules="minlength: 6;"
               value={confirmPassword}
               onChangeText={setConfirmPassword}
             />

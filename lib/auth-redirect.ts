@@ -31,13 +31,16 @@ export function getPasswordResetRedirectUrl() {
 export function getEmailAuthRedirectUrl() {
   const configuredWebUrl = getConfiguredWebUrl();
 
-  if (isExpoGo() && configuredWebUrl) {
-    return `${configuredWebUrl}/verify-email`;
+  // Route email confirmation through the website's /auth-callback page so
+  // the link in the email is a real https URL — works in any email client
+  // on any device. That page attempts to open `sidequest://auth-callback`
+  // with the same params, and falls back to the App Store if the app is
+  // not installed.
+  if (configuredWebUrl) {
+    return `${configuredWebUrl}/auth-callback`;
   }
 
-  if (isExpoGo()) {
-    return undefined;
-  }
-
+  // No EXPO_PUBLIC_WEB_URL configured (local dev without a public URL).
+  // Fall back to the direct deep link.
   return Linking.createURL('/auth-callback');
 }
