@@ -97,8 +97,15 @@ export default function CalendarScreen() {
     return [...items].sort(sortCalendarItems);
   }, [dayItemsMap, selectedDate]);
 
+  // Count ONLY activity items, not the trip-start/trip-end markers that
+  // also live in dayItemsMap. A "plan" is something the user scheduled —
+  // the trip starting/ending isn't a plan in their head.
   const monthPlans = useMemo(
-    () => visibleDates.reduce((sum, key) => sum + (dayItemsMap.get(key)?.length ?? 0), 0),
+    () =>
+      visibleDates.reduce((sum, key) => {
+        const items = dayItemsMap.get(key) ?? [];
+        return sum + items.filter((item) => item.kind === 'activity').length;
+      }, 0),
     [visibleDates, dayItemsMap],
   );
 
