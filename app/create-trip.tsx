@@ -15,12 +15,15 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import RangeDatePicker, { formatRangeDisplay } from '@/components/range-date-picker';
 import CountryPicker from '@/components/travel-tracker/country-picker';
 import { useI18n } from '@/components/i18n-provider';
 import { UnsavedChangesModal, useUnsavedChanges } from '@/components/unsaved-changes';
+import { useAuth } from '@/components/auth-provider';
+import { BigHeroCard, type TripMember, type TripWithEvent } from '@/components/big-hero-card';
 import { apiFetch, apiJson } from '@/lib/api';
 import { invalidateCache } from '@/lib/cache';
 import type { Quest } from '@/lib/types';
@@ -30,7 +33,10 @@ type MessageState = { type: 'success' | 'error'; text: string } | null;
 
 export default function CreateTripScreen() {
   const { t } = useI18n();
+  const { user } = useAuth();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const [now] = useState(() => new Date());
   const [title, setTitle] = useState('');
   const [destination, setDestination] = useState('');
   const [tripCountries, setTripCountries] = useState<string[]>([]);
@@ -208,6 +214,48 @@ export default function CreateTripScreen() {
     }
   }
 
+  // Build a fake TripWithEvent from the current form state so the
+  // BigHeroCard preview renders EXACTLY like the trip will look on the
+  // home tab once it's saved. The user is the only known member at this
+  // point (more come via invites after creation).
+  const previewTrip: TripWithEvent = useMemo(() => ({
+    quest: {
+      id: 'preview',
+      title: title.trim() || null,
+      description: null,
+      destination: destination.trim() || null,
+      startDate: startDate || getDefaultStartDate(),
+      endDate: endDate || getDefaultEndDate(),
+      imageUrl: coverImage,
+      spotifyUrl: null,
+      ownerId: user?.id ?? 'preview',
+      ownerIds: user?.id ? [user.id] : [],
+      visibility: 'public',
+      isRevealed: true,
+      teaser: null,
+      inviteCode,
+      countries: tripCountries,
+      shareCode: null,
+    } as Quest,
+    nextEventDate: new Date(`${startDate || getDefaultStartDate()}T12:00:00`),
+    nextEventLabel: title.trim() || 'Adventure preview',
+    upcomingEvents: [],
+    isOngoing: (() => {
+      // Mirror the home logic: today is between start and end (inclusive).
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const s = new Date(`${startDate}T12:00:00`);
+      const e = new Date(`${endDate}T12:00:00`);
+      return s.getTime() <= today.getTime() && e.getTime() >= today.getTime();
+    })(),
+  }), [title, destination, startDate, endDate, coverImage, inviteCode, tripCountries, user, now]);
+
+  const previewMembers: TripMember[] = useMemo(() => {
+    if (!user?.id) return [];
+    return [{ id: user.id, name: user.name ?? 'You', avatarUrl: user.avatarUrl ?? null, isOwner: true }];
+  }, [user]);
+
+  const previewCardHeight = Math.min((screenWidth - 44) * 0.92, screenHeight * 0.36, 320);
+
   return (
     <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView
@@ -222,28 +270,32 @@ export default function CreateTripScreen() {
           <Text style={styles.headerTitle}>{t('trip.title')}</Text>
         </View>
 
-        <Pressable style={styles.coverCard} onPress={() => void handlePickCover()}>
-          {coverImage ? <Image source={{ uri: coverImage }} style={styles.coverImage} /> : null}
-          {!coverImage ? <View style={styles.coverGlow} /> : null}
-          {!coverImage ? <View style={styles.coverAccent} /> : null}
-          {!coverImage ? <View style={styles.coverShadow} /> : null}
-          {!coverImage ? (
-            <View style={styles.coverOverlay}>
-              <View style={styles.coverIconCircle}>
-                <Ionicons name="camera-outline" size={34} color="#fff" />
-                <View style={styles.coverPlusBadge}>
-                  <Ionicons name="add" size={14} color="#fff" />
-                </View>
-              </View>
-              <Text style={styles.coverLabel}>{t('trip.add_cover')}</Text>
-            </View>
-          ) : (
-            <View style={styles.coverEditBadge}>
-              <Ionicons name="camera-outline" size={14} color="#fff" />
-              <Text style={styles.coverEditBadgeText}>{t('trip.change_photo')}</Text>
-            </View>
-          )}
-        </Pressable>
+        {/* Live preview — renders the exact same BigHeroCard the trip will
+            show on home once saved. Updates as the user types title /
+            destination / picks dates / uploads a cover. Tapping the
+            preview also opens the image picker so it doubles as a cover
+            affordance. */}
+        <Text style={styles.previewLabel}>{t('trip.preview_label')}</Text>
+        <BigHeroCard
+          trip={previewTrip}
+          width={screenWidth - 44}
+          cardHeight={previewCardHeight}
+          members={previewMembers}
+          now={now}
+          t={t}
+          hideEnterButton
+          onPress={() => void handlePickCover()}
+        />
+
+        {/* The BigHeroCard preview above is now also the cover-photo
+            picker — tapping it opens the image library. A small hint
+            below directs first-time users. */}
+        <TouchableOpacity activeOpacity={0.85} style={styles.coverHint} onPress={() => void handlePickCover()}>
+          <Ionicons name={coverImage ? 'camera-reverse-outline' : 'camera-outline'} size={16} color={PRIMARY_COLOR} />
+          <Text style={[styles.coverHintText, { color: PRIMARY_COLOR }]}>
+            {coverImage ? t('trip.change_photo') : t('trip.add_cover')}
+          </Text>
+        </TouchableOpacity>
 
         <Text style={styles.prompt}>{t('trip.what_to_call')}</Text>
         <TextInput
@@ -471,6 +523,31 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '900',
     letterSpacing: -0.9,
+  },
+  previewLabel: {
+    marginTop: 4,
+    marginBottom: 10,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.4,
+    color: '#8a909e',
+  },
+  coverHint: {
+    marginTop: 12,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 100,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: PRIMARY_20,
+  },
+  coverHintText: {
+    fontSize: 13,
+    fontWeight: '700',
   },
   coverCard: {
     height: 300,

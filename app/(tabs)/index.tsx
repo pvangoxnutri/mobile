@@ -9,25 +9,14 @@ import { useAuth } from '@/components/auth-provider';
 import { useI18n } from '@/components/i18n-provider';
 import TopAlertsButton from '@/components/top-alerts-button';
 import UserProfileCard from '@/components/user-profile-card';
+import { BigHeroCard, getInitials, type TripWithEvent, type TripMember } from '@/components/big-hero-card';
 import { apiFetch, apiJson } from '@/lib/api';
 import { getCached, setCached, invalidateCache } from '@/lib/cache';
 import type { PendingInvite, Quest, SideQuestActivity, TripEvent } from '@/lib/types';
 import { PRIMARY_COLOR, PRIMARY_08, PRIMARY_20, SECONDARY_COLOR } from '@/constants/colors';
 
-type TripMember = {
-  id: string;
-  name: string;
-  avatarUrl?: string | null;
-  isOwner: boolean;
-};
-
-type TripWithEvent = {
-  quest: Quest;
-  nextEventDate: Date;
-  nextEventLabel: string;
-  upcomingEvents: { label: string; date: Date }[];
-  isOngoing?: boolean;
-};
+// TripMember, TripWithEvent and BigHeroCard live in components/big-hero-card.tsx
+// so the create-trip preview can reuse the exact same rendering as home.
 
 export default function HomeScreen() {
   const { user, signOut } = useAuth();
@@ -512,7 +501,7 @@ export default function HomeScreen() {
                   trip={entry}
                   width={upcomingCardWidth}
                   cardHeight={Math.min(upcomingCardWidth * 0.92, screenHeight * 0.36, 320)}
-                  activities={activities.filter((a) => a.tripId === entry.quest.id)}
+                  sealedCount={activities.filter((a) => a.tripId === entry.quest.id && a.isHidden && !a.isRevealed).length}
                   members={entry.quest.id === featuredTrip?.quest.id ? homeMembers : []}
                   failedAvatars={failedMemberAvatars}
                   onAvatarError={(id) => setFailedMemberAvatars((prev) => new Set([...prev, id]))}
@@ -767,28 +756,7 @@ function QuestCard({
 
 // ── Hero card helpers ────────────────────────────────────────────────────────
 
-function getTripDayInfo(startDateStr?: string, endDateStr?: string, now: Date = new Date()) {
-  if (!startDateStr || !endDateStr) return null;
-  const start = new Date(startDateStr);
-  const end = new Date(endDateStr);
-  const ms = 24 * 60 * 60 * 1000;
-  const totalDays = Math.max(1, Math.round((end.getTime() - start.getTime()) / ms) + 1);
-  const todayMid = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const startMid = new Date(start.getFullYear(), start.getMonth(), start.getDate());
-  const dayOfTrip = Math.floor((todayMid.getTime() - startMid.getTime()) / ms) + 1;
-  return { dayOfTrip, totalDays };
-}
-
-function formatTimeLeft(targetDateStr?: string, now: Date = new Date()): string | null {
-  if (!targetDateStr) return null;
-  const target = new Date(targetDateStr);
-  const targetEnd = new Date(target.getFullYear(), target.getMonth(), target.getDate(), 23, 59, 59);
-  const diffMs = targetEnd.getTime() - now.getTime();
-  if (diffMs <= 0) return null;
-  const days = Math.floor(diffMs / (24 * 60 * 60 * 1000));
-  const hours = Math.floor((diffMs % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
-  return `${days}d ${hours}h left`;
-}
+// getTripDayInfo + formatTimeLeft live in components/big-hero-card.tsx now.
 
 function formatRelativeTime(dateStr: string, now: Date): string {
   const date = new Date(dateStr);
@@ -816,129 +784,8 @@ function categoryIonicon(category?: string | null): keyof typeof Ionicons.glyphM
   }
 }
 
-// ── BigHeroCard ──────────────────────────────────────────────────────────────
-
-function BigHeroCard({
-  trip,
-  width,
-  cardHeight,
-  activities,
-  members,
-  failedAvatars,
-  onAvatarError,
-  now,
-  t,
-}: {
-  trip: TripWithEvent;
-  width: number;
-  cardHeight: number;
-  activities: SideQuestActivity[];
-  members: TripMember[];
-  failedAvatars: Set<string>;
-  onAvatarError: (id: string) => void;
-  now: Date;
-  t: (key: string, vars?: Record<string, string | number>) => string;
-}) {
-  const quest = trip.quest;
-  const isOngoing = trip.isOngoing;
-  const dayInfo = getTripDayInfo(quest.startDate, quest.endDate, now);
-  const sealedCount = activities.filter((a) => a.isHidden && !a.isRevealed).length;
-  const timeLeft = isOngoing
-    ? formatTimeLeft(quest.endDate, now)
-    : formatTimeLeft(quest.startDate, now);
-  const visibleAvatars = members.slice(0, 3);
-
-  return (
-    <TouchableOpacity
-      activeOpacity={0.94}
-      onPress={() => router.push(`/trip/${quest.id}`)}
-      style={[styles.bigHeroCard, { width, height: cardHeight }]}>
-      {quest.imageUrl ? (
-        <Image source={{ uri: quest.imageUrl }} style={styles.bigHeroImage} resizeMode="cover" />
-      ) : (
-        <View style={[styles.bigHeroImage, styles.bigHeroImageFallback]} />
-      )}
-
-      {/* Faked bottom gradient via stacked semi-transparent layers — works
-          without expo-linear-gradient and reads close enough on top of any
-          photo for the white text to stay legible. */}
-      <View pointerEvents="none" style={styles.bigHeroGradient1} />
-      <View pointerEvents="none" style={styles.bigHeroGradient2} />
-      <View pointerEvents="none" style={styles.bigHeroGradient3} />
-
-      {/* Top row */}
-      <View style={styles.bigHeroTopRow}>
-        {quest.destination ? (
-          <View style={styles.bigHeroLocPill}>
-            <Ionicons name="location" size={12} color="#fff" />
-            <Text style={styles.bigHeroLocText} numberOfLines={1}>{quest.destination}</Text>
-          </View>
-        ) : <View />}
-        {isOngoing ? (
-          <View style={styles.bigHeroLivePill}>
-            <View style={styles.bigHeroLiveDot} />
-            <Text style={styles.bigHeroLiveText}>LIVE</Text>
-          </View>
-        ) : timeLeft ? (
-          <View style={styles.bigHeroUpcomingPill}>
-            <Text style={styles.bigHeroUpcomingText}>{timeLeft.toUpperCase()}</Text>
-          </View>
-        ) : null}
-      </View>
-
-      {/* Bottom content */}
-      <View style={styles.bigHeroBottom}>
-        {dayInfo && isOngoing ? (
-          <Text style={styles.bigHeroDayLine}>
-            Day {dayInfo.dayOfTrip} of {dayInfo.totalDays}
-            {timeLeft ? ` · ${timeLeft}` : ''}
-          </Text>
-        ) : null}
-        <Text style={styles.bigHeroTitle} numberOfLines={2}>
-          {quest.title?.trim() || t('home.defaultTripName')}
-        </Text>
-
-        <View style={styles.bigHeroFooter}>
-          {visibleAvatars.length > 0 ? (
-            <View style={styles.bigHeroAvatars}>
-              {visibleAvatars.map((member, idx) => (
-                <View
-                  key={member.id}
-                  style={[
-                    styles.bigHeroAvatar,
-                    { marginLeft: idx === 0 ? 0 : -12, zIndex: visibleAvatars.length - idx },
-                  ]}>
-                  {member.avatarUrl && member.avatarUrl.trim() && !failedAvatars.has(member.id) ? (
-                    <Image
-                      source={{ uri: member.avatarUrl }}
-                      style={styles.bigHeroAvatarImage}
-                      onError={() => onAvatarError(member.id)}
-                    />
-                  ) : (
-                    <Text style={styles.bigHeroAvatarText}>{getInitials(member.name)}</Text>
-                  )}
-                </View>
-              ))}
-            </View>
-          ) : null}
-
-          {sealedCount > 0 ? (
-            <View style={styles.bigHeroSealed}>
-              <Ionicons name="lock-closed" size={12} color="rgba(255,255,255,0.92)" />
-              <Text style={styles.bigHeroSealedText}>{sealedCount} sealed</Text>
-            </View>
-          ) : null}
-
-          <View style={{ flex: 1 }} />
-          <View style={styles.bigHeroEnter}>
-            <Text style={styles.bigHeroEnterText}>{t('home.enter') || 'Enter'}</Text>
-            <Ionicons name="arrow-forward" size={13} color="#14161d" />
-          </View>
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
-}
+// BigHeroCard moved to components/big-hero-card.tsx so create-trip can
+// render the exact same component as a live preview.
 
 // ── ActivityFeedCard ─────────────────────────────────────────────────────────
 // Shows the most recent things happening for the featured trip: trip events
@@ -1322,11 +1169,7 @@ function getTripWithEvent(quest: Quest, activities: SideQuestActivity[], now: Da
   };
 }
 
-function getInitials(name?: string | null) {
-  if (!name) return 'SQ';
-  const parts = name.trim().split(/\s+/).filter(Boolean).slice(0, 2);
-  return parts.map((part) => part[0]?.toUpperCase()).join('') || 'SQ';
-}
+// getInitials is imported from components/big-hero-card.tsx
 
 function getCountdownParts(targetDate: Date | undefined, now: Date, t?: (key: string) => string) {
   if (!targetDate) {
