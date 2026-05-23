@@ -18,6 +18,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { apiFetch, apiJson } from '@/lib/api';
+import { invalidateCache } from '@/lib/cache';
 import { fetchPlaceSuggestions, type PlaceAutocompleteSuggestion } from '@/lib/maps-api';
 import { type StoredMapPlace, withLocationMarker } from '@/lib/sidequest-location';
 import type { SideQuestActivity } from '@/lib/types';
@@ -282,6 +283,10 @@ function SideQuestFormInner({
           throw new Error((await response.text()) || 'Kunde inte uppdatera aktiviteten.');
         }
 
+        // Activities list for this trip just changed — invalidate the
+        // home/calendar cache so the next tab focus reflects the edit.
+        invalidateCache(`/api/trips/${tripId}/activities`);
+
         return { id: sideQuestId };
       } else {
         const response = await apiJson<SideQuestActivity>(`/api/trips/${tripId}/activities`, {
@@ -289,6 +294,8 @@ function SideQuestFormInner({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         });
+
+        invalidateCache(`/api/trips/${tripId}/activities`);
 
         return { id: response.id };
       }

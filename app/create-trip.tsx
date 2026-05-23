@@ -22,6 +22,7 @@ import CountryPicker from '@/components/travel-tracker/country-picker';
 import { useI18n } from '@/components/i18n-provider';
 import { UnsavedChangesModal, useUnsavedChanges } from '@/components/unsaved-changes';
 import { apiFetch, apiJson } from '@/lib/api';
+import { invalidateCache } from '@/lib/cache';
 import type { Quest } from '@/lib/types';
 import { PRIMARY_COLOR, PRIMARY_08, PRIMARY_20, SECONDARY_COLOR } from '@/constants/colors';
 
@@ -162,6 +163,11 @@ export default function CreateTripScreen() {
           countries: tripCountries,
         }),
       });
+
+      // Trip list cached by home/calendar is now stale — drop it so the
+      // next tab focus shows the freshly created trip without waiting for
+      // the 30s TTL.
+      invalidateCache('/api/trips');
 
       if (pendingInvites.length > 0) {
         await Promise.allSettled(

@@ -10,6 +10,7 @@ import { useI18n } from '@/components/i18n-provider';
 import TopAlertsButton from '@/components/top-alerts-button';
 import UserProfileCard from '@/components/user-profile-card';
 import { apiFetch, apiJson } from '@/lib/api';
+import { getCached, setCached, invalidateCache } from '@/lib/cache';
 import type { PendingInvite, Quest, SideQuestActivity, TripEvent } from '@/lib/types';
 import { PRIMARY_COLOR, PRIMARY_08, PRIMARY_20, SECONDARY_COLOR } from '@/constants/colors';
 
@@ -69,7 +70,23 @@ export default function HomeScreen() {
 
   const loadQuests = useCallback(() => {
     let active = true;
-    setLoading(true);
+
+    // Show cached trips + activities INSTANTLY so a tab switch back to home
+    // doesn't flash a loading state. We then refetch in the background and
+    // update if anything has changed.
+    const cachedTrips = getCached<Quest[]>('/api/trips');
+    if (cachedTrips) {
+      setQuests(cachedTrips);
+      const cachedActs: SideQuestActivity[] = [];
+      for (const trip of cachedTrips) {
+        const acts = getCached<SideQuestActivity[]>(`/api/trips/${trip.id}/activities`);
+        if (acts) cachedActs.push(...acts);
+      }
+      if (cachedActs.length > 0) setActivities(cachedActs);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
     setError('');
 
     console.log('[HOME] loading trips...');
@@ -77,11 +94,14 @@ export default function HomeScreen() {
       .then(async (data) => {
         if (!active) return;
         const tripList = Array.isArray(data) ? data : [];
+        setCached('/api/trips', tripList);
 
         const activityGroups = await Promise.all(
           tripList.map(async (trip) => {
             try {
-              return await apiJson<SideQuestActivity[]>(`/api/trips/${trip.id}/activities`);
+              const acts = await apiJson<SideQuestActivity[]>(`/api/trips/${trip.id}/activities`);
+              setCached(`/api/trips/${trip.id}/activities`, acts);
+              return acts;
             } catch (err) {
               console.warn(`[HOME] loadActivities failed for trip ${trip.id}:`, err instanceof Error ? err.message : err);
               return [];
@@ -96,7 +116,8 @@ export default function HomeScreen() {
       .catch(async (err: Error) => {
         if (!active) return;
         setError(err.message || 'Unable to load quests.');
-        setActivities([]);
+        // Only wipe state if we don't have a cached snapshot still on screen
+        if (!cachedTrips) setActivities([]);
         if (err.message.includes('401') || err.message.toLowerCase().includes('unauthorized')) {
           await signOut();
           router.replace('/(auth)/login');
@@ -114,16 +135,28 @@ export default function HomeScreen() {
   }, [signOut]);
 
   const loadInvites = useCallback(() => {
+    const cached = getCached<PendingInvite[]>('/api/trips/invites/me');
+    if (cached) setPendingInvites(cached);
+
     void apiJson<PendingInvite[]>('/api/trips/invites/me')
-      .then(setPendingInvites)
+      .then((data) => {
+        setCached('/api/trips/invites/me', data);
+        setPendingInvites(data);
+      })
       .catch((err: unknown) => {
         console.warn('[HOME] loadInvites failed:', err instanceof Error ? err.message : err);
       });
   }, []);
 
   const loadTripEvents = useCallback(() => {
+    const cached = getCached<TripEvent[]>('/api/trips/events/me');
+    if (cached) setTripEvents(cached);
+
     void apiJson<TripEvent[]>('/api/trips/events/me')
-      .then(setTripEvents)
+      .then((data) => {
+        setCached('/api/trips/events/me', data);
+        setTripEvents(data);
+      })
       .catch((err: unknown) => {
         console.warn('[HOME] loadTripEvents failed:', err instanceof Error ? err.message : err);
       });
@@ -149,20 +182,26 @@ export default function HomeScreen() {
   }, [featuredTrip?.quest.id]);
 
   // Load members for the featured trip so the BigHeroCard can show avatar
-  // overlay. Re-fires when the user swipes to a different trip.
+  // overlay. Re-fires when the user swipes to a different trip. Cached
+  // per-trip so re-visiting a swiped-to-trip is instant.
   useEffect(() => {
     if (!featuredTrip) {
       setHomeMembers([]);
       return;
     }
     let active = true;
-    void apiJson<TripMember[]>(`/api/trips/${featuredTrip.quest.id}/members`)
+    const url = `/api/trips/${featuredTrip.quest.id}/members`;
+    const cached = getCached<TripMember[]>(url);
+    if (cached) setHomeMembers(cached);
+
+    void apiJson<TripMember[]>(url)
       .then((data) => {
+        setCached(url, data);
         if (active) setHomeMembers(data);
       })
       .catch((err: unknown) => {
         console.warn('[HOME] homeMembers load failed:', err instanceof Error ? err.message : err);
-        if (active) setHomeMembers([]);
+        if (active && !cached) setHomeMembers([]);
       });
     return () => {
       active = false;
@@ -198,6 +237,9 @@ export default function HomeScreen() {
       const res = await apiFetch(`/api/trips/${encodeURIComponent(invite.tripId)}/invites/${encodeURIComponent(invite.id)}/accept`, { method: 'POST' });
       if (!res.ok) return;
       setPendingInvites((prev) => prev.filter((i) => i.id !== invite.id));
+      // Trip list and invites have changed server-side — drop stale cache
+      // so the next reads (incl. tab switches) hit the network.
+      invalidateCache('/api/trips');
       loadQuests();
       loadInvites();
     } catch (err) {
@@ -213,6 +255,7 @@ export default function HomeScreen() {
       const res = await apiFetch(`/api/trips/${encodeURIComponent(invite.tripId)}/invites/${encodeURIComponent(invite.id)}/decline`, { method: 'POST' });
       if (!res.ok) return;
       setPendingInvites((prev) => prev.filter((i) => i.id !== invite.id));
+      invalidateCache('/api/trips/invites/me');
       loadInvites();
     } catch (err) {
       console.error('[HOME] handleDeclineInvite failed:', err instanceof Error ? err.message : err);
@@ -239,6 +282,7 @@ export default function HomeScreen() {
       }
       setJoinModalOpen(false);
       setJoinCode('');
+      invalidateCache('/api/trips');
       loadQuests();
     } catch {
       setJoinError('Something went wrong. Try again.');
