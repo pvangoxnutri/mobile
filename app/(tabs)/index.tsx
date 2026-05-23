@@ -410,7 +410,7 @@ export default function HomeScreen() {
       <ScrollView
         contentContainerStyle={[
           styles.screenContent,
-          { paddingTop: Math.max(insets.top, 16) + 8, paddingBottom: floatingBottom + 96 },
+          { paddingTop: Math.max(insets.top, 16) + 8, paddingBottom: Math.max(insets.bottom, 14) + 100 },
         ]}
         showsVerticalScrollIndicator={false}>
         <View style={[styles.topRow, { alignItems: 'center', justifyContent: 'space-between' }]}>
@@ -511,7 +511,7 @@ export default function HomeScreen() {
                   key={entry.quest.id}
                   trip={entry}
                   width={upcomingCardWidth}
-                  cardHeight={Math.min(upcomingCardWidth * 1.08, screenHeight * 0.42, 380)}
+                  cardHeight={Math.min(upcomingCardWidth * 0.92, screenHeight * 0.36, 320)}
                   activities={activities.filter((a) => a.tripId === entry.quest.id)}
                   members={entry.quest.id === featuredTrip?.quest.id ? homeMembers : []}
                   failedAvatars={failedMemberAvatars}
@@ -1737,7 +1737,7 @@ const styles = StyleSheet.create({
 
   // ── Dashes pagination ──────────────────────────────────────────────────
   dashRow: {
-    marginTop: 10,
+    marginTop: 8,
     paddingHorizontal: 22,
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1770,7 +1770,7 @@ const styles = StyleSheet.create({
 
   // ── Activity feed card ─────────────────────────────────────────────────
   activityCard: {
-    marginTop: 14,
+    marginTop: 10,
     backgroundColor: '#fff',
     borderRadius: 18,
     paddingVertical: 2,
@@ -1867,7 +1867,7 @@ const styles = StyleSheet.create({
 
   // ── Up Next row ────────────────────────────────────────────────────────
   upNextWrap: {
-    marginTop: 16,
+    marginTop: 10,
   },
   upNextHeader: {
     flexDirection: 'row',
@@ -1905,7 +1905,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#ece7df',
   },
   upNextImageBox: {
-    height: 86,
+    height: 76,
     backgroundColor: '#e6e2d8',
     position: 'relative',
   },
