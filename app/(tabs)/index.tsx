@@ -655,12 +655,68 @@ function FloatingFab({
   onJoin: () => void;
   t?: (key: string) => string;
 }) {
+  // Animated values — driven from the `open` prop:
+  //   menu  → fade + slide-up + scale
+  //   back  → fade only
+  //   fab + → 45° rotation so it visually becomes a ×
+  const menuOpacity = useRef(new Animated.Value(0)).current;
+  const menuTranslate = useRef(new Animated.Value(20)).current;
+  const menuScale = useRef(new Animated.Value(0.92)).current;
+  const backdropOpacity = useRef(new Animated.Value(0)).current;
+  const fabRotate = useRef(new Animated.Value(0)).current;
+  // Keep the menu mounted long enough to play the close animation. Set to
+  // false only after the close animation finishes.
+  const [mounted, setMounted] = useState(open);
+
+  useEffect(() => {
+    if (open) {
+      setMounted(true);
+      Animated.parallel([
+        Animated.timing(backdropOpacity, { toValue: 1, duration: 180, useNativeDriver: true }),
+        Animated.spring(menuTranslate, { toValue: 0, useNativeDriver: true, damping: 16, stiffness: 220 }),
+        Animated.spring(menuScale, { toValue: 1, useNativeDriver: true, damping: 16, stiffness: 220 }),
+        Animated.timing(menuOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
+        Animated.spring(fabRotate, { toValue: 1, useNativeDriver: true, damping: 14, stiffness: 200 }),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(backdropOpacity, { toValue: 0, duration: 160, useNativeDriver: true }),
+        Animated.timing(menuTranslate, { toValue: 20, duration: 160, useNativeDriver: true }),
+        Animated.timing(menuScale, { toValue: 0.92, duration: 160, useNativeDriver: true }),
+        Animated.timing(menuOpacity, { toValue: 0, duration: 140, useNativeDriver: true }),
+        Animated.timing(fabRotate, { toValue: 0, duration: 180, useNativeDriver: true }),
+      ]).start(({ finished }) => {
+        if (finished) setMounted(false);
+      });
+    }
+  }, [open, backdropOpacity, menuTranslate, menuScale, menuOpacity, fabRotate]);
+
+  const fabRotation = fabRotate.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '45deg'],
+  });
+
   return (
     <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
-      {open ? <Pressable style={styles.fabBackdrop} onPress={onDismiss} /> : null}
+      {mounted ? (
+        <Animated.View
+          pointerEvents={open ? 'auto' : 'none'}
+          style={[styles.fabBackdrop, { opacity: backdropOpacity }]}>
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={onDismiss} />
+        </Animated.View>
+      ) : null}
+
       <View pointerEvents="box-none" style={[styles.fabWrap, { bottom }]}>
-        {open ? (
-          <View style={styles.fabMenu}>
+        {mounted ? (
+          <Animated.View
+            pointerEvents={open ? 'auto' : 'none'}
+            style={[
+              styles.fabMenu,
+              {
+                opacity: menuOpacity,
+                transform: [{ translateY: menuTranslate }, { scale: menuScale }],
+              },
+            ]}>
             <TouchableOpacity
               activeOpacity={0.88}
               style={[styles.fabMenuButton, styles.fabMenuButtonPrimary, { backgroundColor: PRIMARY_COLOR }]}
@@ -682,14 +738,16 @@ function FloatingFab({
             </TouchableOpacity>
 
             <View style={styles.fabMenuCaret} />
-          </View>
+          </Animated.View>
         ) : null}
 
         <TouchableOpacity
           activeOpacity={0.92}
           style={[styles.floatingFab, { backgroundColor: PRIMARY_COLOR, shadowColor: PRIMARY_COLOR }]}
           onPress={onToggle}>
-          <Ionicons name="add" size={30} color="#fff" />
+          <Animated.View style={{ transform: [{ rotate: fabRotation }] }}>
+            <Ionicons name="add" size={30} color="#fff" />
+          </Animated.View>
         </TouchableOpacity>
       </View>
     </View>
