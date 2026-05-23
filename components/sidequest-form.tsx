@@ -59,6 +59,11 @@ type Props = {
   initialValues?: Partial<SideQuestFormValues>;
   initialImageUrl?: string | null;
   onDirtyChange?: (dirty: boolean) => void;
+  // Called the instant a save succeeds, before router.replace navigates.
+  // Lets the parent screen tell its unsaved-changes guard that this nav
+  // is intentional so the guard doesn't pop the modal (which would also
+  // re-trigger save and create the duplicate the user reported).
+  onSaved?: () => void;
 };
 
 export type SideQuestFormHandle = {
@@ -80,6 +85,7 @@ function SideQuestFormInner({
   initialValues,
   initialImageUrl,
   onDirtyChange,
+  onSaved,
 }: Props, ref: Ref<SideQuestFormHandle>) {
   const insets = useSafeAreaInsets();
   const [title, setTitle] = useState(initialValues?.title ?? '');
@@ -297,6 +303,10 @@ function SideQuestFormInner({
   async function handleSubmit() {
     const saved = await saveActivity();
     if (saved) {
+      // Notify the parent screen so it can flip its unsaved-changes guard
+      // off before we navigate. Without this the guard pops "Unsaved
+      // changes" mid-save and ends up re-firing save → duplicate activity.
+      onSaved?.();
       router.replace(`/trip/${tripId}/sidequest/${saved.id}`);
     }
   }

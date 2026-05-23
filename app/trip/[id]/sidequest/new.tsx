@@ -124,6 +124,7 @@ export default function NewSideQuestScreen() {
             initialValues={isEditMode ? initialValues : undefined}
             initialImageUrl={isEditMode ? activity?.imageUrl : undefined}
             onDirtyChange={setIsDirty}
+            onSaved={unsaved.markSaved}
           />
         ) : null}
 

@@ -27,11 +27,24 @@ export function useUnsavedChanges({ isDirty, onSave }: UseUnsavedChangesArgs) {
   // user picks Save or Discard) routes them to wherever they originally
   // wanted to go — without retriggering usePreventRemove.
   const pendingActionRef = useRef<(() => void) | null>(null);
+  // When the screen has explicitly saved (e.g. user pressed "Create Adventure"),
+  // we want the next navigation to go through without the guard popping the
+  // "Unsaved changes" modal. We can't just clear isDirty in time because
+  // navigation fires synchronously after the screen's save handler.
+  const savedRef = useRef(false);
 
   // usePreventRemove works with native-stack screens (covers iOS edge-swipe,
   // Android hardware back, and any nav action — unlike beforeRemove which
   // native-stack doesn't fully support).
   usePreventRemove(isDirty, ({ data }) => {
+    if (savedRef.current) {
+      // Just saved — let navigation through. preventDefault has already
+      // intercepted the original action; re-dispatching it works because
+      // navigation tracks the dispatched action and won't re-intercept it.
+      savedRef.current = false;
+      navigation.dispatch(data.action);
+      return;
+    }
     pendingActionRef.current = () => navigation.dispatch(data.action);
     setModalOpen(true);
   });
@@ -87,6 +100,12 @@ export function useUnsavedChanges({ isDirty, onSave }: UseUnsavedChangesArgs) {
     setModalOpen(false);
   }, [busy]);
 
+  // Called by the screen right before it navigates away after a successful
+  // save. Tells the guard to skip its check for the next navigation event.
+  const markSaved = useCallback(() => {
+    savedRef.current = true;
+  }, []);
+
   return {
     requestBack,
     modalOpen,
@@ -95,6 +114,7 @@ export function useUnsavedChanges({ isDirty, onSave }: UseUnsavedChangesArgs) {
     handleSave,
     handleCancel,
     setModalOpen,
+    markSaved,
   };
 }
 

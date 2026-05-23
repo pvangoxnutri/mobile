@@ -184,13 +184,6 @@ export default function CreateTripScreen() {
     }
   }
 
-  async function handleCreateTrip() {
-    const trip = await saveTrip();
-    if (trip) {
-      router.replace(`/trip/${trip.id}`);
-    }
-  }
-
   const unsaved = useUnsavedChanges({
     isDirty,
     onSave: async () => {
@@ -198,6 +191,16 @@ export default function CreateTripScreen() {
       return trip !== null;
     },
   });
+
+  async function handleCreateTrip() {
+    const trip = await saveTrip();
+    if (trip) {
+      // Tell the unsaved-changes guard we just saved on purpose, so it
+      // doesn't pop the modal and trigger a second save when we navigate.
+      unsaved.markSaved();
+      router.replace(`/trip/${trip.id}`);
+    }
+  }
 
   return (
     <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
