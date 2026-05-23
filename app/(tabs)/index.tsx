@@ -32,7 +32,7 @@ export default function HomeScreen() {
   const { user, signOut } = useAuth();
   const { t } = useI18n();
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
+  const { width, height: screenHeight } = useWindowDimensions();
   const [quests, setQuests] = useState<Quest[]>([]);
   const [activities, setActivities] = useState<SideQuestActivity[]>([]);
   const [loading, setLoading] = useState(true);
@@ -467,6 +467,7 @@ export default function HomeScreen() {
                   key={entry.quest.id}
                   trip={entry}
                   width={upcomingCardWidth}
+                  cardHeight={Math.min(upcomingCardWidth * 1.08, screenHeight * 0.42, 380)}
                   activities={activities.filter((a) => a.tripId === entry.quest.id)}
                   members={entry.quest.id === featuredTrip?.quest.id ? homeMembers : []}
                   failedAvatars={failedMemberAvatars}
@@ -770,6 +771,7 @@ function categoryIonicon(category?: string | null): keyof typeof Ionicons.glyphM
 function BigHeroCard({
   trip,
   width,
+  cardHeight,
   activities,
   members,
   failedAvatars,
@@ -779,6 +781,7 @@ function BigHeroCard({
 }: {
   trip: TripWithEvent;
   width: number;
+  cardHeight: number;
   activities: SideQuestActivity[];
   members: TripMember[];
   failedAvatars: Set<string>;
@@ -794,7 +797,6 @@ function BigHeroCard({
     ? formatTimeLeft(quest.endDate, now)
     : formatTimeLeft(quest.startDate, now);
   const visibleAvatars = members.slice(0, 3);
-  const cardHeight = Math.min(width * 1.5, 540);
 
   return (
     <TouchableOpacity
@@ -1585,11 +1587,11 @@ const styles = StyleSheet.create({
   },
   bigHeroTitle: {
     color: '#fff',
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: '800',
-    letterSpacing: -0.8,
-    lineHeight: 36,
-    marginBottom: 18,
+    letterSpacing: -0.6,
+    lineHeight: 32,
+    marginBottom: 14,
     textShadowColor: 'rgba(0,0,0,0.45)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 6,
@@ -1651,7 +1653,7 @@ const styles = StyleSheet.create({
 
   // ── Dashes pagination ──────────────────────────────────────────────────
   dashRow: {
-    marginTop: 14,
+    marginTop: 10,
     paddingHorizontal: 22,
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1684,10 +1686,10 @@ const styles = StyleSheet.create({
 
   // ── Activity feed card ─────────────────────────────────────────────────
   activityCard: {
-    marginTop: 22,
+    marginTop: 14,
     backgroundColor: '#fff',
     borderRadius: 18,
-    paddingVertical: 4,
+    paddingVertical: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
@@ -1699,8 +1701,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 8,
+    paddingTop: 12,
+    paddingBottom: 4,
   },
   activityHeaderLeft: {
     flexDirection: 'row',
@@ -1727,7 +1729,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 9,
     gap: 12,
   },
   activityRowBorder: {
@@ -1773,13 +1775,13 @@ const styles = StyleSheet.create({
 
   // ── Up Next row ────────────────────────────────────────────────────────
   upNextWrap: {
-    marginTop: 24,
+    marginTop: 16,
   },
   upNextHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   upNextHeading: {
     fontSize: 11,
@@ -1811,7 +1813,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#ece7df',
   },
   upNextImageBox: {
-    height: 110,
+    height: 86,
     backgroundColor: '#e6e2d8',
     position: 'relative',
   },
@@ -1845,7 +1847,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.85)',
   },
   upNextBody: {
-    padding: 10,
+    padding: 9,
   },
   upNextDate: {
     fontSize: 10,
