@@ -28,15 +28,23 @@ import { PRIMARY_COLOR, PRIMARY_08 } from '@/constants/colors';
 
 const TOTAL_STEPS = 2;
 
-const FOUND_VIA = ['Friend', 'TikTok', 'Instagram', 'App Store', 'Other'];
+// Values are stored on the backend so they stay in English; only the display
+// label is run through i18n.
+const FOUND_VIA: { value: string; labelKey: string }[] = [
+  { value: 'Friend', labelKey: 'onboarding.foundVia.friend' },
+  { value: 'TikTok', labelKey: 'onboarding.foundVia.tiktok' },
+  { value: 'Instagram', labelKey: 'onboarding.foundVia.instagram' },
+  { value: 'App Store', labelKey: 'onboarding.foundVia.appStore' },
+  { value: 'Other', labelKey: 'onboarding.foundVia.other' },
+];
 
-const PURPOSES = [
-  { value: 'plan_trips', label: 'Plan trips with friends', emoji: '✈️' },
-  { value: 'surprise', label: 'Surprise my group', emoji: '🎁' },
-  { value: 'discover', label: 'Discover new experiences', emoji: '🌍' },
-  { value: 'work', label: 'Work', emoji: '💼' },
-  { value: 'exploring', label: 'Just exploring', emoji: '🧭' },
-  { value: 'other', label: 'Other', emoji: '✨' },
+const PURPOSES: { value: string; labelKey: string; emoji: string }[] = [
+  { value: 'plan_trips', labelKey: 'onboarding.purpose.planTrips', emoji: '✈️' },
+  { value: 'surprise', labelKey: 'onboarding.purpose.surprise', emoji: '🎁' },
+  { value: 'discover', labelKey: 'onboarding.purpose.discover', emoji: '🌍' },
+  { value: 'work', labelKey: 'onboarding.purpose.work', emoji: '💼' },
+  { value: 'exploring', labelKey: 'onboarding.purpose.exploring', emoji: '🧭' },
+  { value: 'other', labelKey: 'onboarding.purpose.other', emoji: '✨' },
 ];
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -161,14 +169,14 @@ export default function OnboardingScreen() {
         <View style={styles.topBar}>
           <View style={styles.stepPill}>
             <Text style={styles.stepPillText}>
-              {step} of {TOTAL_STEPS}
+              {t('onboarding.stepOf', { current: step, total: TOTAL_STEPS })}
             </Text>
           </View>
           <TouchableOpacity
             onPress={() => void finish(true)}
             disabled={busy}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-            <Text style={styles.skipText}>Skip</Text>
+            <Text style={styles.skipText}>{t('onboarding.skip')}</Text>
           </TouchableOpacity>
         </View>
 
@@ -201,6 +209,7 @@ export default function OnboardingScreen() {
                 setPurpose={setPurpose}
                 purposeOther={purposeOther}
                 setPurposeOther={setPurposeOther}
+                t={t}
               />
             )}
             {step === 2 && (
@@ -211,6 +220,7 @@ export default function OnboardingScreen() {
                 initials={initials}
                 uploadBusy={uploadBusy}
                 onPickAvatar={() => void handleAvatarPick()}
+                t={t}
               />
             )}
           </ScrollView>
@@ -226,7 +236,7 @@ export default function OnboardingScreen() {
               <ActivityIndicator color="#fff" />
             ) : (
               <Text style={styles.nextButtonText}>
-                {step < TOTAL_STEPS ? 'Next  →' : 'Finish  ✓'}
+                {step < TOTAL_STEPS ? `${t('onboarding.next')}  →` : `${t('onboarding.finish')}  ✓`}
               </Text>
             )}
           </Pressable>
@@ -245,6 +255,7 @@ function StepDiscovery({
   setPurpose,
   purposeOther,
   setPurposeOther,
+  t,
 }: {
   foundVia: string | null;
   setFoundVia: (v: string | null) => void;
@@ -252,27 +263,28 @@ function StepDiscovery({
   setPurpose: (v: string | null) => void;
   purposeOther: string;
   setPurposeOther: (v: string) => void;
+  t: (key: string, vars?: Record<string, string | number>) => string;
 }) {
   return (
     <View>
-      <Text style={styles.stepHeading}>How did you find us? 👋</Text>
-      <Text style={styles.stepSubtitle}>No wrong answers</Text>
+      <Text style={styles.stepHeading}>{t('onboarding.discovery.heading')} 👋</Text>
+      <Text style={styles.stepSubtitle}>{t('onboarding.discovery.subtitle')}</Text>
 
       <View style={styles.chipRow}>
         {FOUND_VIA.map((opt) => (
           <TouchableOpacity
-            key={opt}
-            style={[styles.chip, foundVia === opt && { borderColor: PRIMARY_COLOR, backgroundColor: PRIMARY_08 }]}
+            key={opt.value}
+            style={[styles.chip, foundVia === opt.value && { borderColor: PRIMARY_COLOR, backgroundColor: PRIMARY_08 }]}
             activeOpacity={0.75}
-            onPress={() => setFoundVia(foundVia === opt ? null : opt)}>
-            <Text style={[styles.chipText, foundVia === opt && { color: PRIMARY_COLOR, fontWeight: '700' }]}>{opt}</Text>
+            onPress={() => setFoundVia(foundVia === opt.value ? null : opt.value)}>
+            <Text style={[styles.chipText, foundVia === opt.value && { color: PRIMARY_COLOR, fontWeight: '700' }]}>{t(opt.labelKey)}</Text>
           </TouchableOpacity>
         ))}
       </View>
 
       <View style={styles.sectionDivider} />
 
-      <Text style={styles.sectionLabel}>What brings you here?</Text>
+      <Text style={styles.sectionLabel}>{t('onboarding.purpose.heading')}</Text>
       <View style={styles.purposeGrid}>
         {PURPOSES.map((opt) => (
           <TouchableOpacity
@@ -282,7 +294,7 @@ function StepDiscovery({
             onPress={() => setPurpose(purpose === opt.value ? null : opt.value)}>
             <Text style={styles.purposeEmoji}>{opt.emoji}</Text>
             <Text style={[styles.purposeLabel, purpose === opt.value && { color: PRIMARY_COLOR }]}>
-              {opt.label}
+              {t(opt.labelKey)}
             </Text>
           </TouchableOpacity>
         ))}
@@ -291,7 +303,7 @@ function StepDiscovery({
       {purpose === 'other' ? (
         <TextInput
           style={styles.otherInput}
-          placeholder="Tell us more..."
+          placeholder={t('onboarding.purpose.otherPlaceholder')}
           placeholderTextColor="#b2b7c2"
           value={purposeOther}
           onChangeText={setPurposeOther}
@@ -310,6 +322,7 @@ function StepProfile({
   initials,
   uploadBusy,
   onPickAvatar,
+  t,
 }: {
   bio: string;
   setBio: (v: string) => void;
@@ -317,11 +330,12 @@ function StepProfile({
   initials: string;
   uploadBusy: boolean;
   onPickAvatar: () => void;
+  t: (key: string, vars?: Record<string, string | number>) => string;
 }) {
   return (
     <View>
-      <Text style={styles.stepHeading}>Almost done! 🙌</Text>
-      <Text style={styles.stepSubtitle}>Add a photo and tell people about yourself</Text>
+      <Text style={styles.stepHeading}>{t('onboarding.profile.heading')} 🙌</Text>
+      <Text style={styles.stepSubtitle}>{t('onboarding.profile.subtitle')}</Text>
 
       {/* Avatar upload */}
       <View style={styles.avatarSection}>
@@ -341,15 +355,15 @@ function StepProfile({
             )}
           </View>
         </TouchableOpacity>
-        <Text style={styles.avatarHint}>Tap to add a photo</Text>
+        <Text style={styles.avatarHint}>{t('onboarding.profile.avatarHint')}</Text>
       </View>
 
       {/* Bio input */}
       <View style={styles.bioBlock}>
-        <Text style={styles.bioLabel}>Bio</Text>
+        <Text style={styles.bioLabel}>{t('onboarding.profile.bioLabel')}</Text>
         <TextInput
           style={styles.bioInput}
-          placeholder="Adventure seeker, food lover, chaos planner…"
+          placeholder={t('onboarding.profile.bioPlaceholder')}
           placeholderTextColor="#b2b7c2"
           value={bio}
           onChangeText={setBio}
@@ -357,7 +371,7 @@ function StepProfile({
           numberOfLines={4}
           textAlignVertical="top"
         />
-        <Text style={styles.bioOptional}>Optional — you can always add this later</Text>
+        <Text style={styles.bioOptional}>{t('onboarding.profile.bioOptional')}</Text>
       </View>
     </View>
   );
