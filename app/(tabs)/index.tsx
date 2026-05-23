@@ -927,7 +927,7 @@ function ActivityFeedCard({
   const firstPlanTomorrow = plansTomorrow.find((a) => !a.isHidden) ?? plansTomorrow[0];
 
   const totalNew = tripEvents.length + (plansTomorrow.length > 0 ? 1 : 0);
-  if (totalNew === 0) return null;
+  const isEmpty = totalNew === 0;
 
   function eventLabel(e: TripEvent): string {
     if (e.type === 'member_joined') return t('home.activity.joined', { name: e.actorName });
@@ -976,7 +976,10 @@ function ActivityFeedCard({
       })}
 
       {plansTomorrow.length > 0 ? (
-        <View style={[styles.activityRow, tripEvents.length > 0 && styles.activityRowBorder]}>
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={() => router.push(`/trip/${tripId}`)}
+          style={[styles.activityRow, tripEvents.length > 0 && styles.activityRowBorder]}>
           <View style={[styles.activityAvatar, styles.activityAvatarMuted]}>
             <Ionicons name={categoryIonicon(firstPlanTomorrow?.category)} size={16} color="#8a909e" />
           </View>
@@ -990,6 +993,17 @@ function ActivityFeedCard({
             </Text>
           </View>
           <Ionicons name="chevron-forward" size={16} color="#bbc0c8" />
+        </TouchableOpacity>
+      ) : null}
+
+      {isEmpty ? (
+        <View style={[styles.activityRow, styles.activityEmptyRow]}>
+          <View style={[styles.activityAvatar, styles.activityAvatarMuted]}>
+            <Ionicons name="time-outline" size={16} color="#bbc0c8" />
+          </View>
+          <View style={styles.activityTextBlock}>
+            <Text style={styles.activityEmptyText}>{t('home.activity.empty')}</Text>
+          </View>
         </View>
       ) : null}
     </View>
@@ -1022,7 +1036,7 @@ function UpNextRow({
     })
     .slice(0, 3);
 
-  if (upcoming.length === 0) return null;
+  const isEmpty = upcoming.length === 0;
 
   return (
     <View style={styles.upNextWrap}>
@@ -1032,17 +1046,30 @@ function UpNextRow({
           <Text style={styles.upNextSeeAll}>{t('home.see_all')}</Text>
         </TouchableOpacity>
       </View>
-      <View style={styles.upNextRow}>
-        {upcoming.map((activity) => (
-          <UpNextCard
-            key={activity.id}
-            activity={activity}
-            tripId={trip.quest.id}
-            now={now}
-            t={t}
-          />
-        ))}
-      </View>
+
+      {isEmpty ? (
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={() => router.push(`/trip/${trip.quest.id}/sidequest/new`)}
+          style={styles.upNextEmptyCard}>
+          <View style={styles.upNextEmptyIcon}>
+            <Ionicons name="add-circle-outline" size={22} color="#bbc0c8" />
+          </View>
+          <Text style={styles.upNextEmptyText}>{t('home.upnext.empty')}</Text>
+        </TouchableOpacity>
+      ) : (
+        <View style={styles.upNextRow}>
+          {upcoming.map((activity) => (
+            <UpNextCard
+              key={activity.id}
+              activity={activity}
+              tripId={trip.quest.id}
+              now={now}
+              t={t}
+            />
+          ))}
+        </View>
+      )}
     </View>
   );
 }
@@ -1772,6 +1799,14 @@ const styles = StyleSheet.create({
     color: '#8a909e',
     marginTop: 2,
   },
+  activityEmptyRow: {
+    paddingVertical: 14,
+  },
+  activityEmptyText: {
+    fontSize: 12,
+    color: '#8a909e',
+    fontWeight: '500',
+  },
 
   // ── Up Next row ────────────────────────────────────────────────────────
   upNextWrap: {
@@ -1873,6 +1908,27 @@ const styles = StyleSheet.create({
     color: '#6e7480',
     marginTop: 4,
     fontStyle: 'italic',
+  },
+  upNextEmptyCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#eef0f4',
+    borderStyle: 'dashed',
+    paddingVertical: 22,
+    paddingHorizontal: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  upNextEmptyIcon: {
+    opacity: 0.7,
+  },
+  upNextEmptyText: {
+    fontSize: 12,
+    color: '#8a909e',
+    fontWeight: '500',
+    textAlign: 'center',
   },
   questCard: {
     height: 220,

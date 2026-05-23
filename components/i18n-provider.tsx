@@ -101,9 +101,11 @@ const dictionaries: Record<AppLanguage, Record<string, string>> = {
     'home.activity.left_verb': 'left the trip',
     'home.activity.plans': 'plans',
     'home.activity.tomorrow': 'tomorrow',
+    'home.activity.empty': 'Nothing has happened yet. Invite friends or add a sidequest to get started.',
     'home.upnext.unlocks': 'UNLOCKS',
     'home.upnext.sealed_title': 'Sealed quest',
     'home.upnext.by': 'by',
+    'home.upnext.empty': 'No plans yet — tap to add the first one.',
 
     'common.create_trip_hint': 'Create a trip to start the timer',
 
@@ -359,9 +361,11 @@ const dictionaries: Record<AppLanguage, Record<string, string>> = {
     'home.activity.left_verb': 'lämnade resan',
     'home.activity.plans': 'planer',
     'home.activity.tomorrow': 'imorgon',
+    'home.activity.empty': 'Inget har hänt än. Bjud in vänner eller lägg till en sidequest för att komma igång.',
     'home.upnext.unlocks': 'LÅSES UPP',
     'home.upnext.sealed_title': 'Förseglat',
     'home.upnext.by': 'av',
+    'home.upnext.empty': 'Inga planer än — tryck för att lägga till första.',
 
     'common.create_trip_hint': 'Skapa en resa för att starta timern',
 
