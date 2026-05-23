@@ -489,10 +489,16 @@ export default function HomeScreen() {
                     />
                   ))}
                 </View>
-                <View style={styles.swipeHint}>
-                  <Text style={styles.swipeHintText}>{t('home.swipe_for_more')}</Text>
-                  <Ionicons name="arrow-forward" size={14} color="#8a909e" />
-                </View>
+                {/* Only show the "swipe for more" hint while there are still
+                    adventures to the RIGHT of the current card. When the user
+                    has swiped to the last one, nothing more is to be revealed
+                    by swiping right, so hide the arrow + text. */}
+                {selectedTripIndex < sortedTrips.length - 1 ? (
+                  <View style={styles.swipeHint}>
+                    <Text style={styles.swipeHintText}>{t('home.swipe_for_more')}</Text>
+                    <Ionicons name="arrow-forward" size={14} color="#8a909e" />
+                  </View>
+                ) : null}
               </View>
             ) : null}
 
@@ -1219,6 +1225,14 @@ function getTripWithEvent(quest: Quest, activities: SideQuestActivity[], now: Da
   const today = new Date(now);
   today.setHours(0, 0, 0, 0);
 
+  const tripStart = new Date(`${quest.startDate}T12:00:00`);
+  const tripEnd = new Date(`${quest.endDate}T12:00:00`);
+  // Whether the trip is currently happening — independent of whether the
+  // trip has individual activities scheduled. Previously this was only set
+  // in the "no activities" branch, which made the LIVE badge missing on
+  // any ongoing trip that had upcoming sidequests.
+  const isOngoing = tripStart.getTime() <= today.getTime() && tripEnd.getTime() >= today.getTime();
+
   const tripActivities = activities
     .filter((activity) => activity.tripId === quest.id)
     .map((activity) => ({
@@ -1234,14 +1248,12 @@ function getTripWithEvent(quest: Quest, activities: SideQuestActivity[], now: Da
       nextEventDate: tripActivities[0].date,
       nextEventLabel: tripActivities[0].label,
       upcomingEvents: tripActivities,
+      isOngoing,
     };
   }
 
-  const tripStart = new Date(`${quest.startDate}T12:00:00`);
-  const tripEnd = new Date(`${quest.endDate}T12:00:00`);
-
-  // Ongoing trip — show with today as the anchor date
-  if (tripStart.getTime() <= today.getTime() && tripEnd.getTime() >= today.getTime()) {
+  // Ongoing trip with no remaining activities — show with today as anchor
+  if (isOngoing) {
     return {
       quest,
       nextEventDate: today,
@@ -1262,6 +1274,7 @@ function getTripWithEvent(quest: Quest, activities: SideQuestActivity[], now: Da
     nextEventDate: tripStart,
     nextEventLabel: quest.title?.trim() || 'Upcoming adventure',
     upcomingEvents: [{ label: quest.title?.trim() || 'Upcoming adventure', date: tripStart }],
+    isOngoing: false,
   };
 }
 
