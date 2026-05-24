@@ -2,9 +2,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Linking from 'expo-linking';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState, useEffect } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -20,7 +21,9 @@ import UserProfileCard from '@/components/user-profile-card';
 import { useI18n } from '@/components/i18n-provider';
 import { apiFetch, apiJson } from '@/lib/api';
 import { buildGoogleMapsSearchUrl, extractLocationQuery, extractStoredMapPlace, stripLocationMarker } from '@/lib/sidequest-location';
+import { useRevealAnimation } from '@/hooks/useMotion';
 import type { ActivityComment, SideQuestActivity } from '@/lib/types';
+import { COLORS } from '@/constants/design-tokens';
 import { PRIMARY_COLOR, SECONDARY_COLOR } from '@/constants/colors';
 
 export default function SideQuestDetailScreen() {
@@ -36,10 +39,17 @@ export default function SideQuestDetailScreen() {
   const [profileCardUserId, setProfileCardUserId] = useState<string | null>(null);
   const inputRef = useRef<TextInput>(null);
 
+  // Reveal animation for hidden SideQuest
+  const { blurValue, contentTranslateY, contentOpacity, glowOpacity, startReveal } = useRevealAnimation({
+    triggerHaptics: true,
+  });
+  const hasTriggeredReveal = useRef(false);
+
   useFocusEffect(
     useCallback(() => {
       let active = true;
       setLoading(true);
+      hasTriggeredReveal.current = false;
 
       void Promise.all([
         apiJson<SideQuestActivity>(`/api/trips/${id}/activities/${encodeURIComponent(sidequestId)}`),
@@ -66,6 +76,14 @@ export default function SideQuestDetailScreen() {
       };
     }, [id, sidequestId]),
   );
+
+  // Trigger reveal animation when activity becomes visible (not hidden for viewer)
+  useEffect(() => {
+    if (activity && activity.imageUrl && !activity.isHiddenForViewer && !hasTriggeredReveal.current) {
+      hasTriggeredReveal.current = true;
+      startReveal();
+    }
+  }, [activity, startReveal]);
 
   const submitComment = useCallback(async () => {
     const text = commentText.trim();
@@ -124,8 +142,24 @@ export default function SideQuestDetailScreen() {
           <>
             {activity.imageUrl ? (
               <View style={styles.heroCard}>
-                <Image source={{ uri: activity.imageUrl }} style={styles.heroImage} blurRadius={activity.isHiddenForViewer ? 22 : 0} />
-                <View style={[styles.heroOverlay, activity.isHiddenForViewer ? styles.heroOverlayHidden : null]} />
+                <Animated.View
+                  style={{
+                    opacity: contentOpacity,
+                    transform: [{ translateY: contentTranslateY }],
+                  }}>
+                  <Image
+                    source={{ uri: activity.imageUrl }}
+                    style={styles.heroImage}
+                    blurRadius={activity.isHiddenForViewer ? 22 : 0}
+                  />
+                </Animated.View>
+                <Animated.View
+                  style={[
+                    styles.heroOverlay,
+                    activity.isHiddenForViewer ? styles.heroOverlayHidden : null,
+                    { opacity: glowOpacity },
+                  ]}
+                />
                 {activity.canEdit ? (
                   <TouchableOpacity
                     activeOpacity={0.9}
@@ -137,7 +171,14 @@ export default function SideQuestDetailScreen() {
                     <Text style={styles.editButtonText}>Edit</Text>
                   </TouchableOpacity>
                 ) : null}
-                <View style={styles.heroContent}>
+                <Animated.View
+                  style={[
+                    styles.heroContent,
+                    {
+                      opacity: contentOpacity,
+                      transform: [{ translateY: contentTranslateY }],
+                    },
+                  ]}>
                   <View style={styles.statusRow}>
                     <StatusChip
                       label={activity.visibility === 'hidden' && !activity.isRevealed ? 'Hidden' : activity.ownerName || 'Visible'}
@@ -152,7 +193,7 @@ export default function SideQuestDetailScreen() {
                         : t('activity.hidden_title')
                       : cleanDescription || t('activity.no_description')}
                   </Text>
-                </View>
+                </Animated.View>
               </View>
             ) : null}
 
