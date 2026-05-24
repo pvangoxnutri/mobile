@@ -14,7 +14,7 @@ import { apiFetch, apiJson } from '@/lib/api';
 import { getCached, setCached, invalidateCache } from '@/lib/cache';
 import { uploadImageIfNeeded } from '@/lib/uploads';
 import type { Quest, SideQuestActivity, TripInvite, LinkPreview } from '@/lib/types';
-import { PRIMARY_COLOR, PRIMARY_08, PRIMARY_20, SECONDARY_COLOR } from '@/constants/colors';
+import { COLORS, SHADOWS, SPACING, RADIUS, TYPOGRAPHY } from '@/constants/design-tokens';
 
 type ChatMsg = {
   id: string;
@@ -496,7 +496,7 @@ export default function TripDetailsScreen() {
 
           <TouchableOpacity style={styles.costSplitRow} activeOpacity={0.86} onPress={() => router.push(`/trip/${id}/split`)}>
             <View style={styles.costSplitRowIcon}>
-              <Ionicons name="calculator-outline" size={18} color={PRIMARY_COLOR} />
+              <Ionicons name="calculator-outline" size={18} color={COLORS.primary} />
             </View>
             <Text style={styles.costSplitRowLabel}>Cost Split</Text>
             <Ionicons name="chevron-forward" size={20} color="#b2b7c0" />
@@ -534,7 +534,7 @@ export default function TripDetailsScreen() {
                         ) : activity.imageUrl ? (
                           <Image source={{ uri: activity.imageUrl }} style={styles.timelineIcon} />
                         ) : (
-                          <View style={[styles.timelineIcon, { backgroundColor: PRIMARY_COLOR }]}>
+                          <View style={[styles.timelineIcon, { backgroundColor: COLORS.primary }]}>
                             <Ionicons name="sparkles" size={18} color="#fff" />
                           </View>
                         )}
@@ -567,14 +567,14 @@ export default function TripDetailsScreen() {
         </ScrollView>
 
         <View pointerEvents="box-none" style={[styles.chatBubbleWrap, { bottom: Math.max(insets.bottom, 16) + 6 }]}>
-          <TouchableOpacity activeOpacity={0.92} style={[styles.chatBubble, { backgroundColor: SECONDARY_COLOR, shadowColor: SECONDARY_COLOR }]} onPress={() => setChatOpen(true)}>
+          <TouchableOpacity activeOpacity={0.92} style={[styles.chatBubble, { backgroundColor: COLORS.secondary, shadowColor: COLORS.secondary }]} onPress={() => setChatOpen(true)}>
             <Ionicons name="chatbubble-ellipses-outline" size={20} color="#fff" />
-            {chatUnread ? <View style={[styles.chatUnreadDot, { backgroundColor: PRIMARY_COLOR }]} /> : null}
+            {chatUnread ? <View style={[styles.chatUnreadDot, { backgroundColor: COLORS.primary }]} /> : null}
           </TouchableOpacity>
         </View>
 
         <View pointerEvents="box-none" style={[styles.floatingWrap, { bottom: Math.max(insets.bottom, 16) + 6 }]}>
-          <TouchableOpacity activeOpacity={0.92} style={[styles.floatingButton, { backgroundColor: PRIMARY_COLOR, shadowColor: PRIMARY_COLOR }]} onPress={() => router.push(`/trip/${id}/sidequest/new`)}>
+          <TouchableOpacity activeOpacity={0.92} style={[styles.floatingButton, { backgroundColor: COLORS.primary, shadowColor: COLORS.primary }]} onPress={() => router.push(`/trip/${id}/sidequest/new`)}>
             <Ionicons name="add" size={20} color="#fff" />
             <Text style={styles.floatingButtonText}>Lägg till aktivitet</Text>
           </TouchableOpacity>
@@ -633,7 +633,7 @@ export default function TripDetailsScreen() {
                           setInviteComposerOpen((current) => !current);
                         }}>
                         <View style={[styles.personAvatar, styles.inviteAvatar]}>
-                          <Ionicons name="add" size={20} color={PRIMARY_COLOR} />
+                          <Ionicons name="add" size={20} color={COLORS.primary} />
                         </View>
                         <View style={styles.personCopy}>
                           <Text style={styles.personName}>Invite traveler</Text>
@@ -673,7 +673,7 @@ export default function TripDetailsScreen() {
                             </Animated.View>
                             <TouchableOpacity
                               activeOpacity={0.9}
-                              style={[styles.inviteAddButton, { backgroundColor: PRIMARY_COLOR }, inviteSubmitting ? styles.inviteAddButtonDisabled : null]}
+                              style={[styles.inviteAddButton, { backgroundColor: COLORS.primary }, inviteSubmitting ? styles.inviteAddButtonDisabled : null]}
                               disabled={inviteSubmitting}
                               onPress={() => void handleAddInvite()}>
                               <Text style={styles.inviteAddButtonText}>{inviteSubmitting ? 'Adding...' : 'Invite'}</Text>
@@ -682,18 +682,18 @@ export default function TripDetailsScreen() {
 
                           <View style={styles.inviteActions}>
                             <TouchableOpacity activeOpacity={0.9} style={styles.secondaryInviteButton} onPress={() => void handleCopyInviteCode()}>
-                              <Ionicons name="copy-outline" size={16} color={PRIMARY_COLOR} />
-                              <Text style={[styles.secondaryInviteButtonText, { color: PRIMARY_COLOR }]}>Copy code</Text>
+                              <Ionicons name="copy-outline" size={16} color={COLORS.primary} />
+                              <Text style={[styles.secondaryInviteButtonText, { color: COLORS.primary }]}>Copy code</Text>
                             </TouchableOpacity>
                             <TouchableOpacity activeOpacity={0.9} style={styles.secondaryInviteButton} onPress={() => void handleShareInvite()}>
-                              <Ionicons name="share-social-outline" size={16} color={PRIMARY_COLOR} />
-                              <Text style={[styles.secondaryInviteButtonText, { color: PRIMARY_COLOR }]}>Share</Text>
+                              <Ionicons name="share-social-outline" size={16} color={COLORS.primary} />
+                              <Text style={[styles.secondaryInviteButtonText, { color: COLORS.primary }]}>Share</Text>
                             </TouchableOpacity>
                           </View>
 
                           <View style={styles.inviteHintRow}>
                             <Text style={styles.inviteHintLabel}>Invite code</Text>
-                            <Text style={[styles.inviteHintCode, { color: PRIMARY_COLOR }]}>{trip?.inviteCode ?? '------'}</Text>
+                            <Text style={[styles.inviteHintCode, { color: COLORS.primary }]}>{trip?.inviteCode ?? '------'}</Text>
                           </View>
 
                           {inviteMessage ? <Text style={styles.inviteMessage}>{inviteMessage}</Text> : null}
@@ -747,7 +747,7 @@ export default function TripDetailsScreen() {
                 <View style={styles.chatPresenceRow}>
                   {chatPresence.slice(0, 6).map((u) => (
                     <View key={u.userId} style={styles.chatPresenceBubble}>
-                      <Text style={[styles.chatPresenceBubbleText, { color: SECONDARY_COLOR }]}>{getInitials(u.userName)}</Text>
+                      <Text style={[styles.chatPresenceBubbleText, { color: COLORS.secondary }]}>{getInitials(u.userName)}</Text>
                     </View>
                   ))}
                   {chatPresence.length > 6 ? (
@@ -785,7 +785,7 @@ export default function TripDetailsScreen() {
                               <Image source={{ uri: message.imageUrl }} style={styles.chatMessageImage} />
                             </Pressable>
                           ) : null}
-                          <View style={[styles.chatBubbleCard, styles.chatBubbleCardOwn, { backgroundColor: PRIMARY_COLOR }]}>
+                          <View style={[styles.chatBubbleCard, styles.chatBubbleCardOwn, { backgroundColor: COLORS.primary }]}>
                             {message.text ? (
                               <ChatMessageText text={message.text} isOwn={true} />
                             ) : null}
@@ -886,7 +886,7 @@ export default function TripDetailsScreen() {
                   activeOpacity={0.9}
                   style={[
                     styles.chatSendButton,
-                    { backgroundColor: PRIMARY_COLOR },
+                    { backgroundColor: COLORS.primary },
                     (!chatDraft.trim() && !chatPendingImage) || chatSending || chatImageUploading ? styles.chatSendButtonDisabled : null,
                   ]}
                   disabled={(!chatDraft.trim() && !chatPendingImage) || chatSending || chatImageUploading}
@@ -2475,8 +2475,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: PRIMARY_COLOR,
-    shadowColor: PRIMARY_COLOR,
+    backgroundColor: COLORS.primary,
+    shadowColor: COLORS.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -2546,7 +2546,7 @@ const styles = StyleSheet.create({
     borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: PRIMARY_COLOR,
+    backgroundColor: COLORS.primary,
   },
   categoryModalBody: {
     paddingBottom: 4,
