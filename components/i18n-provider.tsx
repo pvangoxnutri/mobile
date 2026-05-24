@@ -62,6 +62,7 @@ const dictionaries: Record<AppLanguage, Record<string, string>> = {
     'common.member': 'Member',
     'common.all_day': 'All day',
     'common.hidden': 'Hidden',
+    'common.check_internet': 'Check internet connection',
 
     'nav.home': 'Home',
     'nav.calendar': 'Calendar',
@@ -352,6 +353,7 @@ const dictionaries: Record<AppLanguage, Record<string, string>> = {
     'common.member': 'Medlem',
     'common.all_day': 'Hela dagen',
     'common.hidden': 'Dölj',
+    'common.check_internet': 'Kontrollera internetanslutningen',
 
     'nav.home': 'Hem',
     'nav.calendar': 'Kalender',

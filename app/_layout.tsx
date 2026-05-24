@@ -3,9 +3,11 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { View } from 'react-native';
 
 import { AuthGate, AuthProvider } from '@/components/auth-provider';
 import { I18nProvider } from '@/components/i18n-provider';
+import { NetworkStatusBar } from '@/components/network-status-bar';
 import { useColorScheme } from 'react-native';
 
 export const unstable_settings = {
@@ -21,7 +23,9 @@ export default function RootLayout() {
         <I18nProvider>
           <AuthProvider>
             <AuthGate>
-              <Stack screenOptions={{ headerShown: false }}>
+              <View style={{ flex: 1 }}>
+                <NetworkStatusBar />
+                <Stack screenOptions={{ headerShown: false }}>
                 <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
                 <Stack.Screen name="index" options={{ headerShown: false }} />
                 <Stack.Screen name="(auth)/login" options={{ headerShown: false }} />
@@ -41,7 +45,8 @@ export default function RootLayout() {
                 <Stack.Screen name="trip/[id]/sidequest/[sidequestId]" options={{ headerShown: false }} />
                 <Stack.Screen name="modal" options={{ presentation: 'modal', headerShown: false }} />
               </Stack>
-              <StatusBar style="dark" />
+                <StatusBar style="dark" />
+              </View>
             </AuthGate>
           </AuthProvider>
         </I18nProvider>
