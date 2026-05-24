@@ -142,7 +142,7 @@ export default function CalendarScreen() {
       activeTrip ??
       quests[0];
     if (trip) {
-      router.push(`/trip/${trip.id}/sidequest/new`);
+      router.push(`/trip/${trip.id}/sidequest/new?initialDate=${selectedDate}`);
     }
   }
 

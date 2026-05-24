@@ -13,7 +13,7 @@ import { PRIMARY_COLOR } from '@/constants/colors';
 
 export default function NewSideQuestScreen() {
   const insets = useSafeAreaInsets();
-  const { id, editId } = useLocalSearchParams<{ id: string; editId?: string }>();
+  const { id, editId, initialDate } = useLocalSearchParams<{ id: string; editId?: string; initialDate?: string }>();
   const [trip, setTrip] = useState<Quest | null>(null);
   const [activity, setActivity] = useState<SideQuestActivity | null>(null);
   const [error, setError] = useState('');
@@ -71,23 +71,29 @@ export default function NewSideQuestScreen() {
   );
 
   const initialValues = useMemo<Partial<SideQuestFormValues> | undefined>(() => {
-    if (!activity) return undefined;
+    if (activity) {
+      return {
+        title: activity.title ?? '',
+        description: stripLocationMarker(activity.description) ?? '',
+        category: activity.category ?? null,
+        locationQuery: extractLocationQuery(activity.description),
+        locationPlace: extractStoredMapPlace(activity.description),
+        date: activity.date,
+        visibility: activity.visibility,
+        revealDate: activity.revealAt ? activity.revealAt.slice(0, 10) : activity.date,
+        revealTime: activity.revealAt ? formatTimeForInput(activity.revealAt) : '18:00',
+        teaser: activity.teaser ?? '',
+        teaserOffsetMinutes: activity.teaserOffsetMinutes ?? 120,
+        imageUrl: activity.imageUrl ?? null,
+      };
+    }
 
-    return {
-      title: activity.title ?? '',
-      description: stripLocationMarker(activity.description) ?? '',
-      category: activity.category ?? null,
-      locationQuery: extractLocationQuery(activity.description),
-      locationPlace: extractStoredMapPlace(activity.description),
-      date: activity.date,
-      visibility: activity.visibility,
-      revealDate: activity.revealAt ? activity.revealAt.slice(0, 10) : activity.date,
-      revealTime: activity.revealAt ? formatTimeForInput(activity.revealAt) : '18:00',
-      teaser: activity.teaser ?? '',
-      teaserOffsetMinutes: activity.teaserOffsetMinutes ?? 120,
-      imageUrl: activity.imageUrl ?? null,
-    };
-  }, [activity]);
+    if (initialDate) {
+      return { date: initialDate };
+    }
+
+    return undefined;
+  }, [activity, initialDate]);
 
   return (
     <>
