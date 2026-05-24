@@ -435,7 +435,7 @@ const styles = StyleSheet.create({
   },
   progressFill: {
     height: 3,
-    backgroundColor: '#ff4f74',
+    backgroundColor: PRIMARY_COLOR,
     borderRadius: 2,
   },
 
@@ -459,10 +459,10 @@ const styles = StyleSheet.create({
   nextButton: {
     height: 56,
     borderRadius: 18,
-    backgroundColor: '#ff4f74',
+    backgroundColor: PRIMARY_COLOR,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#ff4f74',
+    shadowColor: PRIMARY_COLOR,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.28,
     shadowRadius: 16,
@@ -509,8 +509,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#fafbfc',
   },
   chipSelected: {
-    borderColor: '#ff4f74',
-    backgroundColor: '#fff0f4',
+    borderColor: PRIMARY_COLOR,
+    backgroundColor: PRIMARY_08,
   },
   chipText: {
     color: '#4b515e',
@@ -518,7 +518,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   chipTextSelected: {
-    color: '#ff4f74',
+    color: PRIMARY_COLOR,
     fontWeight: '700',
   },
   sectionDivider: {
@@ -550,8 +550,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   purposeCardSelected: {
-    borderColor: '#ff4f74',
-    backgroundColor: '#fff0f4',
+    borderColor: PRIMARY_COLOR,
+    backgroundColor: PRIMARY_08,
   },
   purposeEmoji: {
     fontSize: 28,
@@ -564,7 +564,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   purposeLabelSelected: {
-    color: '#e8264d',
+    color: PRIMARY_COLOR,
   },
   otherInput: {
     marginTop: 16,
@@ -594,7 +594,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   themeCardSelected: {
-    borderColor: '#ff4f74',
+    borderColor: PRIMARY_COLOR,
     backgroundColor: '#fff',
   },
   themeColorStrip: {
@@ -658,7 +658,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#ff4f74',
+    backgroundColor: PRIMARY_COLOR,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -686,7 +686,7 @@ const styles = StyleSheet.create({
     height: 124,
     borderRadius: 62,
     borderWidth: 3,
-    borderColor: '#ff4f74',
+    borderColor: PRIMARY_COLOR,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -711,7 +711,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#ff4f74',
+    backgroundColor: PRIMARY_COLOR,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2.5,
