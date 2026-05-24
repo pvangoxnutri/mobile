@@ -11,6 +11,7 @@ import { useAuth } from '@/components/auth-provider';
 import { useI18n } from '@/components/i18n-provider';
 import UserProfileCard from '@/components/user-profile-card';
 import { apiFetch, apiJson } from '@/lib/api';
+import { getCached, setCached, invalidateCache } from '@/lib/cache';
 import { uploadImageIfNeeded } from '@/lib/uploads';
 import type { Quest, SideQuestActivity, TripInvite, LinkPreview } from '@/lib/types';
 import { PRIMARY_COLOR, PRIMARY_08, PRIMARY_20, SECONDARY_COLOR } from '@/constants/colors';
@@ -84,6 +85,22 @@ export default function TripDetailsScreen() {
 
       async function run() {
         console.log(`[TRIP-DETAIL] loading trip ${id}...`);
+
+        // Show cached data INSTANTLY so navigating back to an already-opened
+        // trip doesn't flash a loading state. We then refetch in the background.
+        const cachedTrip = getCached<Quest>(`/api/trips/${id}`);
+        const cachedMembers = getCached<TripMember[]>(`/api/trips/${id}/members`);
+        const cachedInvites = getCached<TripInvite[]>(`/api/trips/${id}/invites`);
+        const cachedActivities = getCached<SideQuestActivity[]>(`/api/trips/${id}/activities`);
+
+        if (cachedTrip) {
+          setTrip(cachedTrip);
+          setSpotifyUrlDraft(cachedTrip.spotifyUrl ?? '');
+        }
+        if (cachedMembers) setMembers(cachedMembers);
+        if (cachedInvites) setInvites(cachedInvites);
+        if (cachedActivities) setActivities(cachedActivities);
+
         try {
           const [tripData, memberData, inviteData, activityData] = await Promise.all([
             apiJson<Quest>(`/api/trips/${id}`),
@@ -98,6 +115,10 @@ export default function TripDetailsScreen() {
           setMembers(memberData);
           setInvites(inviteData);
           setActivities(activityData);
+          setCached(`/api/trips/${id}`, tripData);
+          setCached(`/api/trips/${id}/members`, memberData);
+          setCached(`/api/trips/${id}/invites`, inviteData);
+          setCached(`/api/trips/${id}/activities`, activityData);
           // Check for unread chat messages
           try {
             const latestMsgs = await apiJson<ChatMsg[]>(`/api/trips/${id}/chat?since=${encodeURIComponent(lastReadAtRef.current)}`);
@@ -244,6 +265,7 @@ export default function TripDetailsScreen() {
         body: JSON.stringify({ email: normalizedEmail }),
       });
 
+      invalidateCache(`/api/trips/${id}/invites`);
       setInvites((current) => [...current, invite]);
       setInviteEmail('');
       setInviteComposerOpen(false);
@@ -376,6 +398,7 @@ export default function TripDetailsScreen() {
       }
 
       const updated = (await response.json()) as Quest;
+      invalidateCache(`/api/trips/${id}`);
       setTrip(updated);
       setSpotifyUrlDraft(updated.spotifyUrl ?? '');
       setSpotifyModalOpen(false);
