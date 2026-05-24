@@ -13,7 +13,7 @@ import { BigHeroCard, getInitials, type TripWithEvent, type TripMember } from '@
 import { apiFetch, apiJson } from '@/lib/api';
 import { getCached, setCached, invalidateCache } from '@/lib/cache';
 import type { PendingInvite, Quest, SideQuestActivity, TripEvent } from '@/lib/types';
-import { PRIMARY_COLOR, PRIMARY_08, PRIMARY_20, SECONDARY_COLOR } from '@/constants/colors';
+import { COLORS, SHADOWS, SPACING, RADIUS, TYPOGRAPHY } from '@/constants/design-tokens';
 
 // TripMember, TripWithEvent and BigHeroCard live in components/big-hero-card.tsx
 // so the create-trip preview can reuse the exact same rendering as home.
@@ -325,11 +325,11 @@ export default function HomeScreen() {
           {pendingInvites.length > 0 ? (
             <View style={[styles.inviteSection, { marginTop: 20 }]}>
               <View style={styles.inviteSectionHeader}>
-                <Ionicons name="mail-unread-outline" size={16} color={PRIMARY_COLOR} />
-                <Text style={[styles.inviteSectionTitle, { color: PRIMARY_COLOR }]}>{t('home.invited')}</Text>
+                <Ionicons name="mail-unread-outline" size={16} color={COLORS.primary} />
+                <Text style={[styles.inviteSectionTitle, { color: COLORS.primary }]}>{t('home.invited')}</Text>
               </View>
               {pendingInvites.map((invite) => (
-                <View key={invite.id} style={[styles.inviteCard, { borderColor: PRIMARY_20, backgroundColor: PRIMARY_08 }]}>
+                <View key={invite.id} style={[styles.inviteCard, { borderColor: COLORS.primaryLight20, backgroundColor: COLORS.primaryLight12 }]}>
                   {invite.tripImageUrl ? (
                     <Image source={{ uri: invite.tripImageUrl }} style={styles.inviteCardImage} />
                   ) : (
@@ -345,7 +345,7 @@ export default function HomeScreen() {
                     <Text style={styles.inviteCardFrom}>Invited by {invite.invitedByName}</Text>
                   </View>
                   <View style={styles.inviteCardActions}>
-                    <TouchableOpacity style={[styles.inviteAcceptBtn, { backgroundColor: PRIMARY_COLOR }]} activeOpacity={0.82} onPress={() => void handleAcceptInvite(invite)} disabled={inviteActionBusy === invite.id}>
+                    <TouchableOpacity style={[styles.inviteAcceptBtn, { backgroundColor: COLORS.primary }]} activeOpacity={0.82} onPress={() => void handleAcceptInvite(invite)} disabled={inviteActionBusy === invite.id}>
                       {inviteActionBusy === invite.id ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.inviteAcceptText}>{t('common.join')}</Text>}
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.inviteDeclineBtn} activeOpacity={0.82} onPress={() => void handleDeclineInvite(invite)} disabled={inviteActionBusy === invite.id + '_decline'}>
@@ -719,7 +719,7 @@ function FloatingFab({
             ]}>
             <TouchableOpacity
               activeOpacity={0.88}
-              style={[styles.fabMenuButton, styles.fabMenuButtonPrimary, { backgroundColor: PRIMARY_COLOR }]}
+              style={[styles.fabMenuButton, styles.fabMenuButtonPrimary, { backgroundColor: COLORS.primary }]}
               onPress={() => {
                 onDismiss();
                 router.push('/create-trip');
@@ -730,11 +730,11 @@ function FloatingFab({
               <Text style={styles.fabMenuButtonPrimaryText} numberOfLines={1}>{t ? t('home.create_adventure') : 'Create Adventure'}</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity activeOpacity={0.88} style={[styles.fabMenuButton, styles.fabMenuButtonSecondary, { borderColor: PRIMARY_COLOR }]} onPress={onJoin}>
-              <View style={[styles.fabMenuIconWrap, { backgroundColor: PRIMARY_08 }]}>
-                <Ionicons name="person-add" size={18} color={PRIMARY_COLOR} />
+            <TouchableOpacity activeOpacity={0.88} style={[styles.fabMenuButton, styles.fabMenuButtonSecondary, { borderColor: COLORS.primary }]} onPress={onJoin}>
+              <View style={[styles.fabMenuIconWrap, { backgroundColor: COLORS.primaryLight12 }]}>
+                <Ionicons name="person-add" size={18} color={COLORS.primary} />
               </View>
-              <Text style={[styles.fabMenuButtonText, { color: PRIMARY_COLOR }]} numberOfLines={1}>{t ? t('home.join_adventure') : 'Join Adventure'}</Text>
+              <Text style={[styles.fabMenuButtonText, { color: COLORS.primary }]} numberOfLines={1}>{t ? t('home.join_adventure') : 'Join Adventure'}</Text>
             </TouchableOpacity>
 
             <View style={styles.fabMenuCaret} />
@@ -743,7 +743,7 @@ function FloatingFab({
 
         <TouchableOpacity
           activeOpacity={0.92}
-          style={[styles.floatingFab, { backgroundColor: PRIMARY_COLOR, shadowColor: PRIMARY_COLOR }]}
+          style={[styles.floatingFab, { backgroundColor: COLORS.primary, shadowColor: COLORS.primary }]}
           onPress={onToggle}>
           <Animated.View style={{ transform: [{ rotate: fabRotation }] }}>
             <Ionicons name="add" size={30} color="#fff" />
@@ -767,7 +767,7 @@ function InfoBadge({
 }) {
   const content = (
     <View style={styles.infoBadge}>
-      <View style={[styles.infoBadgeIcon, tone === 'cyan' ? styles.infoBadgeIconCyan : styles.infoBadgeIconPink, { backgroundColor: tone === 'cyan' ? SECONDARY_COLOR : PRIMARY_COLOR }]}>
+      <View style={[styles.infoBadgeIcon, tone === 'cyan' ? styles.infoBadgeIconCyan : styles.infoBadgeIconPink, { backgroundColor: tone === 'cyan' ? COLORS.secondary : COLORS.primary }]}>
         <Ionicons name={icon} size={16} color="#fff" />
       </View>
       <Text style={styles.infoBadgeLabel}>{label}</Text>
@@ -804,7 +804,7 @@ function QuestCard({
       style={[styles.questCard, { width: cardWidth }, badgeTone === 'cyan' ? styles.questCardSky : styles.questCardLava]}>
       {imageUrl ? <Image source={{ uri: imageUrl }} style={styles.questCardImage} /> : null}
       <View style={[styles.questCardOverlay, badgeTone === 'cyan' ? styles.questCardOverlaySky : styles.questCardOverlayLava]} />
-      <View style={[styles.questCardBadge, badgeTone === 'cyan' ? styles.questCardBadgeCyan : styles.questCardBadgePink, { backgroundColor: badgeTone === 'cyan' ? SECONDARY_COLOR : PRIMARY_COLOR }]}>
+      <View style={[styles.questCardBadge, badgeTone === 'cyan' ? styles.questCardBadgeCyan : styles.questCardBadgePink, { backgroundColor: badgeTone === 'cyan' ? COLORS.secondary : COLORS.primary }]}>
         <Text style={[styles.questCardBadgeText, badgeTone === 'cyan' ? styles.questCardBadgeTextDark : null]}>{badge}</Text>
       </View>
       <Text style={styles.questCardTitle}>{title}</Text>
@@ -1153,7 +1153,7 @@ function JoinModal({
         />
         {error ? <Text style={styles.joinError}>{error}</Text> : null}
         <Pressable
-          style={({ pressed }) => [styles.joinButton, { backgroundColor: PRIMARY_COLOR }, pressed && { opacity: 0.88 }, (!code.trim() || busy) && styles.joinButtonDisabled]}
+          style={({ pressed }) => [styles.joinButton, { backgroundColor: COLORS.primary }, pressed && { opacity: 0.88 }, (!code.trim() || busy) && styles.joinButtonDisabled]}
           onPress={onJoin}
           disabled={!code.trim() || busy}>
           {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.joinButtonText}>{t ? t('home.join_adventure') : 'Join Adventure'}</Text>}
@@ -1271,23 +1271,21 @@ function getMembersLabel(quest?: Quest | null, t?: (key: string, vars?: Record<s
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.white,
   },
   screenContent: {
-    paddingHorizontal: 22,
+    paddingHorizontal: SPACING.xl,
     paddingBottom: 110,
   },
   emptyScreenContent: {
     flexGrow: 1,
-    paddingHorizontal: 22,
+    paddingHorizontal: SPACING.xl,
     paddingBottom: 164,
   },
   emptySectionHeading: {
-    marginTop: 44,
-    color: '#5f5a5a',
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 2.8,
+    marginTop: SPACING.xxxl,
+    ...TYPOGRAPHY.eyebrow,
+    color: COLORS.textMeta,
   },
   emptyUpcoming: {
     alignItems: 'center',
@@ -1301,19 +1299,19 @@ const styles = StyleSheet.create({
     borderRadius: 56,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#f5f4f5',
+    backgroundColor: COLORS.bgLight,
   },
   emptyUpcomingTitle: {
     marginTop: 28,
-    color: '#171821',
+    color: COLORS.textPrimary,
     fontSize: 30,
     fontWeight: '900',
     letterSpacing: -1.2,
   },
   emptyUpcomingCopy: {
-    marginTop: 12,
+    marginTop: SPACING.lg,
     maxWidth: 240,
-    color: '#747984',
+    color: COLORS.textSecondary,
     fontSize: 18,
     lineHeight: 30,
     textAlign: 'center',
@@ -1321,7 +1319,7 @@ const styles = StyleSheet.create({
   emptyHint: {
     marginTop: 'auto',
     textAlign: 'center',
-    color: '#c8c9cf',
+    color: COLORS.textMuted,
     fontSize: 14,
   },
   topRow: {
@@ -1329,13 +1327,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     minHeight: 50,
-    gap: 10,
+    gap: SPACING.md,
   },
   avatarShell: {
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#f4f4f5',
+    backgroundColor: COLORS.bgLight,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
@@ -1353,21 +1351,21 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#1e2128',
+    backgroundColor: COLORS.avatarDark,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarText: {
-    color: '#fff',
+    color: COLORS.white,
     fontSize: 14,
     fontWeight: '800',
     letterSpacing: -0.6,
   },
   hero: {
-    marginTop: 54,
+    marginTop: SPACING.xxxl,
   },
   heroTitle: {
-    color: '#121317',
+    color: COLORS.textPrimary,
     fontSize: 40,
     lineHeight: 42,
     fontWeight: '900',
@@ -1379,37 +1377,37 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   loadingText: {
-    color: '#747984',
+    color: COLORS.textSecondary,
     fontSize: 15,
     fontWeight: '600',
   },
   dateRow: {
-    marginTop: 16,
+    marginTop: SPACING.lg,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: SPACING.md,
   },
   dateText: {
-    color: '#454a56',
+    color: COLORS.textSecondary,
     fontSize: 17,
     letterSpacing: -0.3,
   },
   badgeRow: {
     marginTop: 18,
     flexDirection: 'row',
-    gap: 10,
+    gap: SPACING.md,
     flexWrap: 'wrap',
   },
   infoBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    borderRadius: 999,
-    backgroundColor: '#f5f5f6',
+    gap: SPACING.md,
+    borderRadius: RADIUS.circle,
+    backgroundColor: COLORS.bgLight,
     borderWidth: 1,
-    borderColor: '#e3e5e9',
-    paddingVertical: 8,
-    paddingHorizontal: 13,
+    borderColor: COLORS.borderPrimary,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
   },
   infoBadgeIcon: {
     width: 20,
@@ -1419,33 +1417,31 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   infoBadgeIconCyan: {
-    backgroundColor: '#0d90a8',
+    backgroundColor: COLORS.secondary,
   },
   infoBadgeIconPink: {
-    backgroundColor: '#e12d68',
+    backgroundColor: COLORS.primary,
   },
   infoBadgeLabel: {
-    color: '#666b76',
+    color: COLORS.textSecondary,
     fontSize: 13,
     fontWeight: '700',
     letterSpacing: 0.9,
   },
   sectionHeader: {
-    marginTop: 34,
+    marginTop: SPACING.xxxl,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: SPACING.md,
   },
   sectionLabel: {
-    color: '#b4b7bf',
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 3.2,
+    ...TYPOGRAPHY.eyebrow,
+    color: COLORS.textMeta,
   },
   sectionLine: {
     flex: 1,
     height: 1,
-    backgroundColor: '#e8ebef',
+    backgroundColor: COLORS.borderPrimary,
   },
   carousel: {
     marginTop: 16,
@@ -1606,7 +1602,7 @@ const styles = StyleSheet.create({
   bigHeroAvatarText: {
     fontSize: 11,
     fontWeight: '800',
-    color: PRIMARY_COLOR,
+    color: COLORS.primary,
   },
   bigHeroSealed: {
     flexDirection: 'row',
@@ -1738,7 +1734,7 @@ const styles = StyleSheet.create({
   activityAvatarText: {
     fontSize: 12,
     fontWeight: '800',
-    color: PRIMARY_COLOR,
+    color: COLORS.primary,
   },
   activityTextBlock: {
     flex: 1,
@@ -2044,14 +2040,14 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   fabMenuButtonPrimary: {
-    // backgroundColor applied inline via PRIMARY_COLOR for theme consistency
+    // backgroundColor applied inline via COLORS.primary for theme consistency
     borderWidth: 1.5,
     borderColor: 'transparent', // match secondary's footprint so both buttons render at identical height
   },
   fabMenuButtonSecondary: {
     backgroundColor: '#fff',
     borderWidth: 1.5,
-    // borderColor applied inline via PRIMARY_COLOR
+    // borderColor applied inline via COLORS.primary
   },
   fabMenuButtonPrimaryText: {
     color: '#fff',
