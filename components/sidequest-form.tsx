@@ -107,6 +107,7 @@ function SideQuestFormInner({
   const [pickerTarget, setPickerTarget] = useState<PickerTarget>(null);
   const [message, setMessage] = useState<MessageState>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [revealedNow, setRevealedNow] = useState(false);
 
   const bottomPadding = useMemo(() => Math.max(insets.bottom, 18) + 60, [insets.bottom]);
   const revealAtPreview = visibility === 'hidden' ? formatRevealPreview(revealDate, revealTime) : 'Avslöjas direkt';
@@ -259,11 +260,12 @@ function SideQuestFormInner({
         description: withLocationMarker(description.trim() || null, locationQuery.trim() || null, locationPlace),
         category: category || null,
         date,
-        visibility,
-        revealAt,
-        teaser: visibility === 'hidden' ? teaser.trim() || null : null,
-        teaserOffsetMinutes: visibility === 'hidden' && teaser.trim() ? teaserOffsetMinutes : null,
+        visibility: revealedNow ? 'public' : visibility,
+        revealAt: revealedNow ? null : revealAt,
+        teaser: visibility === 'hidden' && !revealedNow ? teaser.trim() || null : null,
+        teaserOffsetMinutes: visibility === 'hidden' && !revealedNow && teaser.trim() ? teaserOffsetMinutes : null,
         imageUrl: uploadedImageUrl,
+        revealedNow,
       };
 
       if (mode === 'edit' && sideQuestId) {
@@ -543,7 +545,22 @@ function SideQuestFormInner({
         </View>
       </View>
 
-      {visibility === 'hidden' ? (
+      {visibility === 'hidden' && !revealedNow ? (
+        <View style={styles.block}>
+          <TouchableOpacity
+            activeOpacity={0.88}
+            style={[styles.revealNowButton, { backgroundColor: PRIMARY_COLOR, shadowColor: PRIMARY_COLOR }]}
+            onPress={() => {
+              setRevealedNow(true);
+              setMessage({ type: 'success', text: 'Aktiviteten kommer att avslöjas direkt när du sparar!' });
+            }}>
+            <Ionicons name="flash" size={18} color="#fff" style={{ marginRight: 8 }} />
+            <Text style={styles.revealNowButtonText}>Avslöja nu istället för att vänta</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+
+      {visibility === 'hidden' && !revealedNow ? (
         <>
           <View style={styles.block}>
             <Text style={styles.label}>Avslöjandeschema</Text>
@@ -1269,6 +1286,24 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#eef1f5',
     overflow: 'hidden',
+  },
+  revealNowButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 56,
+    borderRadius: 18,
+    backgroundColor: PRIMARY_COLOR,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.24,
+    shadowRadius: 16,
+    elevation: 6,
+  },
+  revealNowButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: -0.3,
   },
 });
 
