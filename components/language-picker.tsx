@@ -1,5 +1,5 @@
 ﻿import { Ionicons } from '@expo/vector-icons';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import {
   Image,
   KeyboardAvoidingView,
@@ -9,7 +9,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -32,23 +31,13 @@ export default function LanguagePicker({
   value,
   onChange,
   label,
-  searchPlaceholder = 'Search language',
 }: {
   value: AppLanguage;
   onChange: (next: AppLanguage) => void;
   label: string;
-  searchPlaceholder?: string;
-}) {  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState('');
-
+}) {
+  const [open, setOpen] = useState(false);
   const selected = LANGUAGE_OPTIONS.find((option) => option.code === value) ?? LANGUAGE_OPTIONS[0];
-  const normalizedQuery = query.trim().toLowerCase();
-  const filtered = useMemo(() => {
-    if (!normalizedQuery) return LANGUAGE_OPTIONS;
-    return LANGUAGE_OPTIONS.filter((option) =>
-      `${option.displayName} ${option.nativeName} ${option.code}`.toLowerCase().includes(normalizedQuery),
-    );
-  }, [normalizedQuery]);
 
   return (
     <View>
@@ -72,17 +61,8 @@ export default function LanguagePicker({
               </TouchableOpacity>
             </View>
 
-            <TextInput
-              value={query}
-              onChangeText={setQuery}
-              placeholder={searchPlaceholder}
-              placeholderTextColor="#a2a8b3"
-              style={styles.searchInput}
-              autoCapitalize="none"
-            />
-
             <ScrollView style={styles.list} keyboardShouldPersistTaps="handled">
-              {filtered.map((option) => {
+              {LANGUAGE_OPTIONS.map((option) => {
                 const active = option.code === value;
                 return (
                   <TouchableOpacity
@@ -92,7 +72,6 @@ export default function LanguagePicker({
                     onPress={() => {
                       onChange(option.code);
                       setOpen(false);
-                      setQuery('');
                     }}>
                     <View style={styles.optionLeft}>
                       <Image source={{ uri: option.flagUri }} style={styles.flagImage} />
@@ -105,7 +84,6 @@ export default function LanguagePicker({
                   </TouchableOpacity>
                 );
               })}
-              {filtered.length === 0 ? <Text style={styles.empty}>No matches</Text> : null}
             </ScrollView>
           </View>
         </KeyboardAvoidingView>
@@ -184,16 +162,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#f2f4f8',
-  },
-  searchInput: {
-    height: 44,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e4e7ee',
-    backgroundColor: '#f9fafc',
-    paddingHorizontal: 12,
-    fontSize: 15,
-    color: '#151a24',
   },
   list: {
     marginTop: 10,

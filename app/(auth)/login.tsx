@@ -143,7 +143,6 @@ export default function LoginScreen() {
             label={t('auth.language')}
             value={selectedLanguage}
             onChange={handleLanguageChange}
-            searchPlaceholder={language === 'sv' ? 'Sök språk' : 'Search language'}
           />
         </View>
         {mode === 'signup' ? (

@@ -186,7 +186,6 @@ export default function OnboardingScreen() {
             label={t('auth.language')}
             value={language}
             onChange={(next) => void handleLanguageChange(next)}
-            searchPlaceholder={language === 'sv' ? 'Sök språk' : 'Search language'}
           />
         </View>
 
