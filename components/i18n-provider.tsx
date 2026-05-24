@@ -42,6 +42,10 @@ const dictionaries: Record<AppLanguage, Record<string, string>> = {
     'auth.language': 'Language',
     'auth.language_en': 'English',
     'auth.language_sv': 'Svenska',
+    'auth.legal_consent_prefix': 'By continuing you agree to our',
+    'auth.legal_consent_and': 'and',
+    'auth.privacy_policy': 'Privacy Policy',
+    'auth.terms_of_service': 'Terms of Service',
 
     'common.or': 'OR',
     'common.cancel': 'Cancel',
@@ -329,6 +333,10 @@ const dictionaries: Record<AppLanguage, Record<string, string>> = {
     'auth.language': 'Språk',
     'auth.language_en': 'English',
     'auth.language_sv': 'Svenska',
+    'auth.legal_consent_prefix': 'Genom att fortsätta godkänner du våra',
+    'auth.legal_consent_and': 'och',
+    'auth.privacy_policy': 'Sekretesspolicy',
+    'auth.terms_of_service': 'Användarvillkor',
 
     'common.or': 'ELLER',
     'common.cancel': 'Avbryt',

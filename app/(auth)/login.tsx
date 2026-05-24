@@ -234,17 +234,17 @@ export default function LoginScreen() {
 
         <View style={styles.legalConsent}>
           <Text style={styles.legalConsentText}>
-            By continuing you agree to our{' '}
+            {t('auth.legal_consent_prefix')}{' '}
             <Text
               style={styles.legalLink}
               onPress={() => void WebBrowser.openBrowserAsync('https://sidequesttravel.app/privacy')}>
-              Privacy Policy
+              {t('auth.privacy_policy')}
             </Text>
-            {' '}and{' '}
+            {' '}{t('auth.legal_consent_and')}{' '}
             <Text
               style={styles.legalLink}
               onPress={() => void WebBrowser.openBrowserAsync('https://sidequesttravel.app/terms')}>
-              Terms of Service
+              {t('auth.terms_of_service')}
             </Text>
             .
           </Text>
