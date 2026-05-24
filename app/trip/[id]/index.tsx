@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/components/auth-provider';
 import { useI18n } from '@/components/i18n-provider';
 import UserProfileCard from '@/components/user-profile-card';
+import HiddenSidequestCard from '@/components/hidden-sidequest-card';
 import { apiFetch, apiJson } from '@/lib/api';
 import { getCached, setCached, invalidateCache } from '@/lib/cache';
 import { uploadImageIfNeeded } from '@/lib/uploads';
@@ -520,6 +521,20 @@ export default function TripDetailsScreen() {
                 {group.items.map((activity) => {
                   const hidden = activity.isHiddenForViewer;
                   const timeLabel = formatActivityTimeShort(activity.time);
+
+                  if (hidden) {
+                    return (
+                      <HiddenSidequestCard
+                        key={activity.id}
+                        id={activity.id}
+                        revealAt={activity.revealAt}
+                        timeLabel={timeLabel}
+                        formatTimeUntilReveal={formatTimeUntilReveal}
+                        onPress={() => router.push(`/trip/${id}/sidequest/${activity.id}`)}
+                      />
+                    );
+                  }
+
                   return (
                     <TouchableOpacity
                       key={activity.id}
@@ -527,11 +542,7 @@ export default function TripDetailsScreen() {
                       style={styles.timelineRow}
                       onPress={() => router.push(`/trip/${id}/sidequest/${activity.id}`)}>
                       <View style={styles.timelineIconWrap}>
-                        {hidden ? (
-                          <View style={[styles.timelineIcon, styles.timelineIconHidden]}>
-                            <Ionicons name="lock-closed" size={18} color="#fff" />
-                          </View>
-                        ) : activity.imageUrl ? (
+                        {activity.imageUrl ? (
                           <Image source={{ uri: activity.imageUrl }} style={styles.timelineIcon} />
                         ) : (
                           <View style={[styles.timelineIcon, { backgroundColor: COLORS.primary }]}>
@@ -541,10 +552,10 @@ export default function TripDetailsScreen() {
                       </View>
                       <View style={styles.timelineBody}>
                         <Text style={styles.timelineTitle} numberOfLines={1}>
-                          {hidden ? 'Hidden quest' : (activity.title?.trim() || 'Activity')}
+                          {activity.title?.trim() || 'Activity'}
                         </Text>
                         <Text style={styles.timelineSubtitle} numberOfLines={1}>
-                          {hidden ? formatTimeUntilReveal(activity.revealAt) : formatActivityAuthorSubtitle(activity)}
+                          {formatActivityAuthorSubtitle(activity)}
                         </Text>
                       </View>
                       {timeLabel ? <Text style={styles.timelineTime}>{timeLabel}</Text> : null}

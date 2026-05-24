@@ -8,16 +8,14 @@
  */
 
 import { useRef, useCallback, useEffect } from 'react';
-import { Animated, Platform } from 'react-native';
-import { trigger as triggerHaptic } from 'react-native-haptic-feedback';
+import { Animated } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import {
   MOTION_TIMING,
   MOTION_SPRING,
   MOTION_SCALE,
   MOTION_OPACITY,
   MOTION_TRANSLATE,
-  MOTION_EASING,
-  MOTION_HAPTIC,
   MOTION_STAGGER,
 } from '../MOTION_CONSTANTS';
 
@@ -47,12 +45,10 @@ export function useRevealAnimation(config: RevealAnimationConfig = {}) {
 
   const startReveal = useCallback(() => {
     if (triggerHaptics) {
-      // Initial tap feeling
-      triggerHaptic('impactOccurred', { style: 'Light' });
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
 
     Animated.sequence([
-      // Stagger for dramatic effect
       Animated.delay(100),
 
       // Main reveal animation (runs in parallel)
@@ -62,7 +58,6 @@ export function useRevealAnimation(config: RevealAnimationConfig = {}) {
           toValue: 0,
           duration: MOTION_TIMING.cinematic,
           useNativeDriver: false, // blur can't use native driver
-          easing: MOTION_EASING.cinematic,
         }),
 
         // Rise content up (4px → 0px)
@@ -70,7 +65,6 @@ export function useRevealAnimation(config: RevealAnimationConfig = {}) {
           toValue: 0,
           duration: MOTION_TIMING.cinematic,
           useNativeDriver: true,
-          easing: MOTION_EASING.cinematic,
         }),
 
         // Fade in content
@@ -78,7 +72,6 @@ export function useRevealAnimation(config: RevealAnimationConfig = {}) {
           toValue: 1,
           duration: MOTION_TIMING.cinematic,
           useNativeDriver: true,
-          easing: MOTION_EASING.cinematic,
         }),
 
         // Glow effect
@@ -86,29 +79,22 @@ export function useRevealAnimation(config: RevealAnimationConfig = {}) {
           toValue: 1,
           duration: MOTION_TIMING.cinematic,
           useNativeDriver: true,
-          easing: MOTION_EASING.cinematic,
         }),
       ]),
 
       // Haptic at midway (感じる moment)
-      Animated.delay(0),
-      Animated.timing(new Animated.Value(0), {
-        toValue: 1,
-        duration: 1,
-        useNativeDriver: true,
-      }),
+      Animated.delay(MOTION_TIMING.cinematic / 2),
 
       // Glow fade out (post-reveal)
       Animated.timing(glowOpacity, {
         toValue: 0,
         duration: 400,
         useNativeDriver: true,
-        easing: MOTION_EASING.softOut,
       }),
     ]).start(() => {
       if (triggerHaptics) {
         // Success completion haptic
-        triggerHaptic('notificationOccurred', { type: 'Success' });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
       onComplete?.();
     });
@@ -144,7 +130,7 @@ export function useScalePress(config: ScalePressConfig = {}) {
 
   const handlePressIn = useCallback(() => {
     if (triggerHaptics) {
-      triggerHaptic('impactOccurred', { style: 'Medium' });
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
 
     Animated.timing(scaleValue, {
@@ -360,7 +346,7 @@ export function useShake(config: ShakeConfig = {}) {
 
   const shake = useCallback(() => {
     if (triggerHaptics) {
-      triggerHaptic('notificationOccurred', { type: 'Error' });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     }
 
     const shakeCount = Math.ceil((duration / 1000) * frequency);
@@ -417,7 +403,7 @@ export function useModalSpring(config: ModalSpringConfig = {}) {
 
   const start = useCallback(() => {
     if (triggerHaptics) {
-      triggerHaptic('impactOccurred', { style: 'Light' });
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
 
     Animated.parallel([
@@ -479,7 +465,7 @@ export function useSuccessCelebration(config: SuccessConfig = {}) {
 
   const celebrate = useCallback(() => {
     if (triggerHaptics) {
-      triggerHaptic('notificationOccurred', { type: 'Success' });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
 
     Animated.parallel([
@@ -494,13 +480,13 @@ export function useSuccessCelebration(config: SuccessConfig = {}) {
         duration: MOTION_TIMING.emotional,
         useNativeDriver: true,
       }),
-    ]).start(
+    ]).start(() => {
       Animated.timing(scaleValue, {
         toValue: 1,
         duration: MOTION_TIMING.standard,
         useNativeDriver: true,
-      }).start(onComplete)
-    );
+      }).start(onComplete);
+    });
   }, [scaleValue, opacityValue, onComplete, triggerHaptics]);
 
   useEffect(() => {
