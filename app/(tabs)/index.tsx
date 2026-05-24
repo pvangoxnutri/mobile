@@ -9,9 +9,11 @@ import { useAuth } from '@/components/auth-provider';
 import { useI18n } from '@/components/i18n-provider';
 import TopAlertsButton from '@/components/top-alerts-button';
 import UserProfileCard from '@/components/user-profile-card';
+import InviteCard from '@/components/invite-card';
 import { BigHeroCard, getInitials, type TripWithEvent, type TripMember } from '@/components/big-hero-card';
 import { apiFetch, apiJson } from '@/lib/api';
 import { getCached, setCached, invalidateCache } from '@/lib/cache';
+import { useScalePress } from '@/hooks/useMotion';
 import type { PendingInvite, Quest, SideQuestActivity, TripEvent } from '@/lib/types';
 import { COLORS, SHADOWS, SPACING, RADIUS, TYPOGRAPHY } from '@/constants/design-tokens';
 
@@ -329,30 +331,13 @@ export default function HomeScreen() {
                 <Text style={[styles.inviteSectionTitle, { color: COLORS.primary }]}>{t('home.invited')}</Text>
               </View>
               {pendingInvites.map((invite) => (
-                <View key={invite.id} style={[styles.inviteCard, { borderColor: COLORS.primaryLight20, backgroundColor: COLORS.primaryLight12 }]}>
-                  {invite.tripImageUrl ? (
-                    <Image source={{ uri: invite.tripImageUrl }} style={styles.inviteCardImage} />
-                  ) : (
-                    <View style={[styles.inviteCardImage, styles.inviteCardImagePlaceholder]}>
-                      <Ionicons name="map-outline" size={22} color="#b0b4be" />
-                    </View>
-                  )}
-                  <View style={styles.inviteCardBody}>
-                    <Text style={styles.inviteCardTitle} numberOfLines={1}>{invite.tripTitle ?? t('home.defaultTripName')}</Text>
-                    {invite.tripDestination ? (
-                      <Text style={styles.inviteCardMeta} numberOfLines={1}><Ionicons name="location-outline" size={11} /> {invite.tripDestination}</Text>
-                    ) : null}
-                    <Text style={styles.inviteCardFrom}>Invited by {invite.invitedByName}</Text>
-                  </View>
-                  <View style={styles.inviteCardActions}>
-                    <TouchableOpacity style={[styles.inviteAcceptBtn, { backgroundColor: COLORS.primary }]} activeOpacity={0.82} onPress={() => void handleAcceptInvite(invite)} disabled={inviteActionBusy === invite.id}>
-                      {inviteActionBusy === invite.id ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.inviteAcceptText}>{t('common.join')}</Text>}
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.inviteDeclineBtn} activeOpacity={0.82} onPress={() => void handleDeclineInvite(invite)} disabled={inviteActionBusy === invite.id + '_decline'}>
-                      {inviteActionBusy === invite.id + '_decline' ? <ActivityIndicator size="small" color="#8a909e" /> : <Ionicons name="close" size={16} color="#8a909e" />}
-                    </TouchableOpacity>
-                  </View>
-                </View>
+                <InviteCard
+                  key={invite.id}
+                  invite={invite}
+                  busy={inviteActionBusy === invite.id || inviteActionBusy === invite.id + '_decline'}
+                  onAccept={handleAcceptInvite}
+                  onDecline={handleDeclineInvite}
+                />
               ))}
             </View>
           ) : null}
@@ -425,50 +410,13 @@ export default function HomeScreen() {
               <Text style={styles.inviteSectionTitle}>{t('home.invited')}</Text>
             </View>
             {pendingInvites.map((invite) => (
-              <View key={invite.id} style={styles.inviteCard}>
-                {invite.tripImageUrl ? (
-                  <Image source={{ uri: invite.tripImageUrl }} style={styles.inviteCardImage} />
-                ) : (
-                  <View style={[styles.inviteCardImage, styles.inviteCardImagePlaceholder]}>
-                    <Ionicons name="map-outline" size={22} color="#b0b4be" />
-                  </View>
-                )}
-                <View style={styles.inviteCardBody}>
-                  <Text style={styles.inviteCardTitle} numberOfLines={1}>
-                    {invite.tripTitle ?? t('home.defaultTripName')}
-                  </Text>
-                  {invite.tripDestination ? (
-                    <Text style={styles.inviteCardMeta} numberOfLines={1}>
-                      <Ionicons name="location-outline" size={11} /> {invite.tripDestination}
-                    </Text>
-                  ) : null}
-                  <Text style={styles.inviteCardFrom}>Invited by {invite.invitedByName}</Text>
-                </View>
-                <View style={styles.inviteCardActions}>
-                  <TouchableOpacity
-                    style={styles.inviteAcceptBtn}
-                    activeOpacity={0.82}
-                    onPress={() => void handleAcceptInvite(invite)}
-                    disabled={inviteActionBusy === invite.id}>
-                    {inviteActionBusy === invite.id ? (
-                      <ActivityIndicator size="small" color="#fff" />
-                    ) : (
-                      <Text style={styles.inviteAcceptText}>{t('common.join')}</Text>
-                    )}
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.inviteDeclineBtn}
-                    activeOpacity={0.82}
-                    onPress={() => void handleDeclineInvite(invite)}
-                    disabled={inviteActionBusy === invite.id + '_decline'}>
-                    {inviteActionBusy === invite.id + '_decline' ? (
-                      <ActivityIndicator size="small" color="#8a909e" />
-                    ) : (
-                      <Ionicons name="close" size={16} color="#8a909e" />
-                    )}
-                  </TouchableOpacity>
-                </View>
-              </View>
+              <InviteCard
+                key={invite.id}
+                invite={invite}
+                busy={inviteActionBusy === invite.id || inviteActionBusy === invite.id + '_decline'}
+                onAccept={handleAcceptInvite}
+                onDecline={handleDeclineInvite}
+              />
             ))}
           </View>
         ) : null}
