@@ -11,6 +11,7 @@ import { useAuth } from '@/components/auth-provider';
 import { useI18n } from '@/components/i18n-provider';
 import UserProfileCard from '@/components/user-profile-card';
 import HiddenSidequestCard from '@/components/hidden-sidequest-card';
+import ModalSheet from '@/components/modal-sheet';
 import { apiFetch, apiJson } from '@/lib/api';
 import { getCached, setCached, invalidateCache } from '@/lib/cache';
 import { uploadImageIfNeeded } from '@/lib/uploads';
@@ -591,22 +592,19 @@ export default function TripDetailsScreen() {
           </TouchableOpacity>
         </View>
 
-        <Modal visible={peopleSheetOpen} transparent animationType="slide" onRequestClose={() => setPeopleSheetOpen(false)}>
-          <View style={styles.sheetBackdrop}>
-            <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setPeopleSheetOpen(false)} />
-            <View style={[styles.sheetCard, { paddingBottom: Math.max(insets.bottom, 18) + 12 }]}>
-              <View style={styles.sheetHandle} />
-              <View style={styles.sheetHeader}>
-                <View>
-                  <Text style={styles.sheetEyebrow}>TRAVELERS</Text>
-                  <Text style={styles.sheetTitle}>Everyone on this adventure</Text>
-                </View>
-                <TouchableOpacity style={styles.sheetCloseButton} activeOpacity={0.88} onPress={() => setPeopleSheetOpen(false)}>
-                  <Ionicons name="close" size={20} color="#161821" />
-                </TouchableOpacity>
-              </View>
+        <ModalSheet visible={peopleSheetOpen} onClose={() => setPeopleSheetOpen(false)}>
+          <View style={styles.sheetHandle} />
+          <View style={styles.sheetHeader}>
+            <View>
+              <Text style={styles.sheetEyebrow}>TRAVELERS</Text>
+              <Text style={styles.sheetTitle}>Everyone on this adventure</Text>
+            </View>
+            <TouchableOpacity style={styles.sheetCloseButton} activeOpacity={0.88} onPress={() => setPeopleSheetOpen(false)}>
+              <Ionicons name="close" size={20} color="#161821" />
+            </TouchableOpacity>
+          </View>
 
-              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.sheetContent}>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.sheetContent, { paddingBottom: Math.max(insets.bottom, 18) + 12 }]}>
                 <View style={styles.peopleSection}>
                   <Text style={styles.peopleSectionTitle}>Travelers</Text>
                   {members.map((member) => (
@@ -733,9 +731,7 @@ export default function TripDetailsScreen() {
                   )}
                 </View>
               </ScrollView>
-            </View>
-          </View>
-        </Modal>
+        </ModalSheet>
 
         <Modal visible={chatOpen} transparent animationType="fade" onRequestClose={closeChat}>
           <View style={styles.chatModalBackdrop}>
@@ -910,11 +906,9 @@ export default function TripDetailsScreen() {
           </View>
         </Modal>
 
-        <Modal visible={spotifyModalOpen} transparent animationType="fade" onRequestClose={() => setSpotifyModalOpen(false)}>
-          <View style={styles.sheetBackdrop}>
-            <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setSpotifyModalOpen(false)} />
-            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1, justifyContent: 'flex-end' }}>
-            <View style={[styles.sheetCard, { paddingBottom: Math.max(insets.bottom, 18) + 12 }]}>
+        <ModalSheet visible={spotifyModalOpen} onClose={() => setSpotifyModalOpen(false)}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+            <View style={[styles.sheetContent, { paddingBottom: Math.max(insets.bottom, 18) + 12 }]}>
               <View style={styles.sheetHandle} />
               <View style={styles.sheetHeader}>
                 <View>
@@ -968,9 +962,8 @@ export default function TripDetailsScreen() {
                 </View>
               </View>
             </View>
-            </KeyboardAvoidingView>
-          </View>
-        </Modal>
+          </KeyboardAvoidingView>
+        </ModalSheet>
 
         <Modal
           visible={selectedCategoryKey !== null}
