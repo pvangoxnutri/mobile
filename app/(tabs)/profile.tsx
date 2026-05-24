@@ -15,6 +15,7 @@ import { apiFetch, apiJson } from '@/lib/api';
 import { getDefaultNotificationPreferences, loadNotificationPreferences, saveNotificationPreferences, type NotificationPreferences } from '@/lib/social';
 import { supabase } from '@/lib/supabase';
 import type { Quest } from '@/lib/types';
+import { PRIMARY_COLOR, PRIMARY_08, SECONDARY_COLOR } from '@/constants/colors';
 
 export default function ProfileScreen() {
   const { user, signOut, refreshProfile, deleteAccount } = useAuth();
@@ -409,7 +410,7 @@ export default function ProfileScreen() {
           )}
         </View>
 
-        <TouchableOpacity style={[styles.editAvatarButton, { backgroundColor: '#10a6c0', shadowColor: '#10a6c0' }]} activeOpacity={0.85} onPress={() => void handleAvatarPick()}>
+        <TouchableOpacity style={[styles.editAvatarButton, { backgroundColor: SECONDARY_COLOR, shadowColor: SECONDARY_COLOR }]} activeOpacity={0.85} onPress={() => void handleAvatarPick()}>
           {busy === 'avatar' ? <ActivityIndicator size="small" color="#fff" /> : <Ionicons name="create-outline" size={18} color="#fff" />}
         </TouchableOpacity>
 
@@ -431,9 +432,9 @@ export default function ProfileScreen() {
       </View>
 
       <View style={styles.statsRow}>
-        <StatCard value={String(joinedTrips)} label={t('profile.stats.tripsJoined')} accent="#10a6c0" />
-        <StatCard value={String(createdQuests)} label={t('profile.stats.sidequestsCreated')} accent="#ff4f74" />
-        <StatCard value={String(visitedCountries)} label={t('profile.stats.countriesVisited')} accent="#ff4f74" />
+        <StatCard value={String(joinedTrips)} label={t('profile.stats.tripsJoined')} accent={SECONDARY_COLOR} />
+        <StatCard value={String(createdQuests)} label={t('profile.stats.sidequestsCreated')} accent={PRIMARY_COLOR} />
+        <StatCard value={String(visitedCountries)} label={t('profile.stats.countriesVisited')} accent={PRIMARY_COLOR} />
       </View>
 
       <SectionCard

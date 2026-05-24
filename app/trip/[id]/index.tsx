@@ -13,7 +13,7 @@ import UserProfileCard from '@/components/user-profile-card';
 import { apiFetch, apiJson } from '@/lib/api';
 import { uploadImageIfNeeded } from '@/lib/uploads';
 import type { Quest, SideQuestActivity, TripInvite, LinkPreview } from '@/lib/types';
-import { PRIMARY_COLOR, SECONDARY_COLOR } from '@/constants/colors';
+import { PRIMARY_COLOR, PRIMARY_08, PRIMARY_20, SECONDARY_COLOR } from '@/constants/colors';
 
 type ChatMsg = {
   id: string;
