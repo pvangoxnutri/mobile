@@ -113,6 +113,8 @@ function SideQuestFormInner({
   const revealAtPreview = visibility === 'hidden' ? formatRevealPreview(revealDate, revealTime) : 'Avslöjas direkt';
   const tripRangeText =
     tripStartDate && tripEndDate ? `${formatShortDate(tripStartDate)} – ${formatShortDate(tripEndDate)}` : 'Laddar resans datum';
+  const today = getDefaultDate();
+  const selectedDateBeforeToday = isDateInputValid(date) && date < today;
   const selectedDateOutOfRange =
     tripStartDate && tripEndDate ? !isWithinRange(date, tripStartDate, tripEndDate) : false;
   const revealRange = useMemo(() => getRevealRange(tripStartDate, tripEndDate, date), [date, tripEndDate, tripStartDate]);
@@ -228,7 +230,14 @@ function SideQuestFormInner({
     }
 
     if (pickerTarget === 'date') {
-      setDate(toDateInput(selectedDate));
+      const selectedDateStr = toDateInput(selectedDate);
+      const today = getDefaultDate();
+      if (selectedDateStr < today) {
+        setMessage({ type: 'error', text: 'Aktiviteter kan inte vara tidigare än dagens datum.' });
+        return;
+      }
+      setDate(selectedDateStr);
+      setMessage(null);
       return;
     }
 
@@ -240,11 +249,27 @@ function SideQuestFormInner({
     setRevealTime(toTimeInput(selectedDate));
   }
 
+  function handleActivityDateInput(value: string) {
+    const today = getDefaultDate();
+    if (isDateInputValid(value) && value < today) {
+      setMessage({ type: 'error', text: 'Aktiviteter kan inte vara tidigare än dagens datum.' });
+      return;
+    }
+    setDate(value);
+    setMessage(null);
+  }
+
   async function saveActivity(): Promise<{ id: string } | null> {
     const normalizedTitle = title.trim();
 
     if (!normalizedTitle && visibility !== 'hidden') {
       setMessage({ type: 'error', text: 'Ange en titel för aktiviteten.' });
+      return null;
+    }
+
+    const today = getDefaultDate();
+    if (date < today) {
+      setMessage({ type: 'error', text: 'Aktiviteter kan inte vara tidigare än dagens datum.' });
       return null;
     }
 
@@ -489,12 +514,12 @@ function SideQuestFormInner({
       <View style={styles.block}>
         <Text style={styles.label}>När händer det?</Text>
         {Platform.OS === 'web' ? (
-          <View style={[styles.selectionCard, selectedDateOutOfRange ? styles.selectionCardError : null]}>
+          <View style={[styles.selectionCard, selectedDateOutOfRange || selectedDateBeforeToday ? styles.selectionCardError : null]}>
             <View style={{ flex: 1 }}>
               <Text style={styles.selectionEyebrow}>AKTIVITETSDATUM</Text>
               <TextInput
                 value={date}
-                onChangeText={setDate}
+                onChangeText={handleActivityDateInput}
                 placeholder="ÅÅÅÅ-MM-DD"
                 placeholderTextColor="#b7bcc7"
                 style={styles.webDateInput}
@@ -511,7 +536,7 @@ function SideQuestFormInner({
             style={[
               styles.selectionCard,
               pickerTarget === 'date' ? styles.selectionCardActive : null,
-              selectedDateOutOfRange ? styles.selectionCardError : null,
+              selectedDateOutOfRange || selectedDateBeforeToday ? styles.selectionCardError : null,
             ]}
             onPress={() => setPickerTarget('date')}>
             <View>
