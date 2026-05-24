@@ -8,7 +8,9 @@ import TopAlertsButton from '@/components/top-alerts-button';
 import { useI18n } from '@/components/i18n-provider';
 import { apiJson } from '@/lib/api';
 import type { Quest, SideQuestActivity } from '@/lib/types';
-import { PRIMARY_COLOR, PRIMARY_08, PRIMARY_12, SECONDARY_COLOR } from '@/constants/colors';
+import { SPACING, TYPOGRAPHY, COLORS, RADIUS, SHADOWS } from '@/constants/design-tokens';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 
 type CalendarItem = {
   id: string;
@@ -29,8 +31,6 @@ type CalendarItem = {
   ownerName?: string | null;
   tripPhase?: 'start' | 'end';
 };
-
-const BG = '#F7F3EC';
 
 export default function CalendarScreen() {
   const { t } = useI18n();
@@ -147,7 +147,7 @@ export default function CalendarScreen() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: BG }}>
+    <View style={{ flex: 1, backgroundColor: COLORS.white }}>
       <ScrollView
         ref={scrollRef}
         contentContainerStyle={[styles.screen, { paddingTop: Math.max(insets.top, 16) + 8, paddingBottom: Math.max(insets.bottom, 20) + 140 }]}
@@ -179,7 +179,7 @@ export default function CalendarScreen() {
         {/* Active trip card */}
         {activeTrip ? (
           <TouchableOpacity activeOpacity={0.9} style={styles.activeCard} onPress={() => router.push(`/trip/${activeTrip.id}`)}>
-            <View style={[styles.activeIcon, { backgroundColor: PRIMARY_COLOR }]}>
+            <View style={[styles.activeIcon, { backgroundColor: COLORS.primary }]}>
               <Ionicons name="airplane" size={16} color="#fff" />
             </View>
             <View style={{ flex: 1 }}>
@@ -189,7 +189,7 @@ export default function CalendarScreen() {
               </Text>
             </View>
             {activeTripDay ? (
-              <View style={[styles.dayBadge, { backgroundColor: PRIMARY_COLOR }]}>
+              <View style={[styles.dayBadge, { backgroundColor: COLORS.primary }]}>
                 <Text style={styles.dayBadgeText}>Day {activeTripDay}</Text>
               </View>
             ) : null}
@@ -217,17 +217,17 @@ export default function CalendarScreen() {
                   key={dateKey}
                   style={[styles.dateChip, isSelected && styles.dateChipSelected]}
                   onPress={() => jumpToSelectedDay(dateKey)}>
-                  <Text style={[styles.dateChipWeekday, isSelected && { color: PRIMARY_COLOR }]}>
+                  <Text style={[styles.dateChipWeekday, isSelected && { color: COLORS.primary }]}>
                     {new Intl.DateTimeFormat('en-US', { weekday: 'short' }).format(date).toUpperCase()}
                   </Text>
-                  <Text style={[styles.dateChipDay, isSelected && { color: PRIMARY_COLOR }]}>{date.getDate()}</Text>
+                  <Text style={[styles.dateChipDay, isSelected && { color: COLORS.primary }]}>{date.getDate()}</Text>
                   <View style={styles.dateChipDots}>
                     {getCalendarDots(items).map((tone, index) => (
                       <View
                         key={`${dateKey}-${tone}-${index}`}
                         style={[
                           styles.dateChipDot,
-                          tone === 'trip' ? { backgroundColor: SECONDARY_COLOR } : tone === 'hidden' ? { backgroundColor: '#47505d' } : { backgroundColor: PRIMARY_COLOR },
+                          tone === 'trip' ? { backgroundColor: COLORS.secondary } : tone === 'hidden' ? { backgroundColor: COLORS.textMuted } : { backgroundColor: COLORS.primary },
                         ]}
                       />
                     ))}
@@ -238,7 +238,7 @@ export default function CalendarScreen() {
           </View>
         ) : (
           <View style={styles.emptyMonthState}>
-            <Ionicons name="calendar-clear-outline" size={28} color="#b1b7c2" />
+            <Ionicons name="calendar-clear-outline" size={28} color={COLORS.textMuted} />
             <Text style={styles.emptyMonthText}>{t('calendar.empty.noEventDates')}</Text>
           </View>
         )}
@@ -260,13 +260,13 @@ export default function CalendarScreen() {
               {(tripStartItem || tripEndItem) ? (
                 <View style={styles.tripBadgeRow}>
                   {tripStartItem ? (
-                    <TouchableOpacity activeOpacity={0.85} style={[styles.tripBadge, { backgroundColor: SECONDARY_COLOR }]} onPress={() => router.push(`/trip/${tripStartItem.tripId}`)}>
+                    <TouchableOpacity activeOpacity={0.85} style={[styles.tripBadge, { backgroundColor: COLORS.secondary }]} onPress={() => router.push(`/trip/${tripStartItem.tripId}`)}>
                       <Ionicons name="airplane" size={11} color="#fff" />
                       <Text style={styles.tripBadgeText}>{tripStartItem.title} starts</Text>
                     </TouchableOpacity>
                   ) : null}
                   {tripEndItem ? (
-                    <TouchableOpacity activeOpacity={0.85} style={[styles.tripBadge, { backgroundColor: SECONDARY_COLOR }]} onPress={() => router.push(`/trip/${tripEndItem.tripId}`)}>
+                    <TouchableOpacity activeOpacity={0.85} style={[styles.tripBadge, { backgroundColor: COLORS.secondary }]} onPress={() => router.push(`/trip/${tripEndItem.tripId}`)}>
                       <Ionicons name="flag" size={11} color="#fff" />
                       <Text style={styles.tripBadgeText}>{tripEndItem.title} ends</Text>
                     </TouchableOpacity>
@@ -289,7 +289,7 @@ export default function CalendarScreen() {
                 };
                 const timeText = item.time?.trim() || t('calendar.time.anytime');
                 const iconName: keyof typeof Ionicons.glyphMap = item.hidden ? 'lock-closed' : 'sparkles';
-                const iconBg = item.hidden ? '#1B1E28' : PRIMARY_COLOR;
+                const iconBg = item.hidden ? COLORS.textPrimary : COLORS.primary;
                 const subtitle =
                   item.hidden && item.revealAt && !item.isRevealed
                     ? `Reveals at ${formatRevealTimeShort(item.revealAt)}`
@@ -314,7 +314,7 @@ export default function CalendarScreen() {
             </View>
           ) : !tripStartItem && !tripEndItem ? (
             <View style={styles.emptyDayState}>
-              <Ionicons name="calendar-clear-outline" size={26} color="#b1b7c2" />
+              <Ionicons name="calendar-clear-outline" size={26} color={COLORS.textMuted} />
               <Text style={styles.emptyDayText}>{t('calendar.empty.nothingPlanned')}</Text>
             </View>
           ) : null}
@@ -454,42 +454,37 @@ function getCalendarDots(items: CalendarItem[]) {
 
 const styles = StyleSheet.create({
   screen: {
-    paddingHorizontal: 20,
+    paddingHorizontal: SPACING.xl,
   },
 
   // Header
   headerTopRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 12,
-    marginBottom: 18,
+    gap: SPACING.md,
+    marginBottom: SPACING.lg,
   },
-  // Absolute-positioned so the alerts icon sits at the exact same X/Y on
-  // every tab that uses it, independent of per-page header layout.
   alertsAnchor: {
     position: 'absolute',
-    right: 20,
+    right: SPACING.xl,
     zIndex: 10,
   },
   eyebrow: {
-    fontSize: 12,
+    ...TYPOGRAPHY.sectionHeader,
     fontWeight: '800',
-    color: PRIMARY_COLOR,
-    letterSpacing: 2.2,
-    marginBottom: 6,
+    color: COLORS.primary,
+    marginBottom: SPACING.sm,
   },
   bigTitle: {
-    fontSize: 38,
+    ...TYPOGRAPHY.pageHeading,
     fontWeight: '900',
-    color: '#141720',
-    lineHeight: 44,
-    letterSpacing: -1,
-    marginBottom: 6,
+    color: COLORS.textPrimary,
+    marginBottom: SPACING.sm,
   },
   titleCopy: {
-    color: '#737883',
-    fontSize: 13,
-    lineHeight: 19,
+    ...TYPOGRAPHY.body,
+    fontWeight: '500',
+    color: COLORS.textSecondary,
     maxWidth: 240,
   },
 
@@ -498,16 +493,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#fff',
-    borderRadius: 28,
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-    marginBottom: 14,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
+    backgroundColor: COLORS.white,
+    borderRadius: RADIUS.lg,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.sm,
+    marginBottom: SPACING.lg,
+    ...SHADOWS.subtle,
   },
   monthSwitchButton: {
     width: 36,
@@ -518,58 +509,51 @@ const styles = StyleSheet.create({
   },
   monthTitle: {
     flex: 1,
-    color: '#1B1E28',
-    fontSize: 15,
+    ...TYPOGRAPHY.cardTitle,
     fontWeight: '700',
+    color: COLORS.textPrimary,
     textAlign: 'center',
   },
 
-  // Active trip card
+  // Active trip card (dark background variant)
   activeCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    backgroundColor: '#1B1E28',
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    marginBottom: 22,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.15,
-    shadowRadius: 14,
-    elevation: 6,
+    gap: SPACING.md,
+    backgroundColor: COLORS.textPrimary,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.lg,
+    marginBottom: SPACING.xl,
+    ...SHADOWS.medium,
   },
   activeIcon: {
     width: 36,
     height: 36,
-    borderRadius: 10,
+    borderRadius: RADIUS.xs,
     alignItems: 'center',
     justifyContent: 'center',
   },
   activeLabel: {
-    fontSize: 10,
+    ...TYPOGRAPHY.eyebrow,
     fontWeight: '700',
-    color: '#9AA2AE',
-    letterSpacing: 1.5,
-    marginBottom: 2,
+    color: COLORS.textMuted,
+    marginBottom: SPACING.xs,
   },
   activeTitle: {
-    fontSize: 14,
+    ...TYPOGRAPHY.cardTitle,
     fontWeight: '700',
-    color: '#fff',
-    letterSpacing: -0.2,
+    color: COLORS.white,
   },
   dayBadge: {
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    borderRadius: RADIUS.xs,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
   },
   dayBadgeText: {
-    fontSize: 12,
+    ...TYPOGRAPHY.buttonSmall,
     fontWeight: '800',
-    color: '#fff',
-    letterSpacing: -0.2,
+    color: COLORS.white,
   },
 
   // Section header
@@ -577,59 +561,57 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'baseline',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    marginBottom: SPACING.md,
   },
   sectionEyebrow: {
-    fontSize: 11,
+    ...TYPOGRAPHY.eyebrow,
     fontWeight: '800',
-    color: '#9AA2AE',
-    letterSpacing: 1.8,
+    color: COLORS.textMeta,
   },
   sectionMeta: {
-    fontSize: 12,
-    color: '#9AA2AE',
+    ...TYPOGRAPHY.meta,
     fontWeight: '600',
+    color: COLORS.textMeta,
   },
 
-  // Date grid
+  // Date grid (card-based)
   dateChipGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 22,
+    gap: SPACING.md,
+    marginBottom: SPACING.xl,
   },
   dateChip: {
     width: '31.5%',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#ECE7DD',
-    backgroundColor: '#fff',
-    paddingHorizontal: 10,
-    paddingVertical: 10,
+    borderRadius: RADIUS.sm,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.md,
+    ...SHADOWS.subtle,
   },
   dateChipSelected: {
-    backgroundColor: '#FFE9F0',
-    borderColor: '#FFC7D7',
+    backgroundColor: COLORS.primaryLight12,
+    borderWidth: 2,
+    borderColor: COLORS.primary,
   },
   dateChipWeekday: {
-    color: '#8a919d',
-    fontSize: 10,
+    ...TYPOGRAPHY.eyebrow,
     fontWeight: '800',
-    letterSpacing: 1,
+    color: COLORS.textMeta,
+    fontSize: 10,
   },
   dateChipDay: {
-    marginTop: 2,
-    color: '#171821',
-    fontSize: 22,
+    marginTop: SPACING.xs,
+    ...TYPOGRAPHY.pageHeading,
     fontWeight: '900',
-    letterSpacing: -0.5,
+    color: COLORS.textPrimary,
+    fontSize: 22,
   },
   dateChipDots: {
-    marginTop: 6,
+    marginTop: SPACING.md,
     minHeight: 6,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: SPACING.xs,
   },
   dateChipDot: {
     width: 5,
@@ -637,122 +619,102 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   emptyMonthState: {
-    borderRadius: 22,
-    backgroundColor: '#fff',
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.white,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 26,
-    paddingHorizontal: 18,
-    marginBottom: 22,
+    paddingVertical: SPACING.xxxl,
+    paddingHorizontal: SPACING.lg,
+    marginBottom: SPACING.xl,
+    ...SHADOWS.subtle,
   },
   emptyMonthText: {
-    marginTop: 10,
-    color: '#7c8290',
-    fontSize: 14,
+    marginTop: SPACING.lg,
+    ...TYPOGRAPHY.body,
+    fontWeight: '500',
+    color: COLORS.textSecondary,
     textAlign: 'center',
   },
 
   // Selected day card
   planCard: {
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: '#ECE7DD',
-    backgroundColor: '#fff',
-    padding: 18,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    elevation: 3,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.white,
+    padding: SPACING.lg,
+    marginBottom: SPACING.xl,
+    ...SHADOWS.subtle,
   },
   planHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: SPACING.md,
   },
   planEyebrow: {
-    color: PRIMARY_COLOR,
-    fontSize: 11,
+    ...TYPOGRAPHY.eyebrow,
     fontWeight: '800',
-    letterSpacing: 1.6,
-    marginBottom: 2,
+    color: COLORS.primary,
+    marginBottom: SPACING.xs,
   },
   planDayRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    gap: 10,
+    gap: SPACING.lg,
   },
   planDayBig: {
-    color: '#141720',
-    fontSize: 38,
+    ...TYPOGRAPHY.pageHeading,
     fontWeight: '900',
-    letterSpacing: -1.3,
+    fontSize: 38,
+    color: COLORS.textPrimary,
   },
   planDayMeta: {
-    color: '#7c8290',
-    fontSize: 13,
+    ...TYPOGRAPHY.meta,
     fontWeight: '600',
-  },
-  addButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: '#1B1E28',
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-  },
-  addButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#fff',
-    letterSpacing: -0.2,
+    color: COLORS.textSecondary,
   },
   planList: {
-    marginTop: 12,
-    gap: 8,
+    marginTop: SPACING.lg,
+    gap: SPACING.md,
   },
   planRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
-    gap: 10,
+    paddingVertical: SPACING.md,
+    gap: SPACING.lg,
   },
   planTime: {
     width: 62,
-    color: '#161821',
-    fontSize: 13,
+    ...TYPOGRAPHY.label,
     fontWeight: '700',
+    color: COLORS.textPrimary,
   },
   tripBadgeRow: {
-    marginTop: 10,
+    marginTop: SPACING.lg,
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
+    gap: SPACING.md,
   },
   tripBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    gap: SPACING.sm,
+    borderRadius: RADIUS.circle,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
   },
   tripBadgeText: {
-    color: '#fff',
-    fontSize: 11,
+    ...TYPOGRAPHY.meta,
     fontWeight: '700',
-    letterSpacing: -0.1,
+    color: COLORS.white,
   },
   planTimeDivider: {
     width: 1,
     height: 28,
-    backgroundColor: '#ECE7DD',
+    backgroundColor: COLORS.borderPrimary,
   },
   planIcon: {
     width: 34,
     height: 34,
-    borderRadius: 10,
+    borderRadius: RADIUS.xs,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -761,35 +723,37 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   planRowTitle: {
-    color: '#171821',
-    fontSize: 15,
+    ...TYPOGRAPHY.cardTitle,
     fontWeight: '800',
-    letterSpacing: -0.2,
+    color: COLORS.textPrimary,
   },
   planRowMeta: {
-    marginTop: 2,
-    color: '#7c8290',
-    fontSize: 12,
+    marginTop: SPACING.xs,
+    ...TYPOGRAPHY.meta,
     fontWeight: '500',
+    color: COLORS.textSecondary,
   },
   emptyDayState: {
-    marginTop: 12,
-    borderRadius: 18,
-    backgroundColor: '#FAF7F1',
+    marginTop: SPACING.lg,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.bgLight,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 24,
-    paddingHorizontal: 18,
+    paddingVertical: SPACING.xxl,
+    paddingHorizontal: SPACING.lg,
   },
   emptyDayText: {
-    marginTop: 8,
-    color: '#7c8290',
-    fontSize: 13,
+    marginTop: SPACING.md,
+    ...TYPOGRAPHY.body,
+    fontWeight: '500',
+    color: COLORS.textSecondary,
     textAlign: 'center',
   },
   errorText: {
-    marginTop: 14,
-    color: '#d53d18',
+    marginTop: SPACING.lg,
+    ...TYPOGRAPHY.meta,
+    fontWeight: '500',
+    color: COLORS.error,
     textAlign: 'center',
   },
 });
