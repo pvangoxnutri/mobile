@@ -27,7 +27,7 @@ import { BigHeroCard, type TripMember, type TripWithEvent } from '@/components/b
 import { apiFetch, apiJson } from '@/lib/api';
 import { invalidateCache } from '@/lib/cache';
 import type { Quest } from '@/lib/types';
-import { PRIMARY_COLOR, PRIMARY_08, PRIMARY_20, SECONDARY_COLOR } from '@/constants/colors';
+import { SPACING, TYPOGRAPHY, COLORS, RADIUS, SHADOWS, OPACITIES } from '@/constants/design-tokens';
 
 type MessageState = { type: 'success' | 'error'; text: string } | null;
 
@@ -265,7 +265,7 @@ export default function CreateTripScreen() {
         showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <TouchableOpacity style={styles.backButton} activeOpacity={0.8} onPress={unsaved.requestBack}>
-            <Ionicons name="arrow-back" size={28} color={PRIMARY_COLOR} />
+            <Ionicons name="arrow-back" size={28} color={COLORS.primary} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>{t('trip.title')}</Text>
         </View>
@@ -291,8 +291,8 @@ export default function CreateTripScreen() {
             picker — tapping it opens the image library. A small hint
             below directs first-time users. */}
         <TouchableOpacity activeOpacity={0.85} style={styles.coverHint} onPress={() => void handlePickCover()}>
-          <Ionicons name={coverImage ? 'camera-reverse-outline' : 'camera-outline'} size={16} color={PRIMARY_COLOR} />
-          <Text style={[styles.coverHintText, { color: PRIMARY_COLOR }]}>
+          <Ionicons name={coverImage ? 'camera-reverse-outline' : 'camera-outline'} size={16} color={COLORS.primary} />
+          <Text style={[styles.coverHintText, { color: COLORS.primary }]}>
             {coverImage ? t('trip.change_photo') : t('trip.add_cover')}
           </Text>
         </TouchableOpacity>
@@ -319,7 +319,7 @@ export default function CreateTripScreen() {
 
         <View style={styles.section}>
           <View style={styles.sectionTitleRow}>
-            <Ionicons name="calendar-outline" size={23} color={PRIMARY_COLOR} />
+            <Ionicons name="calendar-outline" size={23} color={COLORS.primary} />
             <Text style={styles.sectionTitle}>{t('trip.when_going')}</Text>
           </View>
 
@@ -329,15 +329,15 @@ export default function CreateTripScreen() {
               <Text style={styles.dateRangeValue}>{formatRangeDisplay(startDate, endDate)}</Text>
               <Text style={styles.dateRangeHint}>{t('trip.dates_hint')}</Text>
             </View>
-            <View style={[styles.dateRangeIcon, { backgroundColor: PRIMARY_08, borderColor: PRIMARY_20 }]}>
-              <Ionicons name="calendar-outline" size={22} color={PRIMARY_COLOR} />
+            <View style={[styles.dateRangeIcon, { backgroundColor: COLORS.primaryLight12, borderColor: COLORS.primaryLight20 }]}>
+              <Ionicons name="calendar-outline" size={22} color={COLORS.primary} />
             </View>
           </Pressable>
         </View>
 
         <View style={styles.section}>
           <View style={styles.sectionTitleRow}>
-            <Ionicons name="key-outline" size={23} color={SECONDARY_COLOR} />
+            <Ionicons name="key-outline" size={23} color={COLORS.secondary} />
             <Text style={styles.sectionTitle}>{t('trip.invite_code_section')}</Text>
           </View>
 
@@ -348,13 +348,13 @@ export default function CreateTripScreen() {
             </View>
 
             <View style={styles.codeActions}>
-              <TouchableOpacity activeOpacity={0.86} style={[styles.codeActionButton, { borderColor: PRIMARY_20 }]} onPress={() => void handleCopyInviteCode()}>
-                <Ionicons name="copy-outline" size={16} color={PRIMARY_COLOR} />
-                <Text style={[styles.codeActionText, { color: PRIMARY_COLOR }]}>{t('common.copy')}</Text>
+              <TouchableOpacity activeOpacity={0.86} style={[styles.codeActionButton, { borderColor: COLORS.primaryLight20 }]} onPress={() => void handleCopyInviteCode()}>
+                <Ionicons name="copy-outline" size={16} color={COLORS.primary} />
+                <Text style={[styles.codeActionText, { color: COLORS.primary }]}>{t('common.copy')}</Text>
               </TouchableOpacity>
-              <TouchableOpacity activeOpacity={0.86} style={[styles.codeActionButton, { borderColor: PRIMARY_20 }]} onPress={() => void handleShareInviteCode()}>
-                <Ionicons name="share-social-outline" size={16} color={PRIMARY_COLOR} />
-                <Text style={[styles.codeActionText, { color: PRIMARY_COLOR }]}>{t('common.share')}</Text>
+              <TouchableOpacity activeOpacity={0.86} style={[styles.codeActionButton, { borderColor: COLORS.primaryLight20 }]} onPress={() => void handleShareInviteCode()}>
+                <Ionicons name="share-social-outline" size={16} color={COLORS.primary} />
+                <Text style={[styles.codeActionText, { color: COLORS.primary }]}>{t('common.share')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -362,7 +362,7 @@ export default function CreateTripScreen() {
 
         <View style={styles.section}>
           <View style={styles.sectionTitleRow}>
-            <Ionicons name="mail-open-outline" size={23} color={SECONDARY_COLOR} />
+            <Ionicons name="mail-open-outline" size={23} color={COLORS.secondary} />
             <Text style={styles.sectionTitle}>{t('trip.invited_waiting')}</Text>
           </View>
 
@@ -373,13 +373,13 @@ export default function CreateTripScreen() {
               value={inviteEmail}
               onChangeText={setInviteEmail}
               placeholder={t('trip.invites.placeholder')}
-              placeholderTextColor="#b5b9c1"
+              placeholderTextColor={COLORS.placeholderText}
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
               style={styles.inviteInput}
             />
-            <TouchableOpacity activeOpacity={0.88} style={[styles.inviteAddButton, { backgroundColor: PRIMARY_COLOR }]} onPress={handleAddInvite}>
+            <TouchableOpacity activeOpacity={0.88} style={[styles.inviteAddButton, { backgroundColor: COLORS.primary }]} onPress={handleAddInvite}>
               <Text style={styles.inviteAddButtonText}>{t('common.add')}</Text>
             </TouchableOpacity>
           </View>
@@ -412,7 +412,7 @@ export default function CreateTripScreen() {
           </View>
         ) : null}
 
-        <TouchableOpacity activeOpacity={0.9} style={[styles.primaryButton, { backgroundColor: PRIMARY_COLOR, shadowColor: PRIMARY_COLOR }, submitting ? styles.primaryButtonDisabled : null]} disabled={submitting} onPress={() => void handleCreateTrip()}>
+        <TouchableOpacity activeOpacity={0.9} style={[styles.primaryButton, { backgroundColor: COLORS.primary, shadowColor: COLORS.primary }, submitting ? styles.primaryButtonDisabled : null]} disabled={submitting} onPress={() => void handleCreateTrip()}>
           <Text style={styles.primaryButtonText}>{submitting ? t('trip.starting') : t('trip.start_adventure')}</Text>
         </TouchableOpacity>
       </ScrollView>
@@ -494,22 +494,22 @@ function getDefaultEndDate() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.white,
   },
   scroll: {
     flex: 1,
   },
   content: {
-    paddingHorizontal: 24,
+    paddingHorizontal: SPACING.xl,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
-    paddingBottom: 14,
-    marginBottom: 12,
+    gap: SPACING.lg,
+    paddingBottom: SPACING.sm,
+    marginBottom: SPACING.md,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f1f4',
+    borderBottomColor: COLORS.borderPrimary,
   },
   backButton: {
     width: 40,
@@ -519,41 +519,39 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerTitle: {
-    color: '#151722',
-    fontSize: 24,
+    ...TYPOGRAPHY.pageHeading,
     fontWeight: '900',
-    letterSpacing: -0.9,
+    color: COLORS.textPrimary,
   },
   previewLabel: {
-    marginTop: 4,
-    marginBottom: 10,
-    fontSize: 11,
+    marginTop: SPACING.sm,
+    marginBottom: SPACING.sm,
+    ...TYPOGRAPHY.eyebrow,
     fontWeight: '800',
-    letterSpacing: 1.4,
-    color: '#8a909e',
+    color: COLORS.textMeta,
   },
   coverHint: {
-    marginTop: 12,
+    marginTop: SPACING.lg,
     alignSelf: 'center',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 100,
-    backgroundColor: '#fff',
+    gap: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: RADIUS.circle,
+    backgroundColor: COLORS.white,
     borderWidth: 1,
-    borderColor: PRIMARY_20,
+    borderColor: COLORS.primaryLight20,
   },
   coverHintText: {
-    fontSize: 13,
+    ...TYPOGRAPHY.label,
     fontWeight: '700',
   },
   coverCard: {
     height: 300,
-    borderRadius: 36,
+    borderRadius: RADIUS.lg,
     overflow: 'hidden',
-    backgroundColor: '#dbeaed',
+    backgroundColor: COLORS.bgLight,
     position: 'relative',
     justifyContent: 'center',
     alignItems: 'center',
@@ -580,8 +578,8 @@ const styles = StyleSheet.create({
     bottom: 18,
     width: 132,
     height: 18,
-    borderRadius: 999,
-    backgroundColor: 'rgba(43,49,53,0.18)',
+    borderRadius: RADIUS.circle,
+    backgroundColor: COLORS.gradientDark12,
     opacity: 0.35,
   },
   coverOverlay: {
@@ -599,8 +597,8 @@ const styles = StyleSheet.create({
   },
   coverPlusBadge: {
     position: 'absolute',
-    right: 22,
-    top: 21,
+    right: SPACING.xl,
+    top: SPACING.xl,
     width: 22,
     height: 22,
     borderRadius: 11,
@@ -609,114 +607,105 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.32)',
   },
   coverLabel: {
-    marginTop: 16,
-    color: '#fff',
+    marginTop: SPACING.lg,
+    color: COLORS.white,
     fontSize: 18,
     fontWeight: '500',
     letterSpacing: -0.4,
   },
   coverEditBadge: {
     position: 'absolute',
-    right: 18,
-    top: 18,
+    right: SPACING.lg,
+    top: SPACING.lg,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: 'rgba(18,22,29,0.38)',
+    gap: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: RADIUS.circle,
+    backgroundColor: COLORS.pillDark42,
   },
   coverEditBadgeText: {
-    color: '#fff',
+    color: COLORS.white,
     fontSize: 13,
     fontWeight: '700',
     letterSpacing: -0.2,
   },
   prompt: {
-    marginTop: 30,
+    marginTop: SPACING.xxxl,
     textAlign: 'center',
-    color: '#4d4f56',
-    fontSize: 18,
-    letterSpacing: -0.3,
+    color: COLORS.textSecondary,
+    ...TYPOGRAPHY.cardTitle,
   },
   titleInput: {
-    marginTop: 12,
+    marginTop: SPACING.lg,
     textAlign: 'center',
-    color: '#121317',
+    color: COLORS.textPrimary,
     fontSize: 34,
     fontWeight: '800',
     letterSpacing: -1.2,
-    paddingVertical: 10,
+    paddingVertical: SPACING.md,
   },
   secondaryPrompt: {
-    marginTop: 4,
+    marginTop: SPACING.sm,
     textAlign: 'center',
-    color: '#747984',
-    fontSize: 16,
+    color: COLORS.textSecondary,
+    ...TYPOGRAPHY.cardTitle,
   },
   destinationInput: {
-    marginTop: 10,
+    marginTop: SPACING.md,
     textAlign: 'center',
-    color: '#121317',
+    color: COLORS.textPrimary,
     fontSize: 20,
     fontWeight: '600',
     letterSpacing: -0.6,
-    paddingVertical: 8,
+    paddingVertical: SPACING.md,
   },
   section: {
-    marginTop: 32,
+    marginTop: SPACING.xxxl,
   },
   sectionTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: SPACING.md,
   },
   sectionTitle: {
-    color: '#171821',
-    fontSize: 20,
+    ...TYPOGRAPHY.sectionHeader,
     fontWeight: '800',
-    letterSpacing: -0.5,
+    color: COLORS.textPrimary,
   },
   dateRangeCard: {
-    marginTop: 16,
+    marginTop: SPACING.lg,
     minHeight: 118,
-    borderRadius: 30,
+    borderRadius: RADIUS.lg,
     borderWidth: 1,
-    borderColor: '#eceef2',
-    backgroundColor: '#fff',
-    paddingHorizontal: 22,
-    paddingVertical: 18,
+    borderColor: COLORS.borderPrimary,
+    backgroundColor: COLORS.white,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.lg,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.04,
-    shadowRadius: 18,
-    elevation: 4,
+    ...SHADOWS.subtle,
   },
   dateRangeCopy: {
     flex: 1,
   },
   dateRangeEyebrow: {
-    color: '#7f848f',
-    fontSize: 12,
+    ...TYPOGRAPHY.eyebrow,
     fontWeight: '800',
-    letterSpacing: 1.2,
+    color: COLORS.textMeta,
   },
   dateRangeValue: {
-    marginTop: 8,
-    color: '#14161d',
-    fontSize: 21,
+    marginTop: SPACING.md,
+    ...TYPOGRAPHY.sectionHeader,
     fontWeight: '800',
-    letterSpacing: -0.7,
+    color: COLORS.textPrimary,
   },
   dateRangeHint: {
-    marginTop: 8,
-    color: '#7a818d',
-    fontSize: 14,
-    lineHeight: 21,
+    marginTop: SPACING.md,
+    ...TYPOGRAPHY.body,
+    color: COLORS.textSecondary,
   },
   dateRangeIcon: {
     width: 46,
@@ -724,177 +713,170 @@ const styles = StyleSheet.create({
     borderRadius: 23,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#fff1f5',
+    backgroundColor: COLORS.primaryLight12,
     borderWidth: 1,
-    borderColor: '#ffd8e2',
-    marginLeft: 14,
+    borderColor: COLORS.primaryLight20,
+    marginLeft: SPACING.md,
   },
   codeCard: {
-    marginTop: 16,
-    borderRadius: 26,
+    marginTop: SPACING.lg,
+    borderRadius: RADIUS.lg,
     borderWidth: 1,
-    borderColor: '#eceef2',
-    backgroundColor: '#fff',
-    padding: 18,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.04,
-    shadowRadius: 18,
-    elevation: 4,
+    borderColor: COLORS.borderPrimary,
+    backgroundColor: COLORS.white,
+    padding: SPACING.lg,
+    ...SHADOWS.subtle,
   },
   codeLabel: {
-    color: '#7f848f',
-    fontSize: 12,
+    ...TYPOGRAPHY.eyebrow,
     fontWeight: '700',
-    letterSpacing: 1.1,
+    color: COLORS.textMeta,
   },
   codeValue: {
-    marginTop: 6,
-    color: '#14161d',
-    fontSize: 28,
+    marginTop: SPACING.sm,
+    ...TYPOGRAPHY.pageHeading,
     fontWeight: '900',
+    color: COLORS.textPrimary,
     letterSpacing: 3,
   },
   codeActions: {
     flexDirection: 'row',
-    gap: 10,
-    marginTop: 16,
+    gap: SPACING.md,
+    marginTop: SPACING.lg,
   },
   codeActionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    borderRadius: 999,
+    gap: SPACING.sm,
+    borderRadius: RADIUS.circle,
     borderWidth: 1,
-    borderColor: '#ffd0db',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    borderColor: COLORS.primaryLight20,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.md,
   },
   codeActionText: {
-    color: '#ff4f74',
-    fontSize: 14,
+    ...TYPOGRAPHY.label,
     fontWeight: '700',
+    color: COLORS.primary,
   },
   inviteHelper: {
-    marginTop: 12,
-    color: '#717783',
-    fontSize: 15,
-    lineHeight: 22,
+    marginTop: SPACING.lg,
+    ...TYPOGRAPHY.body,
+    color: COLORS.textSecondary,
   },
   inviteComposer: {
-    marginTop: 16,
+    marginTop: SPACING.lg,
     flexDirection: 'row',
-    gap: 10,
+    gap: SPACING.md,
     alignItems: 'center',
   },
   inviteInput: {
     flex: 1,
     minHeight: 56,
-    borderRadius: 18,
+    borderRadius: RADIUS.sm,
     borderWidth: 1,
-    borderColor: '#e7e9ee',
-    paddingHorizontal: 16,
-    color: '#171821',
-    fontSize: 16,
-    backgroundColor: '#fff',
+    borderColor: COLORS.borderInput,
+    paddingHorizontal: SPACING.lg,
+    color: COLORS.textPrimary,
+    ...TYPOGRAPHY.body,
+    backgroundColor: COLORS.bgLightest,
   },
   inviteAddButton: {
     minHeight: 56,
-    borderRadius: 18,
-    backgroundColor: '#ff4f74',
+    borderRadius: RADIUS.sm,
+    backgroundColor: COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 18,
+    paddingHorizontal: SPACING.lg,
   },
   inviteAddButtonText: {
-    color: '#fff',
-    fontSize: 15,
+    color: COLORS.white,
+    ...TYPOGRAPHY.buttonLarge,
     fontWeight: '800',
   },
   pendingWrap: {
-    marginTop: 16,
+    marginTop: SPACING.lg,
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: SPACING.md,
   },
   pendingChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    borderRadius: 999,
-    backgroundColor: '#f5f7fa',
+    gap: SPACING.md,
+    borderRadius: RADIUS.circle,
+    backgroundColor: COLORS.bgLight,
     borderWidth: 1,
-    borderColor: '#e6e9ef',
-    paddingLeft: 14,
-    paddingRight: 10,
-    paddingVertical: 10,
+    borderColor: COLORS.borderPrimary,
+    paddingLeft: SPACING.md,
+    paddingRight: SPACING.sm,
+    paddingVertical: SPACING.md,
   },
   pendingChipText: {
-    color: '#2b2d35',
-    fontSize: 14,
+    ...TYPOGRAPHY.body,
     fontWeight: '600',
+    color: COLORS.textPrimary,
   },
   pendingEmpty: {
-    marginTop: 16,
+    marginTop: SPACING.lg,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: SPACING.md,
   },
   pendingEmptyText: {
-    color: '#98a0ad',
-    fontSize: 14,
+    ...TYPOGRAPHY.body,
     fontWeight: '600',
+    color: COLORS.textMuted,
   },
   messageBanner: {
-    marginTop: 22,
-    borderRadius: 18,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
+    marginTop: SPACING.xl,
+    borderRadius: RADIUS.sm,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.md,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: SPACING.md,
   },
   messageBannerSuccess: {
-    backgroundColor: '#e9f8f1',
+    backgroundColor: COLORS.successLight,
     borderWidth: 1,
-    borderColor: '#bfe9d2',
+    borderColor: COLORS.successBorder,
   },
   messageBannerError: {
-    backgroundColor: '#ffefeb',
+    backgroundColor: COLORS.errorLight,
     borderWidth: 1,
-    borderColor: '#ffd0c3',
+    borderColor: COLORS.errorBorder,
   },
   messageText: {
     flex: 1,
-    fontSize: 14,
+    ...TYPOGRAPHY.body,
     fontWeight: '600',
   },
   messageTextSuccess: {
-    color: '#16734d',
+    color: COLORS.success,
   },
   messageTextError: {
-    color: '#a52617',
+    color: COLORS.error,
   },
   primaryButton: {
-    marginTop: 30,
+    marginTop: SPACING.xxxl,
     height: 82,
-    borderRadius: 999,
-    backgroundColor: '#ff4f74',
+    borderRadius: RADIUS.circle,
+    backgroundColor: COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#ff4f74',
+    shadowColor: COLORS.primary,
     shadowOffset: { width: 0, height: 16 },
     shadowOpacity: 0.28,
     shadowRadius: 28,
     elevation: 10,
   },
   primaryButtonDisabled: {
-    opacity: 0.72,
+    opacity: OPACITIES.disabled,
   },
   primaryButtonText: {
-    color: '#fff',
-    fontSize: 24,
+    ...TYPOGRAPHY.buttonLarge,
     fontWeight: '900',
-    letterSpacing: -0.9,
+    color: COLORS.white,
   },
 });

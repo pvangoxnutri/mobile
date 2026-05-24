@@ -129,7 +129,11 @@ export const COLORS = {
 
   // Semantic colors
   success: '#3ddc8c',           // Activity dot, success state, LIVE indicator
+  successLight: '#e9f8f1',      // Success message background
+  successBorder: '#bfe9d2',     // Success message border
   error: '#d53d18',             // Error messages
+  errorLight: '#ffefeb',        // Error message background
+  errorBorder: '#ffd0c3',       // Error message border
   warning: '#f59e0b',           // Reserved for future warnings
 
   // Modal & overlay backdrops
