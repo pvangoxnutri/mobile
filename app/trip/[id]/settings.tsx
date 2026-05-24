@@ -657,7 +657,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   inviteCodePillText: {
-    color: '#ff4f74',
+    color: PRIMARY_COLOR,
     fontSize: 12,
     fontWeight: '900',
     letterSpacing: 1,
@@ -682,7 +682,7 @@ const styles = StyleSheet.create({
   inviteAddButton: {
     minHeight: 54,
     borderRadius: 18,
-    backgroundColor: '#ff4f74',
+    backgroundColor: PRIMARY_COLOR,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 16,
@@ -713,7 +713,7 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
   },
   secondaryInviteButtonText: {
-    color: '#ff4f74',
+    color: PRIMARY_COLOR,
     fontSize: 14,
     fontWeight: '700',
   },
@@ -739,7 +739,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
     minHeight: 64,
     borderRadius: 999,
-    backgroundColor: '#ff4f74',
+    backgroundColor: PRIMARY_COLOR,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 20,
