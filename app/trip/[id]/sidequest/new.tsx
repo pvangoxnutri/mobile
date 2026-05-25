@@ -121,6 +121,7 @@ export default function NewSideQuestScreen() {
           </View>
         ) : trip && (isEditMode ? activity && initialValues : true) ? (
           <SideQuestForm
+            key={`${isEditMode ? 'edit' : 'create'}-${editId || 'new'}`}
             ref={formRef}
             mode={isEditMode ? 'edit' : 'create'}
             tripId={id}

@@ -11,6 +11,7 @@ import { useAuth } from '@/components/auth-provider';
 import { useI18n } from '@/components/i18n-provider';
 import UserProfileCard from '@/components/user-profile-card';
 import HiddenSidequestCard from '@/components/hidden-sidequest-card';
+import ActivityImageFallback from '@/components/activity-image-fallback';
 import ModalSheet from '@/components/modal-sheet';
 import { apiFetch, apiJson } from '@/lib/api';
 import { getCached, setCached, invalidateCache } from '@/lib/cache';
@@ -546,9 +547,7 @@ export default function TripDetailsScreen() {
                         {activity.imageUrl ? (
                           <Image source={{ uri: activity.imageUrl }} style={styles.timelineIcon} />
                         ) : (
-                          <View style={[styles.timelineIcon, { backgroundColor: COLORS.primary }]}>
-                            <Ionicons name="sparkles" size={18} color="#fff" />
-                          </View>
+                          <ActivityImageFallback category={activity.category} size="small" style={styles.timelineIcon} />
                         )}
                       </View>
                       <View style={styles.timelineBody}>

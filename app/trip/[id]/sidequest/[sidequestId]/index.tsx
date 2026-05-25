@@ -18,6 +18,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import UserProfileCard from '@/components/user-profile-card';
+import ActivityImageFallback from '@/components/activity-image-fallback';
 import { useI18n } from '@/components/i18n-provider';
 import { apiFetch, apiJson } from '@/lib/api';
 import { buildGoogleMapsSearchUrl, extractLocationQuery, extractStoredMapPlace, stripLocationMarker } from '@/lib/sidequest-location';
@@ -195,7 +196,11 @@ export default function SideQuestDetailScreen() {
                   </Text>
                 </Animated.View>
               </View>
-            ) : null}
+            ) : (
+              <View style={styles.heroCardNoImage}>
+                <ActivityImageFallback category={activity.category} size="large" style={styles.heroFallback} />
+              </View>
+            )}
 
             <View style={styles.metaCard}>
               {!activity.imageUrl ? (
@@ -401,6 +406,18 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: '#edf1f4',
     justifyContent: 'flex-end',
+  },
+  heroCardNoImage: {
+    minHeight: 360,
+    borderRadius: 34,
+    overflow: 'hidden',
+    backgroundColor: '#edf1f4',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 22,
+  },
+  heroFallback: {
+    borderRadius: 34,
   },
   heroImage: {
     ...StyleSheet.absoluteFillObject,

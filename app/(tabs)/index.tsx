@@ -10,6 +10,7 @@ import { useI18n } from '@/components/i18n-provider';
 import TopAlertsButton from '@/components/top-alerts-button';
 import UserProfileCard from '@/components/user-profile-card';
 import InviteCard from '@/components/invite-card';
+import ActivityImageFallback from '@/components/activity-image-fallback';
 import { BigHeroCard, getInitials, type TripWithEvent, type TripMember } from '@/components/big-hero-card';
 import { apiFetch, apiJson } from '@/lib/api';
 import { getCached, setCached, invalidateCache } from '@/lib/cache';
@@ -1021,6 +1022,8 @@ function UpNextCard({
       <View style={[styles.upNextImageBox, isSealed && styles.upNextImageBoxSealed]}>
         {!isSealed && activity.imageUrl ? (
           <Image source={{ uri: activity.imageUrl }} style={styles.upNextImage} resizeMode="cover" />
+        ) : !isSealed ? (
+          <ActivityImageFallback category={activity.category} size="medium" style={styles.upNextFallback} />
         ) : null}
         <View style={[styles.upNextIconBadge, isSealed && styles.upNextIconBadgeSealed]}>
           <Ionicons
@@ -1761,6 +1764,11 @@ const styles = StyleSheet.create({
   },
   upNextImage: {
     width: '100%', height: '100%',
+  },
+  upNextFallback: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 0,
   },
   upNextIconBadge: {
     position: 'absolute',
