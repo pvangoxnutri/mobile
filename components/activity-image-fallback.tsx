@@ -19,11 +19,11 @@ import { getCategorySymbol } from '@/lib/category-symbol';
 
 interface ActivityImageFallbackProps {
   category?: string | null;
-  size?: 'small' | 'medium' | 'large';
+  size?: 'small' | 'medium' | 'large' | 'hero';
   style?: any;
 }
 
-function getSizeStyles(size: 'small' | 'medium' | 'large') {
+function getSizeStyles(size: 'small' | 'medium' | 'large' | 'hero') {
   switch (size) {
     case 'small':
       return {
@@ -36,6 +36,14 @@ function getSizeStyles(size: 'small' | 'medium' | 'large') {
         container: { width: 160, height: 160 },
         borderRadius: RADIUS.md,
         iconSize: 40,
+      };
+    case 'hero':
+      // Fills the parent container; large icon for hero-sized fallbacks
+      // on screens like SideQuest detail. Width/height override via style prop.
+      return {
+        container: { width: '100%' as const, height: '100%' as const, minHeight: 360 },
+        borderRadius: RADIUS.lg,
+        iconSize: 96,
       };
     case 'medium':
     default:

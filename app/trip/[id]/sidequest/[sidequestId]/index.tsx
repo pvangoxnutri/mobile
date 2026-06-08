@@ -21,11 +21,16 @@ import UserProfileCard from '@/components/user-profile-card';
 import ActivityImageFallback from '@/components/activity-image-fallback';
 import { useI18n } from '@/components/i18n-provider';
 import { apiFetch, apiJson } from '@/lib/api';
+import { getCategorySymbol } from '@/lib/category-symbol';
 import { buildGoogleMapsSearchUrl, extractLocationQuery, extractStoredMapPlace, stripLocationMarker } from '@/lib/sidequest-location';
 import { useRevealAnimation } from '@/hooks/useMotion';
 import type { ActivityComment, SideQuestActivity } from '@/lib/types';
 import { COLORS } from '@/constants/design-tokens';
 import { PRIMARY_COLOR, SECONDARY_COLOR } from '@/constants/colors';
+
+function stripLeadingEmoji(text: string): string {
+  return text.replace(/^\p{Extended_Pictographic}️?\s*/u, '');
+}
 
 export default function SideQuestDetailScreen() {
   const { t } = useI18n();
@@ -198,7 +203,7 @@ export default function SideQuestDetailScreen() {
               </View>
             ) : (
               <View style={styles.heroCardNoImage}>
-                <ActivityImageFallback category={activity.category} size="large" style={styles.heroFallback} />
+                <ActivityImageFallback category={activity.category} size="hero" style={styles.heroFallback} />
               </View>
             )}
 
@@ -232,19 +237,17 @@ export default function SideQuestDetailScreen() {
                   ) : null}
                 </>
               ) : null}
-              {activity.category ? (
-                <MetaRow
-                  icon="pricetag-outline"
-                  label={t('activity.category')}
-                  value={{
-                    flight:    t('activity.category_flight'),
-                    sidequest: t('activity.category_sidequest'),
-                    food:      t('activity.category_food'),
-                    sight:     t('activity.category_sight'),
-                    other:     t('activity.category_other'),
-                  }[activity.category] ?? activity.category}
-                />
-              ) : null}
+              {activity.category ? (() => {
+                const symbol = getCategorySymbol(activity.category);
+                return (
+                  <MetaRow
+                    icon={symbol.icon}
+                    iconColor={symbol.iconColor}
+                    label={t('activity.category')}
+                    value={stripLeadingEmoji(t(symbol.labelKey))}
+                  />
+                );
+              })() : null}
               <MetaRow icon="calendar-outline" label={t('activity.date')} value={formatLongDate(activity.date)} />
               {activity.visibility === 'hidden' && activity.revealAt ? (
                 <MetaRow icon="sparkles-outline" label={t('activity.reveal')} value={formatReveal(activity.revealAt)} />
@@ -330,11 +333,11 @@ export default function SideQuestDetailScreen() {
   );
 }
 
-function MetaRow({ icon, label, value }: { icon: keyof typeof Ionicons.glyphMap; label: string; value: string }) {
+function MetaRow({ icon, label, value, iconColor }: { icon: keyof typeof Ionicons.glyphMap; label: string; value: string; iconColor?: string }) {
   return (
     <View style={styles.metaRow}>
       <View style={styles.metaIcon}>
-        <Ionicons name={icon} size={18} color={PRIMARY_COLOR} />
+        <Ionicons name={icon} size={18} color={iconColor ?? PRIMARY_COLOR} />
       </View>
       <View style={styles.metaCopy}>
         <Text style={styles.metaLabel}>{label}</Text>
@@ -411,13 +414,10 @@ const styles = StyleSheet.create({
     minHeight: 360,
     borderRadius: 34,
     overflow: 'hidden',
-    backgroundColor: '#edf1f4',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 22,
   },
   heroFallback: {
     borderRadius: 34,
+    minHeight: 360,
   },
   heroImage: {
     ...StyleSheet.absoluteFillObject,
