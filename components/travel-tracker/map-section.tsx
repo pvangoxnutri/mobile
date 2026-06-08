@@ -35,7 +35,7 @@ interface ContinentMeta {
 
 const CONTINENT_META: Record<Continent, ContinentMeta> = {
   Europe:          { icon: 'castle',             color: '#7C6FE0', lightBg: '#EFEEFB', shortName: 'Europe' },
-  Asia:            { icon: 'torii-gate',         color: '#E47A8B', lightBg: '#FCEEF1', shortName: 'Asia' },
+  Asia:            { icon: 'temple-buddhist',    color: '#E47A8B', lightBg: '#FCEEF1', shortName: 'Asia' },
   Africa:          { icon: 'tree',               color: '#D4943C', lightBg: '#FBF1DE', shortName: 'Africa' },
   'North America': { icon: 'image-filter-hdr',   color: '#5A6472', lightBg: '#EEF0F4', shortName: 'N. America' },
   'South America': { icon: 'palm-tree',          color: '#A57DC8', lightBg: '#F3ECF8', shortName: 'S. America' },

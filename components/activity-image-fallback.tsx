@@ -8,61 +8,19 @@
  * - Premium minimal aesthetic
  * - Emotionally warm and intentional
  * - Consistent with app's visual language
+ *
+ * Uses the shared category visual system: lib/category-symbol.ts
  */
 
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, SPACING, RADIUS } from '@/constants/design-tokens';
+import { RADIUS } from '@/constants/design-tokens';
+import { getCategorySymbol } from '@/lib/category-symbol';
 
 interface ActivityImageFallbackProps {
   category?: string | null;
   size?: 'small' | 'medium' | 'large';
   style?: any;
-}
-
-type CategoryConfig = {
-  icon: React.ComponentProps<typeof Ionicons>['name'];
-  backgroundColor: string;
-  iconColor: string;
-};
-
-const CATEGORY_CONFIGS: Record<string, CategoryConfig> = {
-  flight: {
-    icon: 'airplane',
-    backgroundColor: '#e0f2fe', // Soft sky blue
-    iconColor: '#0284c7',       // Sky blue
-  },
-  sidequest: {
-    icon: 'compass',
-    backgroundColor: '#f5f3ff', // Soft purple
-    iconColor: '#7c3aed',       // Purple
-  },
-  food: {
-    icon: 'restaurant',
-    backgroundColor: '#fef3c7', // Warm cream
-    iconColor: '#d97706',       // Warm orange
-  },
-  sight: {
-    icon: 'images',
-    backgroundColor: '#f3f4f6', // Soft neutral
-    iconColor: '#6b7280',       // Medium gray
-  },
-  other: {
-    icon: 'star',
-    backgroundColor: '#fce7f3', // Soft rose
-    iconColor: '#ec4899',       // Rose
-  },
-};
-
-const DEFAULT_CONFIG: CategoryConfig = {
-  icon: 'sparkles',
-  backgroundColor: '#f0f9ff', // Light blue
-  iconColor: '#0369a1',       // Medium blue
-};
-
-function getCategoryConfig(category?: string | null): CategoryConfig {
-  if (!category) return DEFAULT_CONFIG;
-  return CATEGORY_CONFIGS[category] || DEFAULT_CONFIG;
 }
 
 function getSizeStyles(size: 'small' | 'medium' | 'large') {
@@ -94,7 +52,7 @@ export default function ActivityImageFallback({
   size = 'medium',
   style,
 }: ActivityImageFallbackProps) {
-  const config = getCategoryConfig(category);
+  const symbol = getCategorySymbol(category);
   const sizeStyle = getSizeStyles(size);
 
   return (
@@ -103,15 +61,13 @@ export default function ActivityImageFallback({
         {
           ...sizeStyle.container,
           borderRadius: sizeStyle.borderRadius,
-          backgroundColor: config.backgroundColor,
+          backgroundColor: symbol.backgroundColor,
           alignItems: 'center',
           justifyContent: 'center',
         },
         style,
       ]}>
-      <Ionicons name={config.icon} size={sizeStyle.iconSize} color={config.iconColor} />
+      <Ionicons name={symbol.icon} size={sizeStyle.iconSize} color={symbol.iconColor} />
     </View>
   );
 }
-
-export { getCategoryConfig };

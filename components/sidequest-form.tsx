@@ -19,10 +19,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { apiFetch, apiJson } from '@/lib/api';
 import { invalidateCache } from '@/lib/cache';
+import { CATEGORY_VALUES, getCategorySymbol, type ActivityCategoryValue } from '@/lib/category-symbol';
 import { fetchPlaceSuggestions, type PlaceAutocompleteSuggestion } from '@/lib/maps-api';
 import { type StoredMapPlace, withLocationMarker } from '@/lib/sidequest-location';
 import type { SideQuestActivity } from '@/lib/types';
 import { uploadImageIfNeeded } from '@/lib/uploads';
+import { useI18n } from '@/components/i18n-provider';
 import { PRIMARY_COLOR, PRIMARY_08, PRIMARY_20, SECONDARY_COLOR } from '@/constants/colors';
 
 type PickerTarget = 'date' | 'revealDate' | 'revealTime' | null;
@@ -43,13 +45,17 @@ export type SideQuestFormValues = {
   imageUrl: string | null;
 };
 
-const CATEGORIES: { value: string; label: string; emoji: string }[] = [
-  { value: 'flight',      label: 'Flyg',        emoji: '✈️' },
-  { value: 'sidequest',   label: 'Sidequest',   emoji: '🎯' },
-  { value: 'food',        label: 'Mat',         emoji: '🍽️' },
-  { value: 'sight',       label: 'Sevärdighet', emoji: '🏛️' },
-  { value: 'other',       label: 'Övrigt',      emoji: '⭐' },
-];
+// Category values now come from the shared category visual system
+// (lib/category-symbol.ts). Labels are localized via i18n; icons + colors
+// come from getCategorySymbol(value).
+
+/**
+ * Strips a leading emoji + optional space from i18n strings like "✈️ Flight"
+ * so we can render the Ionicons icon next to a clean text label.
+ */
+function stripLeadingEmoji(text: string): string {
+  return text.replace(/^\p{Extended_Pictographic}️?\s*/u, '');
+}
 
 type Props = {
   mode: 'create' | 'edit';
@@ -89,6 +95,7 @@ function SideQuestFormInner({
   onSaved,
 }: Props, ref: Ref<SideQuestFormHandle>) {
   const insets = useSafeAreaInsets();
+  const { t } = useI18n();
   const [title, setTitle] = useState(initialValues?.title ?? '');
   const [description, setDescription] = useState(initialValues?.description ?? '');
   const [category, setCategory] = useState<string | null>(initialValues?.category ?? null);
@@ -446,16 +453,23 @@ function SideQuestFormInner({
       <View style={styles.block}>
         <Text style={styles.label}>Kategori <Text style={styles.labelOptional}>(valfritt)</Text></Text>
         <View style={styles.categoryRow}>
-          {CATEGORIES.map((cat) => {
-            const active = category === cat.value;
+          {CATEGORY_VALUES.map((value) => {
+            const symbol = getCategorySymbol(value);
+            const active = category === value;
+            const label = stripLeadingEmoji(t(symbol.labelKey));
             return (
               <TouchableOpacity
-                key={cat.value}
+                key={value}
                 activeOpacity={0.8}
                 style={[styles.categoryChip, active && { borderColor: PRIMARY_COLOR, backgroundColor: PRIMARY_08 }]}
-                onPress={() => setCategory(active ? null : cat.value)}>
-                <Text style={styles.categoryEmoji}>{cat.emoji}</Text>
-                <Text style={[styles.categoryLabel, active && { color: PRIMARY_COLOR, fontWeight: '600' }]}>{cat.label}</Text>
+                onPress={() => setCategory(active ? null : value)}>
+                <Ionicons
+                  name={symbol.icon}
+                  size={16}
+                  color={active ? PRIMARY_COLOR : symbol.iconColor}
+                  style={{ marginRight: 6 }}
+                />
+                <Text style={[styles.categoryLabel, active && { color: PRIMARY_COLOR, fontWeight: '600' }]}>{label}</Text>
               </TouchableOpacity>
             );
           })}

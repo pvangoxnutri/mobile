@@ -11,6 +11,7 @@ import TopAlertsButton from '@/components/top-alerts-button';
 import UserProfileCard from '@/components/user-profile-card';
 import InviteCard from '@/components/invite-card';
 import ActivityImageFallback from '@/components/activity-image-fallback';
+import { getCategorySymbol } from '@/lib/category-symbol';
 import { BigHeroCard, getInitials, type TripWithEvent, type TripMember } from '@/components/big-hero-card';
 import { apiFetch, apiJson } from '@/lib/api';
 import { getCached, setCached, invalidateCache } from '@/lib/cache';
@@ -780,15 +781,8 @@ function formatRelativeTime(dateStr: string, now: Date): string {
 }
 
 function categoryIonicon(category?: string | null): keyof typeof Ionicons.glyphMap {
-  switch ((category ?? '').toLowerCase()) {
-    case 'food': return 'cafe-outline';
-    case 'sight': return 'sunny-outline';
-    case 'sport': return 'fitness-outline';
-    case 'transport': return 'airplane-outline';
-    case 'stay': return 'bed-outline';
-    case 'nightlife': return 'wine-outline';
-    default: return 'star-outline';
-  }
+  // Delegates to the shared category visual system.
+  return getCategorySymbol(category).icon;
 }
 
 // BigHeroCard moved to components/big-hero-card.tsx so create-trip can
@@ -1027,9 +1021,9 @@ function UpNextCard({
         ) : null}
         <View style={[styles.upNextIconBadge, isSealed && styles.upNextIconBadgeSealed]}>
           <Ionicons
-            name={isSealed ? 'lock-closed' : categoryIonicon(activity.category)}
+            name={isSealed ? 'lock-closed' : getCategorySymbol(activity.category).icon}
             size={14}
-            color={isSealed ? '#8a909e' : '#14161d'}
+            color={isSealed ? '#8a909e' : getCategorySymbol(activity.category).iconColor}
           />
         </View>
       </View>
