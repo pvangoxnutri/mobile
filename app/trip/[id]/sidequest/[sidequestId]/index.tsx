@@ -150,12 +150,13 @@ export default function SideQuestDetailScreen() {
               <View style={styles.heroCard}>
                 <Animated.View
                   style={{
-                    opacity: contentOpacity,
+                    ...StyleSheet.absoluteFillObject,
                     transform: [{ translateY: contentTranslateY }],
                   }}>
                   <Image
                     source={{ uri: activity.imageUrl }}
                     style={styles.heroImage}
+                    resizeMode="cover"
                     blurRadius={activity.isHiddenForViewer ? 22 : 0}
                   />
                 </Animated.View>
