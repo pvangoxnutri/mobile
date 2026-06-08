@@ -302,7 +302,7 @@ export default function CreateTripScreen() {
           value={title}
           onChangeText={setTitle}
           placeholder={t('trip.trip_name_placeholder')}
-          placeholderTextColor="#d8dbe2"
+          placeholderTextColor={COLORS.placeholderText}
           style={styles.titleInput}
         />
 
@@ -311,7 +311,7 @@ export default function CreateTripScreen() {
           value={destination}
           onChangeText={setDestination}
           placeholder={t('trip.destination_placeholder')}
-          placeholderTextColor="#cfd3db"
+          placeholderTextColor={COLORS.placeholderText}
           style={styles.destinationInput}
         />
 
@@ -319,7 +319,7 @@ export default function CreateTripScreen() {
 
         <View style={styles.section}>
           <View style={styles.sectionTitleRow}>
-            <Ionicons name="calendar-outline" size={23} color={COLORS.primary} />
+            <Ionicons name="calendar-outline" size={18} color={COLORS.textMeta} />
             <Text style={styles.sectionTitle}>{t('trip.when_going')}</Text>
           </View>
 
@@ -337,7 +337,7 @@ export default function CreateTripScreen() {
 
         <View style={styles.section}>
           <View style={styles.sectionTitleRow}>
-            <Ionicons name="key-outline" size={23} color={COLORS.secondary} />
+            <Ionicons name="key-outline" size={18} color={COLORS.textMeta} />
             <Text style={styles.sectionTitle}>{t('trip.invite_code_section')}</Text>
           </View>
 
@@ -362,7 +362,7 @@ export default function CreateTripScreen() {
 
         <View style={styles.section}>
           <View style={styles.sectionTitleRow}>
-            <Ionicons name="mail-open-outline" size={23} color={COLORS.secondary} />
+            <Ionicons name="mail-open-outline" size={18} color={COLORS.textMeta} />
             <Text style={styles.sectionTitle}>{t('trip.invited_waiting')}</Text>
           </View>
 
@@ -390,14 +390,14 @@ export default function CreateTripScreen() {
                 <View key={email} style={styles.pendingChip}>
                   <Text style={styles.pendingChipText}>{email}</Text>
                   <TouchableOpacity activeOpacity={0.8} onPress={() => handleRemoveInvite(email)}>
-                    <Ionicons name="close" size={16} color="#6d7280" />
+                    <Ionicons name="close" size={16} color={COLORS.textSecondary} />
                   </TouchableOpacity>
                 </View>
               ))}
             </View>
           ) : (
             <View style={styles.pendingEmpty}>
-              <Ionicons name="time-outline" size={18} color="#98a0ad" />
+              <Ionicons name="time-outline" size={18} color={COLORS.textMeta} />
               <Text style={styles.pendingEmptyText}>{t('trip.no_invites')}</Text>
             </View>
           )}
@@ -508,8 +508,6 @@ const styles = StyleSheet.create({
     gap: SPACING.lg,
     paddingBottom: SPACING.sm,
     marginBottom: SPACING.md,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderPrimary,
   },
   backButton: {
     width: 40,
