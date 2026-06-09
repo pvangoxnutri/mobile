@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import TopAlertsButton from '@/components/top-alerts-button';
 import { useI18n } from '@/components/i18n-provider';
 import { apiJson } from '@/lib/api';
+import { getCategorySymbol } from '@/lib/category-symbol';
 import type { Quest, SideQuestActivity } from '@/lib/types';
 import { SPACING, TYPOGRAPHY, COLORS, RADIUS, SHADOWS } from '@/constants/design-tokens';
 import { Card } from '@/components/ui/card';
@@ -30,6 +31,7 @@ type CalendarItem = {
   isRevealed?: boolean;
   ownerName?: string | null;
   tripPhase?: 'start' | 'end';
+  category?: string | null;
 };
 
 export default function CalendarScreen() {
@@ -168,11 +170,11 @@ export default function CalendarScreen() {
         {/* Month switcher */}
         <View style={styles.monthSwitchRow}>
           <TouchableOpacity activeOpacity={0.84} style={styles.monthSwitchButton} onPress={() => setMonthDate((current) => addMonths(current, -1))}>
-            <Ionicons name="chevron-back" size={18} color="#1B1E28" />
+            <Ionicons name="chevron-back" size={18} color={COLORS.textPrimary} />
           </TouchableOpacity>
           <Text style={styles.monthTitle}>{monthTitle}</Text>
           <TouchableOpacity activeOpacity={0.84} style={styles.monthSwitchButton} onPress={() => setMonthDate((current) => addMonths(current, 1))}>
-            <Ionicons name="chevron-forward" size={18} color="#1B1E28" />
+            <Ionicons name="chevron-forward" size={18} color={COLORS.textPrimary} />
           </TouchableOpacity>
         </View>
 
@@ -180,7 +182,7 @@ export default function CalendarScreen() {
         {activeTrip ? (
           <TouchableOpacity activeOpacity={0.9} style={styles.activeCard} onPress={() => router.push(`/trip/${activeTrip.id}`)}>
             <View style={[styles.activeIcon, { backgroundColor: COLORS.primary }]}>
-              <Ionicons name="airplane" size={16} color="#fff" />
+              <Ionicons name="airplane" size={16} color={COLORS.white} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.activeLabel}>ACTIVE TRIP</Text>
@@ -261,13 +263,13 @@ export default function CalendarScreen() {
                 <View style={styles.tripBadgeRow}>
                   {tripStartItem ? (
                     <TouchableOpacity activeOpacity={0.85} style={[styles.tripBadge, { backgroundColor: COLORS.secondary }]} onPress={() => router.push(`/trip/${tripStartItem.tripId}`)}>
-                      <Ionicons name="airplane" size={11} color="#fff" />
+                      <Ionicons name="airplane" size={11} color={COLORS.white} />
                       <Text style={styles.tripBadgeText}>{tripStartItem.title} starts</Text>
                     </TouchableOpacity>
                   ) : null}
                   {tripEndItem ? (
                     <TouchableOpacity activeOpacity={0.85} style={[styles.tripBadge, { backgroundColor: COLORS.secondary }]} onPress={() => router.push(`/trip/${tripEndItem.tripId}`)}>
-                      <Ionicons name="flag" size={11} color="#fff" />
+                      <Ionicons name="flag" size={11} color={COLORS.white} />
                       <Text style={styles.tripBadgeText}>{tripEndItem.title} ends</Text>
                     </TouchableOpacity>
                   ) : null}
@@ -275,7 +277,7 @@ export default function CalendarScreen() {
               ) : null}
             </View>
             <TouchableOpacity style={styles.addButton} activeOpacity={0.85} onPress={handleAddPress}>
-              <Ionicons name="add" size={18} color="#fff" />
+              <Ionicons name="add" size={18} color={COLORS.white} />
               <Text style={styles.addButtonText}>Add</Text>
             </TouchableOpacity>
           </View>
@@ -288,8 +290,10 @@ export default function CalendarScreen() {
                   router.push(`/trip/${encodeURIComponent(item.tripId)}/sidequest/${encodeURIComponent(sidequestId)}`);
                 };
                 const timeText = item.time?.trim() || t('calendar.time.anytime');
-                const iconName: keyof typeof Ionicons.glyphMap = item.hidden ? 'lock-closed' : 'sparkles';
-                const iconBg = item.hidden ? COLORS.textPrimary : COLORS.primary;
+                const symbol = getCategorySymbol(item.category);
+                const iconName: keyof typeof Ionicons.glyphMap = item.hidden ? 'lock-closed' : symbol.icon;
+                const iconBg = item.hidden ? COLORS.textPrimary : symbol.backgroundColor;
+                const iconColor = item.hidden ? COLORS.white : symbol.iconColor;
                 const subtitle =
                   item.hidden && item.revealAt && !item.isRevealed
                     ? `Reveals at ${formatRevealTimeShort(item.revealAt)}`
@@ -300,7 +304,7 @@ export default function CalendarScreen() {
                     <Text style={styles.planTime} numberOfLines={1}>{timeText}</Text>
                     <View style={styles.planTimeDivider} />
                     <View style={[styles.planIcon, { backgroundColor: iconBg }]}>
-                      <Ionicons name={iconName} size={16} color="#fff" />
+                      <Ionicons name={iconName} size={16} color={iconColor} />
                     </View>
                     <View style={styles.planCopyWrap}>
                       <Text style={styles.planRowTitle} numberOfLines={1}>
@@ -384,6 +388,7 @@ function buildDayItemsMap(quests: Quest[], activities: SideQuestActivity[], t: (
       revealAt: activity.revealAt,
       isRevealed: activity.isRevealed,
       ownerName: activity.ownerName,
+      category: activity.category,
     });
     map.set(activity.date, items);
   }
@@ -472,7 +477,7 @@ const styles = StyleSheet.create({
   eyebrow: {
     ...TYPOGRAPHY.sectionHeader,
     fontWeight: '800',
-    color: COLORS.primary,
+    color: COLORS.textMeta,
     marginBottom: SPACING.sm,
   },
   bigTitle: {
@@ -652,7 +657,7 @@ const styles = StyleSheet.create({
   planEyebrow: {
     ...TYPOGRAPHY.eyebrow,
     fontWeight: '800',
-    color: COLORS.primary,
+    color: COLORS.textMeta,
     marginBottom: SPACING.xs,
   },
   planDayRow: {
@@ -680,6 +685,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: SPACING.md,
     gap: SPACING.lg,
+  },
+  addButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: RADIUS.circle,
+  },
+  addButtonText: {
+    ...TYPOGRAPHY.buttonSmall,
+    fontWeight: '800',
+    color: COLORS.white,
   },
   planTime: {
     width: 62,
