@@ -2,9 +2,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import TopAlertsButton from '@/components/top-alerts-button';
+import ActivityImageFallback from '@/components/activity-image-fallback';
+import TabHeader from '@/components/tab-header';
 import { useI18n } from '@/components/i18n-provider';
 import { apiJson } from '@/lib/api';
 import { getCategorySymbol } from '@/lib/category-symbol';
@@ -42,6 +43,7 @@ export default function CalendarScreen() {
   const [activities, setActivities] = useState<SideQuestActivity[]>([]);
   const [monthDate, setMonthDate] = useState(() => startOfMonth(new Date()));
   const [selectedDate, setSelectedDate] = useState(toDateKey(new Date()));
+  const [now] = useState(() => new Date());
   const [error, setError] = useState('');
 
   const loadCalendar = useCallback(() => {
@@ -124,6 +126,13 @@ export default function CalendarScreen() {
     return Math.max(1, diff + 1);
   }, [activeTrip]);
 
+  // Trip lookup so selected-day cards can show the trip name as social context.
+  const tripsById = useMemo(() => {
+    const map = new Map<string, Quest>();
+    for (const q of quests) map.set(q.id, q);
+    return map;
+  }, [quests]);
+
   useEffect(() => {
     if (visibleDates.length === 0) return;
     if (!visibleDates.includes(selectedDate)) {
@@ -155,17 +164,7 @@ export default function CalendarScreen() {
         contentContainerStyle={[styles.screen, { paddingTop: Math.max(insets.top, 16) + 8, paddingBottom: Math.max(insets.bottom, 20) + 140 }]}
         showsVerticalScrollIndicator={false}>
 
-        {/* Header */}
-        <View style={styles.headerTopRow}>
-          <View style={{ flex: 1, paddingRight: 60 }}>
-            <Text style={styles.eyebrow}>YOUR PLAN</Text>
-            <Text style={styles.bigTitle}>Calendar</Text>
-            <Text style={styles.titleCopy}>Everything planned across your trips, hidden moments included.</Text>
-          </View>
-        </View>
-        <View style={[styles.alertsAnchor, { top: Math.max(insets.top, 16) + 8 }]}>
-          <TopAlertsButton />
-        </View>
+        <TabHeader />
 
         {/* Month switcher */}
         <View style={styles.monthSwitchRow}>
@@ -200,9 +199,10 @@ export default function CalendarScreen() {
 
         {/* Section header */}
         <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionEyebrow}>EVENT DATES THIS MONTH</Text>
+          <Text style={styles.sectionEyebrow}>{t('calendar.eventDates.heading')}</Text>
+          <View style={styles.sectionLine} />
           {visibleDates.length > 0 ? (
-            <Text style={styles.sectionMeta}>{visibleDates.length} days · {monthPlans} plans</Text>
+            <Text style={styles.sectionMeta}>{t('calendar.eventDates.summary', { days: visibleDates.length, plans: monthPlans })}</Text>
           ) : null}
         </View>
 
@@ -240,89 +240,105 @@ export default function CalendarScreen() {
           </View>
         ) : (
           <View style={styles.emptyMonthState}>
-            <Ionicons name="calendar-clear-outline" size={28} color={COLORS.textMuted} />
+            <View style={styles.emptyMonthIconCircle}>
+              <Ionicons name="calendar-clear-outline" size={40} color={COLORS.textMuted} />
+            </View>
             <Text style={styles.emptyMonthText}>{t('calendar.empty.noEventDates')}</Text>
           </View>
         )}
 
-        {/* Selected day card */}
+        {/* Selected day — Home Up Next-style cards for the chosen day */}
         {(() => {
           const tripStartItem = selectedItems.find((i) => i.kind === 'trip' && i.tripPhase === 'start');
           const tripEndItem = selectedItems.find((i) => i.kind === 'trip' && i.tripPhase === 'end');
           const activityItems = selectedItems.filter((i) => i.kind === 'activity');
           return (
-        <View style={styles.planCard}>
-          <View style={styles.planHeaderRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.planEyebrow}>{formatSelectedDateEyebrow(selectedDate)}</Text>
-              <View style={styles.planDayRow}>
-                <Text style={styles.planDayBig}>{parseDateKey(selectedDate).getDate()}</Text>
-                <Text style={styles.planDayMeta}>{activityItems.length} {activityItems.length === 1 ? 'plan' : 'plans'}</Text>
+            <>
+              {/* Section header: eyebrow + hairline + count + Add */}
+              <View style={styles.selectedDayHeader}>
+                <Text style={styles.sectionEyebrow}>{formatSelectedDateEyebrow(selectedDate)}</Text>
+                <View style={styles.sectionLine} />
+                {activityItems.length > 0 ? (
+                  <Text style={styles.sectionMeta}>
+                    {t(activityItems.length === 1 ? 'calendar.selectedDay.plansCount_one' : 'calendar.selectedDay.plansCount_other', { count: activityItems.length })}
+                  </Text>
+                ) : null}
+                <TouchableOpacity style={styles.addButton} activeOpacity={0.85} onPress={handleAddPress}>
+                  <Ionicons name="add" size={18} color={COLORS.white} />
+                  <Text style={styles.addButtonText}>{t('calendar.addButton')}</Text>
+                </TouchableOpacity>
               </View>
+
+              {/* Trip start/end markers for the selected day, if any */}
               {(tripStartItem || tripEndItem) ? (
                 <View style={styles.tripBadgeRow}>
                   {tripStartItem ? (
                     <TouchableOpacity activeOpacity={0.85} style={[styles.tripBadge, { backgroundColor: COLORS.secondary }]} onPress={() => router.push(`/trip/${tripStartItem.tripId}`)}>
                       <Ionicons name="airplane" size={11} color={COLORS.white} />
-                      <Text style={styles.tripBadgeText}>{tripStartItem.title} starts</Text>
+                      <Text style={styles.tripBadgeText}>{t('calendar.tripStarts', { title: tripStartItem.title })}</Text>
                     </TouchableOpacity>
                   ) : null}
                   {tripEndItem ? (
                     <TouchableOpacity activeOpacity={0.85} style={[styles.tripBadge, { backgroundColor: COLORS.secondary }]} onPress={() => router.push(`/trip/${tripEndItem.tripId}`)}>
                       <Ionicons name="flag" size={11} color={COLORS.white} />
-                      <Text style={styles.tripBadgeText}>{tripEndItem.title} ends</Text>
+                      <Text style={styles.tripBadgeText}>{t('calendar.tripEnds', { title: tripEndItem.title })}</Text>
                     </TouchableOpacity>
                   ) : null}
                 </View>
               ) : null}
-            </View>
-            <TouchableOpacity style={styles.addButton} activeOpacity={0.85} onPress={handleAddPress}>
-              <Ionicons name="add" size={18} color={COLORS.white} />
-              <Text style={styles.addButtonText}>Add</Text>
-            </TouchableOpacity>
-          </View>
 
-          {activityItems.length > 0 ? (
-            <View style={styles.planList}>
-              {activityItems.map((item) => {
-                const onPress = () => {
-                  const sidequestId = item.activityId ?? item.id;
-                  router.push(`/trip/${encodeURIComponent(item.tripId)}/sidequest/${encodeURIComponent(sidequestId)}`);
-                };
-                const timeText = item.time?.trim() || t('calendar.time.anytime');
-                const symbol = getCategorySymbol(item.category);
-                const iconName: keyof typeof Ionicons.glyphMap = item.hidden ? 'lock-closed' : symbol.icon;
-                const iconBg = item.hidden ? COLORS.textPrimary : symbol.backgroundColor;
-                const iconColor = item.hidden ? COLORS.white : symbol.iconColor;
-                const subtitle =
-                  item.hidden && item.revealAt && !item.isRevealed
-                    ? `Reveals at ${formatRevealTimeShort(item.revealAt)}`
-                    : item.ownerName?.trim() || item.meta;
+              {activityItems.length === 0 ? (
+                !tripStartItem && !tripEndItem ? (
+                  <View style={styles.upcomingEmptyCard}>
+                    <View style={styles.upcomingEmptyIcon}>
+                      <Ionicons name="sparkles-outline" size={20} color={COLORS.textMuted} />
+                    </View>
+                    <Text style={styles.upcomingEmptyText}>{t('calendar.empty.nothingPlanned')}</Text>
+                  </View>
+                ) : null
+              ) : (
+                <View style={styles.upcomingRow}>
+                  {activityItems.map((item) => {
+                    const symbol = getCategorySymbol(item.category);
+                    const dateLabel = formatUpcomingDate(item.date, now, t);
+                    const timeLabel = item.time ? ` · ${item.time}` : '';
+                    const tripTitle = tripsById.get(item.tripId)?.title ?? null;
 
-                return (
-                  <TouchableOpacity key={item.id} activeOpacity={0.85} style={styles.planRow} onPress={onPress}>
-                    <Text style={styles.planTime} numberOfLines={1}>{timeText}</Text>
-                    <View style={styles.planTimeDivider} />
-                    <View style={[styles.planIcon, { backgroundColor: iconBg }]}>
-                      <Ionicons name={iconName} size={16} color={iconColor} />
-                    </View>
-                    <View style={styles.planCopyWrap}>
-                      <Text style={styles.planRowTitle} numberOfLines={1}>
-                        {item.hidden ? t('calendar.activity.hidden') : item.title}
-                      </Text>
-                      <Text style={styles.planRowMeta} numberOfLines={1}>{subtitle}</Text>
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          ) : !tripStartItem && !tripEndItem ? (
-            <View style={styles.emptyDayState}>
-              <Ionicons name="calendar-clear-outline" size={26} color={COLORS.textMuted} />
-              <Text style={styles.emptyDayText}>{t('calendar.empty.nothingPlanned')}</Text>
-            </View>
-          ) : null}
-        </View>
+                    return (
+                      <TouchableOpacity
+                        key={item.id}
+                        activeOpacity={0.88}
+                        onPress={() => router.push(`/trip/${encodeURIComponent(item.tripId)}/sidequest/${encodeURIComponent(item.activityId ?? item.id)}`)}
+                        style={[styles.upcomingCard, item.hidden && styles.upcomingCardSealed]}>
+                        <View style={[styles.upcomingImageBox, item.hidden && styles.upcomingImageBoxSealed]}>
+                          {!item.hidden && item.imageUrl ? (
+                            <Image source={{ uri: item.imageUrl }} style={styles.upcomingImage} resizeMode="cover" />
+                          ) : !item.hidden ? (
+                            <ActivityImageFallback category={item.category} size="medium" style={styles.upcomingFallback} />
+                          ) : null}
+                          <View style={[styles.upcomingIconBadge, item.hidden && styles.upcomingIconBadgeSealed]}>
+                            <Ionicons
+                              name={item.hidden ? 'lock-closed' : symbol.icon}
+                              size={14}
+                              color={item.hidden ? COLORS.textMeta : symbol.iconColor}
+                            />
+                          </View>
+                        </View>
+                        <View style={styles.upcomingBody}>
+                          <Text style={styles.upcomingDate} numberOfLines={1}>{dateLabel}{timeLabel}</Text>
+                          <Text style={styles.upcomingTitle} numberOfLines={1}>
+                            {item.hidden ? t('calendar.activity.hidden') : item.title}
+                          </Text>
+                          {tripTitle ? (
+                            <Text style={styles.upcomingTripName} numberOfLines={1}>{tripTitle}</Text>
+                          ) : null}
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
+            </>
           );
         })()}
 
@@ -437,16 +453,22 @@ function formatSelectedDateEyebrow(value: string) {
   return `${weekday} · ${month}`;
 }
 
+function formatUpcomingDate(value: string, now: Date, t: (key: string) => string) {
+  const todayStr = toDateKey(now);
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowStr = toDateKey(tomorrow);
+  if (value === todayStr) return t('home.today');
+  if (value === tomorrowStr) return t('home.tomorrow');
+  return new Intl.DateTimeFormat(undefined, { weekday: 'short', day: 'numeric' }).format(parseDateKey(value));
+}
+
 function formatTripRange(start: string, end: string) {
   const s = parseDateKey(start);
   const e = parseDateKey(end);
   const startStr = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(s);
   const endStr = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(e);
   return `${startStr} — ${endStr}`;
-}
-
-function formatRevealTimeShort(value: string) {
-  return new Intl.DateTimeFormat('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(value));
 }
 
 function getCalendarDots(items: CalendarItem[]) {
@@ -462,39 +484,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.xl,
   },
 
-  // Header
-  headerTopRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: SPACING.md,
-    marginBottom: SPACING.lg,
-  },
-  alertsAnchor: {
-    position: 'absolute',
-    right: SPACING.xl,
-    zIndex: 10,
-  },
-  eyebrow: {
-    ...TYPOGRAPHY.sectionHeader,
-    fontWeight: '800',
-    color: COLORS.textMeta,
-    marginBottom: SPACING.sm,
-  },
-  bigTitle: {
-    ...TYPOGRAPHY.pageHeading,
-    fontWeight: '900',
-    color: COLORS.textPrimary,
-    marginBottom: SPACING.sm,
-  },
-  titleCopy: {
-    ...TYPOGRAPHY.body,
-    fontWeight: '500',
-    color: COLORS.textSecondary,
-    maxWidth: 240,
-  },
-
   // Month switcher
   monthSwitchRow: {
+    marginTop: SPACING.xxxl,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -524,13 +516,13 @@ const styles = StyleSheet.create({
   activeCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.md,
+    gap: SPACING.lg,
     backgroundColor: COLORS.textPrimary,
-    borderRadius: RADIUS.md,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.lg,
-    marginBottom: SPACING.xl,
-    ...SHADOWS.medium,
+    borderRadius: RADIUS.lg,
+    paddingHorizontal: SPACING.xl,
+    paddingVertical: SPACING.xl,
+    marginBottom: SPACING.xxl,
+    ...SHADOWS.strong,
   },
   activeIcon: {
     width: 36,
@@ -564,8 +556,8 @@ const styles = StyleSheet.create({
   // Section header
   sectionHeaderRow: {
     flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: SPACING.md,
     marginBottom: SPACING.md,
   },
   sectionEyebrow: {
@@ -573,24 +565,31 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: COLORS.textMeta,
   },
+  sectionLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: COLORS.borderPrimary,
+  },
   sectionMeta: {
     ...TYPOGRAPHY.meta,
     fontWeight: '600',
     color: COLORS.textMeta,
   },
 
-  // Date grid (card-based)
+  // Date grid (compact calendar-grid feel)
   dateChipGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: SPACING.md,
+    gap: SPACING.sm,
     marginBottom: SPACING.xl,
   },
   dateChip: {
-    width: '31.5%',
-    borderRadius: RADIUS.sm,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.md,
+    width: '22.5%',
+    borderRadius: RADIUS.xs,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.sm,
+    backgroundColor: COLORS.white,
+    alignItems: 'center',
     ...SHADOWS.subtle,
   },
   dateChipSelected: {
@@ -599,92 +598,66 @@ const styles = StyleSheet.create({
     borderColor: COLORS.primary,
   },
   dateChipWeekday: {
-    ...TYPOGRAPHY.eyebrow,
+    fontSize: 9,
     fontWeight: '800',
     color: COLORS.textMeta,
-    fontSize: 10,
+    letterSpacing: 1.0,
   },
   dateChipDay: {
-    marginTop: SPACING.xs,
-    ...TYPOGRAPHY.pageHeading,
+    marginTop: 2,
+    fontSize: 18,
+    lineHeight: 22,
     fontWeight: '900',
     color: COLORS.textPrimary,
-    fontSize: 22,
+    letterSpacing: -0.6,
   },
   dateChipDots: {
-    marginTop: SPACING.md,
-    minHeight: 6,
+    marginTop: SPACING.xs,
+    minHeight: 5,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.xs,
+    gap: 3,
   },
   dateChipDot: {
-    width: 5,
-    height: 5,
+    width: 4,
+    height: 4,
     borderRadius: 999,
   },
   emptyMonthState: {
-    borderRadius: RADIUS.md,
+    borderRadius: RADIUS.xl,
     backgroundColor: COLORS.white,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: SPACING.xxxl,
-    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.xxxl + SPACING.md,
+    paddingHorizontal: SPACING.xl,
     marginBottom: SPACING.xl,
     ...SHADOWS.subtle,
+  },
+  emptyMonthIconCircle: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.bgLight,
   },
   emptyMonthText: {
-    marginTop: SPACING.lg,
-    ...TYPOGRAPHY.body,
-    fontWeight: '500',
-    color: COLORS.textSecondary,
+    marginTop: SPACING.xl,
+    color: COLORS.textPrimary,
+    fontSize: 22,
+    lineHeight: 26,
+    fontWeight: '900',
+    letterSpacing: -0.8,
     textAlign: 'center',
+    maxWidth: 260,
   },
 
-  // Selected day card
-  planCard: {
-    borderRadius: RADIUS.md,
-    backgroundColor: COLORS.white,
-    padding: SPACING.lg,
-    marginBottom: SPACING.xl,
-    ...SHADOWS.subtle,
-  },
-  planHeaderRow: {
+  // Selected day section header (Home pattern: eyebrow + hairline + meta + Add)
+  selectedDayHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: SPACING.md,
-  },
-  planEyebrow: {
-    ...TYPOGRAPHY.eyebrow,
-    fontWeight: '800',
-    color: COLORS.textMeta,
-    marginBottom: SPACING.xs,
-  },
-  planDayRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: SPACING.lg,
-  },
-  planDayBig: {
-    ...TYPOGRAPHY.pageHeading,
-    fontWeight: '900',
-    fontSize: 38,
-    color: COLORS.textPrimary,
-  },
-  planDayMeta: {
-    ...TYPOGRAPHY.meta,
-    fontWeight: '600',
-    color: COLORS.textSecondary,
-  },
-  planList: {
-    marginTop: SPACING.lg,
     gap: SPACING.md,
-  },
-  planRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: SPACING.md,
-    gap: SPACING.lg,
+    marginBottom: SPACING.md,
   },
   addButton: {
     flexDirection: 'row',
@@ -700,17 +673,11 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: COLORS.white,
   },
-  planTime: {
-    width: 62,
-    ...TYPOGRAPHY.label,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-  },
   tripBadgeRow: {
-    marginTop: SPACING.lg,
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: SPACING.md,
+    marginBottom: SPACING.md,
   },
   tripBadge: {
     flexDirection: 'row',
@@ -725,54 +692,114 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.white,
   },
-  planTimeDivider: {
-    width: 1,
-    height: 28,
-    backgroundColor: COLORS.borderPrimary,
-  },
-  planIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: RADIUS.xs,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  planCopyWrap: {
-    flex: 1,
-    minWidth: 0,
-  },
-  planRowTitle: {
-    ...TYPOGRAPHY.cardTitle,
-    fontWeight: '800',
-    color: COLORS.textPrimary,
-  },
-  planRowMeta: {
-    marginTop: SPACING.xs,
-    ...TYPOGRAPHY.meta,
-    fontWeight: '500',
-    color: COLORS.textSecondary,
-  },
-  emptyDayState: {
-    marginTop: SPACING.lg,
-    borderRadius: RADIUS.md,
-    backgroundColor: COLORS.bgLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: SPACING.xxl,
-    paddingHorizontal: SPACING.lg,
-  },
-  emptyDayText: {
-    marginTop: SPACING.md,
-    ...TYPOGRAPHY.body,
-    fontWeight: '500',
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-  },
   errorText: {
     marginTop: SPACING.lg,
     ...TYPOGRAPHY.meta,
     fontWeight: '500',
     color: COLORS.error,
+    textAlign: 'center',
+  },
+
+  // Selected-day activity cards — full-width, stacked vertically (one per row)
+  upcomingRow: {
+    flexDirection: 'column',
+    gap: SPACING.md,
+    marginBottom: SPACING.xl,
+  },
+  upcomingCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: RADIUS.sm,
+    overflow: 'hidden',
+    ...SHADOWS.subtle,
+  },
+  upcomingCardSealed: {
+    backgroundColor: '#ece7df',
+  },
+  upcomingImageBox: {
+    height: 76,
+    backgroundColor: '#e6e2d8',
+    position: 'relative',
+  },
+  upcomingImageBoxSealed: {
+    backgroundColor: '#ece7df',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  upcomingImage: {
+    width: '100%',
+    height: '100%',
+  },
+  upcomingFallback: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 0,
+  },
+  upcomingIconBadge: {
+    position: 'absolute',
+    top: SPACING.sm,
+    left: SPACING.sm,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: COLORS.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+  },
+  upcomingIconBadgeSealed: {
+    position: 'absolute',
+    top: '40%',
+    left: '50%',
+    transform: [{ translateX: -14 }],
+    width: 28,
+    height: 28,
+    backgroundColor: 'rgba(255,255,255,0.85)',
+  },
+  upcomingBody: {
+    padding: 9,
+  },
+  upcomingDate: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: COLORS.textMeta,
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  upcomingTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: COLORS.textPrimary,
+    letterSpacing: -0.2,
+  },
+  upcomingTripName: {
+    fontSize: 11,
+    color: COLORS.textMeta,
+    marginTop: 4,
+    fontWeight: '500',
+  },
+  upcomingEmptyCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: RADIUS.sm,
+    borderWidth: 1,
+    borderColor: COLORS.borderPrimary,
+    borderStyle: 'dashed',
+    paddingVertical: SPACING.xl,
+    paddingHorizontal: SPACING.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.sm,
+    marginBottom: SPACING.xl,
+  },
+  upcomingEmptyIcon: {
+    opacity: 0.7,
+  },
+  upcomingEmptyText: {
+    fontSize: 12,
+    color: COLORS.textMeta,
+    fontWeight: '500',
     textAlign: 'center',
   },
 });
