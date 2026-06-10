@@ -1,66 +1,119 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import React from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import React, { useEffect, useRef, useState } from 'react';
+import { Animated, Easing, Pressable, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PRIMARY_COLOR } from '@/constants/colors';
 
-export default function TabLayout() {
-  const insets = useSafeAreaInsets();
-  const tabBarBottom = 0;
-  const tabBarHeight = 74 + Math.max(insets.bottom - 6, 0);
+const TAB_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
+  index: 'home',
+  calendar: 'calendar-clear-outline',
+  profile: 'person',
+};
 
+const PILL_SIZE = 50;
+const TAB_BAR_PADDING_H = 10;
+const TAB_BAR_PADDING_TOP = 10;
+
+export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
         tabBarShowLabel: false,
-        tabBarStyle: [styles.tabBar, { bottom: tabBarBottom, height: tabBarHeight }],
-        tabBarItemStyle: styles.tabItem,
-        tabBarButton: (props) => <Pressable {...(props as React.ComponentProps<typeof Pressable>)} hitSlop={14} pressRetentionOffset={14} />,
-      }}>
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Home',
-          tabBarIcon: ({ focused }) => (
-            <TabIcon focused={focused} icon={<Ionicons name="home" size={26} color={focused ? '#fff' : '#9fa4ae'} />} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="calendar"
-        options={{
-          title: 'Calendar',
-          tabBarIcon: ({ focused }) => (
-            <TabIcon
-              focused={focused}
-              icon={<Ionicons name="calendar-clear-outline" size={26} color={focused ? '#fff' : '#9fa4ae'} />}
-            />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: 'Profile',
-          tabBarIcon: ({ focused }) => (
-            <TabIcon focused={focused} icon={<Ionicons name="person" size={25} color={focused ? '#fff' : '#9fa4ae'} />} />
-          ),
-        }}
-      />
+      }}
+      tabBar={(props) => <PremiumTabBar {...props} />}>
+      <Tabs.Screen name="index" options={{ title: 'Home' }} />
+      <Tabs.Screen name="calendar" options={{ title: 'Calendar' }} />
+      <Tabs.Screen name="profile" options={{ title: 'Profile' }} />
     </Tabs>
   );
 }
 
-function TabIcon({ focused, icon }: { focused: boolean; icon: React.ReactNode }) {
-  if (!focused) {
-    return <View style={styles.inactiveIcon}>{icon}</View>;
+function PremiumTabBar({ state, navigation }: BottomTabBarProps) {
+  const insets = useSafeAreaInsets();
+  const [containerWidth, setContainerWidth] = useState(0);
+  const pillTranslateX = useRef(new Animated.Value(0)).current;
+  const isFirstLayout = useRef(true);
+
+  const tabBarHeight = 74 + Math.max(insets.bottom - 6, 0);
+
+  // Compute target X for the active tab whenever index or width changes.
+  useEffect(() => {
+    if (containerWidth === 0) return;
+    const innerWidth = containerWidth - 2 * TAB_BAR_PADDING_H;
+    const tabWidth = innerWidth / state.routes.length;
+    const tabCenterX = TAB_BAR_PADDING_H + tabWidth * (state.index + 0.5);
+    const targetX = tabCenterX - PILL_SIZE / 2;
+
+    if (isFirstLayout.current) {
+      // First measurement → snap without animation so initial render isn't
+      // a slide from left edge.
+      pillTranslateX.setValue(targetX);
+      isFirstLayout.current = false;
+      return;
+    }
+
+    Animated.timing(pillTranslateX, {
+      toValue: targetX,
+      duration: 280,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [state.index, containerWidth, state.routes.length, pillTranslateX]);
+
+  function onLayout(e: LayoutChangeEvent) {
+    setContainerWidth(e.nativeEvent.layout.width);
   }
 
   return (
-    <View style={[styles.activeIcon, { backgroundColor: PRIMARY_COLOR, shadowColor: PRIMARY_COLOR }]}>
-      {icon}
+    <View style={[styles.tabBar, { height: tabBarHeight }]} onLayout={onLayout}>
+      {/* Sliding pill behind icons. Rendered first so icons sit on top. */}
+      {containerWidth > 0 ? (
+        <Animated.View
+          style={[
+            styles.pill,
+            {
+              backgroundColor: PRIMARY_COLOR,
+              shadowColor: PRIMARY_COLOR,
+              transform: [{ translateX: pillTranslateX }],
+            },
+          ]}
+        />
+      ) : null}
+
+      {state.routes.map((route, index) => {
+        const focused = state.index === index;
+        const iconName = TAB_ICONS[route.name] ?? 'ellipse';
+
+        const onPress = () => {
+          const event = navigation.emit({
+            type: 'tabPress',
+            target: route.key,
+            canPreventDefault: true,
+          });
+          if (!focused && !event.defaultPrevented) {
+            navigation.navigate(route.name);
+          }
+        };
+
+        const onLongPress = () => {
+          navigation.emit({ type: 'tabLongPress', target: route.key });
+        };
+
+        return (
+          <Pressable
+            key={route.key}
+            onPress={onPress}
+            onLongPress={onLongPress}
+            hitSlop={14}
+            pressRetentionOffset={14}
+            style={styles.tabItem}>
+            <Ionicons name={iconName} size={26} color={focused ? '#fff' : '#9fa4ae'} />
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
@@ -70,10 +123,12 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 16,
     right: 16,
-    height: 74,
-    paddingTop: 10,
+    bottom: 0,
+    paddingTop: TAB_BAR_PADDING_TOP,
     paddingBottom: 10,
-    paddingHorizontal: 10,
+    paddingHorizontal: TAB_BAR_PADDING_H,
+    flexDirection: 'row',
+    alignItems: 'flex-start', // icons anchor at top; safe-area extends bottom
     borderTopWidth: 0,
     borderRadius: 999,
     backgroundColor: 'rgba(255,255,255,0.97)',
@@ -84,25 +139,21 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   tabItem: {
+    flex: 1,
+    height: PILL_SIZE,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  activeIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    alignItems: 'center',
-    justifyContent: 'center',
+  pill: {
+    position: 'absolute',
+    top: TAB_BAR_PADDING_TOP, // aligns with tabItem y-position
+    left: 0, // visual x controlled via translateX
+    width: PILL_SIZE,
+    height: PILL_SIZE,
+    borderRadius: PILL_SIZE / 2,
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.28,
     shadowRadius: 20,
     elevation: 8,
-  },
-  inactiveIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
 });
