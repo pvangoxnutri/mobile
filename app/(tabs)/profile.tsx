@@ -1,16 +1,18 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
-import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Animated, Easing, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import ActivityImageFallback from '@/components/activity-image-fallback';
 import { useAuth } from '@/components/auth-provider';
 import { useI18n, type AppLanguage } from '@/components/i18n-provider';
 import LanguagePicker from '@/components/language-picker';
-import TopAlertsButton from '@/components/top-alerts-button';
+import TabHeader from '@/components/tab-header';
 import { apiFetch, apiJson } from '@/lib/api';
 import { getDefaultNotificationPreferences, loadNotificationPreferences, saveNotificationPreferences, type NotificationPreferences } from '@/lib/social';
 import { supabase } from '@/lib/supabase';
@@ -24,6 +26,7 @@ export default function ProfileScreen() {
   const [joinedTrips, setJoinedTrips] = useState(0);
   const [createdQuests, setCreatedQuests] = useState(0);
   const [tripDerivedVisited, setTripDerivedVisited] = useState<Record<string, string>>({});
+  const [trips, setTrips] = useState<Quest[]>([]);
   const [manualStatusMap, setManualStatusMap] = useState<Record<string, string>>({});
   const [name, setName] = useState(user?.name ?? '');
   const [bio, setBio] = useState(user?.bio ?? '');
@@ -71,6 +74,7 @@ export default function ProfileScreen() {
         if (!active) return;
 
         const safeQuests = Array.isArray(quests) ? quests : [];
+        setTrips(safeQuests);
         setJoinedTrips(safeQuests.length);
         setCreatedQuests(safeQuests.filter((quest) => quest.ownerId === user?.id).length);
 
@@ -112,6 +116,13 @@ export default function ProfileScreen() {
     return Object.values(merged).filter((s) => s === 'visited').length;
   }, [tripDerivedVisited, manualStatusMap]);
 
+  const previousTrips = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    return trips
+      .filter((trip) => trip.endDate < today)
+      .sort((a, b) => b.endDate.localeCompare(a.endDate));
+  }, [trips]);
+
   useEffect(() => {
     let active = true;
 
@@ -126,6 +137,97 @@ export default function ProfileScreen() {
   }, []);
 
   const initials = useMemo(() => getInitials(user?.name), [user?.name]);
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Fake shared-element transition for the small header avatar → hero avatar.
+  //
+  // Timeline (replays each time Profile gets focus):
+  //   t=0 ms      header avatar starts shrinking + fading      (200 ms)
+  //   t=0 ms      bell starts sliding right into avatar slot   (250 ms, ease-out)
+  //   t=100 ms    hero avatar starts popping in                (290 ms, ease-out)
+  //
+  // The bell's translateX equals the avatar's flex slot width: gap(10) + 56 =
+  // 66 px. At end the bell visually sits at the right padding edge — exactly
+  // where the small avatar used to be.
+  // ──────────────────────────────────────────────────────────────────────────
+  const headerAvatarScale = useRef(new Animated.Value(1)).current;
+  const headerAvatarOpacity = useRef(new Animated.Value(1)).current;
+  const bellTranslateX = useRef(new Animated.Value(0)).current;
+  const heroOpacity = useRef(new Animated.Value(0)).current;
+  const heroScale = useRef(new Animated.Value(0.75)).current;
+  const heroTranslateY = useRef(new Animated.Value(12)).current;
+
+  useFocusEffect(
+    useCallback(() => {
+      // Reset to start state so navigating away and back replays the animation.
+      headerAvatarScale.setValue(1);
+      headerAvatarOpacity.setValue(1);
+      bellTranslateX.setValue(0);
+      heroOpacity.setValue(0);
+      heroScale.setValue(0.75);
+      heroTranslateY.setValue(12);
+
+      Animated.parallel([
+        // Header avatar shrinks + fades (the "sinks into a hole" moment).
+        Animated.timing(headerAvatarScale, {
+          toValue: 0.15,
+          duration: 200,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(headerAvatarOpacity, {
+          toValue: 0,
+          duration: 200,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+
+        // Bell slides 66 px right into the avatar slot.
+        Animated.timing(bellTranslateX, {
+          toValue: 66,
+          duration: 250,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+
+        // Hero avatar pops in, slightly delayed so the small avatar has time
+        // to start shrinking first.
+        Animated.timing(heroOpacity, {
+          toValue: 1,
+          delay: 100,
+          duration: 290,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(heroScale, {
+          toValue: 1,
+          delay: 100,
+          duration: 290,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(heroTranslateY, {
+          toValue: 0,
+          delay: 100,
+          duration: 290,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }, [headerAvatarScale, headerAvatarOpacity, bellTranslateX, heroOpacity, heroScale, heroTranslateY]),
+  );
+
+  const bellAnimatedStyle = useMemo(
+    () => ({ transform: [{ translateX: bellTranslateX }] }),
+    [bellTranslateX],
+  );
+  const headerAvatarAnimatedStyle = useMemo(
+    () => ({
+      opacity: headerAvatarOpacity,
+      transform: [{ scale: headerAvatarScale }],
+    }),
+    [headerAvatarOpacity, headerAvatarScale],
+  );
 
   async function updateNotificationPreference<K extends keyof NotificationPreferences>(key: K, value: NotificationPreferences[K]) {
     const next = { ...notificationPreferences, [key]: value };
@@ -388,19 +490,24 @@ export default function ProfileScreen() {
           { paddingTop: Math.max(insets.top, 16) + 8, paddingBottom: Math.max(insets.bottom, 20) + 112 },
         ]}
         showsVerticalScrollIndicator={false}>
-        <View style={styles.topBar}>
-          <TouchableOpacity style={styles.topButton} activeOpacity={0.8} onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={28} color="#6d7380" />
-          </TouchableOpacity>
-          <Text style={styles.title}>{t('profile.title')}</Text>
-          <View style={styles.topButton} />
-        </View>
-        <View style={[styles.alertsAnchor, { top: Math.max(insets.top, 16) + 8 }]}>
-          <TopAlertsButton />
-        </View>
+        <TabHeader
+          bellAnimatedStyle={bellAnimatedStyle}
+          avatarAnimatedStyle={headerAvatarAnimatedStyle}
+        />
 
       <View style={styles.avatarSection}>
-        <View style={[styles.avatarRing, { borderColor: '#ff4f74' }]}>
+        <Animated.View
+          style={[
+            styles.avatarRing,
+            { borderColor: COLORS.primary },
+            {
+              opacity: heroOpacity,
+              transform: [
+                { scale: heroScale },
+                { translateY: heroTranslateY },
+              ],
+            },
+          ]}>
           {user?.avatarUrl ? (
             <Image source={{ uri: user.avatarUrl }} style={styles.avatar} />
           ) : (
@@ -408,7 +515,7 @@ export default function ProfileScreen() {
               <Text style={styles.avatarInitials}>{initials}</Text>
             </View>
           )}
-        </View>
+        </Animated.View>
 
         <TouchableOpacity style={[styles.editAvatarButton, { backgroundColor: COLORS.secondary, shadowColor: COLORS.secondary }]} activeOpacity={0.85} onPress={() => void handleAvatarPick()}>
           {busy === 'avatar' ? <ActivityIndicator size="small" color="#fff" /> : <Ionicons name="create-outline" size={18} color="#fff" />}
@@ -417,12 +524,35 @@ export default function ProfileScreen() {
         <Text style={styles.name}>{user?.name ?? t('profile.defaultName')}</Text>
         <Text style={styles.email}>{user?.email ?? 'user@sidequest.app'}</Text>
         {user?.bio ? <Text style={styles.bioText}>{user.bio}</Text> : null}
+        <View style={styles.statsBadgeRow}>
+          <View style={styles.statsBadge}>
+            <View style={[styles.statsBadgeIcon, { backgroundColor: COLORS.secondary }]}>
+              <Ionicons name="airplane" size={11} color={COLORS.white} />
+            </View>
+            <Text style={styles.statsBadgeValue}>{joinedTrips}</Text>
+            <Text style={styles.statsBadgeLabel}>{t('profile.statsBadge.trips')}</Text>
+          </View>
+          <View style={styles.statsBadge}>
+            <View style={[styles.statsBadgeIcon, { backgroundColor: COLORS.primary }]}>
+              <Ionicons name="sparkles" size={11} color={COLORS.white} />
+            </View>
+            <Text style={styles.statsBadgeValue}>{createdQuests}</Text>
+            <Text style={styles.statsBadgeLabel}>{t('profile.statsBadge.sidequests')}</Text>
+          </View>
+          <View style={styles.statsBadge}>
+            <View style={[styles.statsBadgeIcon, { backgroundColor: COLORS.secondary }]}>
+              <Ionicons name="earth" size={11} color={COLORS.white} />
+            </View>
+            <Text style={styles.statsBadgeValue}>{visitedCountries}</Text>
+            <Text style={styles.statsBadgeLabel}>{t('profile.statsBadge.countries')}</Text>
+          </View>
+        </View>
         {message ? (
           <View style={[styles.messageBanner, message.type === 'success' ? styles.messageBannerSuccess : styles.messageBannerError]}>
             <Ionicons
               name={message.type === 'success' ? 'checkmark-circle' : 'alert-circle'}
               size={18}
-              color={message.type === 'success' ? '#0b9b72' : '#d53d18'}
+              color={message.type === 'success' ? '#0b9b72' : COLORS.error}
             />
             <Text style={[styles.messageText, message.type === 'success' ? styles.messageTextSuccess : styles.messageTextError]}>
               {message.text}
@@ -431,28 +561,73 @@ export default function ProfileScreen() {
         ) : null}
       </View>
 
-      <View style={styles.statsRow}>
-        <StatCard value={String(joinedTrips)} label={t('profile.stats.tripsJoined')} accent={COLORS.secondary} />
-        <StatCard value={String(createdQuests)} label={t('profile.stats.sidequestsCreated')} accent={COLORS.primary} />
-        <StatCard value={String(visitedCountries)} label={t('profile.stats.countriesVisited')} accent={COLORS.primary} />
+      {/* PREVIOUS ADVENTURES — Home Up Next-style content carousel */}
+      <View style={styles.adventureHeader}>
+        <Text style={styles.adventureEyebrow}>{t('profile.previousAdventures.heading')}</Text>
+        <View style={styles.adventureLine} />
+        {previousTrips.length > 0 ? (
+          <TouchableOpacity activeOpacity={0.7} onPress={() => router.push('/previous-adventures')}>
+            <Text style={styles.adventureSeeAll}>{t('home.see_all')}</Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
+
+      {previousTrips.length === 0 ? (
+        <View style={styles.adventureEmpty}>
+          <Ionicons name="compass-outline" size={20} color={COLORS.textMuted} />
+          <Text style={styles.adventureEmptyText}>{t('profile.previousAdventures.empty')}</Text>
+        </View>
+      ) : (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.adventureScroll}
+          contentContainerStyle={styles.adventureScrollContent}>
+          {previousTrips.slice(0, 8).map((trip) => (
+            <TouchableOpacity
+              key={trip.id}
+              activeOpacity={0.88}
+              onPress={() => router.push(`/trip/${trip.id}`)}
+              style={styles.adventureCard}>
+              <View style={styles.adventureImageBox}>
+                {trip.imageUrl ? (
+                  <Image source={{ uri: trip.imageUrl }} style={styles.adventureImage} resizeMode="cover" />
+                ) : (
+                  <ActivityImageFallback category={null} size="medium" style={styles.adventureFallback} />
+                )}
+              </View>
+              <View style={styles.adventureBody}>
+                <Text style={styles.adventureCardDate} numberOfLines={1}>
+                  {formatAdventureDate(trip.endDate)}
+                </Text>
+                <Text style={styles.adventureCardTitle} numberOfLines={1}>{trip.title ?? 'Trip'}</Text>
+                {trip.destination ? (
+                  <Text style={styles.adventureCardMeta} numberOfLines={1}>{trip.destination}</Text>
+                ) : null}
+              </View>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      )}
 
       <SectionCard
         title={t('profile.sections.explore')}
         items={[
-          { icon: 'earth-outline', label: t('profile.explore.travelTracker'), accent: '#10a6c0', onPress: () => router.push('/travel-tracker') },
-          { icon: 'checkmark-done-outline', label: t('profile.explore.previousAdventures'), accent: '#ff4f74', onPress: () => router.push('/previous-adventures') },
+          { icon: 'earth-outline', label: t('profile.explore.travelTracker'), accent: COLORS.secondary, onPress: () => router.push('/travel-tracker') },
           // TEMPORARY: diagnostic viewer — remove once API/auth issue is resolved
           { icon: 'bug-outline', label: 'Debug Logs (temp)', accent: '#c47b00', onPress: () => router.push('/debug-logs' as never) },
         ]}
       />
 
       <SectionCard
-        title={t('profile.sections.editProfile')}
+        title={t('profile.sections.preferences')}
         items={[
-          { icon: 'person-circle-outline', label: t('profile.editProfile.changeName'), accent: '#ff4f74', onPress: () => setEditingName(true) },
-          { icon: 'text-outline', label: t('profile.editProfile.editBio'), accent: '#ff4f74', onPress: () => setEditingBio(true) },
-          { icon: 'camera-outline', label: busy === 'avatar' ? t('profile.editProfile.uploading') : t('profile.editProfile.changeImage'), accent: '#ff4f74', onPress: () => void handleAvatarPick() },
+          { icon: 'person-circle-outline', label: t('profile.editProfile.changeName'), accent: COLORS.primary, onPress: () => setEditingName(true) },
+          { icon: 'text-outline', label: t('profile.editProfile.editBio'), accent: COLORS.primary, onPress: () => setEditingBio(true) },
+          { icon: 'camera-outline', label: busy === 'avatar' ? t('profile.editProfile.uploading') : t('profile.editProfile.changeImage'), accent: COLORS.primary, onPress: () => void handleAvatarPick() },
+          { icon: 'notifications-outline', label: t('profile.notifications.title'), accent: COLORS.primary, onPress: () => setEditingNotifications(true) },
+          { icon: 'lock-closed-outline', label: t('profile.accountSettings.changePassword'), accent: COLORS.secondary, onPress: () => setEditingPassword(true) },
+          { icon: 'language-outline', label: t('profile.accountSettings.changeLanguage'), accent: COLORS.secondary, onPress: () => setEditingLanguage(true) },
         ]}
       />
 
@@ -466,7 +641,7 @@ export default function ProfileScreen() {
               <TouchableOpacity style={styles.confirmCancel} activeOpacity={0.88} onPress={() => setEditingName(false)}>
                 <Text style={styles.confirmCancelText}>Cancel</Text>
               </TouchableOpacity>
-              <Pressable style={[styles.confirmDelete, { backgroundColor: '#ff4f74' }]} onPress={() => void handleNameSave()} disabled={busy === 'name'}>
+              <Pressable style={[styles.confirmDelete, { backgroundColor: COLORS.primary }]} onPress={() => void handleNameSave()} disabled={busy === 'name'}>
                 {busy === 'name' ? <ActivityIndicator color="#fff" /> : <Text style={styles.confirmDeleteText}>{t('profile.modals.saveNameButton')}</Text>}
               </Pressable>
             </View>
@@ -492,7 +667,7 @@ export default function ProfileScreen() {
               <TouchableOpacity style={styles.confirmCancel} activeOpacity={0.88} onPress={() => setEditingBio(false)}>
                 <Text style={styles.confirmCancelText}>Cancel</Text>
               </TouchableOpacity>
-              <Pressable style={[styles.confirmDelete, { backgroundColor: '#ff4f74' }]} onPress={() => void handleBioSave()} disabled={busy === 'bio'}>
+              <Pressable style={[styles.confirmDelete, { backgroundColor: COLORS.primary }]} onPress={() => void handleBioSave()} disabled={busy === 'bio'}>
                 {busy === 'bio' ? <ActivityIndicator color="#fff" /> : <Text style={styles.confirmDeleteText}>{t('profile.modals.saveBioButton')}</Text>}
               </Pressable>
             </View>
@@ -502,34 +677,20 @@ export default function ProfileScreen() {
 
 
       <SectionCard
-        title={t('profile.sections.accountSettings')}
+        title={t('profile.sections.supportLegal')}
         items={[
-          { icon: 'lock-closed-outline', label: t('profile.accountSettings.changePassword'), accent: '#10a6c0', onPress: () => setEditingPassword(true) },
-          { icon: 'language-outline', label: t('profile.accountSettings.changeLanguage'), accent: '#10a6c0', onPress: () => setEditingLanguage(true) },
-        ]}
-      />
-
-      <SectionCard
-        title={t('profile.support.title')}
-        items={[
-          { icon: 'alert-circle-outline', label: t('profile.support.reportIssue'), accent: '#10a6c0', onPress: () => openSupportModal('bug') },
-          { icon: 'chatbox-outline', label: t('profile.support.feedback'), accent: '#10a6c0', onPress: () => openSupportModal('feedback') },
-        ]}
-      />
-
-      <SectionCard
-        title="Legal"
-        items={[
+          { icon: 'alert-circle-outline', label: t('profile.support.reportIssue'), accent: COLORS.secondary, onPress: () => openSupportModal('bug') },
+          { icon: 'chatbox-outline', label: t('profile.support.feedback'), accent: COLORS.secondary, onPress: () => openSupportModal('feedback') },
           {
             icon: 'shield-checkmark-outline',
             label: 'Privacy Policy',
-            accent: '#10a6c0',
+            accent: COLORS.secondary,
             onPress: () => void WebBrowser.openBrowserAsync('https://sidequesttravel.app/privacy'),
           },
           {
             icon: 'document-text-outline',
             label: 'Terms of Service',
-            accent: '#10a6c0',
+            accent: COLORS.secondary,
             onPress: () => void WebBrowser.openBrowserAsync('https://sidequesttravel.app/terms'),
           },
         ]}
@@ -546,7 +707,7 @@ export default function ProfileScreen() {
               value={supportText}
               onChangeText={(text) => { setSupportText(text); if (supportError) setSupportError(null); }}
               placeholder={supportModal === 'bug' ? t('profile.support.reportPlaceholder') : t('profile.support.feedbackPlaceholder')}
-              placeholderTextColor="#9aa0ac"
+              placeholderTextColor={COLORS.placeholderText}
               style={[styles.bioInput, { marginTop: 16 }]}
               multiline
               numberOfLines={5}
@@ -554,14 +715,14 @@ export default function ProfileScreen() {
               autoFocus
             />
             {supportError ? (
-              <Text style={[styles.helperText, { color: '#d53d18', marginTop: 8 }]}>{supportError}</Text>
+              <Text style={[styles.helperText, { color: COLORS.error, marginTop: 8 }]}>{supportError}</Text>
             ) : null}
             <View style={styles.confirmActions}>
               <TouchableOpacity style={styles.confirmCancel} activeOpacity={0.88} onPress={closeSupportModal}>
                 <Text style={styles.confirmCancelText}>{t('common.cancel')}</Text>
               </TouchableOpacity>
               <Pressable
-                style={[styles.confirmDelete, { backgroundColor: '#10a6c0' }]}
+                style={[styles.confirmDelete, { backgroundColor: COLORS.secondary }]}
                 onPress={() => void handleSupportSubmit()}
                 disabled={busy === 'support'}>
                 {busy === 'support' ? <ActivityIndicator color="#fff" /> : <Text style={styles.confirmDeleteText}>{t('profile.support.submit')}</Text>}
@@ -572,12 +733,12 @@ export default function ProfileScreen() {
       </Modal>
 
       <SectionCard
-        title={t('profile.sections.accountSettings')}
+        title={t('profile.sections.account')}
         items={[
           {
             icon: 'log-out-outline',
             label: t('profile.accountSettings.logout'),
-            accent: '#ff4f74',
+            accent: COLORS.primary,
             onPress: () => {
               void signOut().then(() => router.replace('/(auth)/login'));
             },
@@ -585,7 +746,7 @@ export default function ProfileScreen() {
           {
             icon: 'trash-outline',
             label: busy === 'delete' ? t('profile.accountSettings.deleting') : t('profile.accountSettings.deleteAccount'),
-            accent: '#d53d18',
+            accent: COLORS.error,
             onPress: handleDeleteAccount,
           },
         ]}
@@ -608,7 +769,7 @@ export default function ProfileScreen() {
               <TouchableOpacity style={styles.confirmCancel} activeOpacity={0.88} onPress={() => setEditingPassword(false)}>
                 <Text style={styles.confirmCancelText}>Cancel</Text>
               </TouchableOpacity>
-              <Pressable style={[styles.confirmDelete, { backgroundColor: '#ff4f74' }]} onPress={() => void handlePasswordSave()} disabled={busy === 'password'}>
+              <Pressable style={[styles.confirmDelete, { backgroundColor: COLORS.primary }]} onPress={() => void handlePasswordSave()} disabled={busy === 'password'}>
                 {busy === 'password' ? <ActivityIndicator color="#fff" /> : <Text style={styles.confirmDeleteText}>{t('profile.modals.updatePasswordButton')}</Text>}
               </Pressable>
             </View>
@@ -633,25 +794,13 @@ export default function ProfileScreen() {
               <TouchableOpacity style={styles.confirmCancel} activeOpacity={0.88} onPress={() => setEditingLanguage(false)}>
                 <Text style={styles.confirmCancelText}>Cancel</Text>
               </TouchableOpacity>
-              <Pressable style={[styles.confirmDelete, { backgroundColor: '#ff4f74' }]} onPress={() => void handleLanguageSave()} disabled={busy === 'language'}>
+              <Pressable style={[styles.confirmDelete, { backgroundColor: COLORS.primary }]} onPress={() => void handleLanguageSave()} disabled={busy === 'language'}>
                 {busy === 'language' ? <ActivityIndicator color="#fff" /> : <Text style={styles.confirmDeleteText}>{t('profile.modals.saveLanguageButton')}</Text>}
               </Pressable>
             </View>
           </View>
         </KeyboardAvoidingView>
       </Modal>
-
-      <SectionCard
-        title={t('profile.sections.notifications')}
-        items={[
-          {
-            icon: 'notifications-outline',
-            label: t('profile.notifications.title'),
-            accent: '#ff4f74',
-            onPress: () => setEditingNotifications(true),
-          },
-        ]}
-      />
 
       <Modal visible={editingNotifications} transparent animationType="fade" onRequestClose={() => setEditingNotifications(false)}>
         <KeyboardAvoidingView style={styles.confirmBackdrop} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
@@ -723,11 +872,11 @@ export default function ProfileScreen() {
         <KeyboardAvoidingView style={styles.confirmBackdrop} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setThanksModal(null)} />
           <View style={styles.thanksCard}>
-            <View style={[styles.thanksIconCircle, { backgroundColor: thanksModal === 'bug' ? '#fff1f5' : '#e6f7fa' }]}>
+            <View style={[styles.thanksIconCircle, { backgroundColor: thanksModal === 'bug' ? COLORS.avatarLight : '#e6f7fa' }]}>
               <Ionicons
                 name={thanksModal === 'bug' ? 'bug-outline' : 'heart'}
                 size={32}
-                color={thanksModal === 'bug' ? '#ff4f74' : '#10a6c0'}
+                color={thanksModal === 'bug' ? COLORS.primary : COLORS.secondary}
               />
             </View>
             <Text style={styles.thanksTitle}>
@@ -737,7 +886,7 @@ export default function ProfileScreen() {
               {thanksModal === 'bug' ? t('profile.support.thanksBugBody') : t('profile.support.thanksFeedbackBody')}
             </Text>
             <Pressable
-              style={[styles.thanksButton, { backgroundColor: thanksModal === 'bug' ? '#ff4f74' : '#10a6c0' }]}
+              style={[styles.thanksButton, { backgroundColor: thanksModal === 'bug' ? COLORS.primary : COLORS.secondary }]}
               onPress={() => setThanksModal(null)}>
               <Text style={styles.thanksButtonText}>{t('profile.support.thanksClose')}</Text>
             </Pressable>
@@ -764,14 +913,14 @@ function NotificationSettingRow({
 }) {
   return (
     <View style={styles.notificationRow}>
-      <View style={[styles.notificationIcon, { backgroundColor: '#fff1f5' }]}>
+      <View style={[styles.notificationIcon, { backgroundColor: COLORS.avatarLight }]}>
         <Ionicons name={icon} size={18} color="#ff4f74" />
       </View>
       <View style={styles.notificationCopy}>
         <Text style={styles.notificationTitle}>{title}</Text>
         <Text style={styles.notificationSubtitle}>{subtitle}</Text>
       </View>
-      <Switch value={value} onValueChange={onValueChange} trackColor={{ false: '#d8dde6', true: '#ffe5ec' }} thumbColor={value ? '#ff4f74' : '#fff'} />
+      <Switch value={value} onValueChange={onValueChange} trackColor={{ false: '#d8dde6', true: '#ffe5ec' }} thumbColor={value ? COLORS.primary : COLORS.white} />
     </View>
   );
 }
@@ -803,12 +952,16 @@ function SectionCard({
               <Ionicons name={item.icon} size={23} color={item.accent} />
               <Text style={styles.rowLabel}>{item.label}</Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color="#b2b7c0" />
+            <Ionicons name="chevron-forward" size={20} color={COLORS.textMuted} />
           </TouchableOpacity>
         </View>
       ))}
     </View>
   );
+}
+
+function formatAdventureDate(value: string) {
+  return new Intl.DateTimeFormat(undefined, { month: 'short', year: 'numeric' }).format(new Date(`${value}T12:00:00`));
 }
 
 function getInitials(name?: string | null) {
@@ -826,103 +979,217 @@ function createTimeoutSignal(timeoutMs: number) {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.white,
   },
   content: {
-    paddingHorizontal: 24,
+    paddingHorizontal: SPACING.xl,
     paddingTop: 20,
     paddingBottom: 132,
   },
-  topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    minHeight: 50,
-  },
-  // Absolute-positioned so the alerts icon sits at the exact same X/Y on
-  // every tab that uses it, independent of per-page header layout.
-  alertsAnchor: {
-    position: 'absolute',
-    right: 20,
-    zIndex: 10,
-  },
-  topButton: {
-    width: 42,
-    height: 42,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '900',
-    color: '#121317',
-    letterSpacing: -0.9,
-  },
   avatarSection: {
-    marginTop: 28,
+    marginTop: SPACING.xl,
     alignItems: 'center',
   },
   avatarRing: {
-    width: 132,
-    height: 132,
-    borderRadius: 66,
-    borderWidth: 4,
-    borderColor: '#ef2d63',
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    borderWidth: 5,
+    borderColor: COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.18,
+    shadowRadius: 26,
+    elevation: 9,
   },
   avatar: {
-    width: 118,
-    height: 118,
-    borderRadius: 59,
+    width: 142,
+    height: 142,
+    borderRadius: 71,
     backgroundColor: '#d8c1a3',
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarInitials: {
-    color: '#fff',
-    fontSize: 34,
+    color: COLORS.white,
+    fontSize: 42,
     fontWeight: '900',
-    letterSpacing: -1,
+    letterSpacing: -1.2,
   },
   editAvatarButton: {
     position: 'absolute',
-    right: 94,
-    top: 86,
+    right: 80,
+    top: 108,
     width: 46,
     height: 46,
     borderRadius: 23,
-    backgroundColor: '#10a6c0',
+    backgroundColor: COLORS.secondary,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 3,
-    borderColor: '#fff',
-    shadowColor: '#10a6c0',
+    borderWidth: 4,
+    borderColor: COLORS.white,
+    shadowColor: COLORS.secondary,
     shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.18,
+    shadowOpacity: 0.22,
     shadowRadius: 18,
-    elevation: 6,
+    elevation: 8,
   },
   name: {
-    marginTop: 26,
-    color: '#151722',
-    fontSize: 30,
+    marginTop: SPACING.xxl,
+    color: COLORS.textPrimary,
+    fontSize: 40,
+    lineHeight: 44,
     fontWeight: '900',
-    letterSpacing: -1.4,
+    letterSpacing: -1.8,
+    textAlign: 'center',
+    paddingHorizontal: SPACING.lg,
   },
   email: {
-    marginTop: 6,
-    color: '#8a909d',
-    fontSize: 18,
-    letterSpacing: -0.4,
+    marginTop: SPACING.sm,
+    color: COLORS.textMeta,
+    fontSize: 17,
+    letterSpacing: -0.3,
   },
   bioText: {
-    marginTop: 12,
-    color: '#4e5566',
+    marginTop: SPACING.md,
+    color: COLORS.textSecondary,
     fontSize: 15,
     lineHeight: 22,
     textAlign: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: SPACING.xl,
+  },
+  // Stats badges — pill row near avatar hero (matches Home infoBadge pattern)
+  statsBadgeRow: {
+    marginTop: SPACING.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+    gap: SPACING.sm,
+    paddingHorizontal: SPACING.lg,
+  },
+  statsBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: RADIUS.circle,
+    backgroundColor: COLORS.bgLight,
+    borderWidth: 1,
+    borderColor: COLORS.borderPrimary,
+  },
+  statsBadgeIcon: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statsBadgeValue: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: COLORS.textPrimary,
+    letterSpacing: -0.2,
+  },
+  statsBadgeLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+    letterSpacing: 0.2,
+  },
+  // Previous Adventures carousel (Home Up Next-style cards)
+  adventureHeader: {
+    marginTop: SPACING.xxl,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.md,
+    marginBottom: SPACING.md,
+  },
+  adventureEyebrow: {
+    ...TYPOGRAPHY.eyebrow,
+    fontWeight: '800',
+    color: COLORS.textMeta,
+  },
+  adventureLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: COLORS.borderPrimary,
+  },
+  adventureSeeAll: {
+    color: COLORS.textMeta,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  adventureScroll: {
+    marginRight: -SPACING.xl,
+  },
+  adventureScrollContent: {
+    paddingRight: SPACING.xl,
+    gap: SPACING.md,
+  },
+  adventureCard: {
+    width: 180,
+    backgroundColor: COLORS.white,
+    borderRadius: RADIUS.sm,
+    overflow: 'hidden',
+    ...SHADOWS.subtle,
+  },
+  adventureImageBox: {
+    height: 110,
+    backgroundColor: '#e6e2d8',
+    position: 'relative',
+  },
+  adventureImage: {
+    width: '100%',
+    height: '100%',
+  },
+  adventureFallback: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 0,
+  },
+  adventureBody: {
+    padding: SPACING.md,
+  },
+  adventureCardDate: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: COLORS.textMeta,
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  adventureCardTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: COLORS.textPrimary,
+    letterSpacing: -0.2,
+  },
+  adventureCardMeta: {
+    marginTop: 4,
+    fontSize: 11,
+    color: COLORS.textMeta,
+    fontWeight: '500',
+  },
+  adventureEmpty: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    paddingVertical: SPACING.lg,
+    paddingHorizontal: SPACING.lg,
+    borderRadius: RADIUS.sm,
+    borderWidth: 1,
+    borderColor: COLORS.borderPrimary,
+    borderStyle: 'dashed',
+    justifyContent: 'center',
+    marginBottom: SPACING.xl,
+  },
+  adventureEmptyText: {
+    color: COLORS.textMeta,
+    fontSize: 13,
+    fontWeight: '500',
   },
   messageBanner: {
     marginTop: 12,
@@ -934,14 +1201,14 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   messageBannerSuccess: {
-    backgroundColor: '#eefaf5',
+    backgroundColor: COLORS.successLight,
     borderWidth: 1,
-    borderColor: '#d1f1e4',
+    borderColor: COLORS.successBorder,
   },
   messageBannerError: {
-    backgroundColor: '#fff4f1',
+    backgroundColor: COLORS.errorLight,
     borderWidth: 1,
-    borderColor: '#ffd9cf',
+    borderColor: COLORS.errorBorder,
   },
   messageText: {
     flex: 1,
@@ -953,7 +1220,7 @@ const styles = StyleSheet.create({
     color: '#0b9b72',
   },
   messageTextError: {
-    color: '#d53d18',
+    color: COLORS.error,
   },
   statsRow: {
     marginTop: 28,
@@ -962,17 +1229,13 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    borderRadius: 28,
+    borderRadius: RADIUS.lg,
     borderWidth: 1,
-    borderColor: '#eceef2',
-    backgroundColor: '#fff',
+    borderColor: COLORS.borderPrimary,
+    backgroundColor: COLORS.white,
     alignItems: 'center',
-    paddingVertical: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.04,
-    shadowRadius: 18,
-    elevation: 4,
+    paddingVertical: SPACING.xxl,
+    ...SHADOWS.medium,
   },
   statValue: {
     fontSize: 36,
@@ -981,45 +1244,37 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     marginTop: 10,
-    color: '#a6abb5',
+    color: COLORS.textMeta,
     fontSize: 12,
     fontWeight: '700',
     letterSpacing: 1.8,
     textAlign: 'center',
   },
   sectionCard: {
-    marginTop: 20,
-    borderRadius: 30,
+    marginTop: SPACING.lg,
+    borderRadius: RADIUS.xl,
     borderWidth: 1,
-    borderColor: '#eceef2',
-    backgroundColor: '#fff',
-    paddingHorizontal: 18,
-    paddingVertical: 18,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.04,
-    shadowRadius: 18,
-    elevation: 4,
+    borderColor: COLORS.borderPrimary,
+    backgroundColor: COLORS.white,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.lg,
+    ...SHADOWS.medium,
   },
   editorCard: {
-    marginTop: 12,
-    borderRadius: 24,
+    marginTop: SPACING.md,
+    borderRadius: RADIUS.lg,
     borderWidth: 1,
-    borderColor: '#eceef2',
-    backgroundColor: '#fff',
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.04,
-    shadowRadius: 18,
-    elevation: 4,
+    borderColor: COLORS.borderPrimary,
+    backgroundColor: COLORS.white,
+    padding: SPACING.lg,
+    ...SHADOWS.medium,
   },
   input: {
     height: 52,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#e4e7ee',
-    backgroundColor: '#f9fafc',
+    borderColor: COLORS.borderInput,
+    backgroundColor: COLORS.bgLightest,
     paddingHorizontal: 16,
     fontSize: 16,
   },
@@ -1027,8 +1282,8 @@ const styles = StyleSheet.create({
     minHeight: 100,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#e4e7ee',
-    backgroundColor: '#f9fafc',
+    borderColor: COLORS.borderInput,
+    backgroundColor: COLORS.bgLightest,
     paddingHorizontal: 16,
     paddingVertical: 12,
     fontSize: 15,
@@ -1036,7 +1291,7 @@ const styles = StyleSheet.create({
   },
   helperText: {
     marginTop: 10,
-    color: '#7b8190',
+    color: COLORS.textSecondary,
     fontSize: 13,
     lineHeight: 18,
   },
@@ -1046,15 +1301,15 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#ff4f74',
+    backgroundColor: COLORS.primary,
   },
   saveButtonText: {
-    color: '#fff',
+    color: COLORS.white,
     fontSize: 15,
     fontWeight: '800',
   },
   sectionTitle: {
-    color: '#151722',
+    color: COLORS.textPrimary,
     fontSize: 18,
     fontWeight: '800',
     letterSpacing: -0.6,
@@ -1062,7 +1317,7 @@ const styles = StyleSheet.create({
   },
   rowDivider: {
     height: 1,
-    backgroundColor: '#edf0f4',
+    backgroundColor: COLORS.borderPrimary,
   },
   rowButton: {
     minHeight: 60,
@@ -1076,7 +1331,7 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   rowLabel: {
-    color: '#1b1e28',
+    color: COLORS.textPrimary,
     fontSize: 17,
     letterSpacing: -0.4,
   },
@@ -1092,7 +1347,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#fff1f5',
+    backgroundColor: COLORS.avatarLight,
     marginRight: 12,
   },
   notificationCopy: {
@@ -1100,13 +1355,13 @@ const styles = StyleSheet.create({
     paddingRight: 12,
   },
   notificationTitle: {
-    color: '#171821',
+    color: COLORS.textPrimary,
     fontSize: 15,
     fontWeight: '700',
   },
   notificationSubtitle: {
     marginTop: 2,
-    color: '#7c8290',
+    color: COLORS.textSecondary,
     fontSize: 13,
     lineHeight: 18,
   },
@@ -1116,8 +1371,8 @@ const styles = StyleSheet.create({
   themeCard: {
     borderRadius: 18,
     borderWidth: 2,
-    borderColor: '#e2e5ee',
-    backgroundColor: '#fafbfc',
+    borderColor: COLORS.borderInput,
+    backgroundColor: COLORS.bgLight,
     overflow: 'hidden',
   },
   themeColorStrip: {
@@ -1146,13 +1401,13 @@ const styles = StyleSheet.create({
     borderRadius: 11,
   },
   themeName: {
-    color: '#111317',
+    color: COLORS.textPrimary,
     fontSize: 14,
     fontWeight: '800',
     letterSpacing: -0.3,
   },
   themeColorCodes: {
-    color: '#9499a6',
+    color: COLORS.textMeta,
     fontSize: 10,
     marginTop: 1,
     letterSpacing: 0.2,
@@ -1169,7 +1424,7 @@ const styles = StyleSheet.create({
     height: 26,
     borderRadius: 13,
     borderWidth: 1.5,
-    borderColor: '#d8dbe6',
+    borderColor: COLORS.borderInput,
   },
   brandBlock: {
     marginTop: 22,
@@ -1183,7 +1438,7 @@ const styles = StyleSheet.create({
   },
   brandTagline: {
     marginTop: 4,
-    color: '#aeb3bd',
+    color: COLORS.textMeta,
     fontSize: 12,
     fontWeight: '700',
     letterSpacing: 2.6,
@@ -1195,21 +1450,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   confirmCard: {
-    borderRadius: 20,
-    backgroundColor: '#fff',
+    borderRadius: RADIUS.lg,
+    backgroundColor: COLORS.white,
     borderWidth: 1,
-    borderColor: '#e7eaf0',
-    padding: 18,
+    borderColor: COLORS.borderPrimary,
+    padding: SPACING.lg,
   },
   confirmTitle: {
-    color: '#14161d',
+    color: COLORS.textPrimary,
     fontSize: 22,
     fontWeight: '800',
     letterSpacing: -0.5,
   },
   confirmBody: {
     marginTop: 10,
-    color: '#656d7b',
+    color: COLORS.textSecondary,
     fontSize: 14,
     lineHeight: 21,
   },
@@ -1223,13 +1478,13 @@ const styles = StyleSheet.create({
     height: 46,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#e4e7ee',
-    backgroundColor: '#f8f9fb',
+    borderColor: COLORS.borderInput,
+    backgroundColor: COLORS.bgLightest,
     alignItems: 'center',
     justifyContent: 'center',
   },
   confirmCancelText: {
-    color: '#2f3440',
+    color: COLORS.textSecondary,
     fontSize: 14,
     fontWeight: '700',
   },
@@ -1237,28 +1492,24 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 46,
     borderRadius: 12,
-    backgroundColor: '#d53d18',
+    backgroundColor: COLORS.error,
     alignItems: 'center',
     justifyContent: 'center',
   },
   confirmDeleteText: {
-    color: '#fff',
+    color: COLORS.white,
     fontSize: 14,
     fontWeight: '800',
   },
   thanksCard: {
-    borderRadius: 24,
-    backgroundColor: '#fff',
+    borderRadius: RADIUS.xl,
+    backgroundColor: COLORS.white,
     borderWidth: 1,
-    borderColor: '#e7eaf0',
-    paddingHorizontal: 24,
-    paddingVertical: 28,
+    borderColor: COLORS.borderPrimary,
+    paddingHorizontal: SPACING.xl,
+    paddingVertical: SPACING.xxl,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 18 },
-    shadowOpacity: 0.16,
-    shadowRadius: 32,
-    elevation: 12,
+    ...SHADOWS.floating,
   },
   thanksIconCircle: {
     width: 72,
@@ -1269,7 +1520,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   thanksTitle: {
-    color: '#14161d',
+    color: COLORS.textPrimary,
     fontSize: 24,
     fontWeight: '900',
     letterSpacing: -0.6,
@@ -1277,7 +1528,7 @@ const styles = StyleSheet.create({
   },
   thanksBody: {
     marginTop: 10,
-    color: '#5b626f',
+    color: COLORS.textSecondary,
     fontSize: 15,
     lineHeight: 22,
     textAlign: 'center',
@@ -1292,7 +1543,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   thanksButtonText: {
-    color: '#fff',
+    color: COLORS.white,
     fontSize: 15,
     fontWeight: '800',
     letterSpacing: -0.2,
