@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BrandMark from '@/components/brand-mark';
 import { useAuth } from '@/components/auth-provider';
 import { useI18n } from '@/components/i18n-provider';
+import TabHeader from '@/components/tab-header';
 import TopAlertsButton from '@/components/top-alerts-button';
 import UserProfileCard from '@/components/user-profile-card';
 import InviteCard from '@/components/invite-card';
@@ -310,21 +311,7 @@ export default function HomeScreen() {
             { paddingTop: Math.max(insets.top, 16) + 8, paddingBottom: floatingBottom + 96 },
           ]}
           showsVerticalScrollIndicator={false}>
-          <View style={[styles.topRow, { alignItems: 'center', justifyContent: 'space-between' }]}>
-            <BrandMark size="sm" />
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <TopAlertsButton inviteCount={pendingInvites.length} />
-              <TouchableOpacity style={styles.avatarShell} activeOpacity={0.8} onPress={() => router.push('/(tabs)/profile')}>
-                {user?.avatarUrl && user.avatarUrl.trim() ? (
-                  <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
-                ) : (
-                  <View style={styles.avatarCore}>
-                    <Text style={styles.avatarText}>{getInitials(user?.name)}</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
+          <TabHeader inviteCount={pendingInvites.length} />
 
           {pendingInvites.length > 0 ? (
             <View style={[styles.inviteSection, { marginTop: 20 }]}>
@@ -389,21 +376,7 @@ export default function HomeScreen() {
           { paddingTop: Math.max(insets.top, 16) + 8, paddingBottom: Math.max(insets.bottom, 14) + 100 },
         ]}
         showsVerticalScrollIndicator={false}>
-        <View style={[styles.topRow, { alignItems: 'center', justifyContent: 'space-between' }]}>
-          <BrandMark size="sm" />
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <TopAlertsButton inviteCount={pendingInvites.length} />
-            <TouchableOpacity style={styles.avatarShell} activeOpacity={0.8} onPress={() => router.push('/(tabs)/profile')}>
-            {user?.avatarUrl && user.avatarUrl.trim() ? (
-              <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
-            ) : (
-              <View style={styles.avatarCore}>
-                <Text style={styles.avatarText}>{getInitials(user?.name)}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-          </View>
-        </View>
+        <TabHeader inviteCount={pendingInvites.length} />
 
         {pendingInvites.length > 0 ? (
           <View style={styles.inviteSection}>
