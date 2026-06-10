@@ -13,6 +13,7 @@ import UserProfileCard from '@/components/user-profile-card';
 import HiddenSidequestCard from '@/components/hidden-sidequest-card';
 import ActivityImageFallback from '@/components/activity-image-fallback';
 import ModalSheet from '@/components/modal-sheet';
+import { EmptyState } from '@/components/ui/empty-state';
 import { apiFetch, apiJson } from '@/lib/api';
 import { getCached, setCached, invalidateCache } from '@/lib/cache';
 import { uploadImageIfNeeded } from '@/lib/uploads';
@@ -565,13 +566,11 @@ export default function TripDetailsScreen() {
               </View>
             ))
           ) : (
-            <View style={styles.emptyState}>
-              <View style={styles.emptyIconCircle}>
-                <Ionicons name="sparkles-outline" size={30} color="#a0a8b5" />
-              </View>
-              <Text style={styles.emptyTitle}>Inga aktiviteter än</Text>
-              <Text style={styles.emptyCopy}>Skapa det första överraskningsuppdraget, avslöjningsmomentet eller planen för äventyret.</Text>
-            </View>
+            <EmptyState
+              icon="sparkles-outline"
+              title="Inga aktiviteter än"
+              description="Skapa det första överraskningsuppdraget, avslöjningsmomentet eller planen för äventyret."
+            />
           )}
 
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
@@ -1645,55 +1644,51 @@ const styles = StyleSheet.create({
   },
   sheetBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(12,14,19,0.28)',
+    backgroundColor: COLORS.backdropModal,
     justifyContent: 'flex-end',
   },
   sheetCard: {
     maxHeight: '82%',
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
-    backgroundColor: '#fff',
-    paddingTop: 10,
-    paddingHorizontal: 20,
+    borderTopLeftRadius: RADIUS.xl,
+    borderTopRightRadius: RADIUS.xl,
+    backgroundColor: COLORS.bgPrimary,
+    paddingTop: SPACING.md,
+    paddingHorizontal: SPACING.lg,
   },
   sheetHandle: {
     alignSelf: 'center',
     width: 44,
     height: 5,
-    borderRadius: 999,
-    backgroundColor: '#d9dde4',
+    borderRadius: RADIUS.circle,
+    backgroundColor: COLORS.borderInput,
   },
   sheetHeader: {
-    marginTop: 14,
+    marginTop: SPACING.lg,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
   },
   sheetEyebrow: {
-    color: '#9aa2ae',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1.4,
+    ...TYPOGRAPHY.eyebrow,
+    color: COLORS.textMeta,
   },
   sheetTitle: {
-    marginTop: 6,
-    color: '#161821',
-    fontSize: 24,
-    fontWeight: '900',
-    letterSpacing: -0.8,
+    marginTop: SPACING.xs,
+    ...TYPOGRAPHY.pageHeading,
+    color: COLORS.textPrimary,
   },
   sheetCloseButton: {
     width: 38,
     height: 38,
-    borderRadius: 19,
+    borderRadius: RADIUS.circle,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#f5f6f8',
+    backgroundColor: COLORS.bgLight,
   },
   sheetContent: {
-    paddingTop: 18,
-    paddingBottom: 8,
-    gap: 18,
+    paddingTop: SPACING.lg,
+    paddingBottom: SPACING.sm,
+    gap: SPACING.lg,
   },
   inviteCard: {
     borderRadius: 28,
@@ -1906,22 +1901,20 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   inviteHintCode: {
-    color: '#ff4f74',
+    color: COLORS.primary,
     fontSize: 13,
     fontWeight: '900',
     letterSpacing: 1.1,
   },
   sectionHeader: {
-    marginTop: 28,
+    marginTop: SPACING.xxl,
   },
   miniCalendarWrap: {
     marginTop: 18,
   },
   miniCalendarEyebrow: {
-    color: '#9aa2ae',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1.4,
+    ...TYPOGRAPHY.eyebrow,
+    color: COLORS.textMeta,
   },
   miniCalendarRow: {
     paddingTop: 12,
@@ -1945,32 +1938,29 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   miniCalendarDay: {
-    marginTop: 4,
-    color: '#161821',
+    marginTop: SPACING.xs,
+    color: COLORS.textPrimary,
     fontSize: 20,
     fontWeight: '900',
     letterSpacing: -0.5,
   },
   sectionEyebrow: {
-    color: '#a7adb8',
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 2.5,
+    ...TYPOGRAPHY.eyebrow,
+    color: COLORS.textMeta,
   },
   sectionTitle: {
-    marginTop: 8,
-    color: '#161821',
+    marginTop: SPACING.sm,
+    ...TYPOGRAPHY.pageHeading,
+    color: COLORS.textPrimary,
     fontSize: 30,
-    fontWeight: '900',
-    letterSpacing: -1.2,
     lineHeight: 34,
+    letterSpacing: -1.2,
   },
   sectionCopy: {
-    marginTop: 8,
-    color: '#78808c',
-    fontSize: 14,
+    marginTop: SPACING.sm,
+    ...TYPOGRAPHY.body,
+    color: COLORS.textSecondary,
     lineHeight: 22,
-    fontWeight: '500',
   },
   emptyState: {
     marginTop: 18,
@@ -2020,11 +2010,11 @@ const styles = StyleSheet.create({
   chatBubble: {
     width: 58,
     height: 58,
-    borderRadius: 29,
+    borderRadius: RADIUS.circle,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#0d90a8',
-    shadowColor: '#0d90a8',
+    backgroundColor: COLORS.secondary,
+    shadowColor: COLORS.secondary,
     shadowOffset: { width: 0, height: 14 },
     shadowOpacity: 0.22,
     shadowRadius: 24,
@@ -2032,14 +2022,14 @@ const styles = StyleSheet.create({
   },
   chatUnreadDot: {
     position: 'absolute',
-    top: 8,
-    right: 8,
+    top: SPACING.sm,
+    right: SPACING.sm,
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: '#ff4f74',
+    backgroundColor: COLORS.primary,
     borderWidth: 2,
-    borderColor: '#fff',
+    borderColor: COLORS.bgPrimary,
   },
   chatModalBackdrop: {
     flex: 1,
@@ -2090,26 +2080,23 @@ const styles = StyleSheet.create({
   chatPresenceBubbleText: {
     fontSize: 10,
     fontWeight: '800',
-    color: '#0d90a8',
+    color: COLORS.secondary,
   },
   chatPresenceLabel: {
-    fontSize: 12,
+    ...TYPOGRAPHY.meta,
+    color: COLORS.textSecondary,
     fontWeight: '600',
-    color: '#7d8491',
     marginLeft: 2,
   },
   chatPanelEyebrow: {
-    color: '#9aa2ae',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1.4,
+    ...TYPOGRAPHY.eyebrow,
+    color: COLORS.textMeta,
   },
   chatPanelTitle: {
-    marginTop: 6,
-    color: '#161821',
+    marginTop: SPACING.xs,
+    ...TYPOGRAPHY.pageHeading,
+    color: COLORS.textPrimary,
     fontSize: 26,
-    fontWeight: '900',
-    letterSpacing: -0.8,
   },
   chatPanelClose: {
     width: 40,
@@ -2379,42 +2366,39 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   dayGroup: {
-    marginTop: 22,
+    marginTop: SPACING.xl,
   },
   dayHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginBottom: 8,
+    gap: SPACING.md,
+    marginBottom: SPACING.sm,
   },
   dayHeaderText: {
-    color: '#161821',
-    fontSize: 14,
+    ...TYPOGRAPHY.cardTitle,
+    color: COLORS.textPrimary,
     fontWeight: '800',
-    letterSpacing: -0.3,
   },
   dayHeaderDay: {
-    color: '#9aa2ae',
-    fontSize: 13,
-    fontWeight: '600',
+    ...TYPOGRAPHY.meta,
+    color: COLORS.textMeta,
   },
   dayHeaderLine: {
     flex: 1,
     height: 1,
-    backgroundColor: '#eceef2',
-    marginLeft: 4,
+    backgroundColor: COLORS.borderPrimary,
+    marginLeft: SPACING.xs,
   },
   timelineRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
-    paddingVertical: 12,
+    gap: SPACING.md,
+    paddingVertical: SPACING.md,
   },
   timelineTime: {
-    color: '#8a909d',
-    fontSize: 14,
-    fontWeight: '600',
-    marginLeft: 8,
+    ...TYPOGRAPHY.meta,
+    color: COLORS.textMeta,
+    marginLeft: SPACING.sm,
   },
   timelineIconWrap: {
     width: 42,
@@ -2423,27 +2407,26 @@ const styles = StyleSheet.create({
   timelineIcon: {
     width: 42,
     height: 42,
-    borderRadius: 12,
+    borderRadius: RADIUS.xs,
     alignItems: 'center',
     justifyContent: 'center',
   },
   timelineIconHidden: {
-    backgroundColor: '#1d212a',
+    backgroundColor: COLORS.avatarDark,
   },
   timelineBody: {
     flex: 1,
     minWidth: 0,
   },
   timelineTitle: {
-    color: '#161821',
-    fontSize: 17,
+    ...TYPOGRAPHY.cardTitle,
+    color: COLORS.textPrimary,
     fontWeight: '800',
-    letterSpacing: -0.3,
   },
   timelineSubtitle: {
-    marginTop: 3,
-    color: '#8a909d',
-    fontSize: 14,
+    marginTop: 2,
+    ...TYPOGRAPHY.meta,
+    color: COLORS.textMeta,
     fontWeight: '500',
   },
   categoryGrid: {
