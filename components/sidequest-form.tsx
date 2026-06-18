@@ -7,6 +7,8 @@ import {
   Image,
   KeyboardAvoidingView,
   Modal,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
   Platform,
   ScrollView,
   StyleSheet,
@@ -799,20 +801,19 @@ function SideQuestFormInner({
           title={getPickerTitle(pickerTarget)}
           subtitle={pickerTarget === 'date' ? `Tillåtet intervall: ${tripRangeText}` : pickerTarget === 'revealDate' ? 'Välj när aktiviteten ska avslöjas.' : 'Välj avslöjandetid.'}
           onClose={() => setPickerTarget(null)}>
-          {pickerTarget ? (
+          {pickerTarget === 'revealTime' ? (
+            // Custom on-brand time wheel. Avoids the native time picker, whose
+            // spinner display hard-crashes under the New Architecture (Fabric)
+            // that Expo Go force-enables, and whose 'default' display looks
+            // out of place inside this sheet.
+            <TimeWheel value={revealTime} onChange={setRevealTime} />
+          ) : pickerTarget ? (
             <DateTimePicker
-              // Force a fresh native picker view per target. Without this,
-              // Fabric (forced on in Expo Go) reuses one native RNDateTimePicker
-              // and mutates its mode/display/value when switching from the date
-              // picker to the time picker — which hard-crashes natively. A
-              // distinct key remounts a clean view each time.
+              // Force a fresh native picker view per target so Fabric never
+              // reuses one native view and mutates its mode/display/value.
               key={pickerTarget}
               value={pickerValue}
-              mode={pickerTarget === 'revealTime' ? 'time' : 'date'}
-              // Use 'default' for every picker. On the New Architecture (Fabric)
-              // that Expo Go force-enables, mixing 'inline' (date) and a second
-              // picker can hard-crash natively when switching between them.
-              // 'default' is the Fabric-safe presentation for both date & time.
+              mode="date"
               display="default"
               minimumDate={
                 pickerTarget === 'date'
@@ -834,6 +835,102 @@ function SideQuestFormInner({
       ) : null}
     </ScrollView>
     </KeyboardAvoidingView>
+  );
+}
+
+// ── Custom time wheel ───────────────────────────────────────────────────────
+// Two snap-scrolling columns (hours / minutes) styled with the app's design
+// language. Replaces the native time picker, which crashes on Fabric and looks
+// out of place here. Minute precision is 5 minutes (plenty for reveal timing).
+
+const WHEEL_ITEM_HEIGHT = 46;
+const WHEEL_VISIBLE = 5; // odd number so one item sits centered
+const WHEEL_HEIGHT = WHEEL_ITEM_HEIGHT * WHEEL_VISIBLE;
+const WHEEL_PAD = (WHEEL_HEIGHT - WHEEL_ITEM_HEIGHT) / 2;
+const HOURS = Array.from({ length: 24 }, (_, i) => i);
+const MINUTES = Array.from({ length: 12 }, (_, i) => i * 5);
+
+function parseRevealTime(value: string): { hour: number; minute: number } {
+  const [hRaw, mRaw] = (value || '18:00').split(':');
+  let hour = parseInt(hRaw, 10);
+  let minute = parseInt(mRaw, 10);
+  if (!Number.isFinite(hour)) hour = 18;
+  if (!Number.isFinite(minute)) minute = 0;
+  hour = Math.max(0, Math.min(23, hour));
+  // Snap minute to the nearest 5 so it aligns with a wheel slot.
+  minute = Math.max(0, Math.min(55, Math.round(minute / 5) * 5));
+  return { hour, minute };
+}
+
+function WheelColumn({ data, selected, onSelect }: { data: number[]; selected: number; onSelect: (value: number) => void }) {
+  const scrollRef = useRef<ScrollView>(null);
+  const didInit = useRef(false);
+  const selectedIndex = Math.max(0, data.indexOf(selected));
+
+  const scrollToIndex = (index: number, animated: boolean) => {
+    scrollRef.current?.scrollTo({ y: index * WHEEL_ITEM_HEIGHT, animated });
+  };
+
+  const handleMomentumEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    // snapToInterval already settles the offset on a slot; just read it.
+    const index = Math.round(event.nativeEvent.contentOffset.y / WHEEL_ITEM_HEIGHT);
+    const clamped = Math.max(0, Math.min(data.length - 1, index));
+    const value = data[clamped];
+    if (value !== selected) onSelect(value);
+  };
+
+  return (
+    <View style={styles.wheelColumn}>
+      <ScrollView
+        ref={scrollRef}
+        showsVerticalScrollIndicator={false}
+        snapToInterval={WHEEL_ITEM_HEIGHT}
+        decelerationRate="fast"
+        contentContainerStyle={{ paddingVertical: WHEEL_PAD }}
+        onLayout={() => {
+          if (!didInit.current) {
+            didInit.current = true;
+            scrollToIndex(selectedIndex, false);
+          }
+        }}
+        onMomentumScrollEnd={handleMomentumEnd}>
+        {data.map((value) => {
+          const active = value === selected;
+          return (
+            <TouchableOpacity
+              key={value}
+              activeOpacity={0.7}
+              style={styles.wheelItem}
+              onPress={() => {
+                onSelect(value);
+                scrollToIndex(data.indexOf(value), true);
+              }}>
+              <Text style={[styles.wheelItemText, active ? styles.wheelItemTextActive : null]}>
+                {String(value).padStart(2, '0')}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
+}
+
+function TimeWheel({ value, onChange }: { value: string; onChange: (next: string) => void }) {
+  const { hour, minute } = parseRevealTime(value);
+
+  const update = (nextHour: number, nextMinute: number) => {
+    onChange(`${String(nextHour).padStart(2, '0')}:${String(nextMinute).padStart(2, '0')}`);
+  };
+
+  return (
+    <View style={styles.wheelWrap}>
+      {/* Center highlight band sits behind both columns */}
+      <View pointerEvents="none" style={styles.wheelHighlight} />
+      <WheelColumn data={HOURS} selected={hour} onSelect={(h) => update(h, minute)} />
+      <Text style={styles.wheelColon}>:</Text>
+      <WheelColumn data={MINUTES} selected={minute} onSelect={(m) => update(hour, m)} />
+    </View>
   );
 }
 
@@ -1489,6 +1586,48 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#eef1f5',
     overflow: 'hidden',
+  },
+  wheelWrap: {
+    height: WHEEL_HEIGHT,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+  },
+  wheelHighlight: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    top: WHEEL_PAD + 8,
+    height: WHEEL_ITEM_HEIGHT,
+    borderRadius: 16,
+    backgroundColor: PRIMARY_08,
+  },
+  wheelColumn: {
+    width: 78,
+    height: WHEEL_HEIGHT,
+  },
+  wheelItem: {
+    height: WHEEL_ITEM_HEIGHT,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  wheelItemText: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#b7bcc7',
+    letterSpacing: -0.4,
+  },
+  wheelItemTextActive: {
+    color: PRIMARY_COLOR,
+    fontWeight: '900',
+    fontSize: 24,
+  },
+  wheelColon: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#161821',
+    marginHorizontal: 4,
   },
   flightRow: {
     flexDirection: 'row',
