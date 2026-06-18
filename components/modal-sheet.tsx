@@ -15,7 +15,7 @@
 import { Animated, Dimensions, Pressable, StyleSheet, View } from 'react-native';
 import { ReactNode, useEffect } from 'react';
 import { useModalSpring } from '@/hooks/useMotion';
-import { COLORS, SHADOWS } from '@/constants/design-tokens';
+import { COLORS, SHADOWS, SPACING } from '@/constants/design-tokens';
 
 interface ModalSheetProps {
   visible: boolean;
@@ -99,6 +99,10 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
+    // Inset all sheet content from the screen edges so headers, close
+    // buttons and rows don't sit flush against the rounded corners (which
+    // looked like they spilled off the sides).
+    paddingHorizontal: SPACING.xl,
     ...SHADOWS.floating,
   },
 });
