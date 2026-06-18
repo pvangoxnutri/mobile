@@ -3,6 +3,7 @@ import type { UserInfo } from '@/lib/types';
 
 const NOTIFICATION_PREFS_KEY = 'sidequest.notification-prefs';
 const NOTIFICATIONS_KEY = 'sidequest.notifications';
+const NOTIFICATIONS_LAST_SEEN_KEY = 'sidequest.notifications.lastSeenAt';
 const CHAT_KEY_PREFIX = 'sidequest.trip-chat.';
 const memoryStorage = new Map<string, string>();
 
@@ -76,6 +77,38 @@ export async function prependNotification(notification: AppNotification) {
   const current = await loadNotifications();
   const next = [notification, ...current].slice(0, 50);
   await safeSetItem(NOTIFICATIONS_KEY, JSON.stringify(next));
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Unread notification tracking
+//
+// A single "last seen" timestamp is stored in AsyncStorage. Any notification
+// with createdAt > lastSeen counts as unread. Opening the notification
+// center calls markNotificationsAsRead() which advances lastSeen to "now",
+// clearing the unread indicator until something newer arrives.
+// ──────────────────────────────────────────────────────────────────────────
+
+export async function loadLastNotificationSeenAt(): Promise<number> {
+  const raw = await safeGetItem(NOTIFICATIONS_LAST_SEEN_KEY);
+  if (!raw) return 0;
+  const ms = new Date(raw).getTime();
+  return Number.isFinite(ms) ? ms : 0;
+}
+
+export async function markNotificationsAsRead(): Promise<void> {
+  await safeSetItem(NOTIFICATIONS_LAST_SEEN_KEY, new Date().toISOString());
+}
+
+export async function loadUnreadNotificationCount(): Promise<number> {
+  const [items, lastSeen] = await Promise.all([
+    loadNotifications(),
+    loadLastNotificationSeenAt(),
+  ]);
+  if (lastSeen === 0) return items.length;
+  return items.filter((n) => {
+    const t = new Date(n.createdAt).getTime();
+    return Number.isFinite(t) && t > lastSeen;
+  }).length;
 }
 
 export async function loadTripChat(tripId: string, tripTitle: string) {

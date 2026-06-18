@@ -5,7 +5,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiJson } from '@/lib/api';
-import { loadNotifications, type AppNotification } from '@/lib/social';
+import { loadNotifications, markNotificationsAsRead, type AppNotification } from '@/lib/social';
 import type { Quest, SideQuestActivity, TripEvent } from '@/lib/types';
 import { PRIMARY_COLOR, SECONDARY_COLOR } from '@/constants/colors';
 
@@ -18,6 +18,12 @@ export default function TmpNavbarScreen() {
 
   const loadAlerts = useCallback(() => {
     let active = true;
+
+    // Opening the notification center clears the unread indicator. Fire
+    // and forget — the TopAlertsButton in any tab refetches its unread
+    // count next time that tab gains focus, so the dot vanishes on the
+    // way back out.
+    void markNotificationsAsRead();
 
     void Promise.all([
       loadNotifications(),
