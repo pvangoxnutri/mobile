@@ -1,15 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
-import * as Clipboard from 'expo-clipboard';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
-  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
-  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -19,7 +16,6 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import RangeDatePicker, { formatRangeDisplay } from '@/components/range-date-picker';
-import CountryPicker from '@/components/travel-tracker/country-picker';
 import { useI18n } from '@/components/i18n-provider';
 import { UnsavedChangesModal, useUnsavedChanges } from '@/components/unsaved-changes';
 import { useAuth } from '@/components/auth-provider';
@@ -27,7 +23,7 @@ import { BigHeroCard, type TripMember, type TripWithEvent } from '@/components/b
 import { apiFetch, apiJson } from '@/lib/api';
 import { invalidateCache } from '@/lib/cache';
 import type { Quest } from '@/lib/types';
-import { SPACING, TYPOGRAPHY, COLORS, RADIUS, SHADOWS, OPACITIES } from '@/constants/design-tokens';
+import { SPACING, TYPOGRAPHY, COLORS, RADIUS, SHADOWS } from '@/constants/design-tokens';
 
 type MessageState = { type: 'success' | 'error'; text: string } | null;
 
@@ -39,29 +35,25 @@ export default function CreateTripScreen() {
   const [now] = useState(() => new Date());
   const [title, setTitle] = useState('');
   const [destination, setDestination] = useState('');
-  const [tripCountries, setTripCountries] = useState<string[]>([]);
+  // startDate / endDate hold internal defaults so the RangeDatePicker has an
+  // initial range to render, but they are NOT displayed anywhere in the UI
+  // until hasUserSelectedDates flips to true.
   const [startDate, setStartDate] = useState(getDefaultStartDate());
   const [endDate, setEndDate] = useState(getDefaultEndDate());
+  const [hasUserSelectedDates, setHasUserSelectedDates] = useState(false);
   const [coverImage, setCoverImage] = useState<string | null>(null);
   const [inviteCode] = useState(() => createInviteCode());
   const [rangePickerOpen, setRangePickerOpen] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [pendingInvites, setPendingInvites] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<MessageState>(null);
-  const initialStartDate = useRef(startDate);
-  const initialEndDate = useRef(endDate);
 
   const contentBottomPadding = useMemo(() => Math.max(insets.bottom, 18) + 32, [insets.bottom]);
 
   const isDirty = Boolean(
     title.trim() ||
     destination.trim() ||
-    tripCountries.length > 0 ||
     coverImage ||
-    pendingInvites.length > 0 ||
-    startDate !== initialStartDate.current ||
-    endDate !== initialEndDate.current
+    hasUserSelectedDates
   );
 
   async function handlePickCover() {
@@ -80,50 +72,15 @@ export default function CreateTripScreen() {
     }
   }
 
-  function handleAddInvite() {
-    const normalizedEmail = inviteEmail.trim().toLowerCase();
-
-    if (!normalizedEmail) {
-      setMessage({ type: 'error', text: t('trip.error.emptyEmail') });
-      return;
-    }
-
-    if (!looksLikeEmail(normalizedEmail)) {
-      setMessage({ type: 'error', text: t('trip.error.invalidEmail') });
-      return;
-    }
-
-    if (pendingInvites.includes(normalizedEmail)) {
-      setMessage({ type: 'error', text: t('trip.error.emailAlreadyInvited') });
-      return;
-    }
-
-    setPendingInvites((current) => [...current, normalizedEmail]);
-    setInviteEmail('');
-    setMessage(null);
-  }
-
-  function handleRemoveInvite(email: string) {
-    setPendingInvites((current) => current.filter((entry) => entry !== email));
-  }
-
-  async function handleCopyInviteCode() {
-    await Clipboard.setStringAsync(inviteCode);
-    setMessage({ type: 'success', text: t('trip.success.codeCopied', { code: inviteCode }) });
-  }
-
-  async function handleShareInviteCode() {
-    await Share.share({
-      message: `Join my SideQuest with code ${inviteCode}.`,
-      title: 'Join my SideQuest',
-      url: coverImage ?? undefined,
-    });
-  }
-
   async function saveTrip(): Promise<Quest | null> {
     const normalizedTitle = title.trim();
     const normalizedDestination = destination.trim();
 
+    // Only title + destination are required. Dates are optional — when the
+    // user has not explicitly picked a range, the internal startDate /
+    // endDate defaults are still sent to the backend (which requires the
+    // fields) but the UI never showed them. The user can edit dates later
+    // from Trip Detail.
     if (!normalizedTitle) {
       setMessage({ type: 'error', text: t('trip.error.emptyName') });
       return null;
@@ -134,20 +91,9 @@ export default function CreateTripScreen() {
       return null;
     }
 
-    if (!isDateInputValid(startDate) || !isDateInputValid(endDate)) {
-      setMessage({ type: 'error', text: t('trip.error.invalidDateFormat') });
-      return null;
-    }
-
-    if (new Date(`${endDate}T12:00:00`).getTime() < new Date(`${startDate}T12:00:00`).getTime()) {
-      setMessage({ type: 'error', text: t('trip.error.endBeforeStart') });
-      return null;
-    }
-
     setSubmitting(true);
     setMessage(null);
 
-    console.log('[CREATE-TRIP] submitting...');
     try {
       let uploadedImageUrl: string | null = null;
 
@@ -166,7 +112,7 @@ export default function CreateTripScreen() {
           startDate,
           endDate,
           inviteCode,
-          countries: tripCountries,
+          countries: [],
         }),
       });
 
@@ -174,18 +120,6 @@ export default function CreateTripScreen() {
       // next tab focus shows the freshly created trip without waiting for
       // the 30s TTL.
       invalidateCache('/api/trips');
-
-      if (pendingInvites.length > 0) {
-        await Promise.allSettled(
-          pendingInvites.map((email) =>
-            apiJson(`/api/trips/${trip.id}/invites`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ email }),
-            }),
-          ),
-        );
-      }
 
       return trip;
     } catch (error) {
@@ -218,14 +152,28 @@ export default function CreateTripScreen() {
   // BigHeroCard preview renders EXACTLY like the trip will look on the
   // home tab once it's saved. The user is the only known member at this
   // point (more come via invites after creation).
+  // Preview falls back to polished placeholders when fields are empty so the
+  // BigHeroCard always feels intentional. The placeholders only affect the
+  // preview render — the real save in handleCreateTrip uses the raw title /
+  // destination state, so we never persist a placeholder string.
+  const previewTitle = title.trim() || t('trip.preview.titlePlaceholder');
+  const previewDestination = destination.trim() || t('trip.preview.destinationPlaceholder');
+
+  // When the user has not picked dates yet, pass empty strings through to
+  // BigHeroCard. getTripDayInfo / formatTimeLeft both return null on empty,
+  // which makes the LIVE / UPCOMING pill and "Day X of Y" line render
+  // nothing — exactly the "no date" hero look we want.
+  const previewStartDate = hasUserSelectedDates ? startDate : '';
+  const previewEndDate = hasUserSelectedDates ? endDate : '';
+
   const previewTrip: TripWithEvent = useMemo(() => ({
     quest: {
       id: 'preview',
-      title: title.trim() || null,
+      title: previewTitle,
       description: null,
-      destination: destination.trim() || null,
-      startDate: startDate || getDefaultStartDate(),
-      endDate: endDate || getDefaultEndDate(),
+      destination: previewDestination,
+      startDate: previewStartDate,
+      endDate: previewEndDate,
       imageUrl: coverImage,
       spotifyUrl: null,
       ownerId: user?.id ?? 'preview',
@@ -234,20 +182,20 @@ export default function CreateTripScreen() {
       isRevealed: true,
       teaser: null,
       inviteCode,
-      countries: tripCountries,
+      countries: [],
       shareCode: null,
     } as Quest,
-    nextEventDate: new Date(`${startDate || getDefaultStartDate()}T12:00:00`),
-    nextEventLabel: title.trim() || 'Adventure preview',
+    nextEventDate: new Date(`${previewStartDate || getDefaultStartDate()}T12:00:00`),
+    nextEventLabel: previewTitle,
     upcomingEvents: [],
     isOngoing: (() => {
-      // Mirror the home logic: today is between start and end (inclusive).
+      if (!previewStartDate || !previewEndDate) return false;
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const s = new Date(`${startDate}T12:00:00`);
-      const e = new Date(`${endDate}T12:00:00`);
+      const s = new Date(`${previewStartDate}T12:00:00`);
+      const e = new Date(`${previewEndDate}T12:00:00`);
       return s.getTime() <= today.getTime() && e.getTime() >= today.getTime();
     })(),
-  }), [title, destination, startDate, endDate, coverImage, inviteCode, tripCountries, user, now]);
+  }), [previewTitle, previewDestination, previewStartDate, previewEndDate, coverImage, inviteCode, user, now]);
 
   const previewMembers: TripMember[] = useMemo(() => {
     if (!user?.id) return [];
@@ -287,17 +235,17 @@ export default function CreateTripScreen() {
           onPress={() => void handlePickCover()}
         />
 
-        {/* The BigHeroCard preview above is now also the cover-photo
-            picker — tapping it opens the image library. A small hint
-            below directs first-time users. */}
-        <TouchableOpacity activeOpacity={0.85} style={styles.coverHint} onPress={() => void handlePickCover()}>
-          <Ionicons name={coverImage ? 'camera-reverse-outline' : 'camera-outline'} size={16} color={COLORS.primary} />
-          <Text style={[styles.coverHintText, { color: COLORS.primary }]}>
-            {coverImage ? t('trip.change_photo') : t('trip.add_cover')}
-          </Text>
-        </TouchableOpacity>
+        {/* Cover pill: visible only when no image. Hero is already tappable. */}
+        {!coverImage ? (
+          <TouchableOpacity activeOpacity={0.85} style={styles.coverHint} onPress={() => void handlePickCover()}>
+            <Ionicons name="camera-outline" size={16} color={COLORS.primary} />
+            <Text style={[styles.coverHintText, { color: COLORS.primary }]}>
+              {t('trip.add_cover')}
+            </Text>
+          </TouchableOpacity>
+        ) : null}
 
-        <Text style={styles.prompt}>{t('trip.what_to_call')}</Text>
+        {/* Caption-style title input. Borderless, large, left-aligned. */}
         <TextInput
           value={title}
           onChangeText={setTitle}
@@ -306,7 +254,7 @@ export default function CreateTripScreen() {
           style={styles.titleInput}
         />
 
-        <Text style={styles.secondaryPrompt}>{t('trip.where_going')}</Text>
+        {/* Caption-style destination input. Borderless, smaller. */}
         <TextInput
           value={destination}
           onChangeText={setDestination}
@@ -315,92 +263,14 @@ export default function CreateTripScreen() {
           style={styles.destinationInput}
         />
 
-        <CountryPicker value={tripCountries} onChange={setTripCountries} label={t('trip.add_countries')} />
-
-        <View style={styles.section}>
-          <View style={styles.sectionTitleRow}>
-            <Ionicons name="calendar-outline" size={18} color={COLORS.textMeta} />
-            <Text style={styles.sectionTitle}>{t('trip.when_going')}</Text>
-          </View>
-
-          <Pressable style={styles.dateRangeCard} onPress={() => setRangePickerOpen(true)}>
-            <View style={styles.dateRangeCopy}>
-              <Text style={styles.dateRangeEyebrow}>{t('trip.select_dates')}</Text>
-              <Text style={styles.dateRangeValue}>{formatRangeDisplay(startDate, endDate)}</Text>
-              <Text style={styles.dateRangeHint}>{t('trip.dates_hint')}</Text>
-            </View>
-            <View style={[styles.dateRangeIcon, { backgroundColor: COLORS.primaryLight12, borderColor: COLORS.primaryLight20 }]}>
-              <Ionicons name="calendar-outline" size={22} color={COLORS.primary} />
-            </View>
+        {/* Optional date chip. Small pill, centered, secondary affordance. */}
+        <View style={styles.dateChipWrap}>
+          <Pressable style={styles.dateChip} onPress={() => setRangePickerOpen(true)}>
+            <Ionicons name="calendar-outline" size={15} color={COLORS.primary} />
+            <Text style={styles.dateChipValue} numberOfLines={1}>
+              {hasUserSelectedDates ? formatRangeDisplay(startDate, endDate) : t('trip.add_dates')}
+            </Text>
           </Pressable>
-        </View>
-
-        <View style={styles.section}>
-          <View style={styles.sectionTitleRow}>
-            <Ionicons name="key-outline" size={18} color={COLORS.textMeta} />
-            <Text style={styles.sectionTitle}>{t('trip.invite_code_section')}</Text>
-          </View>
-
-          <View style={styles.codeCard}>
-            <View>
-              <Text style={styles.codeLabel}>{t('trip.share_code')}</Text>
-              <Text style={styles.codeValue}>{inviteCode}</Text>
-            </View>
-
-            <View style={styles.codeActions}>
-              <TouchableOpacity activeOpacity={0.86} style={[styles.codeActionButton, { borderColor: COLORS.primaryLight20 }]} onPress={() => void handleCopyInviteCode()}>
-                <Ionicons name="copy-outline" size={16} color={COLORS.primary} />
-                <Text style={[styles.codeActionText, { color: COLORS.primary }]}>{t('common.copy')}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity activeOpacity={0.86} style={[styles.codeActionButton, { borderColor: COLORS.primaryLight20 }]} onPress={() => void handleShareInviteCode()}>
-                <Ionicons name="share-social-outline" size={16} color={COLORS.primary} />
-                <Text style={[styles.codeActionText, { color: COLORS.primary }]}>{t('common.share')}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <View style={styles.sectionTitleRow}>
-            <Ionicons name="mail-open-outline" size={18} color={COLORS.textMeta} />
-            <Text style={styles.sectionTitle}>{t('trip.invited_waiting')}</Text>
-          </View>
-
-          <Text style={styles.inviteHelper}>{t('trip.invite_hint')}</Text>
-
-          <View style={styles.inviteComposer}>
-            <TextInput
-              value={inviteEmail}
-              onChangeText={setInviteEmail}
-              placeholder={t('trip.invites.placeholder')}
-              placeholderTextColor={COLORS.placeholderText}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-              style={styles.inviteInput}
-            />
-            <TouchableOpacity activeOpacity={0.88} style={[styles.inviteAddButton, { backgroundColor: COLORS.primary }]} onPress={handleAddInvite}>
-              <Text style={styles.inviteAddButtonText}>{t('common.add')}</Text>
-            </TouchableOpacity>
-          </View>
-
-          {pendingInvites.length > 0 ? (
-            <View style={styles.pendingWrap}>
-              {pendingInvites.map((email) => (
-                <View key={email} style={styles.pendingChip}>
-                  <Text style={styles.pendingChipText}>{email}</Text>
-                  <TouchableOpacity activeOpacity={0.8} onPress={() => handleRemoveInvite(email)}>
-                    <Ionicons name="close" size={16} color={COLORS.textSecondary} />
-                  </TouchableOpacity>
-                </View>
-              ))}
-            </View>
-          ) : (
-            <View style={styles.pendingEmpty}>
-              <Ionicons name="time-outline" size={18} color={COLORS.textMeta} />
-              <Text style={styles.pendingEmptyText}>{t('trip.no_invites')}</Text>
-            </View>
-          )}
         </View>
 
         {message ? (
@@ -412,7 +282,11 @@ export default function CreateTripScreen() {
           </View>
         ) : null}
 
-        <TouchableOpacity activeOpacity={0.9} style={[styles.primaryButton, { backgroundColor: COLORS.primary, shadowColor: COLORS.primary }, submitting ? styles.primaryButtonDisabled : null]} disabled={submitting} onPress={() => void handleCreateTrip()}>
+        {/* Primary CTA — always clickable. Validation handled in saveTrip. */}
+        <TouchableOpacity
+          activeOpacity={0.9}
+          style={[styles.primaryButton, { backgroundColor: COLORS.primary, shadowColor: COLORS.primary }]}
+          onPress={() => void handleCreateTrip()}>
           <Text style={styles.primaryButtonText}>{submitting ? t('trip.starting') : t('trip.start_adventure')}</Text>
         </TouchableOpacity>
       </ScrollView>
@@ -428,6 +302,7 @@ export default function CreateTripScreen() {
         onChange={(nextStartDate, nextEndDate) => {
           setStartDate(nextStartDate);
           setEndDate(nextEndDate);
+          setHasUserSelectedDates(true);
         }}
         onClose={() => setRangePickerOpen(false)}
       />
@@ -467,14 +342,6 @@ async function uploadImageIfNeeded(uri: string) {
 
   const data = (await response.json()) as { url?: string };
   return data.url ?? null;
-}
-
-function looksLikeEmail(value: string) {
-  return /\S+@\S+\.\S+/.test(value);
-}
-
-function isDateInputValid(value: string) {
-  return /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
 function createInviteCode() {
@@ -629,202 +496,47 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: -0.2,
   },
-  prompt: {
-    marginTop: SPACING.xxxl,
-    textAlign: 'center',
-    color: COLORS.textSecondary,
-    ...TYPOGRAPHY.cardTitle,
-  },
+  // Caption-style inputs (NOT form boxes). Borderless, left-aligned, sized
+  // like editable title + subtitle of the hero card. Mental model: the user
+  // is captioning the trip, not filling in a form.
   titleInput: {
-    marginTop: SPACING.lg,
-    textAlign: 'center',
+    marginTop: SPACING.xl,
     color: COLORS.textPrimary,
-    fontSize: 34,
+    fontSize: 24,
     fontWeight: '800',
-    letterSpacing: -1.2,
-    paddingVertical: SPACING.md,
-  },
-  secondaryPrompt: {
-    marginTop: SPACING.sm,
-    textAlign: 'center',
-    color: COLORS.textSecondary,
-    ...TYPOGRAPHY.cardTitle,
+    letterSpacing: -0.6,
+    paddingVertical: SPACING.xs,
   },
   destinationInput: {
-    marginTop: SPACING.md,
-    textAlign: 'center',
-    color: COLORS.textPrimary,
-    fontSize: 20,
-    fontWeight: '600',
-    letterSpacing: -0.6,
-    paddingVertical: SPACING.md,
-  },
-  section: {
-    marginTop: SPACING.xxxl,
-  },
-  sectionTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.md,
-  },
-  sectionTitle: {
-    ...TYPOGRAPHY.sectionHeader,
-    fontWeight: '800',
-    color: COLORS.textPrimary,
-  },
-  dateRangeCard: {
-    marginTop: SPACING.lg,
-    minHeight: 118,
-    borderRadius: RADIUS.lg,
-    borderWidth: 1,
-    borderColor: COLORS.borderPrimary,
-    backgroundColor: COLORS.white,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.lg,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    ...SHADOWS.subtle,
-  },
-  dateRangeCopy: {
-    flex: 1,
-  },
-  dateRangeEyebrow: {
-    ...TYPOGRAPHY.eyebrow,
-    fontWeight: '800',
-    color: COLORS.textMeta,
-  },
-  dateRangeValue: {
-    marginTop: SPACING.md,
-    ...TYPOGRAPHY.sectionHeader,
-    fontWeight: '800',
-    color: COLORS.textPrimary,
-  },
-  dateRangeHint: {
-    marginTop: SPACING.md,
-    ...TYPOGRAPHY.body,
+    marginTop: SPACING.xs,
     color: COLORS.textSecondary,
+    fontSize: 16,
+    fontWeight: '500',
+    letterSpacing: -0.2,
+    paddingVertical: SPACING.xs,
   },
-  dateRangeIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.primaryLight12,
-    borderWidth: 1,
-    borderColor: COLORS.primaryLight20,
-    marginLeft: SPACING.md,
-  },
-  codeCard: {
+  // Small pill (optional, secondary affordance). Not full-width, not a row.
+  // Sits below the captions, visually subordinate.
+  dateChipWrap: {
     marginTop: SPACING.lg,
-    borderRadius: RADIUS.lg,
-    borderWidth: 1,
-    borderColor: COLORS.borderPrimary,
-    backgroundColor: COLORS.white,
-    padding: SPACING.lg,
-    ...SHADOWS.subtle,
+    alignItems: 'flex-start',
   },
-  codeLabel: {
-    ...TYPOGRAPHY.eyebrow,
-    fontWeight: '700',
-    color: COLORS.textMeta,
-  },
-  codeValue: {
-    marginTop: SPACING.sm,
-    ...TYPOGRAPHY.pageHeading,
-    fontWeight: '900',
-    color: COLORS.textPrimary,
-    letterSpacing: 3,
-  },
-  codeActions: {
-    flexDirection: 'row',
-    gap: SPACING.md,
-    marginTop: SPACING.lg,
-  },
-  codeActionButton: {
+  dateChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.sm,
-    borderRadius: RADIUS.circle,
-    borderWidth: 1,
-    borderColor: COLORS.primaryLight20,
     paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.md,
-  },
-  codeActionText: {
-    ...TYPOGRAPHY.label,
-    fontWeight: '700',
-    color: COLORS.primary,
-  },
-  inviteHelper: {
-    marginTop: SPACING.lg,
-    ...TYPOGRAPHY.body,
-    color: COLORS.textSecondary,
-  },
-  inviteComposer: {
-    marginTop: SPACING.lg,
-    flexDirection: 'row',
-    gap: SPACING.md,
-    alignItems: 'center',
-  },
-  inviteInput: {
-    flex: 1,
-    minHeight: 56,
-    borderRadius: RADIUS.sm,
-    borderWidth: 1,
-    borderColor: COLORS.borderInput,
-    paddingHorizontal: SPACING.lg,
-    color: COLORS.textPrimary,
-    ...TYPOGRAPHY.body,
-    backgroundColor: COLORS.bgLightest,
-  },
-  inviteAddButton: {
-    minHeight: 56,
-    borderRadius: RADIUS.sm,
-    backgroundColor: COLORS.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: SPACING.lg,
-  },
-  inviteAddButtonText: {
-    color: COLORS.white,
-    ...TYPOGRAPHY.buttonLarge,
-    fontWeight: '800',
-  },
-  pendingWrap: {
-    marginTop: SPACING.lg,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: SPACING.md,
-  },
-  pendingChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.md,
+    paddingVertical: SPACING.sm,
     borderRadius: RADIUS.circle,
     backgroundColor: COLORS.bgLight,
     borderWidth: 1,
     borderColor: COLORS.borderPrimary,
-    paddingLeft: SPACING.md,
-    paddingRight: SPACING.sm,
-    paddingVertical: SPACING.md,
   },
-  pendingChipText: {
-    ...TYPOGRAPHY.body,
-    fontWeight: '600',
+  dateChipValue: {
     color: COLORS.textPrimary,
-  },
-  pendingEmpty: {
-    marginTop: SPACING.lg,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.md,
-  },
-  pendingEmptyText: {
-    ...TYPOGRAPHY.body,
-    fontWeight: '600',
-    color: COLORS.textMuted,
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: -0.1,
   },
   messageBanner: {
     marginTop: SPACING.xl,
@@ -868,9 +580,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.28,
     shadowRadius: 28,
     elevation: 10,
-  },
-  primaryButtonDisabled: {
-    opacity: OPACITIES.disabled,
   },
   primaryButtonText: {
     ...TYPOGRAPHY.buttonLarge,
