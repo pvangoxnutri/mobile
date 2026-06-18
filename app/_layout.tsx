@@ -36,7 +36,6 @@ export default function RootLayout() {
                 <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false }} />
                 <Stack.Screen name="travel-tracker" options={{ headerShown: false }} />
                 <Stack.Screen name="previous-adventures" options={{ headerShown: false }} />
-                <Stack.Screen name="debug-logs" options={{ headerShown: false }} />
                 <Stack.Screen name="share/[shareCode]" options={{ headerShown: false }} />
                 <Stack.Screen name="trip/[id]" options={{ headerShown: false }} />
                 <Stack.Screen name="trip/[id]/settings" options={{ headerShown: false }} />

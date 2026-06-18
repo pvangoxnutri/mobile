@@ -3,7 +3,6 @@ import { ActivityIndicator, View } from 'react-native';
 import { apiFetch, API_URL } from '@/lib/api';
 import { normalizeLanguage, useI18n, type AppLanguage } from '@/components/i18n-provider';
 import { getEmailAuthRedirectUrl } from '@/lib/auth-redirect';
-import { addDebugLog } from '@/lib/debug-log-store';
 import { supabase } from '@/lib/supabase';
 import type { UserInfo } from '@/lib/types';
 
@@ -47,7 +46,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const auth: 'yes' | 'no' = accessToken ? 'yes' : 'no';
     console.log(`[AUTH] sync POST /api/auth/sync starting (token: ${auth})`);
-    addDebugLog({ level: 'info', source: 'AUTH', method: 'POST', path: '/api/auth/sync', auth, message: 'starting' });
 
     // Hard cap so a hung request cannot keep AuthGate stuck on the spinner.
     const timeoutMs = 15000;
@@ -69,8 +67,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       console.log(`[AUTH] sync POST /api/auth/sync → ${response.status}`);
-      const level = response.ok ? 'info' : 'warn';
-      addDebugLog({ level, source: 'AUTH', method: 'POST', path: '/api/auth/sync', status: response.status, auth });
 
       if (response.status === 401) {
         throw new Error((await response.text()) || 'Could not sync auth session.');
@@ -84,7 +80,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           bodySnippet = '<unreadable>';
         }
         console.warn(`[AUTH] sync non-OK body: ${bodySnippet}`);
-        addDebugLog({ level: 'warn', source: 'AUTH', method: 'POST', path: '/api/auth/sync', status: response.status, auth, body: bodySnippet, message: 'using fallback profile' });
         return fallbackProfile;
       }
 
@@ -92,13 +87,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (err) {
       if (controller.signal.aborted) {
         console.warn(`[AUTH] sync timed out after ${timeoutMs}ms, using fallback profile`);
-        addDebugLog({ level: 'error', source: 'AUTH', method: 'POST', path: '/api/auth/sync', auth, message: `TIMEOUT after ${timeoutMs}ms (using fallback)` });
         return fallbackProfile;
       }
       const message = err instanceof Error ? err.message : String(err);
       const errType = err instanceof Error ? err.constructor.name : typeof err;
       console.warn(`[AUTH] syncProfileWithBackend failed (${errType}), using fallback profile:`, message);
-      addDebugLog({ level: 'error', source: 'AUTH', method: 'POST', path: '/api/auth/sync', auth, message: `sync failed (${errType}): ${message} (using fallback)` });
       return fallbackProfile;
     } finally {
       clearTimeout(timeoutId);
@@ -108,7 +101,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const refreshProfile = useCallback(async (): Promise<UserInfo | null> => {
     if (inFlightRefresh.current) {
       console.log('[AUTH] refreshProfile: awaiting in-flight call');
-      addDebugLog({ level: 'info', source: 'AUTH', message: 'refreshProfile: awaiting in-flight call' });
       return inFlightRefresh.current;
     }
 
@@ -117,11 +109,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const sessionState = data.session ? 'yes' : 'no';
       console.log(`[AUTH] session: ${sessionState}${error ? ` (error: ${error.message})` : ''}`);
-      addDebugLog({
-        level: error ? 'warn' : 'info',
-        source: 'AUTH',
-        message: `session: ${sessionState}${error ? ` (error: ${error.message})` : ''}`,
-      });
 
       if (error || !data.session) {
         setUser(null);
@@ -145,7 +132,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     console.log('[AUTH] mount: restoring session...');
-    addDebugLog({ level: 'info', source: 'AUTH', message: 'mount: restoring session' });
     void (async () => {
       try {
         await refreshProfile();
@@ -160,7 +146,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event) => {
       console.log('[AUTH] state change:', event);
-      addDebugLog({ level: 'info', source: 'AUTH', message: `state change: ${event}` });
       queueMicrotask(async () => {
         try {
           await refreshProfile();
@@ -213,7 +198,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // call + image storage cleanup) and can exceed the default 15s on a cold
     // backend. Give it a full minute before timing out.
     const DELETE_TIMEOUT_MS = 60_000;
-    addDebugLog({ level: 'info', source: 'AUTH', method: 'DELETE', path: '/api/auth/me', message: 'starting account deletion' });
 
     try {
       const response = await apiFetch('/api/auth/me', { method: 'DELETE' }, DELETE_TIMEOUT_MS);
@@ -226,7 +210,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error('Could not delete account. Please try again.');
       }
 
-      addDebugLog({ level: 'info', source: 'AUTH', method: 'DELETE', path: '/api/auth/me', status: response.status, message: 'account deletion succeeded' });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       // A timeout here is non-fatal: the backend almost always finishes the
@@ -234,10 +217,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // anyway so the caller can route to login; the user will discover the
       // account is gone the next time they try to sign in.
       if (!/timed out/i.test(message)) {
-        addDebugLog({ level: 'error', source: 'AUTH', method: 'DELETE', path: '/api/auth/me', message: `delete failed: ${message}` });
         throw err;
       }
-      addDebugLog({ level: 'warn', source: 'AUTH', method: 'DELETE', path: '/api/auth/me', message: 'timeout treated as success (backend likely completed)' });
     }
 
     await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
