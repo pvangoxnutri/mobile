@@ -12,6 +12,7 @@ import { useI18n } from '@/components/i18n-provider';
 import UserProfileCard from '@/components/user-profile-card';
 import HiddenSidequestCard from '@/components/hidden-sidequest-card';
 import ActivityImageFallback from '@/components/activity-image-fallback';
+import HeroShell from '@/components/hero-shell';
 import ModalSheet from '@/components/modal-sheet';
 import { EmptyState } from '@/components/ui/empty-state';
 import { apiFetch, apiJson } from '@/lib/api';
@@ -432,9 +433,7 @@ export default function TripDetailsScreen() {
             </TouchableOpacity>
           </View>
 
-          <View style={styles.heroCard}>
-            {trip?.imageUrl ? <Image source={{ uri: trip.imageUrl }} style={styles.heroImage} /> : null}
-            <View style={styles.heroOverlay} />
+          <HeroShell imageUrl={trip?.imageUrl} style={styles.heroCardSize}>
             <View style={styles.heroPatternRow}>
               {[0, 1, 2, 3, 4, 5].map((i) => (
                 <View key={i} style={styles.heroPatternCell} />
@@ -449,7 +448,7 @@ export default function TripDetailsScreen() {
                 <TripMetaChip icon="mail-outline" label={`${invites.length} pending`} onPress={() => setPeopleSheetOpen(true)} />
               </View>
             </View>
-          </View>
+          </HeroShell>
 
           <View style={styles.spotifyRow}>
             <View style={styles.spotifyRowIcon}>
@@ -1296,19 +1295,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: '#f5f6f8',
   },
-  heroCard: {
+  heroCardSize: {
     minHeight: 270,
-    borderRadius: 34,
-    overflow: 'hidden',
-    backgroundColor: '#edf0f3',
     justifyContent: 'flex-end',
-  },
-  heroImage: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  heroOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(17,19,25,0.42)',
   },
   heroPatternRow: {
     position: 'absolute',
