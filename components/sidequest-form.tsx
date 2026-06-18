@@ -976,22 +976,32 @@ function TimeWheel({ value, onChange }: { value: string; onChange: (next: string
 // native view to crash on Fabric). Maps touch position on the track to a value.
 
 function BlurSlider({ value, min, max, onChange }: { value: number; min: number; max: number; onChange: (next: number) => void }) {
-  const widthRef = useRef(0);
+  const trackRef = useRef<View>(null);
+  // Absolute page-X of the track's left edge + its width. Using absolute
+  // screen coordinates (gestureState.moveX) avoids the jumpiness you get from
+  // locationX, which flips reference frames when the finger crosses the
+  // thumb/fill child views.
+  const geom = useRef({ x: 0, width: 0 });
 
-  const setFromX = (x: number) => {
-    const w = widthRef.current;
-    if (w <= 0) return;
-    const clampedX = Math.max(0, Math.min(w, x));
-    const ratio = clampedX / w;
-    onChange(Math.round(min + ratio * (max - min)));
+  const measureTrack = () => {
+    trackRef.current?.measure((_x, _y, width, _h, pageX) => {
+      geom.current = { x: pageX, width };
+    });
+  };
+
+  const setFromAbsoluteX = (absoluteX: number) => {
+    const { x, width } = geom.current;
+    if (width <= 0) return;
+    const rel = Math.max(0, Math.min(width, absoluteX - x));
+    onChange(Math.round(min + (rel / width) * (max - min)));
   };
 
   const responder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: (evt) => setFromX(evt.nativeEvent.locationX),
-      onPanResponderMove: (evt) => setFromX(evt.nativeEvent.locationX),
+      onPanResponderGrant: (_evt, gesture) => setFromAbsoluteX(gesture.x0),
+      onPanResponderMove: (_evt, gesture) => setFromAbsoluteX(gesture.moveX),
     }),
   ).current;
 
@@ -999,13 +1009,12 @@ function BlurSlider({ value, min, max, onChange }: { value: number; min: number;
 
   return (
     <View
+      ref={trackRef}
       style={styles.sliderTrack}
-      onLayout={(e) => {
-        widthRef.current = e.nativeEvent.layout.width;
-      }}
+      onLayout={measureTrack}
       {...responder.panHandlers}>
       <View style={[styles.sliderFill, { width: `${pct * 100}%` }]} />
-      <View style={[styles.sliderThumb, { left: `${pct * 100}%` }]} />
+      <View pointerEvents="none" style={[styles.sliderThumb, { left: `${pct * 100}%` }]} />
     </View>
   );
 }
