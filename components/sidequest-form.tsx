@@ -1008,13 +1008,18 @@ function BlurSlider({ value, min, max, onChange }: { value: number; min: number;
   const pct = max > min ? Math.max(0, Math.min(1, (value - min) / (max - min))) : 0;
 
   return (
+    // Tall, invisible touch area (full width) makes the thin track easy to
+    // grab. We measure this same view, and the visible track inside spans the
+    // same horizontal extent, so the value mapping stays aligned.
     <View
       ref={trackRef}
-      style={styles.sliderTrack}
+      style={styles.sliderTouchArea}
       onLayout={measureTrack}
       {...responder.panHandlers}>
-      <View style={[styles.sliderFill, { width: `${pct * 100}%` }]} />
-      <View pointerEvents="none" style={[styles.sliderThumb, { left: `${pct * 100}%` }]} />
+      <View pointerEvents="none" style={styles.sliderTrack}>
+        <View style={[styles.sliderFill, { width: `${pct * 100}%` }]} />
+        <View style={[styles.sliderThumb, { left: `${pct * 100}%` }]} />
+      </View>
     </View>
   );
 }
@@ -1754,8 +1759,12 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: -0.3,
   },
+  sliderTouchArea: {
+    marginTop: 12,
+    height: 44,
+    justifyContent: 'center',
+  },
   sliderTrack: {
-    marginTop: 18,
     height: 8,
     borderRadius: 999,
     backgroundColor: '#e6e9ee',
@@ -1770,10 +1779,11 @@ const styles = StyleSheet.create({
   },
   sliderThumb: {
     position: 'absolute',
-    width: 24,
-    height: 24,
-    marginLeft: -12,
-    borderRadius: 12,
+    top: -9,
+    width: 26,
+    height: 26,
+    marginLeft: -13,
+    borderRadius: 13,
     backgroundColor: '#fff',
     borderWidth: 2,
     borderColor: PRIMARY_COLOR,
