@@ -9,6 +9,7 @@ import {
   Modal,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
+  PanResponder,
   Platform,
   ScrollView,
   StyleSheet,
@@ -25,6 +26,7 @@ import { CATEGORY_VALUES, getCategorySymbol, type ActivityCategoryValue } from '
 import { fetchPlaceSuggestions, type PlaceAutocompleteSuggestion } from '@/lib/maps-api';
 import { type StoredMapPlace, withLocationMarker } from '@/lib/sidequest-location';
 import { withFlightMarkers } from '@/lib/flight-route';
+import { DEFAULT_BLUR, MAX_BLUR, MIN_BLUR, withBlurMarker } from '@/lib/activity-blur';
 import type { SideQuestActivity } from '@/lib/types';
 import { uploadImageIfNeeded } from '@/lib/uploads';
 import { useI18n } from '@/components/i18n-provider';
@@ -48,6 +50,7 @@ export type SideQuestFormValues = {
   teaser: string;
   teaserOffsetMinutes: number | null;
   imageUrl: string | null;
+  blurAmount: number;
 };
 
 // Category values now come from the shared category visual system
@@ -118,6 +121,7 @@ function SideQuestFormInner({
   const [teaser, setTeaser] = useState(initialValues?.teaser ?? '');
   const [teaserOffsetMinutes, setTeaserOffsetMinutes] = useState<number | null>(initialValues?.teaserOffsetMinutes ?? 120);
   const [imageUrl, setImageUrl] = useState<string | null>(initialValues?.imageUrl ?? initialImageUrl ?? null);
+  const [blurAmount, setBlurAmount] = useState<number>(initialValues?.blurAmount ?? DEFAULT_BLUR);
   const [pickerTarget, setPickerTarget] = useState<PickerTarget>(null);
   const [message, setMessage] = useState<MessageState>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -310,9 +314,14 @@ function SideQuestFormInner({
       // (only when the category is flight). Both are hidden markers parsed
       // back out on read — no backend/DB change required.
       const descriptionWithLocation = withLocationMarker(description.trim() || null, locationQuery.trim() || null, locationPlace);
-      const finalDescription = category === 'flight'
+      const descriptionWithFlight = category === 'flight'
         ? withFlightMarkers(descriptionWithLocation, flightFrom, flightTo)
         : descriptionWithLocation;
+      // Store the chosen blur only for hidden activities that actually have a
+      // cover image (nothing to blur otherwise).
+      const finalDescription = visibility === 'hidden' && uploadedImageUrl
+        ? withBlurMarker(descriptionWithFlight, blurAmount)
+        : descriptionWithFlight;
 
       const payload = {
         title: normalizedTitle,
@@ -395,6 +404,7 @@ function SideQuestFormInner({
   const initialLocationQueryForDirty = initialValues?.locationQuery ?? '';
   const initialFlightFromForDirty = initialValues?.flightFrom ?? '';
   const initialFlightToForDirty = initialValues?.flightTo ?? '';
+  const initialBlurForDirty = initialValues?.blurAmount ?? DEFAULT_BLUR;
 
   const dirty = mode === 'edit'
     ? (
@@ -407,6 +417,7 @@ function SideQuestFormInner({
         locationQuery.trim() !== initialLocationQueryForDirty.trim() ||
         flightFrom.trim() !== initialFlightFromForDirty.trim() ||
         flightTo.trim() !== initialFlightToForDirty.trim() ||
+        (visibility === 'hidden' && !!imageUrl && blurAmount !== initialBlurForDirty) ||
         date !== initialDateForDirty
       )
     : (
@@ -781,6 +792,29 @@ function SideQuestFormInner({
               <Text style={styles.helperText}>Lägg bara till en ledtråd om du vill bygga spänning innan avslöjandet.</Text>
             )}
           </View>
+
+          {imageUrl ? (
+            <View style={styles.block}>
+              <Text style={styles.label}>Förhandsvisning</Text>
+              <Text style={styles.helperText}>Så här ser bilden ut för gruppen innan avslöjandet. Dra för mer eller mindre oskärpa.</Text>
+              <View style={styles.blurPreviewCard}>
+                <Image source={{ uri: imageUrl }} style={styles.blurPreviewImage} blurRadius={blurAmount} />
+                <View style={styles.blurPreviewOverlay} />
+                <View style={styles.blurPreviewBadge}>
+                  <Ionicons name="eye-off-outline" size={14} color="#fff" />
+                  <Text style={styles.blurPreviewBadgeText}>Dold tills avslöjandet</Text>
+                </View>
+                {teaser.trim() ? (
+                  <Text style={styles.blurPreviewTeaser} numberOfLines={2}>{teaser.trim()}</Text>
+                ) : null}
+              </View>
+              <BlurSlider value={blurAmount} min={MIN_BLUR} max={MAX_BLUR} onChange={setBlurAmount} />
+              <View style={styles.blurSliderLabels}>
+                <Text style={styles.blurSliderLabel}>Mindre oskärpa</Text>
+                <Text style={styles.blurSliderLabel}>Mer oskärpa</Text>
+              </View>
+            </View>
+          ) : null}
         </>
       ) : null}
 
@@ -933,6 +967,45 @@ function TimeWheel({ value, onChange }: { value: string; onChange: (next: string
       <WheelColumn data={HOURS} selected={hour} onSelect={(h) => update(h, minute)} />
       <Text style={styles.wheelColon}>:</Text>
       <WheelColumn data={MINUTES} selected={minute} onSelect={(m) => update(hour, m)} />
+    </View>
+  );
+}
+
+// ── Blur slider ─────────────────────────────────────────────────────────────
+// Lightweight horizontal slider built on PanResponder (no extra package, no
+// native view to crash on Fabric). Maps touch position on the track to a value.
+
+function BlurSlider({ value, min, max, onChange }: { value: number; min: number; max: number; onChange: (next: number) => void }) {
+  const widthRef = useRef(0);
+
+  const setFromX = (x: number) => {
+    const w = widthRef.current;
+    if (w <= 0) return;
+    const clampedX = Math.max(0, Math.min(w, x));
+    const ratio = clampedX / w;
+    onChange(Math.round(min + ratio * (max - min)));
+  };
+
+  const responder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: (evt) => setFromX(evt.nativeEvent.locationX),
+      onPanResponderMove: (evt) => setFromX(evt.nativeEvent.locationX),
+    }),
+  ).current;
+
+  const pct = max > min ? Math.max(0, Math.min(1, (value - min) / (max - min))) : 0;
+
+  return (
+    <View
+      style={styles.sliderTrack}
+      onLayout={(e) => {
+        widthRef.current = e.nativeEvent.layout.width;
+      }}
+      {...responder.panHandlers}>
+      <View style={[styles.sliderFill, { width: `${pct * 100}%` }]} />
+      <View style={[styles.sliderThumb, { left: `${pct * 100}%` }]} />
     </View>
   );
 }
@@ -1631,6 +1704,85 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: '#161821',
     marginHorizontal: 4,
+  },
+  blurPreviewCard: {
+    marginTop: 12,
+    height: 180,
+    borderRadius: 24,
+    overflow: 'hidden',
+    backgroundColor: '#eef3f5',
+    justifyContent: 'flex-end',
+  },
+  blurPreviewImage: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  blurPreviewOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(20,24,31,0.28)',
+  },
+  blurPreviewBadge: {
+    position: 'absolute',
+    top: 14,
+    left: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(18,22,29,0.55)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  blurPreviewBadgeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.2,
+  },
+  blurPreviewTeaser: {
+    margin: 16,
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+  },
+  sliderTrack: {
+    marginTop: 18,
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: '#e6e9ee',
+    justifyContent: 'center',
+  },
+  sliderFill: {
+    position: 'absolute',
+    left: 0,
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: PRIMARY_COLOR,
+  },
+  sliderThumb: {
+    position: 'absolute',
+    width: 24,
+    height: 24,
+    marginLeft: -12,
+    borderRadius: 12,
+    backgroundColor: '#fff',
+    borderWidth: 2,
+    borderColor: PRIMARY_COLOR,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  blurSliderLabels: {
+    marginTop: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  blurSliderLabel: {
+    color: '#868d99',
+    fontSize: 12,
+    fontWeight: '700',
   },
   flightRow: {
     flexDirection: 'row',

@@ -27,6 +27,7 @@ import { invalidateCache } from '@/lib/cache';
 import { getCategorySymbol } from '@/lib/category-symbol';
 import { buildGoogleMapsSearchUrl, extractLocationQuery, extractStoredMapPlace, stripLocationMarker } from '@/lib/sidequest-location';
 import { extractFlightRoute, formatFlightRoute, hasFlightRoute, stripFlightMarkers } from '@/lib/flight-route';
+import { extractBlur, stripBlurMarker, DEFAULT_BLUR } from '@/lib/activity-blur';
 import { useRevealAnimation } from '@/hooks/useMotion';
 import type { ActivityComment, SideQuestActivity } from '@/lib/types';
 import { COLORS } from '@/constants/design-tokens';
@@ -127,9 +128,10 @@ export default function SideQuestDetailScreen() {
   const flightRoute = useMemo(() => extractFlightRoute(activity?.description), [activity?.description]);
   const showFlightRoute = activity?.category === 'flight' && hasFlightRoute(flightRoute);
   const cleanDescription = useMemo(
-    () => stripFlightMarkers(stripLocationMarker(activity?.description)),
+    () => stripBlurMarker(stripFlightMarkers(stripLocationMarker(activity?.description))),
     [activity?.description],
   );
+  const revealBlur = useMemo(() => extractBlur(activity?.description) ?? DEFAULT_BLUR, [activity?.description]);
 
   // Reveal-now is creator-only. The PATCH endpoint already flips visibility to
   // public and stamps RevealedAt server-side when { revealedNow: true } is
@@ -201,7 +203,7 @@ export default function SideQuestDetailScreen() {
           <>
             <HeroShell
               imageUrl={activity.imageUrl}
-              imageBlurRadius={activity.isHiddenForViewer ? 22 : 0}
+              imageBlurRadius={activity.isHiddenForViewer ? revealBlur : 0}
               fallback={<ActivityImageFallback category={activity.category} size="hero" />}
               style={styles.heroCardSize}>
               {/* Optional glow pulse on top of the gradient during reveal */}

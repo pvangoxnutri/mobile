@@ -9,6 +9,7 @@ import { UnsavedChangesModal, useUnsavedChanges } from '@/components/unsaved-cha
 import { apiJson } from '@/lib/api';
 import { extractLocationQuery, extractStoredMapPlace, stripLocationMarker } from '@/lib/sidequest-location';
 import { extractFlightRoute, stripFlightMarkers } from '@/lib/flight-route';
+import { extractBlur, stripBlurMarker, DEFAULT_BLUR } from '@/lib/activity-blur';
 import type { Quest, SideQuestActivity } from '@/lib/types';
 import { PRIMARY_COLOR } from '@/constants/colors';
 import { COLORS, SPACING, RADIUS, TYPOGRAPHY } from '@/constants/design-tokens';
@@ -77,14 +78,15 @@ export default function NewSideQuestScreen() {
       const flightRoute = extractFlightRoute(activity.description);
       return {
         title: activity.title ?? '',
-        // Strip both location and flight markers so the editable description
+        // Strip location, flight and blur markers so the editable description
         // shows only the human-written text.
-        description: stripFlightMarkers(stripLocationMarker(activity.description)) ?? '',
+        description: stripBlurMarker(stripFlightMarkers(stripLocationMarker(activity.description))) ?? '',
         category: activity.category ?? null,
         locationQuery: extractLocationQuery(activity.description),
         locationPlace: extractStoredMapPlace(activity.description),
         flightFrom: flightRoute.from,
         flightTo: flightRoute.to,
+        blurAmount: extractBlur(activity.description) ?? DEFAULT_BLUR,
         date: activity.date,
         visibility: activity.visibility,
         revealDate: activity.revealAt ? activity.revealAt.slice(0, 10) : activity.date,
