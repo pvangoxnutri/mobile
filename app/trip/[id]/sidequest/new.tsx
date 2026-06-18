@@ -8,8 +8,10 @@ import SideQuestForm, { type SideQuestFormHandle, type SideQuestFormValues } fro
 import { UnsavedChangesModal, useUnsavedChanges } from '@/components/unsaved-changes';
 import { apiJson } from '@/lib/api';
 import { extractLocationQuery, extractStoredMapPlace, stripLocationMarker } from '@/lib/sidequest-location';
+import { extractFlightRoute, stripFlightMarkers } from '@/lib/flight-route';
 import type { Quest, SideQuestActivity } from '@/lib/types';
 import { PRIMARY_COLOR } from '@/constants/colors';
+import { COLORS, SPACING, RADIUS, TYPOGRAPHY } from '@/constants/design-tokens';
 
 export default function NewSideQuestScreen() {
   const insets = useSafeAreaInsets();
@@ -72,12 +74,17 @@ export default function NewSideQuestScreen() {
 
   const initialValues = useMemo<Partial<SideQuestFormValues> | undefined>(() => {
     if (activity) {
+      const flightRoute = extractFlightRoute(activity.description);
       return {
         title: activity.title ?? '',
-        description: stripLocationMarker(activity.description) ?? '',
+        // Strip both location and flight markers so the editable description
+        // shows only the human-written text.
+        description: stripFlightMarkers(stripLocationMarker(activity.description)) ?? '',
         category: activity.category ?? null,
         locationQuery: extractLocationQuery(activity.description),
         locationPlace: extractStoredMapPlace(activity.description),
+        flightFrom: flightRoute.from,
+        flightTo: flightRoute.to,
         date: activity.date,
         visibility: activity.visibility,
         revealDate: activity.revealAt ? activity.revealAt.slice(0, 10) : activity.date,
@@ -101,7 +108,7 @@ export default function NewSideQuestScreen() {
       <View style={styles.screen}>
         <View style={[styles.header, { paddingTop: Math.max(insets.top, 18) + 4 }]}>
           <TouchableOpacity style={styles.backButton} activeOpacity={0.88} onPress={unsaved.requestBack}>
-            <Ionicons name="arrow-back" size={24} color="#11131a" />
+            <Ionicons name="arrow-back" size={24} color={COLORS.textPrimary} />
           </TouchableOpacity>
           <View>
             <Text style={styles.title}>{isEditMode ? 'Redigera aktivitet' : 'Lägg till aktivitet'}</Text>
@@ -158,42 +165,43 @@ function formatTimeForInput(value: string) {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.bgPrimary,
   },
   header: {
-    paddingHorizontal: 22,
-    paddingBottom: 8,
+    paddingHorizontal: SPACING.xl,
+    paddingBottom: SPACING.sm,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
+    gap: SPACING.lg,
   },
   backButton: {
     width: 42,
     height: 42,
-    borderRadius: 21,
+    borderRadius: RADIUS.circle,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#f5f6f8',
+    backgroundColor: COLORS.bgLight,
   },
   title: {
-    color: '#121317',
+    color: COLORS.textPrimary,
     fontSize: 26,
     fontWeight: '900',
     letterSpacing: -0.8,
   },
   subtitle: {
-    marginTop: 4,
-    color: '#79808c',
+    marginTop: SPACING.xs,
+    color: COLORS.textSecondary,
     fontSize: 14,
   },
   centerState: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: SPACING.xxl,
   },
   errorText: {
-    color: '#d53d18',
+    ...TYPOGRAPHY.body,
+    color: COLORS.error,
     textAlign: 'center',
     fontSize: 15,
   },

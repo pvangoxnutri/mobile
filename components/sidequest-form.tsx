@@ -2,7 +2,7 @@
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
-import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from 'react';
+import { Component, forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState, type ReactNode, type Ref } from 'react';
 import {
   Image,
   KeyboardAvoidingView,
@@ -22,6 +22,7 @@ import { invalidateCache } from '@/lib/cache';
 import { CATEGORY_VALUES, getCategorySymbol, type ActivityCategoryValue } from '@/lib/category-symbol';
 import { fetchPlaceSuggestions, type PlaceAutocompleteSuggestion } from '@/lib/maps-api';
 import { type StoredMapPlace, withLocationMarker } from '@/lib/sidequest-location';
+import { withFlightMarkers } from '@/lib/flight-route';
 import type { SideQuestActivity } from '@/lib/types';
 import { uploadImageIfNeeded } from '@/lib/uploads';
 import { useI18n } from '@/components/i18n-provider';
@@ -36,6 +37,8 @@ export type SideQuestFormValues = {
   category: string | null;
   locationQuery: string;
   locationPlace: StoredMapPlace | null;
+  flightFrom: string;
+  flightTo: string;
   date: string;
   visibility: 'public' | 'hidden';
   revealDate: string;
@@ -101,6 +104,8 @@ function SideQuestFormInner({
   const [category, setCategory] = useState<string | null>(initialValues?.category ?? null);
   const [locationQuery, setLocationQuery] = useState(initialValues?.locationQuery ?? '');
   const [locationPlace, setLocationPlace] = useState<StoredMapPlace | null>(initialValues?.locationPlace ?? null);
+  const [flightFrom, setFlightFrom] = useState(initialValues?.flightFrom ?? '');
+  const [flightTo, setFlightTo] = useState(initialValues?.flightTo ?? '');
   const [locationSuggestions, setLocationSuggestions] = useState<PlaceAutocompleteSuggestion[]>([]);
   const [locationLoading, setLocationLoading] = useState(false);
   const [locationError, setLocationError] = useState('');
@@ -114,7 +119,6 @@ function SideQuestFormInner({
   const [pickerTarget, setPickerTarget] = useState<PickerTarget>(null);
   const [message, setMessage] = useState<MessageState>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [revealedNow, setRevealedNow] = useState(false);
 
   const bottomPadding = useMemo(() => Math.max(insets.bottom, 18) + 60, [insets.bottom]);
   const revealAtPreview = visibility === 'hidden' ? formatRevealPreview(revealDate, revealTime) : 'Avslöjas direkt';
@@ -127,6 +131,8 @@ function SideQuestFormInner({
   const revealRange = useMemo(() => getRevealRange(tripStartDate, tripEndDate, date), [date, tripEndDate, tripStartDate]);
   const revealDateOutOfRange =
     visibility === 'hidden' ? !isWithinRange(revealDate, revealRange.min, revealRange.max) : false;
+  const revealIsPast =
+    visibility === 'hidden' && localDateTime(revealDate, revealTime).getTime() <= Date.now();
 
   // Only clamp revealDate when transitioning into Hidden, or when the valid
   // range shifts (e.g. user picked a different activity date). Skip re-runs
@@ -280,6 +286,17 @@ function SideQuestFormInner({
       return null;
     }
 
+    // A hidden activity with a reveal time in the past would be revealed
+    // instantly — which defeats the purpose. Activity DATE may be in the past
+    // (history), but the reveal MOMENT must be in the future.
+    if (visibility === 'hidden') {
+      const revealMs = localDateTime(revealDate, revealTime).getTime();
+      if (!Number.isFinite(revealMs) || revealMs <= Date.now()) {
+        setMessage({ type: 'error', text: 'Avslöjandetiden måste vara i framtiden — annars syns aktiviteten direkt.' });
+        return null;
+      }
+    }
+
     setSubmitting(true);
     setMessage(null);
 
@@ -287,17 +304,24 @@ function SideQuestFormInner({
       const uploadedImageUrl = await uploadImageIfNeeded(imageUrl, 'sidequest');
       const revealAt = visibility === 'hidden' ? combineDateAndTime(revealDate, revealTime) : null;
 
+      // Compose description: location markers first, then flight markers
+      // (only when the category is flight). Both are hidden markers parsed
+      // back out on read — no backend/DB change required.
+      const descriptionWithLocation = withLocationMarker(description.trim() || null, locationQuery.trim() || null, locationPlace);
+      const finalDescription = category === 'flight'
+        ? withFlightMarkers(descriptionWithLocation, flightFrom, flightTo)
+        : descriptionWithLocation;
+
       const payload = {
         title: normalizedTitle,
-        description: withLocationMarker(description.trim() || null, locationQuery.trim() || null, locationPlace),
+        description: finalDescription,
         category: category || null,
         date,
-        visibility: revealedNow ? 'public' : visibility,
-        revealAt: revealedNow ? null : revealAt,
-        teaser: visibility === 'hidden' && !revealedNow ? teaser.trim() || null : null,
-        teaserOffsetMinutes: visibility === 'hidden' && !revealedNow && teaser.trim() ? teaserOffsetMinutes : null,
+        visibility,
+        revealAt,
+        teaser: visibility === 'hidden' ? teaser.trim() || null : null,
+        teaserOffsetMinutes: visibility === 'hidden' && teaser.trim() ? teaserOffsetMinutes : null,
         imageUrl: uploadedImageUrl,
-        revealedNow,
       };
 
       if (mode === 'edit' && sideQuestId) {
@@ -367,6 +391,8 @@ function SideQuestFormInner({
   const initialTeaserForDirty = initialValues?.teaser ?? '';
   const initialImageForDirty = initialValues?.imageUrl ?? initialImageUrl ?? null;
   const initialLocationQueryForDirty = initialValues?.locationQuery ?? '';
+  const initialFlightFromForDirty = initialValues?.flightFrom ?? '';
+  const initialFlightToForDirty = initialValues?.flightTo ?? '';
 
   const dirty = mode === 'edit'
     ? (
@@ -377,6 +403,8 @@ function SideQuestFormInner({
         teaser.trim() !== initialTeaserForDirty.trim() ||
         (imageUrl ?? null) !== (initialImageForDirty ?? null) ||
         locationQuery.trim() !== initialLocationQueryForDirty.trim() ||
+        flightFrom.trim() !== initialFlightFromForDirty.trim() ||
+        flightTo.trim() !== initialFlightToForDirty.trim() ||
         date !== initialDateForDirty
       )
     : (
@@ -385,7 +413,9 @@ function SideQuestFormInner({
         category !== null ||
         teaser.trim() !== '' ||
         imageUrl !== null ||
-        locationQuery.trim() !== ''
+        locationQuery.trim() !== '' ||
+        flightFrom.trim() !== '' ||
+        flightTo.trim() !== ''
       );
 
   useEffect(() => {
@@ -394,15 +424,33 @@ function SideQuestFormInner({
 
   const pickerValue = useMemo(() => {
     if (pickerTarget === 'date') {
-      return new Date(`${date}T12:00:00`);
+      // Clamp to the trip range so the picker never gets a value outside
+      // [minimumDate, maximumDate] — that combination hard-crashes the native
+      // iOS picker.
+      const v = new Date(`${date}T12:00:00`);
+      const min = tripStartDate && isDateInputValid(tripStartDate) ? new Date(`${tripStartDate}T12:00:00`) : undefined;
+      const max = tripEndDate && isDateInputValid(tripEndDate) ? new Date(`${tripEndDate}T12:00:00`) : undefined;
+      return clampDate(v, min, max);
     }
 
     if (pickerTarget === 'revealDate') {
-      return new Date(`${(isDateInputValid(revealDate) ? revealDate : revealRange.min)}T12:00:00`);
+      // Clamp to the reveal range for the same crash-safety reason. After
+      // changing the activity date the stored revealDate can fall outside the
+      // newly computed range until the clamp effect catches up.
+      const v = new Date(`${(isDateInputValid(revealDate) ? revealDate : revealRange.min)}T12:00:00`);
+      const min = new Date(`${revealRange.min}T12:00:00`);
+      const max = new Date(`${revealRange.max}T12:00:00`);
+      return clampDate(v, min, max);
     }
 
-    return new Date(`2026-01-01T${revealTime}:00`);
-  }, [date, pickerTarget, revealDate, revealRange.min, revealTime]);
+    // Time spinner: the date component is irrelevant in mode="time", so use
+    // TODAY + the chosen time, built from local components. Parsing a bare
+    // "YYYY-MM-DDTHH:mm" string can be interpreted as UTC by Hermes, which
+    // makes the spinner drift by the timezone offset (e.g. picking 23:00
+    // snaps back to 01:00 in CEST). Avoiding revealDate here also keeps the
+    // value clear of any out-of-range date edge cases.
+    return localDateTime(getDefaultDate(), revealTime);
+  }, [date, pickerTarget, revealDate, revealRange.min, revealRange.max, revealTime, tripStartDate, tripEndDate]);
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -475,6 +523,49 @@ function SideQuestFormInner({
           })}
         </View>
       </View>
+
+      {category === 'flight' ? (
+        <View style={styles.block}>
+          <Text style={styles.label}>Flygrutt <Text style={styles.labelOptional}>(valfritt)</Text></Text>
+          <View style={styles.flightRow}>
+            <View style={styles.flightField}>
+              <Text style={styles.flightFieldLabel}>FRÅN</Text>
+              <TextInput
+                value={flightFrom}
+                onChangeText={setFlightFrom}
+                placeholder="CPH"
+                placeholderTextColor="#b7bcc7"
+                autoCapitalize="characters"
+                style={styles.flightInput}
+              />
+            </View>
+            <View style={styles.flightArrow}>
+              <Ionicons name="airplane" size={18} color={SECONDARY_COLOR} />
+            </View>
+            <View style={styles.flightField}>
+              <Text style={styles.flightFieldLabel}>TILL</Text>
+              <TextInput
+                value={flightTo}
+                onChangeText={setFlightTo}
+                placeholder="HND"
+                placeholderTextColor="#b7bcc7"
+                autoCapitalize="characters"
+                style={styles.flightInput}
+              />
+            </View>
+          </View>
+          {flightFrom.trim() || flightTo.trim() ? (
+            <View style={styles.flightPreview}>
+              <Ionicons name="airplane-outline" size={15} color={SECONDARY_COLOR} />
+              <Text style={styles.flightPreviewText}>
+                {flightFrom.trim() && flightTo.trim()
+                  ? `${flightFrom.trim()} → ${flightTo.trim()}`
+                  : flightFrom.trim() || flightTo.trim()}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+      ) : null}
 
       <View style={styles.block}>
         <Text style={styles.label}>Beskrivning</Text>
@@ -584,22 +675,7 @@ function SideQuestFormInner({
         </View>
       </View>
 
-      {visibility === 'hidden' && !revealedNow ? (
-        <View style={styles.block}>
-          <TouchableOpacity
-            activeOpacity={0.88}
-            style={[styles.revealNowButton, { backgroundColor: PRIMARY_COLOR, shadowColor: PRIMARY_COLOR }]}
-            onPress={() => {
-              setRevealedNow(true);
-              setMessage({ type: 'success', text: 'Aktiviteten kommer att avslöjas direkt när du sparar!' });
-            }}>
-            <Ionicons name="flash" size={18} color="#fff" style={{ marginRight: 8 }} />
-            <Text style={styles.revealNowButtonText}>Avslöja nu istället för att vänta</Text>
-          </TouchableOpacity>
-        </View>
-      ) : null}
-
-      {visibility === 'hidden' && !revealedNow ? (
+      {visibility === 'hidden' ? (
         <>
           <View style={styles.block}>
             <Text style={styles.label}>Avslöjandeschema</Text>
@@ -664,9 +740,15 @@ function SideQuestFormInner({
                 </TouchableOpacity>
               )}
             </View>
-            <View style={styles.revealSummary}>
-              <Ionicons name="sparkles-outline" size={16} color={PRIMARY_COLOR} />
-              <Text style={styles.revealSummaryText} numberOfLines={2}>{revealAtPreview}</Text>
+            <View style={[styles.revealSummary, revealIsPast ? styles.revealSummaryWarn : null]}>
+              <Ionicons
+                name={revealIsPast ? 'alert-circle-outline' : 'sparkles-outline'}
+                size={16}
+                color={revealIsPast ? '#a52617' : PRIMARY_COLOR}
+              />
+              <Text style={[styles.revealSummaryText, revealIsPast ? styles.revealSummaryTextWarn : null]} numberOfLines={2}>
+                {revealIsPast ? 'Avslöjandetiden har redan passerat — välj en tid i framtiden.' : revealAtPreview}
+              </Text>
             </View>
           </View>
 
@@ -719,9 +801,19 @@ function SideQuestFormInner({
           onClose={() => setPickerTarget(null)}>
           {pickerTarget ? (
             <DateTimePicker
+              // Force a fresh native picker view per target. Without this,
+              // Fabric (forced on in Expo Go) reuses one native RNDateTimePicker
+              // and mutates its mode/display/value when switching from the date
+              // picker to the time picker — which hard-crashes natively. A
+              // distinct key remounts a clean view each time.
+              key={pickerTarget}
               value={pickerValue}
               mode={pickerTarget === 'revealTime' ? 'time' : 'date'}
-              display={Platform.OS === 'ios' ? (pickerTarget === 'revealTime' ? 'spinner' : 'inline') : 'default'}
+              // Use 'default' for every picker. On the New Architecture (Fabric)
+              // that Expo Go force-enables, mixing 'inline' (date) and a second
+              // picker can hard-crash natively when switching between them.
+              // 'default' is the Fabric-safe presentation for both date & time.
+              display="default"
               minimumDate={
                 pickerTarget === 'date'
                   ? tripStartDate ? new Date(`${tripStartDate}T12:00:00`) : undefined
@@ -745,6 +837,27 @@ function SideQuestFormInner({
   );
 }
 
+// Catches render-time errors from the native date/time picker so a bad value
+// surfaces as an on-screen message instead of taking down the whole app.
+class PickerErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state: { error: Error | null } = { error: null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <Text style={{ color: '#a52617', fontSize: 13, padding: 16, textAlign: 'center' }}>
+          Tidsväljaren kunde inte öppnas: {this.state.error.message}
+        </Text>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 function PickerSheet({
   visible,
   title,
@@ -765,7 +878,9 @@ function PickerSheet({
           <View style={styles.modalHandle} />
           <Text style={styles.modalTitle}>{title}</Text>
           <Text style={styles.modalSubtitle}>{subtitle}</Text>
-          <View style={styles.modalPickerWrap}>{children}</View>
+          <View style={styles.modalPickerWrap}>
+            <PickerErrorBoundary>{children}</PickerErrorBoundary>
+          </View>
           <TouchableOpacity activeOpacity={0.9} style={[styles.doneButton, { backgroundColor: PRIMARY_COLOR }]} onPress={onClose}>
             <Text style={styles.doneButtonText}>Klar</Text>
           </TouchableOpacity>
@@ -825,7 +940,40 @@ function formatShortDate(value: string) {
 }
 
 function formatTime(value: string) {
-  return new Intl.DateTimeFormat('sv-SE', { hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(`2026-01-01T${value}:00`));
+  // value is already "HH:MM" (24h). Format directly — parsing it through Date
+  // risks a UTC-vs-local drift in Hermes that would show the wrong hour.
+  const [h, m] = value.split(':');
+  return `${(h ?? '00').padStart(2, '0')}:${(m ?? '00').padStart(2, '0')}`;
+}
+
+// Clamps a Date into [min, max]. Guards the native iOS DateTimePicker, which
+// hard-crashes when given a `value` outside its minimum/maximum bounds, and
+// falls back to a sane value if `value` is somehow Invalid Date.
+function clampDate(value: Date, min?: Date, max?: Date): Date {
+  let t = value.getTime();
+  if (Number.isNaN(t)) {
+    t = (min ?? max ?? new Date()).getTime();
+  }
+  if (min && t < min.getTime()) t = min.getTime();
+  if (max && t > max.getTime()) t = max.getTime();
+  return new Date(t);
+}
+
+// Builds a LOCAL-time Date from "YYYY-MM-DD" + "HH:MM" component strings.
+// Avoids the Hermes quirk where `new Date("YYYY-MM-DDTHH:mm")` may be parsed
+// as UTC, which shifts the time by the device timezone offset.
+function localDateTime(date: string, time: string): Date {
+  const [y, mo, d] = (date ?? '').split('-').map((n) => parseInt(n, 10));
+  const [h, mi] = (time ?? '').split(':').map((n) => parseInt(n, 10));
+  return new Date(
+    Number.isFinite(y) ? y : 2000,
+    Number.isFinite(mo) ? mo - 1 : 0,
+    Number.isFinite(d) ? d : 1,
+    Number.isFinite(h) ? h : 0,
+    Number.isFinite(mi) ? mi : 0,
+    0,
+    0,
+  );
 }
 
 function formatRevealPreview(date: string, time: string) {
@@ -833,8 +981,10 @@ function formatRevealPreview(date: string, time: string) {
 }
 
 function combineDateAndTime(date: string, time: string) {
-  const combined = new Date(`${date}T${time}:00`);
-  return combined.toISOString();
+  // Interpret the picked date+time as LOCAL, then convert to UTC ISO for the
+  // backend. Constructing from components (not string parsing) keeps the saved
+  // reveal moment matching what the user actually chose in their timezone.
+  return localDateTime(date, time).toISOString();
 }
 
 function isWithinRange(value: string, min: string, max: string) {
@@ -852,10 +1002,17 @@ function getPickerTitle(target: PickerTarget) {
 }
 
 function getRevealRange(tripStartDate?: string | null, tripEndDate?: string | null, sideQuestDate?: string | null) {
-  const min = tripStartDate && isDateInputValid(tripStartDate) ? tripStartDate : getDefaultDate();
+  const today = getDefaultDate();
+  // A reveal can never happen in the past, so the earliest selectable reveal
+  // date is today — even if the trip already started.
+  const rawMin = tripStartDate && isDateInputValid(tripStartDate) ? tripStartDate : today;
+  const min = rawMin < today ? today : rawMin;
   const maxCandidate = sideQuestDate && isDateInputValid(sideQuestDate) ? sideQuestDate : tripEndDate && isDateInputValid(tripEndDate) ? tripEndDate : min;
   const tripMax = tripEndDate && isDateInputValid(tripEndDate) ? tripEndDate : maxCandidate;
-  const max = maxCandidate <= tripMax ? maxCandidate : tripMax;
+  const cappedMax = maxCandidate <= tripMax ? maxCandidate : tripMax;
+  // Guard against an inverted range (e.g. a past activity date): max never
+  // earlier than min.
+  const max = cappedMax < min ? min : cappedMax;
   return { min, max };
 }
 
@@ -1156,6 +1313,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
   },
+  revealSummaryWarn: {
+    backgroundColor: '#ffefeb',
+    borderColor: '#ffd0c3',
+  },
+  revealSummaryTextWarn: {
+    color: '#a52617',
+  },
   teaserOptions: {
     marginTop: 14,
     flexDirection: 'row',
@@ -1326,23 +1490,60 @@ const styles = StyleSheet.create({
     borderColor: '#eef1f5',
     overflow: 'hidden',
   },
-  revealNowButton: {
+  flightRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 56,
-    borderRadius: 18,
-    backgroundColor: PRIMARY_COLOR,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.24,
-    shadowRadius: 16,
-    elevation: 6,
+    gap: 10,
   },
-  revealNowButtonText: {
-    color: '#fff',
-    fontSize: 16,
+  flightField: {
+    flex: 1,
+  },
+  flightFieldLabel: {
+    color: '#8a909b',
+    fontSize: 11,
     fontWeight: '800',
-    letterSpacing: -0.3,
+    letterSpacing: 1.2,
+    marginBottom: 6,
+  },
+  flightInput: {
+    minHeight: 58,
+    borderRadius: 20,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#eaedf2',
+    paddingHorizontal: 16,
+    color: '#161821',
+    fontSize: 18,
+    fontWeight: '800',
+    letterSpacing: -0.4,
+  },
+  flightArrow: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#eaf6f9',
+    marginTop: 22,
+  },
+  flightPreview: {
+    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    alignSelf: 'flex-start',
+    borderRadius: 999,
+    backgroundColor: '#eaf6f9',
+    borderWidth: 1,
+    borderColor: '#cfe9ef',
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+  },
+  flightPreviewText: {
+    color: '#0d7d92',
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: 0.2,
   },
 });
 

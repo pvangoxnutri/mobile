@@ -19,10 +19,14 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import UserProfileCard from '@/components/user-profile-card';
 import ActivityImageFallback from '@/components/activity-image-fallback';
+import HeroShell from '@/components/hero-shell';
+import { useAuth } from '@/components/auth-provider';
 import { useI18n } from '@/components/i18n-provider';
 import { apiFetch, apiJson } from '@/lib/api';
+import { invalidateCache } from '@/lib/cache';
 import { getCategorySymbol } from '@/lib/category-symbol';
 import { buildGoogleMapsSearchUrl, extractLocationQuery, extractStoredMapPlace, stripLocationMarker } from '@/lib/sidequest-location';
+import { extractFlightRoute, formatFlightRoute, hasFlightRoute, stripFlightMarkers } from '@/lib/flight-route';
 import { useRevealAnimation } from '@/hooks/useMotion';
 import type { ActivityComment, SideQuestActivity } from '@/lib/types';
 import { COLORS } from '@/constants/design-tokens';
@@ -34,6 +38,7 @@ function stripLeadingEmoji(text: string): string {
 
 export default function SideQuestDetailScreen() {
   const { t } = useI18n();
+  const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const { id, sidequestId } = useLocalSearchParams<{ id: string; sidequestId: string }>();
   const [activity, setActivity] = useState<SideQuestActivity | null>(null);
@@ -42,6 +47,7 @@ export default function SideQuestDetailScreen() {
   const [comments, setComments] = useState<ActivityComment[]>([]);
   const [commentText, setCommentText] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [revealing, setRevealing] = useState(false);
   const [profileCardUserId, setProfileCardUserId] = useState<string | null>(null);
   const inputRef = useRef<TextInput>(null);
 
@@ -118,7 +124,54 @@ export default function SideQuestDetailScreen() {
   }, [activity]);
   const locationQuery = useMemo(() => extractLocationQuery(activity?.description), [activity?.description]);
   const locationPlace = useMemo(() => extractStoredMapPlace(activity?.description), [activity?.description]);
-  const cleanDescription = useMemo(() => stripLocationMarker(activity?.description), [activity?.description]);
+  const flightRoute = useMemo(() => extractFlightRoute(activity?.description), [activity?.description]);
+  const showFlightRoute = activity?.category === 'flight' && hasFlightRoute(flightRoute);
+  const cleanDescription = useMemo(
+    () => stripFlightMarkers(stripLocationMarker(activity?.description)),
+    [activity?.description],
+  );
+
+  // Reveal-now is creator-only. The PATCH endpoint already flips visibility to
+  // public and stamps RevealedAt server-side when { revealedNow: true } is
+  // sent. We additionally gate the button in the UI by:
+  //   1. activity is hidden
+  //   2. activity is not yet revealed
+  //   3. current user is the creator (owner)
+  // so non-creators never see it. The owner id and user id are both the
+  // Supabase user id (see AuthController.GetOrCreateCurrentUserAsync +
+  // TripsController.AddActivity), compared case-insensitively as a guard
+  // against any UUID casing differences.
+  const isOwner = Boolean(
+    user?.id &&
+    activity?.ownerId &&
+    activity.ownerId.toLowerCase() === user.id.toLowerCase(),
+  );
+  const isHidden = activity?.visibility === 'hidden';
+  const alreadyRevealed = Boolean(activity?.isRevealed);
+  const canRevealNow = isHidden && !alreadyRevealed && isOwner;
+
+  const handleRevealNow = useCallback(async () => {
+    if (revealing) return;
+    setRevealing(true);
+    try {
+      const response = await apiFetch(`/api/trips/${id}/activities/${encodeURIComponent(sidequestId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ revealedNow: true }),
+      });
+      if (!response.ok) {
+        throw new Error((await response.text()) || 'Could not reveal this SideQuest.');
+      }
+      invalidateCache(`/api/trips/${id}/activities`);
+      // Re-fetch so the screen reflects the now-public state.
+      const fresh = await apiJson<SideQuestActivity>(`/api/trips/${id}/activities/${encodeURIComponent(sidequestId)}`);
+      setActivity(fresh);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not reveal this SideQuest.');
+    } finally {
+      setRevealing(false);
+    }
+  }, [id, sidequestId, revealing]);
 
   return (
     <>
@@ -146,67 +199,51 @@ export default function SideQuestDetailScreen() {
           </View>
         ) : activity ? (
           <>
-            {activity.imageUrl ? (
-              <View style={styles.heroCard}>
-                <Animated.View
-                  style={{
-                    ...StyleSheet.absoluteFillObject,
+            <HeroShell
+              imageUrl={activity.imageUrl}
+              imageBlurRadius={activity.isHiddenForViewer ? 22 : 0}
+              fallback={<ActivityImageFallback category={activity.category} size="hero" />}
+              style={styles.heroCardSize}>
+              {/* Optional glow pulse on top of the gradient during reveal */}
+              <Animated.View
+                pointerEvents="none"
+                style={[styles.heroGlow, { opacity: glowOpacity }]}
+              />
+              {activity.canEdit ? (
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  style={styles.editButtonFloating}
+                  onPress={() => {
+                        router.push(`/trip/${encodeURIComponent(id)}/sidequest/new?editId=${encodeURIComponent(sidequestId)}`);
+                      }}>
+                  <Ionicons name="create-outline" size={16} color="#fff" />
+                  <Text style={styles.editButtonText}>Edit</Text>
+                </TouchableOpacity>
+              ) : null}
+              <Animated.View
+                style={[
+                  styles.heroContent,
+                  {
+                    opacity: contentOpacity,
                     transform: [{ translateY: contentTranslateY }],
-                  }}>
-                  <Image
-                    source={{ uri: activity.imageUrl }}
-                    style={styles.heroImage}
-                    resizeMode="cover"
-                    blurRadius={activity.isHiddenForViewer ? 22 : 0}
+                  },
+                ]}>
+                <View style={styles.statusRow}>
+                  <StatusChip
+                    label={activity.visibility === 'hidden' && !activity.isRevealed ? 'Hidden' : activity.ownerName || 'Visible'}
+                    tone={activity.visibility === 'hidden' && !activity.isRevealed ? 'dark' : 'pink'}
                   />
-                </Animated.View>
-                <Animated.View
-                  style={[
-                    styles.heroOverlay,
-                    activity.isHiddenForViewer ? styles.heroOverlayHidden : null,
-                    { opacity: glowOpacity },
-                  ]}
-                />
-                {activity.canEdit ? (
-                  <TouchableOpacity
-                    activeOpacity={0.9}
-                    style={styles.editButtonFloating}
-                    onPress={() => {
-                          router.push(`/trip/${encodeURIComponent(id)}/sidequest/new?editId=${encodeURIComponent(sidequestId)}`);
-                        }}>
-                    <Ionicons name="create-outline" size={16} color="#fff" />
-                    <Text style={styles.editButtonText}>Edit</Text>
-                  </TouchableOpacity>
-                ) : null}
-                <Animated.View
-                  style={[
-                    styles.heroContent,
-                    {
-                      opacity: contentOpacity,
-                      transform: [{ translateY: contentTranslateY }],
-                    },
-                  ]}>
-                  <View style={styles.statusRow}>
-                    <StatusChip
-                      label={activity.visibility === 'hidden' && !activity.isRevealed ? 'Hidden' : activity.ownerName || 'Visible'}
-                      tone={activity.visibility === 'hidden' && !activity.isRevealed ? 'dark' : 'pink'}
-                    />
-                  </View>
-                  <Text style={styles.heroTitle}>{hiddenTitle}</Text>
-                  <Text style={styles.heroSubtitle}>
-                    {activity.isHiddenForViewer
-                      ? activity.teaserVisible && activity.teaser
-                        ? activity.teaser
-                        : t('activity.hidden_title')
-                      : cleanDescription || t('activity.no_description')}
-                  </Text>
-                </Animated.View>
-              </View>
-            ) : (
-              <View style={styles.heroCardNoImage}>
-                <ActivityImageFallback category={activity.category} size="hero" style={styles.heroFallback} />
-              </View>
-            )}
+                </View>
+                <Text style={styles.heroTitle}>{hiddenTitle}</Text>
+                <Text style={styles.heroSubtitle}>
+                  {activity.isHiddenForViewer
+                    ? activity.teaserVisible && activity.teaser
+                      ? activity.teaser
+                      : t('activity.hidden_title')
+                    : cleanDescription || t('activity.no_description')}
+                </Text>
+              </Animated.View>
+            </HeroShell>
 
             <View style={styles.metaCard}>
               {!activity.imageUrl ? (
@@ -249,6 +286,14 @@ export default function SideQuestDetailScreen() {
                   />
                 );
               })() : null}
+              {showFlightRoute ? (
+                <MetaRow
+                  icon="airplane"
+                  iconColor={SECONDARY_COLOR}
+                  label={t('activity.flightRoute')}
+                  value={formatFlightRoute(flightRoute)}
+                />
+              ) : null}
               <MetaRow icon="calendar-outline" label={t('activity.date')} value={formatLongDate(activity.date)} />
               {activity.visibility === 'hidden' && activity.revealAt ? (
                 <MetaRow icon="sparkles-outline" label={t('activity.reveal')} value={formatReveal(activity.revealAt)} />
@@ -272,6 +317,19 @@ export default function SideQuestDetailScreen() {
               ) : null}
               {activity.canEdit && activity.teaser ? (
                 <MetaRow icon="chatbubble-ellipses-outline" label={t('activity.teaser')} value={activity.teaser} />
+              ) : null}
+
+              {canRevealNow ? (
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  style={[styles.revealNowButton, revealing ? styles.revealNowButtonBusy : null]}
+                  disabled={revealing}
+                  onPress={() => void handleRevealNow()}>
+                  <Ionicons name="flash" size={17} color="#fff" />
+                  <Text style={styles.revealNowButtonText}>
+                    {revealing ? t('activity.revealingNow') : t('activity.revealNow')}
+                  </Text>
+                </TouchableOpacity>
               ) : null}
             </View>
 
@@ -404,37 +462,13 @@ const styles = StyleSheet.create({
     fontSize: 15,
     textAlign: 'center',
   },
-  heroCard: {
+  heroCardSize: {
     minHeight: 360,
-    borderRadius: 34,
-    overflow: 'hidden',
-    backgroundColor: '#edf1f4',
     justifyContent: 'flex-end',
   },
-  heroCardNoImage: {
-    minHeight: 360,
-    borderRadius: 34,
-    overflow: 'hidden',
-  },
-  heroFallback: {
-    borderRadius: 34,
-    minHeight: 360,
-  },
-  heroImage: {
+  heroGlow: {
     ...StyleSheet.absoluteFillObject,
-  },
-  heroPlaceholder: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#f2f4f7',
-  },
-  heroOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(20,24,31,0.20)',
-  },
-  heroOverlayHidden: {
-    backgroundColor: 'rgba(20,24,31,0.38)',
+    backgroundColor: 'rgba(20,24,31,0.16)',
   },
   heroContent: {
     padding: 22,
@@ -521,6 +555,30 @@ const styles = StyleSheet.create({
     color: '#0f6f82',
     fontSize: 13,
     fontWeight: '700',
+  },
+  revealNowButton: {
+    marginTop: 16,
+    minHeight: 52,
+    borderRadius: 16,
+    backgroundColor: PRIMARY_COLOR,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    shadowColor: PRIMARY_COLOR,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.22,
+    shadowRadius: 18,
+    elevation: 6,
+  },
+  revealNowButtonBusy: {
+    opacity: 0.7,
+  },
+  revealNowButtonText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: -0.2,
   },
   metaRow: {
     flexDirection: 'row',
