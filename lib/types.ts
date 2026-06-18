@@ -37,6 +37,7 @@ export interface Quest {
   inviteCode: string;
   countries?: string[];
   shareCode?: string | null;
+  membersCanEdit?: boolean;
 }
 
 export interface TripInvite {

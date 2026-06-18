@@ -13,6 +13,7 @@ import {
   ScrollView,
   Share,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -55,6 +56,7 @@ export default function TripSettingsScreen() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [membersCanEdit, setMembersCanEdit] = useState(true);
   const [rangePickerOpen, setRangePickerOpen] = useState(false);
   const [message, setMessage] = useState<MessageState>(null);
   const [inviteEmail, setInviteEmail] = useState('');
@@ -72,7 +74,8 @@ export default function TripSettingsScreen() {
       startDate !== trip.startDate ||
       endDate !== trip.endDate ||
       JSON.stringify(tripCountries) !== JSON.stringify(trip.countries ?? []) ||
-      (imageUrl ?? null) !== (trip.imageUrl ?? null)
+      (imageUrl ?? null) !== (trip.imageUrl ?? null) ||
+      membersCanEdit !== (trip.membersCanEdit ?? true)
     )
   );
 
@@ -96,6 +99,7 @@ export default function TripSettingsScreen() {
         setStartDate(tripData.startDate);
         setEndDate(tripData.endDate);
         setImageUrl(tripData.imageUrl ?? null);
+        setMembersCanEdit(tripData.membersCanEdit ?? true);
         setMessage(null);
       })
       .catch((err: Error) => {
@@ -148,6 +152,7 @@ export default function TripSettingsScreen() {
           endDate,
           imageUrl: uploadedImageUrl,
           clearImage: !uploadedImageUrl,
+          membersCanEdit,
         }),
       });
 
@@ -394,6 +399,27 @@ export default function TripSettingsScreen() {
                     </TouchableOpacity>
                   </View>
                   {inviteMessage ? <Text style={styles.inviteMessage}>{inviteMessage}</Text> : null}
+                </View>
+              </View>
+
+              <View style={styles.card}>
+                <Text style={styles.sectionTitle}>Permissions</Text>
+                <View style={styles.permissionRow}>
+                  <View style={styles.permissionCopy}>
+                    <Text style={styles.permissionTitle}>Let members edit the plan</Text>
+                    <Text style={styles.permissionSubtitle}>
+                      {membersCanEdit
+                        ? 'Members can add, edit and remove activities.'
+                        : 'Only you can edit. Members can view but not change activities.'}
+                    </Text>
+                  </View>
+                  <Switch
+                    value={membersCanEdit}
+                    onValueChange={setMembersCanEdit}
+                    trackColor={{ false: '#dfe3e8', true: PRIMARY_COLOR }}
+                    thumbColor="#fff"
+                    ios_backgroundColor="#dfe3e8"
+                  />
                 </View>
               </View>
 
@@ -733,6 +759,16 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   emptyText: { color: '#7d8491', fontSize: 14, marginTop: 6 },
+  permissionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 14,
+    marginTop: 6,
+  },
+  permissionCopy: { flex: 1 },
+  permissionTitle: { color: '#161821', fontSize: 15, fontWeight: '700' },
+  permissionSubtitle: { marginTop: 4, color: '#7d8491', fontSize: 13, lineHeight: 19 },
   messageBanner: {
     marginTop: 4,
     borderRadius: 18,
