@@ -814,7 +814,10 @@ function SideQuestFormInner({
               key={pickerTarget}
               value={pickerValue}
               mode="date"
-              display="default"
+              // Inline shows the calendar immediately on iOS. Safe now that
+              // time uses the custom wheel — there's no native date→time mode
+              // switch left to crash Fabric.
+              display={Platform.OS === 'ios' ? 'inline' : 'default'}
               minimumDate={
                 pickerTarget === 'date'
                   ? tripStartDate ? new Date(`${tripStartDate}T12:00:00`) : undefined
