@@ -143,6 +143,19 @@ function SideQuestFormInner({
   const revealIsPast =
     visibility === 'hidden' && localDateTime(revealDate, revealTime).getTime() <= Date.now();
 
+  // Keep the activity date inside the trip range once the trip dates are
+  // known. Without this, a default/initial date outside the range stays in
+  // state while the picker DISPLAYS a clamped value — so tapping the shown
+  // (already-clamped) day fires no onChange and the stale out-of-range date
+  // gets saved. Clamping state to match what's shown fixes that desync.
+  useEffect(() => {
+    if (!tripStartDate || !tripEndDate) return;
+    if (!isWithinRange(date, tripStartDate, tripEndDate)) {
+      setDate(defaultActivityDate(tripStartDate, tripEndDate));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tripStartDate, tripEndDate]);
+
   // Only clamp revealDate when transitioning into Hidden, or when the valid
   // range shifts (e.g. user picked a different activity date). Skip re-runs
   // triggered by our own setRevealDate so the value doesn't bounce visibly.
