@@ -30,14 +30,14 @@ function flag(cc: string) {
 
 const CURRENCIES: Currency[] = [
   { code: 'SEK', name: 'Swedish Krona',        flag: flag('SE') },
-  { code: 'EUR', name: 'Euro',                  flag: 'ðŸ‡ªðŸ‡º' },
+  { code: 'EUR', name: 'Euro',                  flag: flag('EU') },
   { code: 'USD', name: 'US Dollar',             flag: flag('US') },
   { code: 'GBP', name: 'British Pound',         flag: flag('GB') },
   { code: 'NOK', name: 'Norwegian Krone',       flag: flag('NO') },
   { code: 'DKK', name: 'Danish Krone',          flag: flag('DK') },
-  { code: 'ISK', name: 'Icelandic KrÃ³na',       flag: flag('IS') },
+  { code: 'ISK', name: 'Icelandic Króna',       flag: flag('IS') },
   { code: 'CHF', name: 'Swiss Franc',           flag: flag('CH') },
-  { code: 'PLN', name: 'Polish ZÅ‚oty',          flag: flag('PL') },
+  { code: 'PLN', name: 'Polish Złoty',          flag: flag('PL') },
   { code: 'CZK', name: 'Czech Koruna',          flag: flag('CZ') },
   { code: 'HUF', name: 'Hungarian Forint',      flag: flag('HU') },
   { code: 'RON', name: 'Romanian Leu',          flag: flag('RO') },
@@ -123,7 +123,7 @@ export function CurrencyPicker({ value, onChange }: Props) {  const insets = use
   return (
     <>
       <TouchableOpacity style={styles.trigger} activeOpacity={0.8} onPress={() => setOpen(true)}>
-        <Text style={styles.triggerFlag}>{selected?.flag ?? 'ðŸŒ'}</Text>
+        <Text style={styles.triggerFlag}>{selected?.flag ?? String.fromCodePoint(0x1f310)}</Text>
         <Text style={styles.triggerCode}>{value || 'SEK'}</Text>
         <Ionicons name="chevron-down" size={14} color="#8a909b" />
       </TouchableOpacity>
@@ -138,7 +138,7 @@ export function CurrencyPicker({ value, onChange }: Props) {  const insets = use
               <Ionicons name="search-outline" size={16} color="#8a909b" style={styles.searchIcon} />
               <TextInput
                 style={styles.searchInput}
-                placeholder="Search currency or codeâ€¦"
+                placeholder="Search currency or code..."
                 placeholderTextColor="#afb5bf"
                 value={query}
                 onChangeText={setQuery}
