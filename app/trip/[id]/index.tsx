@@ -861,7 +861,7 @@ export default function TripDetailsScreen() {
                   onPress={() => void handlePickChatImage()}>
                   <Ionicons name="image-outline" size={22} color={chatSending || chatImageUploading ? '#c2c8d2' : '#161821'} />
                 </TouchableOpacity>
-                <Animated.View style={[{ opacity: chatInputOpacityRef }]}>
+                <Animated.View style={{ flex: 1, opacity: chatInputOpacityRef }}>
                   <TextInput
                     value={chatDraft}
                     onChangeText={setChatDraft}
