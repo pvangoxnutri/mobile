@@ -114,7 +114,10 @@ function SideQuestFormInner({
   const [locationSuggestions, setLocationSuggestions] = useState<PlaceAutocompleteSuggestion[]>([]);
   const [locationLoading, setLocationLoading] = useState(false);
   const [locationError, setLocationError] = useState('');
-  const [date, setDate] = useState(initialValues?.date ?? getDefaultDate());
+  // Default the activity date INTO the trip range. Previously it defaulted to
+  // "today", which let you create an activity before the trip even starts
+  // (e.g. trip starts the 29th but the activity landed on today's date).
+  const [date, setDate] = useState(initialValues?.date ?? defaultActivityDate(tripStartDate, tripEndDate));
   const [visibility, setVisibility] = useState<'public' | 'hidden'>(initialValues?.visibility ?? 'public');
   const [revealDate, setRevealDate] = useState(initialValues?.revealDate ?? getDefaultDate());
   const [revealTime, setRevealTime] = useState(initialValues?.revealTime ?? '18:00');
@@ -289,6 +292,13 @@ function SideQuestFormInner({
     const today = getDefaultDate();
     if (date < today) {
       setMessage({ type: 'error', text: 'Aktiviteter kan inte vara tidigare än dagens datum.' });
+      return null;
+    }
+
+    // The activity must fall inside the trip's date range — otherwise it
+    // shows up on the calendar before the trip even starts.
+    if (tripStartDate && tripEndDate && !isWithinRange(date, tripStartDate, tripEndDate)) {
+      setMessage({ type: 'error', text: `Aktiviteten måste vara inom resans datum (${formatShortDate(tripStartDate)} – ${formatShortDate(tripEndDate)}).` });
       return null;
     }
 
@@ -1118,6 +1128,18 @@ function isDateInputValid(value: string) {
 function getDefaultDate() {
   const now = new Date();
   return formatDateParts(now.getFullYear(), now.getMonth() + 1, now.getDate());
+}
+
+// Picks a sensible default activity date that's inside the trip range:
+// today if it falls within the trip, otherwise the trip start (or end).
+function defaultActivityDate(tripStartDate?: string | null, tripEndDate?: string | null): string {
+  const today = getDefaultDate();
+  const start = tripStartDate && isDateInputValid(tripStartDate) ? tripStartDate : null;
+  const end = tripEndDate && isDateInputValid(tripEndDate) ? tripEndDate : null;
+  if (!start || !end) return today;
+  if (today < start) return start;
+  if (today > end) return end;
+  return today;
 }
 
 function formatDateParts(year: number, month: number, day: number) {
