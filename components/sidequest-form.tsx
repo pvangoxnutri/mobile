@@ -383,7 +383,13 @@ function SideQuestFormInner({
       // off before we navigate. Without this the guard pops "Unsaved
       // changes" mid-save and ends up re-firing save → duplicate activity.
       onSaved?.();
-      router.replace(`/trip/${tripId}/sidequest/${saved.id}`);
+      if (mode === 'edit' && router.canGoBack()) {
+        // Editing: return to where Edit was tapped (the activity detail).
+        router.back();
+      } else {
+        // Creating: go forward to the freshly created activity.
+        router.replace(`/trip/${tripId}/sidequest/${saved.id}`);
+      }
     }
   }
 
