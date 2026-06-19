@@ -179,6 +179,18 @@ export default function TripSettingsScreen() {
     onSave: async () => await handleSave(),
   });
 
+  // Save button: persist, then leave the edit screen straight to the adventure.
+  async function handleSaveAndExit() {
+    const ok = await handleSave();
+    if (!ok) return;
+    unsaved.markSaved(); // tell the guard this nav is intentional
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace(`/trip/${id}`);
+    }
+  }
+
   function confirmRemoveMember(member: TripMember) {
     Alert.alert('Remove member', `Remove ${member.name} from this trip?`, [
       { text: 'Cancel', style: 'cancel' },
@@ -448,7 +460,7 @@ export default function TripSettingsScreen() {
                 </View>
               ) : null}
 
-              <TouchableOpacity activeOpacity={0.92} style={[styles.primaryButton, { backgroundColor: PRIMARY_COLOR }, saving ? styles.primaryButtonDisabled : null]} disabled={saving} onPress={() => void handleSave()}>
+              <TouchableOpacity activeOpacity={0.92} style={[styles.primaryButton, { backgroundColor: PRIMARY_COLOR }, saving ? styles.primaryButtonDisabled : null]} disabled={saving} onPress={() => void handleSaveAndExit()}>
                 <Text style={styles.primaryButtonText}>{saving ? 'Saving...' : 'Save trip settings'}</Text>
               </TouchableOpacity>
             </>
