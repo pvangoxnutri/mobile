@@ -208,9 +208,10 @@ export default function CostSplitScreen() {
         setSubmitError('Camera access is needed to photograph a receipt. You can still add the expense without one.');
         return;
       }
+      // No allowsEditing: iOS's built-in crop is locked to a square, which
+      // mangles a receipt's natural shape. Use the full photo as taken.
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
         quality: 0.8,
       });
       if (!result.canceled && result.assets[0]) {
@@ -231,9 +232,9 @@ export default function CostSplitScreen() {
         setSubmitError('Photo library access is needed to attach a receipt. You can still add the expense without one.');
         return;
       }
+      // Same reasoning as the camera path — no forced square crop.
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
         quality: 0.8,
       });
       if (!result.canceled && result.assets[0]) {
@@ -957,11 +958,37 @@ export default function CostSplitScreen() {
                 <TouchableOpacity
                   activeOpacity={0.88}
                   style={styles.dateSelectionCard}
-                  onPress={() => setDatePickerOpen(true)}>
+                  onPress={() => setDatePickerOpen((open) => !open)}>
                   <Text style={styles.dateSelectionValue}>{formatDate(form.date)}</Text>
-                  <Ionicons name="calendar-outline" size={20} color="#5f6570" />
+                  <Ionicons name={datePickerOpen ? 'chevron-up' : 'calendar-outline'} size={20} color="#5f6570" />
                 </TouchableOpacity>
               )}
+              {/* Rendered inline (not in a separate Modal) — a Modal nested
+                  inside the Add Expense modal doesn't reliably receive
+                  touches on Android. */}
+              {datePickerOpen && Platform.OS !== 'web' ? (
+                <View style={styles.dateInlinePickerWrap}>
+                  <PickerErrorBoundary>
+                    <DateTimePicker
+                      value={isDateInputValid(form.date) ? new Date(`${form.date}T12:00:00`) : new Date()}
+                      mode="date"
+                      display={Platform.OS === 'ios' ? 'inline' : 'default'}
+                      themeVariant="light"
+                      accentColor={PRIMARY_COLOR}
+                      textColor="#161821"
+                      onChange={handleDateChange}
+                    />
+                  </PickerErrorBoundary>
+                  {Platform.OS === 'ios' ? (
+                    <TouchableOpacity
+                      activeOpacity={0.9}
+                      style={[styles.datePickerDoneButton, { backgroundColor: PRIMARY_COLOR }]}
+                      onPress={() => setDatePickerOpen(false)}>
+                      <Text style={styles.datePickerDoneText}>Done</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+              ) : null}
 
               {/* Paid By */}
               <Text style={styles.fieldLabel}>Paid By <Text style={styles.fieldLabelRequired}>*</Text></Text>
@@ -1260,18 +1287,6 @@ export default function CostSplitScreen() {
         </View>
       </Modal>
 
-      {/* Date picker sheet — same pattern as the activity-date picker
-          elsewhere in the app: tap-to-open native calendar in a bottom
-          sheet, with an error boundary since this native view is known to
-          crash under certain Fabric states. */}
-      {Platform.OS !== 'web' ? (
-        <DatePickerSheet
-          visible={datePickerOpen}
-          value={isDateInputValid(form.date) ? new Date(`${form.date}T12:00:00`) : new Date()}
-          onChange={handleDateChange}
-          onClose={() => setDatePickerOpen(false)}
-        />
-      ) : null}
     </View>
   );
 }
@@ -1295,46 +1310,6 @@ class PickerErrorBoundary extends Component<{ children: ReactNode }, { error: Er
     }
     return this.props.children;
   }
-}
-
-function DatePickerSheet({
-  visible,
-  value,
-  onChange,
-  onClose,
-}: {
-  visible: boolean;
-  value: Date;
-  onChange: (event: DateTimePickerEvent, selectedDate?: Date) => void;
-  onClose: () => void;
-}) {
-  return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.datePickerBackdrop}>
-        <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={onClose} />
-        <View style={styles.datePickerCard}>
-          <View style={styles.datePickerHandle} />
-          <Text style={styles.datePickerTitle}>Select date</Text>
-          <View style={styles.datePickerWrap}>
-            <PickerErrorBoundary>
-              <DateTimePicker
-                value={value}
-                mode="date"
-                display={Platform.OS === 'ios' ? 'inline' : 'default'}
-                themeVariant="light"
-                accentColor={PRIMARY_COLOR}
-                textColor="#161821"
-                onChange={onChange}
-              />
-            </PickerErrorBoundary>
-          </View>
-          <TouchableOpacity activeOpacity={0.9} style={[styles.datePickerDoneButton, { backgroundColor: PRIMARY_COLOR }]} onPress={onClose}>
-            <Text style={styles.datePickerDoneText}>Done</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </Modal>
-  );
 }
 
 function splitModeColor(mode: string) {
@@ -1976,41 +1951,14 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#161821',
   },
-  datePickerBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    justifyContent: 'flex-end',
-  },
-  datePickerCard: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingTop: 12,
-    paddingHorizontal: 22,
-    paddingBottom: 24,
-  },
-  datePickerHandle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#dde1e8',
-    alignSelf: 'center',
-    marginBottom: 16,
-  },
-  datePickerTitle: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: '#161821',
-    letterSpacing: -0.5,
-    marginBottom: 10,
-  },
-  datePickerWrap: {
-    marginBottom: 12,
-    borderRadius: 22,
-    backgroundColor: '#fff',
+  dateInlinePickerWrap: {
+    marginTop: 8,
+    marginBottom: 14,
+    padding: 10,
+    borderRadius: 18,
+    backgroundColor: '#fafbfc',
     borderWidth: 1,
-    borderColor: '#eef1f5',
-    overflow: 'hidden',
+    borderColor: '#eaedf2',
   },
   datePickerDoneButton: {
     borderRadius: 14,
