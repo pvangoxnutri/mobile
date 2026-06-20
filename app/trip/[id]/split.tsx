@@ -848,7 +848,7 @@ export default function CostSplitScreen() {
 
             <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
               {/* Description */}
-              <Text style={styles.fieldLabel}>Description</Text>
+              <Text style={styles.fieldLabel}>Description <Text style={styles.fieldLabelRequired}>*</Text></Text>
               <TextInput
                 style={styles.textInput}
                 placeholder="e.g. Dinner at restaurant"
@@ -861,7 +861,7 @@ export default function CostSplitScreen() {
                   No currency selector: we don't do conversion, we just sum
                   whatever the user typed, so picking a currency would imply
                   a precision this app doesn't have. */}
-              <Text style={styles.fieldLabel}>Amount</Text>
+              <Text style={styles.fieldLabel}>Amount <Text style={styles.fieldLabelRequired}>*</Text></Text>
               <TextInput
                 style={styles.textInput}
                 placeholder="250"
@@ -921,7 +921,7 @@ export default function CostSplitScreen() {
               )}
 
               {/* Date */}
-              <Text style={styles.fieldLabel}>Date (YYYY-MM-DD)</Text>
+              <Text style={styles.fieldLabel}>Date (YYYY-MM-DD) <Text style={styles.fieldLabelRequired}>*</Text></Text>
               <TextInput
                 style={styles.textInput}
                 placeholder={todayIso()}
@@ -931,7 +931,7 @@ export default function CostSplitScreen() {
               />
 
               {/* Paid By */}
-              <Text style={styles.fieldLabel}>Paid By</Text>
+              <Text style={styles.fieldLabel}>Paid By <Text style={styles.fieldLabelRequired}>*</Text></Text>
               {members.map((member) => {
                 const selected = form.selectedPayers.has(member.id);
                 const isCurrentUser = member.id === user?.id;
@@ -987,7 +987,7 @@ export default function CostSplitScreen() {
               </View>
 
               {/* Participants */}
-              <Text style={styles.fieldLabel}>Split Between</Text>
+              <Text style={styles.fieldLabel}>Split Between <Text style={styles.fieldLabelRequired}>*</Text></Text>
               {form.splitMode === 'equal' ? (
                 <Text style={styles.fieldHint}>All selected members split equally.</Text>
               ) : (
@@ -1848,6 +1848,9 @@ const styles = StyleSheet.create({
     color: '#a0a8b5',
     letterSpacing: 0,
     textTransform: 'none',
+  },
+  fieldLabelRequired: {
+    color: '#ff4f74',
   },
   receiptPickRow: {
     flexDirection: 'row',
