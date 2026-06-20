@@ -1,9 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
+import * as ImagePicker from 'expo-image-picker';
 import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -16,8 +18,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/components/auth-provider';
-import { CurrencyPicker } from '@/components/currency-picker';
 import { apiFetch, apiJson } from '@/lib/api';
+import { uploadImageIfNeeded } from '@/lib/uploads';
 import type { BalancesResponse, Debt, Expense, Settlement } from '@/lib/types';
 import { PRIMARY_COLOR, PRIMARY_08 } from '@/constants/colors';
 
@@ -33,13 +35,16 @@ type SplitMode = 'equal' | 'exact' | 'percentage';
 type AddExpenseForm = {
   description: string;
   amount: string;
-  currency: string;
   date: string;
   splitMode: SplitMode;
   payerAmounts: Record<string, string>; // userId -> amount string
   selectedPayers: Set<string>;
   selectedParticipants: Set<string>;
   participantValues: Record<string, string>; // userId -> value string (pct/exact)
+  // Local file URI of a picked-but-not-yet-uploaded receipt photo. Uploaded
+  // (and swapped for the resulting https URL) only on submit, so cancelling
+  // the modal never leaves an orphaned upload.
+  receiptImage: string | null;
 };
 
 function getInitials(name?: string | null) {
@@ -85,17 +90,18 @@ export default function CostSplitScreen() {
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  const [pickingReceipt, setPickingReceipt] = useState(false);
 
   const [form, setForm] = useState<AddExpenseForm>({
     description: '',
     amount: '',
-    currency: 'SEK',
     date: todayIso(),
     splitMode: 'equal',
     payerAmounts: {},
     selectedPayers: new Set<string>(),
     selectedParticipants: new Set<string>(),
     participantValues: {},
+    receiptImage: null,
   });
 
   const [expandedBalanceUser, setExpandedBalanceUser] = useState<string | null>(null);
@@ -105,6 +111,8 @@ export default function CostSplitScreen() {
   const [settleSubmitting, setSettleSubmitting] = useState(false);
   const [settleError, setSettleError] = useState('');
   const [settledKeys, setSettledKeys] = useState<Set<string>>(new Set());
+
+  const [viewingReceiptUrl, setViewingReceiptUrl] = useState<string | null>(null);
 
   const [deletingExpenseId, setDeletingExpenseId] = useState<string | null>(null);
   const [deletingSettlementId, setDeletingSettlementId] = useState<string | null>(null);
@@ -144,13 +152,13 @@ export default function CostSplitScreen() {
     setForm({
       description: '',
       amount: '',
-      currency: 'SEK',
       date: todayIso(),
       splitMode: 'equal',
       payerAmounts: { [user.id]: '' },
       selectedPayers: new Set([user.id]),
       selectedParticipants: new Set(members.map((m) => m.id)),
       participantValues: {},
+      receiptImage: null,
     });
     setSubmitError('');
     setAddModalOpen(true);
@@ -173,6 +181,59 @@ export default function CostSplitScreen() {
       }
       return { ...prev, selectedPayers: next, payerAmounts: nextAmounts };
     });
+  }
+
+  // Friendly, non-blocking permission requests — if denied we just show an
+  // inline error and let the user keep filling out the rest of the form
+  // (the receipt is always optional).
+  async function handleTakeReceiptPhoto() {
+    if (pickingReceipt) return;
+    setPickingReceipt(true);
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        setSubmitError('Camera access is needed to photograph a receipt. You can still add the expense without one.');
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets[0]) {
+        setSubmitError('');
+        setField('receiptImage', result.assets[0].uri);
+      }
+    } finally {
+      setPickingReceipt(false);
+    }
+  }
+
+  async function handlePickReceiptFromGallery() {
+    if (pickingReceipt) return;
+    setPickingReceipt(true);
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        setSubmitError('Photo library access is needed to attach a receipt. You can still add the expense without one.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets[0]) {
+        setSubmitError('');
+        setField('receiptImage', result.assets[0].uri);
+      }
+    } finally {
+      setPickingReceipt(false);
+    }
+  }
+
+  function handleRemoveReceipt() {
+    setField('receiptImage', null);
   }
 
   function toggleParticipant(memberId: string) {
@@ -231,15 +292,29 @@ export default function CostSplitScreen() {
 
     setSubmitting(true);
     try {
+      // Upload the receipt only now, on actual save — picking a photo
+      // earlier and then cancelling the modal should never leave an
+      // orphaned file in storage.
+      let receiptUrl: string | null = null;
+      if (form.receiptImage) {
+        try {
+          receiptUrl = await uploadImageIfNeeded(form.receiptImage, 'receipt');
+        } catch (err) {
+          setSubmitError(err instanceof Error ? err.message : 'Could not upload the receipt photo.');
+          setSubmitting(false);
+          return;
+        }
+      }
+
       await apiFetch(`/api/trips/${id}/expenses`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           description: form.description.trim(),
           totalAmount,
-          currency: form.currency.trim().toUpperCase(),
           date: form.date,
           splitMode: form.splitMode,
+          receiptUrl,
           payers: payersList,
           participants: participantsList,
         }),
@@ -403,6 +478,13 @@ export default function CostSplitScreen() {
                 expenses.map((expense) => (
                   <View key={expense.id} style={styles.expenseCard}>
                     <View style={styles.expenseTop}>
+                      {expense.receiptUrl ? (
+                        <TouchableOpacity
+                          activeOpacity={0.85}
+                          onPress={() => setViewingReceiptUrl(expense.receiptUrl ?? null)}>
+                          <Image source={{ uri: expense.receiptUrl }} style={styles.expenseReceiptThumb} />
+                        </TouchableOpacity>
+                      ) : null}
                       <View style={styles.expenseMain}>
                         <Text style={styles.expenseDescription}>{expense.description}</Text>
                         <Text style={styles.expenseDate}>{formatDate(expense.date)}</Text>
@@ -775,19 +857,68 @@ export default function CostSplitScreen() {
                 onChangeText={(v) => setField('description', v)}
               />
 
-              {/* Amount + Currency */}
-              <Text style={styles.fieldLabel}>Total Amount</Text>
-              <View style={styles.amountCurrencyRow}>
-                <TextInput
-                  style={[styles.textInput, { flex: 1, marginRight: 8 }]}
-                  placeholder="0.00"
-                  placeholderTextColor="#afb5bf"
-                  keyboardType="decimal-pad"
-                  value={form.amount}
-                  onChangeText={(v) => setField('amount', v)}
-                />
-                <CurrencyPicker value={form.currency} onChange={(v) => setField('currency', v)} />
-              </View>
+              {/* Amount — just the number from the receipt/bank statement.
+                  No currency selector: we don't do conversion, we just sum
+                  whatever the user typed, so picking a currency would imply
+                  a precision this app doesn't have. */}
+              <Text style={styles.fieldLabel}>Amount</Text>
+              <TextInput
+                style={styles.textInput}
+                placeholder="250"
+                placeholderTextColor="#afb5bf"
+                keyboardType="decimal-pad"
+                value={form.amount}
+                onChangeText={(v) => setField('amount', v)}
+              />
+              <Text style={[styles.fieldHint, { marginTop: 6 }]}>
+                Enter the amount in your own currency, as shown on your bank statement.
+              </Text>
+
+              {/* Receipt — optional. Picking a photo only stores a local
+                  URI; the actual upload happens on submit (see
+                  handleSubmitExpense) so cancelling never orphans a file. */}
+              <Text style={[styles.fieldLabel, { marginTop: 18 }]}>Receipt <Text style={styles.fieldLabelOptional}>(optional)</Text></Text>
+              {form.receiptImage ? (
+                <View style={styles.receiptPreviewWrap}>
+                  <Image source={{ uri: form.receiptImage }} style={styles.receiptPreviewImage} />
+                  <View style={styles.receiptPreviewActions}>
+                    <TouchableOpacity
+                      style={styles.receiptActionButton}
+                      activeOpacity={0.85}
+                      disabled={pickingReceipt}
+                      onPress={() => void handlePickReceiptFromGallery()}>
+                      <Ionicons name="image-outline" size={15} color="#4a5068" />
+                      <Text style={styles.receiptActionText}>Replace</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.receiptActionButton, styles.receiptRemoveButton]}
+                      activeOpacity={0.85}
+                      onPress={handleRemoveReceipt}>
+                      <Ionicons name="trash-outline" size={15} color="#d95f6a" />
+                      <Text style={[styles.receiptActionText, { color: '#d95f6a' }]}>Remove</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.receiptPickRow}>
+                  <TouchableOpacity
+                    style={styles.receiptPickButton}
+                    activeOpacity={0.85}
+                    disabled={pickingReceipt}
+                    onPress={() => void handleTakeReceiptPhoto()}>
+                    <Ionicons name="camera-outline" size={18} color="#4a5068" />
+                    <Text style={styles.receiptPickButtonText}>Take photo</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.receiptPickButton}
+                    activeOpacity={0.85}
+                    disabled={pickingReceipt}
+                    onPress={() => void handlePickReceiptFromGallery()}>
+                    <Ionicons name="images-outline" size={18} color="#4a5068" />
+                    <Text style={styles.receiptPickButtonText}>Choose from gallery</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
 
               {/* Date */}
               <Text style={styles.fieldLabel}>Date (YYYY-MM-DD)</Text>
@@ -1034,6 +1165,30 @@ export default function CostSplitScreen() {
         </View>
       </Modal>
 
+      {/* Receipt viewer */}
+      <Modal
+        visible={viewingReceiptUrl !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setViewingReceiptUrl(null)}>
+        <View style={styles.receiptViewerBackdrop}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFillObject}
+            activeOpacity={1}
+            onPress={() => setViewingReceiptUrl(null)}
+          />
+          {viewingReceiptUrl ? (
+            <Image source={{ uri: viewingReceiptUrl }} style={styles.receiptViewerImage} resizeMode="contain" />
+          ) : null}
+          <TouchableOpacity
+            style={styles.receiptViewerClose}
+            activeOpacity={0.85}
+            onPress={() => setViewingReceiptUrl(null)}>
+            <Ionicons name="close" size={22} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      </Modal>
+
       {/* Confirm Delete Settlement */}
       <Modal
         visible={deletingSettlementId !== null}
@@ -1224,6 +1379,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     padding: 16,
     marginBottom: 12,
+  },
+  expenseReceiptThumb: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    marginRight: 12,
+    backgroundColor: '#eef0f4',
   },
   expenseTop: {
     flexDirection: 'row',
@@ -1680,10 +1842,73 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     marginTop: -4,
   },
-  amountCurrencyRow: {
+  fieldLabelOptional: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#a0a8b5',
+    letterSpacing: 0,
+    textTransform: 'none',
+  },
+  receiptPickRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  receiptPickButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 14,
+    justifyContent: 'center',
+    gap: 7,
+    borderWidth: 1,
+    borderColor: '#eaedf2',
+    borderRadius: 12,
+    paddingVertical: 13,
+    backgroundColor: '#fafbfc',
+  },
+  receiptPickButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#4a5068',
+  },
+  receiptPreviewWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderWidth: 1,
+    borderColor: '#eaedf2',
+    borderRadius: 14,
+    padding: 10,
+    backgroundColor: '#fafbfc',
+  },
+  receiptPreviewImage: {
+    width: 56,
+    height: 56,
+    borderRadius: 10,
+    backgroundColor: '#eef0f4',
+  },
+  receiptPreviewActions: {
+    flex: 1,
+    gap: 6,
+  },
+  receiptActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#eaedf2',
+    alignSelf: 'flex-start',
+  },
+  receiptRemoveButton: {
+    borderColor: '#ffd9dc',
+  },
+  receiptActionText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#4a5068',
   },
   textInput: {
     borderWidth: 1,
@@ -1846,5 +2071,26 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '800',
     color: '#fff',
+  },
+  receiptViewerBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.92)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  receiptViewerImage: {
+    width: '92%',
+    height: '80%',
+  },
+  receiptViewerClose: {
+    position: 'absolute',
+    top: 50,
+    right: 22,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

@@ -103,6 +103,7 @@ export interface Expense {
   date: string;
   splitMode: 'equal' | 'exact' | 'percentage';
   currency: string;
+  receiptUrl?: string | null;
   createdAt: string;
   createdByName: string;
   payers: { userId: string; userName: string; amount: number }[];
