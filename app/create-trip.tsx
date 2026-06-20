@@ -27,6 +27,13 @@ import { SPACING, TYPOGRAPHY, COLORS, RADIUS, SHADOWS } from '@/constants/design
 
 type MessageState = { type: 'success' | 'error'; text: string } | null;
 
+// BigHeroCard renders the title on 2 lines at 28px bold — beyond ~40 chars it
+// has to ellipsize. The destination renders in a single-line pill capped at
+// 70% of the card width, which fits far less text — ~28 chars before it would
+// need to ellipsize.
+const TITLE_MAX_LENGTH = 40;
+const DESTINATION_MAX_LENGTH = 28;
+
 export default function CreateTripScreen() {
   const { t } = useI18n();
   const { user } = useAuth();
@@ -202,7 +209,7 @@ export default function CreateTripScreen() {
     return [{ id: user.id, name: user.name ?? 'You', avatarUrl: user.avatarUrl ?? null, isOwner: true }];
   }, [user]);
 
-  const previewCardHeight = Math.min((screenWidth - 44) * 0.92, screenHeight * 0.36, 320);
+  const previewCardHeight = Math.min((screenWidth - 44) * 0.7, screenHeight * 0.25, 240);
 
   return (
     <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -246,22 +253,32 @@ export default function CreateTripScreen() {
         ) : null}
 
         {/* Caption-style title input. Borderless, large, left-aligned. */}
+        <Text style={styles.fieldLabel}>
+          {t('trip.what_to_call')} <Text style={styles.requiredAsterisk}>*</Text>
+        </Text>
         <TextInput
           value={title}
           onChangeText={setTitle}
           placeholder={t('trip.trip_name_placeholder')}
           placeholderTextColor={COLORS.placeholderText}
           style={styles.titleInput}
+          maxLength={TITLE_MAX_LENGTH}
         />
+        <Text style={styles.charCounter}>{title.length}/{TITLE_MAX_LENGTH}</Text>
 
         {/* Caption-style destination input. Borderless, smaller. */}
+        <Text style={styles.fieldLabel}>
+          {t('trip.where_going')} <Text style={styles.requiredAsterisk}>*</Text>
+        </Text>
         <TextInput
           value={destination}
           onChangeText={setDestination}
           placeholder={t('trip.destination_placeholder')}
           placeholderTextColor={COLORS.placeholderText}
           style={styles.destinationInput}
+          maxLength={DESTINATION_MAX_LENGTH}
         />
+        <Text style={styles.charCounter}>{destination.length}/{DESTINATION_MAX_LENGTH}</Text>
 
         {/* Optional date chip. Small pill, centered, secondary affordance. */}
         <View style={styles.dateChipWrap}>
@@ -396,7 +413,7 @@ const styles = StyleSheet.create({
     color: COLORS.textMeta,
   },
   coverHint: {
-    marginTop: SPACING.lg,
+    marginTop: SPACING.sm,
     alignSelf: 'center',
     flexDirection: 'row',
     alignItems: 'center',
@@ -496,11 +513,30 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: -0.2,
   },
+  // Small uppercase label shown above each caption input so the field's
+  // purpose stays visible even after the placeholder disappears (first-time
+  // users shouldn't have to guess from a placeholder alone).
+  fieldLabel: {
+    marginTop: SPACING.md,
+    ...TYPOGRAPHY.eyebrow,
+    fontWeight: '800',
+    color: COLORS.textMeta,
+  },
+  requiredAsterisk: {
+    color: COLORS.error,
+  },
+  charCounter: {
+    marginTop: SPACING.xs,
+    alignSelf: 'flex-end',
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.textMeta,
+  },
   // Caption-style inputs (NOT form boxes). Borderless, left-aligned, sized
   // like editable title + subtitle of the hero card. Mental model: the user
   // is captioning the trip, not filling in a form.
   titleInput: {
-    marginTop: SPACING.xl,
+    marginTop: SPACING.xs,
     color: COLORS.textPrimary,
     fontSize: 24,
     fontWeight: '800',
@@ -518,7 +554,7 @@ const styles = StyleSheet.create({
   // Small pill (optional, secondary affordance). Not full-width, not a row.
   // Sits below the captions, visually subordinate.
   dateChipWrap: {
-    marginTop: SPACING.lg,
+    marginTop: SPACING.sm,
     alignItems: 'flex-start',
   },
   dateChip: {
@@ -569,8 +605,8 @@ const styles = StyleSheet.create({
     color: COLORS.error,
   },
   primaryButton: {
-    marginTop: SPACING.xxxl,
-    height: 82,
+    marginTop: SPACING.md,
+    height: 72,
     borderRadius: RADIUS.circle,
     backgroundColor: COLORS.primary,
     alignItems: 'center',

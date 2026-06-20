@@ -85,6 +85,12 @@ export type SideQuestFormHandle = {
   submitSilently: () => Promise<boolean>;
 };
 
+// Title shows single-line (ellipsized) in the trip timeline row; teaser shows
+// 2-line in the hidden-activity blur preview card during creation. Both caps
+// keep that text from needing to truncate in normal use.
+const TITLE_MAX_LENGTH = 45;
+const TEASER_MAX_LENGTH = 35;
+
 const TEASER_OPTIONS = [
   { label: '2h innan', value: 120 },
   { label: '12h innan', value: 720 },
@@ -530,14 +536,16 @@ function SideQuestFormInner({
       </TouchableOpacity>
 
       <View style={styles.block}>
-        <Text style={styles.label}>Titel</Text>
+        <Text style={styles.label}>Titel <Text style={styles.labelRequired}>*</Text></Text>
         <TextInput
           value={title}
           onChangeText={setTitle}
-          placeholder="t.ex. Ramen på taket"
+          placeholder="Vad ska aktiviteten heta?"
           placeholderTextColor="#b7bcc7"
           style={styles.titleInput}
+          maxLength={TITLE_MAX_LENGTH}
         />
+        <Text style={styles.charCounter}>{title.length}/{TITLE_MAX_LENGTH}</Text>
       </View>
 
       <View style={styles.block}>
@@ -610,7 +618,7 @@ function SideQuestFormInner({
       ) : null}
 
       <View style={styles.block}>
-        <Text style={styles.label}>Beskrivning</Text>
+        <Text style={styles.label}>Beskrivning <Text style={styles.labelOptional}>(valfritt)</Text></Text>
         <TextInput
           value={description}
           onChangeText={setDescription}
@@ -623,7 +631,7 @@ function SideQuestFormInner({
       </View>
 
       <View style={styles.block}>
-        <Text style={styles.label}>Plats</Text>
+        <Text style={styles.label}>Plats <Text style={styles.labelOptional}>(valfritt)</Text></Text>
         <TextInput
           value={locationQuery}
           onChangeText={(value) => {
@@ -632,7 +640,7 @@ function SideQuestFormInner({
               setLocationPlace(null);
             }
           }}
-          placeholder="t.ex. Sagrada Familia, Barcelona"
+          placeholder="Sök en plats"
           placeholderTextColor="#b7bcc7"
           style={styles.input}
         />
@@ -659,7 +667,7 @@ function SideQuestFormInner({
       </View>
 
       <View style={styles.block}>
-        <Text style={styles.label}>När händer det?</Text>
+        <Text style={styles.label}>När händer det? <Text style={styles.labelRequired}>*</Text></Text>
         {Platform.OS === 'web' ? (
           <View style={[styles.selectionCard, selectedDateOutOfRange || selectedDateBeforeToday ? styles.selectionCardError : null]}>
             <View style={{ flex: 1 }}>
@@ -720,7 +728,7 @@ function SideQuestFormInner({
       {visibility === 'hidden' ? (
         <>
           <View style={styles.block}>
-            <Text style={styles.label}>Avslöjandeschema</Text>
+            <Text style={styles.label}>Avslöjandeschema <Text style={styles.labelRequired}>*</Text></Text>
             <View style={styles.revealRow}>
               {Platform.OS === 'web' ? (
                 <View style={[styles.selectionCard, styles.revealCard, revealDateOutOfRange ? styles.selectionCardError : null]}>
@@ -795,14 +803,16 @@ function SideQuestFormInner({
           </View>
 
           <View style={styles.block}>
-            <Text style={styles.label}>Teaser</Text>
+            <Text style={styles.label}>Teaser <Text style={styles.labelOptional}>(valfritt)</Text></Text>
             <TextInput
               value={teaser}
               onChangeText={setTeaser}
               placeholder="Frivillig ledtråd till gruppen innan avslöjandet"
               placeholderTextColor="#b7bcc7"
               style={styles.input}
+              maxLength={TEASER_MAX_LENGTH}
             />
+            <Text style={styles.charCounter}>{teaser.length}/{TEASER_MAX_LENGTH}</Text>
             {teaser.trim() ? (
               <View style={styles.teaserOptions}>
                 {TEASER_OPTIONS.map((option) => (
@@ -1263,6 +1273,18 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#9298a4',
     fontWeight: '400',
+  },
+  labelRequired: {
+    fontSize: 18,
+    color: '#ff4f74',
+    fontWeight: '900',
+  },
+  charCounter: {
+    marginTop: 6,
+    alignSelf: 'flex-end',
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#9298a4',
   },
   categoryRow: {
     flexDirection: 'row',
