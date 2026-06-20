@@ -1,8 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
+import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
-import { useCallback, useState } from 'react';
+import { Component, useCallback, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -74,6 +75,17 @@ function todayIso() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function isDateInputValid(value: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+function toDateInput(date: Date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 export default function CostSplitScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -91,6 +103,7 @@ export default function CostSplitScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [pickingReceipt, setPickingReceipt] = useState(false);
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
 
   const [form, setForm] = useState<AddExpenseForm>({
     description: '',
@@ -234,6 +247,14 @@ export default function CostSplitScreen() {
 
   function handleRemoveReceipt() {
     setField('receiptImage', null);
+  }
+
+  function handleDateChange(event: DateTimePickerEvent, selectedDate?: Date) {
+    if (Platform.OS !== 'ios') {
+      setDatePickerOpen(false);
+    }
+    if (event.type !== 'set' || !selectedDate) return;
+    setField('date', toDateInput(selectedDate));
   }
 
   function toggleParticipant(memberId: string) {
@@ -920,15 +941,27 @@ export default function CostSplitScreen() {
                 </View>
               )}
 
-              {/* Date */}
-              <Text style={styles.fieldLabel}>Date (YYYY-MM-DD) <Text style={styles.fieldLabelRequired}>*</Text></Text>
-              <TextInput
-                style={styles.textInput}
-                placeholder={todayIso()}
-                placeholderTextColor="#afb5bf"
-                value={form.date}
-                onChangeText={(v) => setField('date', v)}
-              />
+              {/* Date — same tap-to-open native picker pattern used for
+                  activity dates elsewhere in the app, instead of free-typed
+                  YYYY-MM-DD text. */}
+              <Text style={styles.fieldLabel}>Date <Text style={styles.fieldLabelRequired}>*</Text></Text>
+              {Platform.OS === 'web' ? (
+                <TextInput
+                  style={styles.textInput}
+                  placeholder={todayIso()}
+                  placeholderTextColor="#afb5bf"
+                  value={form.date}
+                  onChangeText={(v) => setField('date', v)}
+                />
+              ) : (
+                <TouchableOpacity
+                  activeOpacity={0.88}
+                  style={styles.dateSelectionCard}
+                  onPress={() => setDatePickerOpen(true)}>
+                  <Text style={styles.dateSelectionValue}>{formatDate(form.date)}</Text>
+                  <Ionicons name="calendar-outline" size={20} color="#5f6570" />
+                </TouchableOpacity>
+              )}
 
               {/* Paid By */}
               <Text style={styles.fieldLabel}>Paid By <Text style={styles.fieldLabelRequired}>*</Text></Text>
@@ -1226,7 +1259,81 @@ export default function CostSplitScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Date picker sheet — same pattern as the activity-date picker
+          elsewhere in the app: tap-to-open native calendar in a bottom
+          sheet, with an error boundary since this native view is known to
+          crash under certain Fabric states. */}
+      {Platform.OS !== 'web' ? (
+        <DatePickerSheet
+          visible={datePickerOpen}
+          value={isDateInputValid(form.date) ? new Date(`${form.date}T12:00:00`) : new Date()}
+          onChange={handleDateChange}
+          onClose={() => setDatePickerOpen(false)}
+        />
+      ) : null}
     </View>
+  );
+}
+
+// Catches render-time errors from the native date picker so a bad value
+// surfaces as an on-screen message instead of taking down the whole app.
+class PickerErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state: { error: Error | null } = { error: null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <Text style={{ color: '#d95f6a', fontSize: 13, padding: 16, textAlign: 'center' }}>
+          Couldn&apos;t open the date picker: {this.state.error.message}
+        </Text>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function DatePickerSheet({
+  visible,
+  value,
+  onChange,
+  onClose,
+}: {
+  visible: boolean;
+  value: Date;
+  onChange: (event: DateTimePickerEvent, selectedDate?: Date) => void;
+  onClose: () => void;
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.datePickerBackdrop}>
+        <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={onClose} />
+        <View style={styles.datePickerCard}>
+          <View style={styles.datePickerHandle} />
+          <Text style={styles.datePickerTitle}>Select date</Text>
+          <View style={styles.datePickerWrap}>
+            <PickerErrorBoundary>
+              <DateTimePicker
+                value={value}
+                mode="date"
+                display={Platform.OS === 'ios' ? 'inline' : 'default'}
+                themeVariant="light"
+                accentColor={PRIMARY_COLOR}
+                textColor="#161821"
+                onChange={onChange}
+              />
+            </PickerErrorBoundary>
+          </View>
+          <TouchableOpacity activeOpacity={0.9} style={[styles.datePickerDoneButton, { backgroundColor: PRIMARY_COLOR }]} onPress={onClose}>
+            <Text style={styles.datePickerDoneText}>Done</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -1851,6 +1958,69 @@ const styles = StyleSheet.create({
   },
   fieldLabelRequired: {
     color: '#ff4f74',
+  },
+  dateSelectionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 50,
+    borderWidth: 1,
+    borderColor: '#eaedf2',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    backgroundColor: '#fafbfc',
+  },
+  dateSelectionValue: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#161821',
+  },
+  datePickerBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'flex-end',
+  },
+  datePickerCard: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingTop: 12,
+    paddingHorizontal: 22,
+    paddingBottom: 24,
+  },
+  datePickerHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#dde1e8',
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  datePickerTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#161821',
+    letterSpacing: -0.5,
+    marginBottom: 10,
+  },
+  datePickerWrap: {
+    marginBottom: 12,
+    borderRadius: 22,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#eef1f5',
+    overflow: 'hidden',
+  },
+  datePickerDoneButton: {
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  datePickerDoneText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '800',
   },
   receiptPickRow: {
     flexDirection: 'row',
