@@ -734,9 +734,9 @@ export default function TripDetailsScreen() {
           <View style={styles.chatModalBackdrop}>
             <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={closeChat} />
             <KeyboardAvoidingView
-              style={styles.chatKeyboardAvoider}
+              style={[styles.chatKeyboardAvoider, { marginTop: insets.top + 12, marginBottom: insets.bottom + 12 }]}
               behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-            <View style={[styles.chatPanel, { paddingTop: Math.max(insets.top, 18) + 14, paddingBottom: Math.max(insets.bottom, 18) + 14 }]}>
+            <View style={[styles.chatPanel, { paddingTop: 18, paddingBottom: 14 }]}>
               <View style={styles.chatPanelHeader}>
                 <View style={styles.chatPanelHeaderLeft}>
                   <Text style={styles.chatPanelEyebrow}>GROUP CHAT</Text>
@@ -765,7 +765,7 @@ export default function TripDetailsScreen() {
                 </View>
               ) : null}
 
-              <ScrollView ref={chatScrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={styles.chatList}>
+              <ScrollView ref={chatScrollRef} style={styles.chatListScroll} showsVerticalScrollIndicator={false} contentContainerStyle={styles.chatList}>
                 {chatMessages.map((message, index) => {
                   const ownMessage = message.userId === user?.id;
                   const systemMessage = message.isSystem;
@@ -2023,9 +2023,7 @@ const styles = StyleSheet.create({
   chatModalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(9,11,17,0.42)',
-    justifyContent: 'center',
     paddingHorizontal: 14,
-    paddingVertical: 14,
   },
   chatKeyboardAvoider: {
     flex: 1,
@@ -2113,6 +2111,9 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 15,
     fontWeight: '800',
+  },
+  chatListScroll: {
+    flex: 1,
   },
   chatList: {
     paddingTop: 18,
