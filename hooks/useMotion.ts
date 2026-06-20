@@ -392,12 +392,15 @@ interface ModalSpringConfig {
   autoStart?: boolean;
   onComplete?: () => void;
   triggerHaptics?: boolean;
+  /** Starting offset (px) the sheet slides up from. Defaults to a small pop-in;
+   *  pass the sheet's own height for a full slide-up from off-screen. */
+  initialTranslateY?: number;
 }
 
 export function useModalSpring(config: ModalSpringConfig = {}) {
-  const { autoStart = true, onComplete, triggerHaptics = true } = config;
+  const { autoStart = true, onComplete, triggerHaptics = true, initialTranslateY = 100 } = config;
 
-  const translateY = useRef(new Animated.Value(100)).current;
+  const translateY = useRef(new Animated.Value(initialTranslateY)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   const scaleValue = useRef(new Animated.Value(0.8)).current;
 

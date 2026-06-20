@@ -31,6 +31,10 @@ export default function ModalSheet({ visible, children, onClose, height = screen
     autoStart: false,
     onComplete: undefined,
     triggerHaptics: true,
+    // Start fully below the sheet's own height so opening is a real
+    // slide-up from off-screen, mirroring the slide-down-to-screenHeight
+    // close animation below instead of just a small 100px pop-in.
+    initialTranslateY: height,
   });
 
   useEffect(() => {
