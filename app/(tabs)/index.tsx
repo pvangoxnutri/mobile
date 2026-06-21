@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -28,6 +28,10 @@ export default function HomeScreen() {
   const { user, signOut } = useAuth();
   const { t } = useI18n();
   const insets = useSafeAreaInsets();
+  // Set when this screen was opened via a trip-invite push notification's
+  // deep link (?inviteId=...) — used to highlight that specific invite so
+  // tapping the notification doesn't just land "somewhere on home".
+  const { inviteId: focusInviteId } = useLocalSearchParams<{ inviteId?: string }>();
   const { width, height: screenHeight } = useWindowDimensions();
   const [quests, setQuests] = useState<Quest[]>([]);
   const [activities, setActivities] = useState<SideQuestActivity[]>([]);
@@ -331,6 +335,7 @@ export default function HomeScreen() {
                 <InviteCard
                   key={invite.id}
                   invite={invite}
+                  highlighted={invite.id === focusInviteId}
                   busy={inviteActionBusy === invite.id || inviteActionBusy === invite.id + '_decline'}
                   onAccept={handleAcceptInvite}
                   onDecline={handleDeclineInvite}
@@ -396,6 +401,7 @@ export default function HomeScreen() {
               <InviteCard
                 key={invite.id}
                 invite={invite}
+                highlighted={invite.id === focusInviteId}
                 busy={inviteActionBusy === invite.id || inviteActionBusy === invite.id + '_decline'}
                 onAccept={handleAcceptInvite}
                 onDecline={handleDeclineInvite}

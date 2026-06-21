@@ -113,13 +113,50 @@ export async function getCurrentPermissionStatus(): Promise<Notifications.Permis
   return status;
 }
 
+function extractRoute(response: Notifications.NotificationResponse | null): string | null {
+  const data = response?.notification.request.content.data as Record<string, unknown> | undefined;
+  return typeof data?.route === 'string' ? data.route : null;
+}
+
 // Wires a tapped notification's `data.route` (an in-app path we put there
 // ourselves when sending, e.g. "/trip/{id}/sidequest/{activityId}") to
 // in-app navigation. Returns the subscription so the caller can remove it.
+//
+// This listener ONLY fires for taps that happen while this listener is
+// already registered — i.e. the app was foregrounded or backgrounded. A tap
+// that cold-starts the app from fully terminated does NOT fire this (the JS
+// engine, and this listener, didn't exist yet when the tap happened). Use
+// getInitialNotificationRoute() once at startup to cover that case.
 export function addNotificationTapListener(onDeepLink: (route: string) => void) {
   return Notifications.addNotificationResponseReceivedListener((response) => {
-    const data = response.notification.request.content.data as Record<string, unknown> | undefined;
-    const route = typeof data?.route === 'string' ? data.route : null;
+    const route = extractRoute(response);
     if (route) onDeepLink(route);
+  });
+}
+
+// Call once, at startup, after auth/session restoration completes (the
+// caller is responsible for that ordering — see PushNotificationBootstrap).
+// Returns the deep-link route if this app launch was caused by tapping a
+// notification while fully terminated, or null otherwise. Safe to call
+// repeatedly — expo-notifications keeps returning the same last response
+// until the OS clears it, so the caller should only act on this once per
+// app session (PushNotificationBootstrap guards this with a ref).
+export async function getInitialNotificationRoute(): Promise<string | null> {
+  try {
+    const response = await Notifications.getLastNotificationResponseAsync();
+    return extractRoute(response);
+  } catch (err) {
+    console.warn('[PUSH] getInitialNotificationRoute failed:', err);
+    return null;
+  }
+}
+
+// Fires whenever Expo issues a new push token for this device while the app
+// is running (token rotation — rare, but APNs/FCM can do this). Re-registers
+// immediately so we're never silently stuck on a stale token.
+export function addPushTokenRotationListener(onNewToken: () => void) {
+  return Notifications.addPushTokenListener(() => {
+    void pushCurrentToken().catch((err) => console.warn('[PUSH] re-registration after token rotation failed:', err));
+    onNewToken();
   });
 }

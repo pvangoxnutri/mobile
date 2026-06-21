@@ -3,6 +3,7 @@ import { ActivityIndicator, View } from 'react-native';
 import { apiFetch, API_URL } from '@/lib/api';
 import { normalizeLanguage, useI18n, type AppLanguage } from '@/components/i18n-provider';
 import { getEmailAuthRedirectUrl } from '@/lib/auth-redirect';
+import { disablePushNotifications } from '@/lib/push-notifications';
 import { supabase } from '@/lib/supabase';
 import type { UserInfo } from '@/lib/types';
 
@@ -189,6 +190,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function signOut() {
+    // Deactivate this device's push token before signing out — otherwise a
+    // shared/reused device keeps receiving the previous account's pushes
+    // until something else happens to overwrite the registration.
+    await disablePushNotifications().catch(() => {});
     await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
     setUser(null);
   }

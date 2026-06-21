@@ -8,11 +8,15 @@ import { COLORS, SPACING, TYPOGRAPHY, RADIUS } from '@/constants/design-tokens';
 interface InviteCardProps {
   invite: PendingInvite;
   busy: boolean;
+  // True when this card is the one a trip-invite push notification deep
+  // linked to (?inviteId=...) — gives it a stronger border so tapping the
+  // notification visibly lands on the right invite, not just "home".
+  highlighted?: boolean;
   onAccept: (invite: PendingInvite) => void;
   onDecline: (invite: PendingInvite) => void;
 }
 
-export default function InviteCard({ invite, busy, onAccept, onDecline }: InviteCardProps) {
+export default function InviteCard({ invite, busy, highlighted, onAccept, onDecline }: InviteCardProps) {
   const { t } = useI18n();
   const { handlePressIn: acceptPressIn, handlePressOut: acceptPressOut, animatedStyle: acceptAnimatedStyle } = useScalePress({
     scale: 0.94,
@@ -25,7 +29,12 @@ export default function InviteCard({ invite, busy, onAccept, onDecline }: Invite
   });
 
   return (
-    <View style={[styles.inviteCard, { borderColor: COLORS.primaryLight20, backgroundColor: COLORS.primaryLight12 }]}>
+    <View
+      style={[
+        styles.inviteCard,
+        { borderColor: COLORS.primaryLight20, backgroundColor: COLORS.primaryLight12 },
+        highlighted ? { borderColor: COLORS.primary, borderWidth: 2 } : null,
+      ]}>
       {invite.tripImageUrl ? (
         <Image source={{ uri: invite.tripImageUrl }} style={styles.inviteCardImage} />
       ) : (
