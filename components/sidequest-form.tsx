@@ -29,6 +29,7 @@ import { withFlightMarkers } from '@/lib/flight-route';
 import { DEFAULT_BLUR, MAX_BLUR, MIN_BLUR, withBlurMarker } from '@/lib/activity-blur';
 import type { SideQuestActivity } from '@/lib/types';
 import { uploadImageIfNeeded } from '@/lib/uploads';
+import { maybeRequestPushPermission } from '@/lib/push-notifications';
 import { useI18n } from '@/components/i18n-provider';
 import { PRIMARY_COLOR, PRIMARY_08, PRIMARY_20, SECONDARY_COLOR } from '@/constants/colors';
 
@@ -408,6 +409,15 @@ function SideQuestFormInner({
   async function handleSubmit() {
     const saved = await saveActivity();
     if (saved) {
+      // Contextual permission prompt: creating your first hidden SideQuest
+      // is the moment teaser/reveal pushes become meaningful — no point
+      // asking before that, and we only ever actually show the OS dialog
+      // once across the app's lifetime regardless of how many times this
+      // fires.
+      if (mode === 'create' && visibility === 'hidden') {
+        void maybeRequestPushPermission();
+      }
+
       // Notify the parent screen so it can flip its unsaved-changes guard
       // off before we navigate. Without this the guard pops "Unsaved
       // changes" mid-save and ends up re-firing save → duplicate activity.

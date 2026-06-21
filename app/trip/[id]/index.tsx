@@ -48,7 +48,7 @@ type TripMember = {
 export default function TripDetailsScreen() {
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView | null>(null);
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, openChat: openChatParam } = useLocalSearchParams<{ id: string; openChat?: string }>();
   const { user } = useAuth();
   const { t } = useI18n();
   const [trip, setTrip] = useState<Quest | null>(null);
@@ -208,6 +208,15 @@ export default function TripDetailsScreen() {
     for (const m of members) map.set(m.id, m.avatarUrl ?? null);
     return map;
   }, [members]);
+
+  // Deep link from a chat-message push notification: ?openChat=1 opens the
+  // chat modal automatically once this screen mounts.
+  useEffect(() => {
+    if (openChatParam === '1') {
+      setChatOpen(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openChatParam]);
 
   // ── Chat polling + presence ──────────────────────────────────────────────
 

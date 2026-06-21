@@ -16,6 +16,7 @@ import { getCategorySymbol } from '@/lib/category-symbol';
 import { BigHeroCard, getInitials, type TripWithEvent, type TripMember } from '@/components/big-hero-card';
 import { apiFetch, apiJson } from '@/lib/api';
 import { getCached, setCached, invalidateCache } from '@/lib/cache';
+import { maybeRequestPushPermission } from '@/lib/push-notifications';
 import { useScalePress } from '@/hooks/useMotion';
 import type { PendingInvite, Quest, SideQuestActivity, TripEvent } from '@/lib/types';
 import { COLORS, SHADOWS, SPACING, RADIUS, TYPOGRAPHY } from '@/constants/design-tokens';
@@ -106,6 +107,13 @@ export default function HomeScreen() {
         if (!active) return;
         setQuests(tripList);
         setActivities(activityGroups.flat());
+
+        // Contextual permission prompt: the moment a user has at least one
+        // adventure (created or joined) is when push notifications first
+        // become meaningful — no point asking before that.
+        if (tripList.length > 0) {
+          void maybeRequestPushPermission();
+        }
       })
       .catch(async (err: Error) => {
         if (!active) return;

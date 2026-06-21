@@ -8,6 +8,7 @@ import { View } from 'react-native';
 import { AuthGate, AuthProvider } from '@/components/auth-provider';
 import { I18nProvider } from '@/components/i18n-provider';
 import { NetworkStatusBar } from '@/components/network-status-bar';
+import { PushNotificationBootstrap } from '@/components/push-notification-bootstrap';
 import { useColorScheme } from 'react-native';
 
 export const unstable_settings = {
@@ -24,6 +25,7 @@ export default function RootLayout() {
           <AuthProvider>
             <AuthGate>
               <View style={{ flex: 1 }}>
+                <PushNotificationBootstrap />
                 <NetworkStatusBar />
                 <Stack screenOptions={{ headerShown: false }}>
                 <Stack.Screen name="(tabs)" options={{ headerShown: false }} />

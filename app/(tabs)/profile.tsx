@@ -15,6 +15,7 @@ import LanguagePicker from '@/components/language-picker';
 import TabHeader from '@/components/tab-header';
 import { apiFetch, apiJson } from '@/lib/api';
 import { getDefaultNotificationPreferences, loadNotificationPreferences, saveNotificationPreferences, type NotificationPreferences } from '@/lib/social';
+import { disablePushNotifications, getCurrentPermissionStatus, maybeRequestPushPermission } from '@/lib/push-notifications';
 import { supabase } from '@/lib/supabase';
 import type { Quest } from '@/lib/types';
 import { COLORS, SHADOWS, SPACING, RADIUS, TYPOGRAPHY } from '@/constants/design-tokens';
@@ -39,6 +40,7 @@ export default function ProfileScreen() {
   const [editingNotifications, setEditingNotifications] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferences>(getDefaultNotificationPreferences());
+  const [osPermissionDenied, setOsPermissionDenied] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [busy, setBusy] = useState<'name' | 'bio' | 'password' | 'avatar' | 'language' | 'delete' | 'support' | null>(null);
   const [supportModal, setSupportModal] = useState<'bug' | 'feedback' | null>(null);
@@ -129,6 +131,11 @@ export default function ProfileScreen() {
     void loadNotificationPreferences().then((prefs) => {
       if (!active) return;
       setNotificationPreferences(prefs);
+    });
+
+    void getCurrentPermissionStatus().then((status) => {
+      if (!active) return;
+      setOsPermissionDenied(status === 'denied');
     });
 
     return () => {
@@ -229,10 +236,21 @@ export default function ProfileScreen() {
     [headerAvatarOpacity, headerAvatarScale],
   );
 
-  async function updateNotificationPreference<K extends keyof NotificationPreferences>(key: K, value: NotificationPreferences[K]) {
-    const next = { ...notificationPreferences, [key]: value };
+  async function handleTogglePush(value: boolean) {
+    const next = { ...notificationPreferences, pushEnabled: value };
     setNotificationPreferences(next);
     await saveNotificationPreferences(next);
+
+    // This is the only real lever here: ON registers (or requests
+    // permission for) this device's push token; OFF deactivates it
+    // server-side. There's no per-category filtering on the backend yet, so
+    // we don't expose toggles that wouldn't actually change anything.
+    if (value) {
+      await maybeRequestPushPermission();
+    } else {
+      await disablePushNotifications();
+    }
+    setOsPermissionDenied((await getCurrentPermissionStatus()) === 'denied');
   }
 
   async function handleNameSave() {
@@ -809,25 +827,10 @@ export default function ProfileScreen() {
               <NotificationSettingRow
                 icon="phone-portrait-outline"
                 title={t('profile.notifications.pushNotifications')}
-                subtitle={t('profile.notifications.pushHint')}
-                value={notificationPreferences.pushEnabled}
-                onValueChange={(value) => void updateNotificationPreference('pushEnabled', value)}
-              />
-              <View style={styles.rowDivider} />
-              <NotificationSettingRow
-                icon="chatbubble-ellipses-outline"
-                title={t('profile.notifications.chatMessages')}
-                subtitle={t('profile.notifications.chatHint')}
-                value={notificationPreferences.chatMessages}
-                onValueChange={(value) => void updateNotificationPreference('chatMessages', value)}
-              />
-              <View style={styles.rowDivider} />
-              <NotificationSettingRow
-                icon="people-outline"
-                title={t('profile.notifications.chatJoins')}
-                subtitle={t('profile.notifications.joinsHint')}
-                value={notificationPreferences.chatJoins}
-                onValueChange={(value) => void updateNotificationPreference('chatJoins', value)}
+                subtitle={osPermissionDenied ? t('profile.notifications.pushDeniedHint') : t('profile.notifications.pushHint')}
+                value={!osPermissionDenied && notificationPreferences.pushEnabled}
+                disabled={osPermissionDenied}
+                onValueChange={(value) => void handleTogglePush(value)}
               />
             </View>
             <View style={styles.confirmActions}>
@@ -901,12 +904,14 @@ function NotificationSettingRow({
   title,
   subtitle,
   value,
+  disabled,
   onValueChange,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   title: string;
   subtitle: string;
   value: boolean;
+  disabled?: boolean;
   onValueChange: (value: boolean) => void;
 }) {
   return (
@@ -918,7 +923,13 @@ function NotificationSettingRow({
         <Text style={styles.notificationTitle}>{title}</Text>
         <Text style={styles.notificationSubtitle}>{subtitle}</Text>
       </View>
-      <Switch value={value} onValueChange={onValueChange} trackColor={{ false: '#d8dde6', true: '#ffe5ec' }} thumbColor={value ? COLORS.primary : COLORS.white} />
+      <Switch
+        value={value}
+        disabled={disabled}
+        onValueChange={onValueChange}
+        trackColor={{ false: '#d8dde6', true: '#ffe5ec' }}
+        thumbColor={value ? COLORS.primary : COLORS.white}
+      />
     </View>
   );
 }
