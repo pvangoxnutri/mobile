@@ -107,16 +107,19 @@ export function BigHeroCard({
       )}
 
       {/* Stacked semi-transparent layers fake a bottom-to-top dark gradient
-          without pulling in expo-linear-gradient. Keeps white text legible
-          on top of any photo. Six narrow steps instead of three wide ones —
-          fewer/wider bands have hard edges that read as visible lines
-          cutting across a real photo. */}
-      <View pointerEvents="none" style={styles.bigHeroGradient1} />
-      <View pointerEvents="none" style={styles.bigHeroGradient2} />
-      <View pointerEvents="none" style={styles.bigHeroGradient3} />
-      <View pointerEvents="none" style={styles.bigHeroGradient4} />
-      <View pointerEvents="none" style={styles.bigHeroGradient5} />
-      <View pointerEvents="none" style={styles.bigHeroGradient6} />
+          for legibility — only over the dark fallback. Skipped entirely when
+          there's a real photo, per product decision (accepts that text/
+          buttons may be harder to read on a bright or busy photo). */}
+      {!quest.imageUrl ? (
+        <>
+          <View pointerEvents="none" style={styles.bigHeroGradient1} />
+          <View pointerEvents="none" style={styles.bigHeroGradient2} />
+          <View pointerEvents="none" style={styles.bigHeroGradient3} />
+          <View pointerEvents="none" style={styles.bigHeroGradient4} />
+          <View pointerEvents="none" style={styles.bigHeroGradient5} />
+          <View pointerEvents="none" style={styles.bigHeroGradient6} />
+        </>
+      ) : null}
 
       {/* Top row: location pill (left) + LIVE / UPCOMING pill (right) */}
       <View style={styles.bigHeroTopRow}>

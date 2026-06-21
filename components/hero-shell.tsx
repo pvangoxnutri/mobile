@@ -49,17 +49,19 @@ export default function HeroShell({ imageUrl, fallback, imageBlurRadius, style, 
       )}
 
       {/* Stacked semi-transparent layers fake a bottom-to-top dark gradient
-          without pulling in expo-linear-gradient. Keeps text legible on
-          top of any photo (or the dark fallback). Six narrow steps instead
-          of three wide ones — fewer/wider bands have hard edges that read as
-          visible lines cutting across a real photo; more, smaller steps
-          approximate a smooth gradient closely enough to hide them. */}
-      <View pointerEvents="none" style={styles.gradient1} />
-      <View pointerEvents="none" style={styles.gradient2} />
-      <View pointerEvents="none" style={styles.gradient3} />
-      <View pointerEvents="none" style={styles.gradient4} />
-      <View pointerEvents="none" style={styles.gradient5} />
-      <View pointerEvents="none" style={styles.gradient6} />
+          for legibility — only over the dark fallback. Skipped entirely when
+          there's a real photo, per product decision (accepts that text/
+          buttons may be harder to read on a bright or busy photo). */}
+      {!imageUrl ? (
+        <>
+          <View pointerEvents="none" style={styles.gradient1} />
+          <View pointerEvents="none" style={styles.gradient2} />
+          <View pointerEvents="none" style={styles.gradient3} />
+          <View pointerEvents="none" style={styles.gradient4} />
+          <View pointerEvents="none" style={styles.gradient5} />
+          <View pointerEvents="none" style={styles.gradient6} />
+        </>
+      ) : null}
 
       {children}
     </View>
