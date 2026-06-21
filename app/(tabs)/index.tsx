@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BrandMark from '@/components/brand-mark';
+import Avatar from '@/components/avatar';
 import { useAuth } from '@/components/auth-provider';
 import { useI18n } from '@/components/i18n-provider';
 import TabHeader from '@/components/tab-header';
@@ -300,11 +301,31 @@ export default function HomeScreen() {
   async function openMembers() {
     if (!featuredTrip) return;
     setMembersOpen(true);
-    setMembersLoading(true);
     setFailedMemberAvatars(new Set());
 
+    // homeMembers already holds this exact trip's member list — the effect
+    // that populates it fires the moment this trip became featured, and is
+    // itself cache-backed. Reuse it instead of re-fetching data we already
+    // have; only hit the network if we genuinely don't have anything yet
+    // (e.g. that effect's fetch hasn't resolved, or it failed).
+    if (homeMembers.length > 0) {
+      setFeaturedMembers(homeMembers);
+      setMembersLoading(false);
+      return;
+    }
+
+    const url = `/api/trips/${featuredTrip.quest.id}/members`;
+    const cached = getCached<TripMember[]>(url);
+    if (cached) {
+      setFeaturedMembers(cached);
+      setMembersLoading(false);
+      return;
+    }
+
+    setMembersLoading(true);
     try {
-      const data = await apiJson<TripMember[]>(`/api/trips/${featuredTrip.quest.id}/members`);
+      const data = await apiJson<TripMember[]>(url);
+      setCached(url, data);
       setFeaturedMembers(data);
     } catch (err) {
       console.warn('[HOME] openMembers failed:', err instanceof Error ? err.message : err);
@@ -550,15 +571,16 @@ export default function HomeScreen() {
                       setTimeout(() => setProfileCardUserId(member.id), 280);
                     }}>
                     <View style={styles.memberAvatar}>
-                      {member.avatarUrl && member.avatarUrl.trim() && !failedMemberAvatars.has(member.id) ? (
-                        <Image
-                          source={{ uri: member.avatarUrl }}
-                          style={styles.memberAvatarImage}
-                          onError={() => setFailedMemberAvatars(prev => new Set([...prev, member.id]))}
-                        />
-                      ) : (
-                        <Text style={styles.memberAvatarText}>{getInitials(member.name)}</Text>
-                      )}
+                      <Avatar
+                        uri={member.avatarUrl}
+                        name={member.name}
+                        fallbackText={getInitials(member.name)}
+                        forceFallback={failedMemberAvatars.has(member.id)}
+                        onError={() => setFailedMemberAvatars(prev => new Set([...prev, member.id]))}
+                        size={42}
+                        fallbackBackgroundColor="#1d212a"
+                        fallbackTextColor="#fff"
+                      />
                     </View>
                     <View style={styles.memberCopy}>
                       <Text style={styles.memberName}>{member.name}</Text>
@@ -839,15 +861,14 @@ function ActivityFeedCard({
         return (
           <View key={event.id} style={[styles.activityRow, index > 0 && styles.activityRowBorder]}>
             <View style={styles.activityAvatar}>
-              {member?.avatarUrl && !failedAvatars.has(member.id) ? (
-                <Image
-                  source={{ uri: member.avatarUrl }}
-                  style={styles.activityAvatarImage}
-                  onError={() => onAvatarError(member.id)}
-                />
-              ) : (
-                <Text style={styles.activityAvatarText}>{getInitials(event.actorName)}</Text>
-              )}
+              <Avatar
+                uri={member?.avatarUrl}
+                name={event.actorName}
+                fallbackText={getInitials(event.actorName)}
+                forceFallback={member ? failedAvatars.has(member.id) : false}
+                onError={() => member && onAvatarError(member.id)}
+                size={36}
+              />
             </View>
             <View style={styles.activityTextBlock}>
               <Text style={styles.activityTitle}>
@@ -1660,14 +1681,6 @@ const styles = StyleSheet.create({
   activityAvatarMuted: {
     backgroundColor: '#f4f5f7',
   },
-  activityAvatarImage: {
-    width: '100%', height: '100%',
-  },
-  activityAvatarText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: COLORS.primary,
-  },
   activityTextBlock: {
     flex: 1,
   },
@@ -2093,16 +2106,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: '#1d212a',
     overflow: 'hidden',
-  },
-  memberAvatarText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  memberAvatarImage: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
   },
   memberCopy: {
     flex: 1,

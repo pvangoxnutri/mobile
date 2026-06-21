@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Animated, Image, StyleSheet, Text, TouchableOpacity, View, ActivityIndicator } from 'react-native';
+import { Image } from 'expo-image';
+import { Animated, StyleSheet, Text, TouchableOpacity, View, ActivityIndicator } from 'react-native';
 import { useI18n } from '@/components/i18n-provider';
 import { useScalePress } from '@/hooks/useMotion';
 import type { PendingInvite } from '@/lib/types';
@@ -36,7 +37,12 @@ export default function InviteCard({ invite, busy, highlighted, onAccept, onDecl
         highlighted ? { borderColor: COLORS.primary, borderWidth: 2 } : null,
       ]}>
       {invite.tripImageUrl ? (
-        <Image source={{ uri: invite.tripImageUrl }} style={styles.inviteCardImage} />
+        <Image
+          source={{ uri: invite.tripImageUrl }}
+          style={styles.inviteCardImage}
+          cachePolicy="memory-disk"
+          transition={150}
+        />
       ) : (
         <View style={[styles.inviteCardImage, styles.inviteCardImagePlaceholder]}>
           <Ionicons name="map-outline" size={20} color={COLORS.primary} />

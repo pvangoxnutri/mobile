@@ -20,6 +20,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/components/auth-provider';
 import { apiFetch, apiJson } from '@/lib/api';
+import { getCached, setCached } from '@/lib/cache';
 import { uploadImageIfNeeded } from '@/lib/uploads';
 import type { BalancesResponse, Debt, Expense, Settlement } from '@/lib/types';
 import { PRIMARY_COLOR, PRIMARY_08 } from '@/constants/colors';
@@ -134,6 +135,16 @@ export default function CostSplitScreen() {
 
   const loadAll = useCallback(async () => {
     if (!id) return;
+
+    // Members rarely change and are shared with trip detail/settings/home
+    // via the same cache key — show whatever's cached immediately while the
+    // (always-fresh, never cached) financial data loads. Expenses/balances/
+    // settlements are intentionally NOT cached here: showing stale money
+    // data is worse than a brief spinner.
+    const membersUrl = `/api/trips/${id}/members`;
+    const cachedMembers = getCached<TripMember[]>(membersUrl);
+    if (cachedMembers) setMembers(cachedMembers);
+
     setLoading(true);
     setError('');
     try {
@@ -141,12 +152,13 @@ export default function CostSplitScreen() {
         apiJson<Expense[]>(`/api/trips/${id}/expenses`),
         apiJson<BalancesResponse>(`/api/trips/${id}/expenses/balances`),
         apiJson<Settlement[]>(`/api/trips/${id}/expenses/settlements`),
-        apiJson<TripMember[]>(`/api/trips/${id}/members`),
+        apiJson<TripMember[]>(membersUrl),
       ]);
       setExpenses(exp);
       setBalancesData(bal);
       setSettlements(sett);
       setMembers(mem);
+      setCached(membersUrl, mem);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to load cost split data.');
     } finally {

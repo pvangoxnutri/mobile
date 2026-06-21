@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Image, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/components/auth-provider';
+import Avatar from '@/components/avatar';
 import { useI18n } from '@/components/i18n-provider';
 import UserProfileCard from '@/components/user-profile-card';
 import HiddenSidequestCard from '@/components/hidden-sidequest-card';
@@ -624,15 +625,16 @@ export default function TripDetailsScreen() {
                         setTimeout(() => setProfileCardUserId(member.id), 280);
                       }}>
                       <View style={styles.personAvatar}>
-                        {member.avatarUrl && member.avatarUrl.trim() && !failedAvatars.has(member.id) ? (
-                          <Image
-                            source={{ uri: member.avatarUrl }}
-                            style={styles.personAvatarImage}
-                            onError={() => setFailedAvatars(prev => new Set([...prev, member.id]))}
-                          />
-                        ) : (
-                          <Text style={styles.personAvatarText}>{getInitials(member.name)}</Text>
-                        )}
+                        <Avatar
+                          uri={member.avatarUrl}
+                          name={member.name}
+                          fallbackText={getInitials(member.name)}
+                          forceFallback={failedAvatars.has(member.id)}
+                          onError={() => setFailedAvatars(prev => new Set([...prev, member.id]))}
+                          size={42}
+                          fallbackBackgroundColor="#1d212a"
+                          fallbackTextColor="#fff"
+                        />
                       </View>
                       <View style={styles.personCopy}>
                         <Text style={styles.personName}>{member.name}</Text>
@@ -815,15 +817,16 @@ export default function TripDetailsScreen() {
                             style={styles.chatAvatar}
                             activeOpacity={0.7}
                             onPress={() => message.userId && setProfileCardUserId(message.userId)}>
-                            {avatarUrl && avatarUrl.trim() && !failedAvatars.has(message.userId || '') ? (
-                              <Image
-                                source={{ uri: avatarUrl }}
-                                style={styles.chatAvatarImage}
-                                onError={() => message.userId && setFailedAvatars(prev => new Set([...prev, message.userId!]))}
-                              />
-                            ) : (
-                              <Text style={styles.chatAvatarText}>{getInitials(message.userName)}</Text>
-                            )}
+                            <Avatar
+                              uri={avatarUrl}
+                              name={message.userName}
+                              fallbackText={getInitials(message.userName)}
+                              forceFallback={failedAvatars.has(message.userId || '')}
+                              onError={() => message.userId && setFailedAvatars(prev => new Set([...prev, message.userId!]))}
+                              size={28}
+                              fallbackBackgroundColor="#1d212a"
+                              fallbackTextColor="#fff"
+                            />
                           </TouchableOpacity>
                           <View style={styles.chatMessageContent}>
                             <Text style={styles.chatAuthor}>{message.userName}</Text>
@@ -1835,11 +1838,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#1d212a',
     marginRight: 12,
   },
-  personAvatarImage: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-  },
   pendingAvatar: {
     backgroundColor: '#f3f5f8',
   },
@@ -1847,11 +1845,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff2f5',
     borderWidth: 1.5,
     borderColor: '#ffd4de',
-  },
-  personAvatarText: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '800',
   },
   personCopy: {
     flex: 1,
@@ -2164,16 +2157,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
     flexShrink: 0,
-  },
-  chatAvatarImage: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-  },
-  chatAvatarText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: '800',
   },
   chatMessageContent: {
     flex: 1,

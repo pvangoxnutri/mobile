@@ -2,8 +2,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Image, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { getUserProfile } from '@/lib/api';
 import { useI18n } from '@/components/i18n-provider';
+import { getCachedUserProfile, loadUserProfile } from '@/lib/user-cache';
 import type { UserProfile } from '@/lib/types';
 
 export default function UserProfileCard({ userId, onClose }: { userId: string | null; onClose: () => void }) {
@@ -19,19 +19,30 @@ export default function UserProfileCard({ userId, onClose }: { userId: string | 
     }
 
     let active = true;
-    setProfile(null);
     setAvatarFailed(false);
-    setLoading(true);
     setError('');
 
-    getUserProfile(userId)
+    // Show whatever's cached immediately (no spinner) — this is what makes
+    // reopening the same person's card feel instant instead of refetching
+    // every single tap. loadUserProfile() itself skips the network call
+    // entirely if the cache is still fresh.
+    const cached = getCachedUserProfile(userId);
+    if (cached) {
+      setProfile(cached);
+      setLoading(false);
+    } else {
+      setProfile(null);
+      setLoading(true);
+    }
+
+    loadUserProfile(userId)
       .then((data) => {
         if (!active) return;
         setProfile(data);
       })
       .catch(() => {
         if (!active) return;
-        setError('Could not load profile');
+        if (!cached) setError('Could not load profile');
       })
       .finally(() => {
         if (active) setLoading(false);

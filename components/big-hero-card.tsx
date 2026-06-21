@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
+import Avatar from '@/components/avatar';
 import { PRIMARY_COLOR } from '@/constants/colors';
 import type { Quest } from '@/lib/types';
 
@@ -163,15 +164,14 @@ export function BigHeroCard({
                     styles.bigHeroAvatar,
                     { marginLeft: idx === 0 ? 0 : -12, zIndex: visibleAvatars.length - idx },
                   ]}>
-                  {member.avatarUrl && member.avatarUrl.trim() && !failedAvatars?.has(member.id) ? (
-                    <Image
-                      source={{ uri: member.avatarUrl }}
-                      style={styles.bigHeroAvatarImage}
-                      onError={() => onAvatarError?.(member.id)}
-                    />
-                  ) : (
-                    <Text style={styles.bigHeroAvatarText}>{getInitials(member.name)}</Text>
-                  )}
+                  <Avatar
+                    uri={member.avatarUrl}
+                    name={member.name}
+                    fallbackText={getInitials(member.name)}
+                    forceFallback={failedAvatars?.has(member.id)}
+                    onError={() => onAvatarError?.(member.id)}
+                    size={28}
+                  />
                 </View>
               ))}
             </View>
@@ -349,14 +349,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
-  },
-  bigHeroAvatarImage: {
-    width: '100%', height: '100%',
-  },
-  bigHeroAvatarText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: PRIMARY_COLOR,
   },
   bigHeroSealed: {
     flexDirection: 'row',

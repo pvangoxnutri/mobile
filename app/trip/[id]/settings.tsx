@@ -3,7 +3,7 @@ import { Stack, router, useLocalSearchParams } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect } from '@react-navigation/native';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -26,7 +26,7 @@ import RangeDatePicker, { formatRangeDisplay } from '@/components/range-date-pic
 import CountryPicker from '@/components/travel-tracker/country-picker';
 import { UnsavedChangesModal, useUnsavedChanges } from '@/components/unsaved-changes';
 import { apiFetch, apiJson } from '@/lib/api';
-import { invalidateCache } from '@/lib/cache';
+import { getCached, setCached, invalidateCache } from '@/lib/cache';
 import type { Quest, TripInvite } from '@/lib/types';
 import { uploadImageIfNeeded } from '@/lib/uploads';
 import { PRIMARY_COLOR, PRIMARY_08 } from '@/constants/colors';
@@ -65,6 +65,13 @@ export default function TripSettingsScreen() {
   const [leaving, setLeaving] = useState(false);
   const [confirmingLeave, setConfirmingLeave] = useState(false);
 
+  // Guards re-seeding the editable form fields from a background refetch —
+  // without this, a refresh arriving while the user is mid-edit (e.g. right
+  // after they've started typing a new title) would silently overwrite
+  // their in-progress changes. Reset whenever the trip id changes so a
+  // genuinely different trip still seeds fresh.
+  const formSeededForIdRef = useRef<string | null>(null);
+
   const canManageTrip = Boolean(user?.id && trip?.ownerIds?.includes(user.id));
 
   const isDirty = Boolean(
@@ -79,32 +86,64 @@ export default function TripSettingsScreen() {
     )
   );
 
+  function seedFormFromTrip(tripData: Quest) {
+    // Only ever seed once per trip id — a background refetch updating
+    // `trip`/`members`/`invites` must not also reset fields the user may
+    // already be editing.
+    if (formSeededForIdRef.current === id) return;
+    formSeededForIdRef.current = id;
+    setTitle(tripData.title ?? '');
+    setDestination(tripData.destination ?? '');
+    setTripCountries(tripData.countries ?? []);
+    setStartDate(tripData.startDate);
+    setEndDate(tripData.endDate);
+    setImageUrl(tripData.imageUrl ?? null);
+    setMembersCanEdit(tripData.membersCanEdit ?? true);
+  }
+
   const loadTrip = useCallback(() => {
     let active = true;
-    setLoading(true);
+
+    const tripUrl = `/api/trips/${id}`;
+    const membersUrl = `/api/trips/${id}/members`;
+    const invitesUrl = `/api/trips/${id}/invites`;
+
+    // Show cached trip/members/invites instantly so reopening settings for
+    // an already-visited trip doesn't flash a loading spinner. Falls back
+    // to the spinner only when there's truly nothing cached yet.
+    const cachedTrip = getCached<Quest>(tripUrl);
+    const cachedMembers = getCached<TripMember[]>(membersUrl);
+    const cachedInvites = getCached<TripInvite[]>(invitesUrl);
+
+    if (cachedTrip) {
+      setTrip(cachedTrip);
+      seedFormFromTrip(cachedTrip);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
+    if (cachedMembers) setMembers(cachedMembers);
+    if (cachedInvites) setInvites(cachedInvites);
 
     void Promise.all([
-      apiJson<Quest>(`/api/trips/${id}`),
-      apiJson<TripMember[]>(`/api/trips/${id}/members`),
-      apiJson<TripInvite[]>(`/api/trips/${id}/invites`),
+      apiJson<Quest>(tripUrl),
+      apiJson<TripMember[]>(membersUrl),
+      apiJson<TripInvite[]>(invitesUrl),
     ])
       .then(([tripData, memberData, inviteData]) => {
         if (!active) return;
         setTrip(tripData);
         setMembers(memberData);
         setInvites(inviteData);
-        setTitle(tripData.title ?? '');
-        setDestination(tripData.destination ?? '');
-        setTripCountries(tripData.countries ?? []);
-        setStartDate(tripData.startDate);
-        setEndDate(tripData.endDate);
-        setImageUrl(tripData.imageUrl ?? null);
-        setMembersCanEdit(tripData.membersCanEdit ?? true);
+        setCached(tripUrl, tripData);
+        setCached(membersUrl, memberData);
+        setCached(invitesUrl, inviteData);
+        seedFormFromTrip(tripData);
         setMessage(null);
       })
       .catch((err: Error) => {
         if (!active) return;
-        setMessage({ type: 'error', text: err.message || 'Unable to load trip settings.' });
+        if (!cachedTrip) setMessage({ type: 'error', text: err.message || 'Unable to load trip settings.' });
       })
       .finally(() => {
         if (active) setLoading(false);

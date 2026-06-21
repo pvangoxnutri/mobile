@@ -5,6 +5,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiJson } from '@/lib/api';
+import { getCached, setCached } from '@/lib/cache';
 import { loadNotifications, markNotificationsAsRead, type AppNotification } from '@/lib/social';
 import type { Quest, SideQuestActivity, TripEvent } from '@/lib/types';
 import { PRIMARY_COLOR, SECONDARY_COLOR } from '@/constants/colors';
@@ -25,6 +26,28 @@ export default function TmpNavbarScreen() {
     // way back out.
     void markNotificationsAsRead();
 
+    // Same cache keys as the home tab — reuse whatever it already fetched
+    // instead of refetching trips/events/activities from scratch every time
+    // this screen opens. Shows instantly (no "No activity yet" flash) while
+    // a background refresh keeps it current.
+    const cachedQuests = getCached<Quest[]>('/api/trips');
+    const cachedEvents = getCached<TripEvent[]>('/api/trips/events/me');
+    if (cachedQuests) {
+      const cachedActivities: SideQuestActivity[] = [];
+      for (const trip of cachedQuests) {
+        const acts = getCached<SideQuestActivity[]>(`/api/trips/${trip.id}/activities`);
+        if (acts) cachedActivities.push(...acts);
+      }
+      if (cachedActivities.length > 0) {
+        setActivityFeed(
+          cachedActivities
+            .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())
+            .slice(0, 20),
+        );
+      }
+    }
+    if (cachedEvents) setTripEvents(cachedEvents);
+
     void Promise.all([
       loadNotifications(),
       apiJson<Quest[]>('/api/trips'),
@@ -33,10 +56,15 @@ export default function TmpNavbarScreen() {
       .then(async ([storedNotifications, quests, events]) => {
         if (!active) return;
 
+        const questList = Array.isArray(quests) ? quests : [];
+        setCached('/api/trips', questList);
+
         const activityGroups = await Promise.all(
-          (Array.isArray(quests) ? quests : []).map(async (trip) => {
+          questList.map(async (trip) => {
             try {
-              return await apiJson<SideQuestActivity[]>(`/api/trips/${trip.id}/activities`);
+              const acts = await apiJson<SideQuestActivity[]>(`/api/trips/${trip.id}/activities`);
+              setCached(`/api/trips/${trip.id}/activities`, acts);
+              return acts;
             } catch {
               return [];
             }
@@ -46,6 +74,7 @@ export default function TmpNavbarScreen() {
         if (!active) return;
         setNotifications(storedNotifications);
         setTripEvents(Array.isArray(events) ? events : []);
+        setCached('/api/trips/events/me', events);
         setActivityFeed(
           activityGroups
             .flat()
