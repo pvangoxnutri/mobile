@@ -16,7 +16,7 @@ import ActivityImageFallback from '@/components/activity-image-fallback';
 import { getCategorySymbol } from '@/lib/category-symbol';
 import { BigHeroCard, getInitials, type TripWithEvent, type TripMember } from '@/components/big-hero-card';
 import { apiFetch, apiJson } from '@/lib/api';
-import { getCached, setCached, invalidateCache } from '@/lib/cache';
+import { getCached, setCached, invalidateCache, invalidateTripCache } from '@/lib/cache';
 import { maybeRequestPushPermission } from '@/lib/push-notifications';
 import { useScalePress } from '@/hooks/useMotion';
 import type { PendingInvite, Quest, SideQuestActivity, TripEvent } from '@/lib/types';
@@ -244,9 +244,12 @@ export default function HomeScreen() {
       const res = await apiFetch(`/api/trips/${encodeURIComponent(invite.tripId)}/invites/${encodeURIComponent(invite.id)}/accept`, { method: 'POST' });
       if (!res.ok) return;
       setPendingInvites((prev) => prev.filter((i) => i.id !== invite.id));
-      // Trip list and invites have changed server-side — drop stale cache
-      // so the next reads (incl. tab switches) hit the network.
-      invalidateCache('/api/trips');
+      // Trip list, that trip's own members/invites, and this user's pending
+      // invites have all changed server-side — drop the stale cache for
+      // every one of them so the next reads (incl. opening the trip itself)
+      // hit the network instead of showing pre-accept state.
+      invalidateCache('/api/trips/invites/me');
+      invalidateTripCache(invite.tripId);
       loadQuests();
       loadInvites();
     } catch (err) {
@@ -263,6 +266,7 @@ export default function HomeScreen() {
       if (!res.ok) return;
       setPendingInvites((prev) => prev.filter((i) => i.id !== invite.id));
       invalidateCache('/api/trips/invites/me');
+      invalidateTripCache(invite.tripId);
       loadInvites();
     } catch (err) {
       console.error('[HOME] handleDeclineInvite failed:', err instanceof Error ? err.message : err);

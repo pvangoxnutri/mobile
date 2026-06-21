@@ -2,12 +2,58 @@ import { useEffect, useRef } from 'react';
 import { router } from 'expo-router';
 import type { Href } from 'expo-router';
 import { useAuth } from '@/components/auth-provider';
+import { invalidateCache, invalidateTripCache } from '@/lib/cache';
 import {
   addNotificationTapListener,
   addPushTokenRotationListener,
-  getInitialNotificationRoute,
+  getInitialNotificationData,
   registerPushTokenIfPermitted,
+  type PushNotificationData,
 } from '@/lib/push-notifications';
+
+// Invalidates whatever cache could be stale for the screen a push is about
+// to land on — called BEFORE router.push() so that screen's own existing
+// "show cache, then fetch fresh" effect finds nothing cached and fetches for
+// real, instead of briefly showing pre-push data.
+//
+// Deliberately narrow: chat is never cached (chat_message needs no action),
+// and teaser only touches the one key that could actually be stale, not the
+// full trip helper — there's no reason for a teaser tap to invalidate
+// anything that could risk surfacing more than the teaser text.
+function invalidateForPush(data: PushNotificationData) {
+  if (!data.tripId) return;
+
+  switch (data.type) {
+    case 'reveal':
+      // The activity just flipped from hidden to revealed — make sure the
+      // trip's activities list (and the trip record itself) can't show the
+      // pre-reveal snapshot once the user lands.
+      invalidateTripCache(data.tripId);
+      break;
+    case 'teaser':
+      // The teaser window just opened — the cached activities list may
+      // predate it and would otherwise show the old "nothing yet" state
+      // instead of the teaser text.
+      invalidateCache(`/api/trips/${data.tripId}/activities`);
+      break;
+    case 'trip_invite':
+      // Both the recipient's pending-invites list (home) and this trip's
+      // own invites list must be fresh before the highlighted card renders.
+      invalidateCache('/api/trips/invites/me');
+      invalidateTripCache(data.tripId);
+      break;
+    case 'chat_message':
+    default:
+      // Chat is never cached — nothing to do.
+      break;
+  }
+}
+
+function handlePushData(data: PushNotificationData) {
+  if (!data.route) return;
+  invalidateForPush(data);
+  router.push(data.route as Href);
+}
 
 // No UI — just wires push token freshness and notification-tap deep links
 // for the whole app. Mounted once in the root layout, inside AuthGate so
@@ -37,16 +83,14 @@ export function PushNotificationBootstrap() {
   useEffect(() => {
     if (!user || consumedColdStart.current) return;
     consumedColdStart.current = true;
-    void getInitialNotificationRoute().then((route) => {
-      if (route) router.push(route as Href);
+    void getInitialNotificationData().then((data) => {
+      if (data) handlePushData(data);
     });
   }, [user]);
 
   // Foreground/backgrounded taps (app already running in JS).
   useEffect(() => {
-    const subscription = addNotificationTapListener((route) => {
-      router.push(route as Href);
-    });
+    const subscription = addNotificationTapListener(handlePushData);
     return () => subscription.remove();
   }, []);
 

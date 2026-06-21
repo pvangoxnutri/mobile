@@ -113,40 +113,52 @@ export async function getCurrentPermissionStatus(): Promise<Notifications.Permis
   return status;
 }
 
-function extractRoute(response: Notifications.NotificationResponse | null): string | null {
+// Mirrors the `data` dict the backend puts on each of the four notification
+// types (see backend/Services/NotificationDispatchService.cs) — `type` is
+// what lets the caller decide what (if anything) needs invalidating before
+// navigating, instead of just blindly following `route`.
+export type PushNotificationData = {
+  type?: 'teaser' | 'reveal' | 'trip_invite' | 'chat_message' | string;
+  tripId?: string;
+  activityId?: string;
+  inviteId?: string;
+  route?: string;
+};
+
+function extractData(response: Notifications.NotificationResponse | null): PushNotificationData | null {
   const data = response?.notification.request.content.data as Record<string, unknown> | undefined;
-  return typeof data?.route === 'string' ? data.route : null;
+  if (!data || typeof data.route !== 'string') return null;
+  return data as PushNotificationData;
 }
 
-// Wires a tapped notification's `data.route` (an in-app path we put there
-// ourselves when sending, e.g. "/trip/{id}/sidequest/{activityId}") to
-// in-app navigation. Returns the subscription so the caller can remove it.
+// Wires a tapped notification's full data payload (type, tripId, route, …)
+// to the caller. Returns the subscription so the caller can remove it.
 //
 // This listener ONLY fires for taps that happen while this listener is
 // already registered — i.e. the app was foregrounded or backgrounded. A tap
 // that cold-starts the app from fully terminated does NOT fire this (the JS
 // engine, and this listener, didn't exist yet when the tap happened). Use
-// getInitialNotificationRoute() once at startup to cover that case.
-export function addNotificationTapListener(onDeepLink: (route: string) => void) {
+// getInitialNotificationData() once at startup to cover that case.
+export function addNotificationTapListener(onDeepLink: (data: PushNotificationData) => void) {
   return Notifications.addNotificationResponseReceivedListener((response) => {
-    const route = extractRoute(response);
-    if (route) onDeepLink(route);
+    const data = extractData(response);
+    if (data) onDeepLink(data);
   });
 }
 
 // Call once, at startup, after auth/session restoration completes (the
 // caller is responsible for that ordering — see PushNotificationBootstrap).
-// Returns the deep-link route if this app launch was caused by tapping a
-// notification while fully terminated, or null otherwise. Safe to call
-// repeatedly — expo-notifications keeps returning the same last response
-// until the OS clears it, so the caller should only act on this once per
-// app session (PushNotificationBootstrap guards this with a ref).
-export async function getInitialNotificationRoute(): Promise<string | null> {
+// Returns the notification's data payload if this app launch was caused by
+// tapping a notification while fully terminated, or null otherwise. Safe to
+// call repeatedly — expo-notifications keeps returning the same last
+// response until the OS clears it, so the caller should only act on this
+// once per app session (PushNotificationBootstrap guards this with a ref).
+export async function getInitialNotificationData(): Promise<PushNotificationData | null> {
   try {
     const response = await Notifications.getLastNotificationResponseAsync();
-    return extractRoute(response);
+    return extractData(response);
   } catch (err) {
-    console.warn('[PUSH] getInitialNotificationRoute failed:', err);
+    console.warn('[PUSH] getInitialNotificationData failed:', err);
     return null;
   }
 }

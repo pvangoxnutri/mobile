@@ -46,3 +46,23 @@ export function invalidateCache(urlOrPrefix?: string): void {
     }
   }
 }
+
+/**
+ * Drops every cache entry tied to a specific trip — its own details,
+ * members, invites, and activities (the `/api/trips/{tripId}` prefix covers
+ * all of those sub-resources in one go) — plus the two global, cross-trip
+ * reads that embed this trip's data: the home tab's trip list (titles,
+ * destinations, cover images) and the cross-trip events feed (member
+ * joined/left).
+ *
+ * Call this after any mutation that changes a trip's own fields, its
+ * membership, its invites, or its activities — accept/decline/create
+ * invite, remove member, trip settings save, leave trip, etc. Deliberately
+ * does NOT touch chat (never cached) or expenses/balances/settlements
+ * (never cached — financial data must always be fetched fresh).
+ */
+export function invalidateTripCache(tripId: string): void {
+  invalidateCache(`/api/trips/${tripId}`);
+  invalidateCache('/api/trips');
+  invalidateCache('/api/trips/events/me');
+}

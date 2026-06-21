@@ -17,7 +17,7 @@ import HeroShell from '@/components/hero-shell';
 import ModalSheet from '@/components/modal-sheet';
 import { EmptyState } from '@/components/ui/empty-state';
 import { apiFetch, apiJson } from '@/lib/api';
-import { getCached, setCached, invalidateCache } from '@/lib/cache';
+import { getCached, setCached, invalidateTripCache } from '@/lib/cache';
 import { uploadImageIfNeeded } from '@/lib/uploads';
 import type { Quest, SideQuestActivity, TripInvite, LinkPreview } from '@/lib/types';
 import { COLORS, SHADOWS, SPACING, RADIUS, TYPOGRAPHY } from '@/constants/design-tokens';
@@ -280,7 +280,7 @@ export default function TripDetailsScreen() {
         body: JSON.stringify({ email: normalizedEmail }),
       });
 
-      invalidateCache(`/api/trips/${id}/invites`);
+      invalidateTripCache(id);
       setInvites((current) => [...current, invite]);
       setInviteEmail('');
       setInviteComposerOpen(false);
@@ -413,7 +413,7 @@ export default function TripDetailsScreen() {
       }
 
       const updated = (await response.json()) as Quest;
-      invalidateCache(`/api/trips/${id}`);
+      invalidateTripCache(id);
       setTrip(updated);
       setSpotifyUrlDraft(updated.spotifyUrl ?? '');
       setSpotifyModalOpen(false);

@@ -26,7 +26,7 @@ import RangeDatePicker, { formatRangeDisplay } from '@/components/range-date-pic
 import CountryPicker from '@/components/travel-tracker/country-picker';
 import { UnsavedChangesModal, useUnsavedChanges } from '@/components/unsaved-changes';
 import { apiFetch, apiJson } from '@/lib/api';
-import { getCached, setCached, invalidateCache } from '@/lib/cache';
+import { getCached, setCached, invalidateTripCache } from '@/lib/cache';
 import type { Quest, TripInvite } from '@/lib/types';
 import { uploadImageIfNeeded } from '@/lib/uploads';
 import { PRIMARY_COLOR, PRIMARY_08 } from '@/constants/colors';
@@ -199,9 +199,7 @@ export default function TripSettingsScreen() {
         throw new Error((await response.text()) || 'Unable to save trip settings.');
       }
 
-      invalidateCache(`/api/trips/${id}`);
-      invalidateCache(`/api/trips/${id}/members`);
-      invalidateCache(`/api/trips/${id}/invites`);
+      invalidateTripCache(id);
       setMessage({ type: 'success', text: 'Trip settings updated.' });
       loadTrip();
       return true;
@@ -249,7 +247,7 @@ export default function TripSettingsScreen() {
       if (!response.ok) {
         throw new Error((await response.text()) || 'Unable to remove member.');
       }
-      invalidateCache(`/api/trips/${id}/members`);
+      invalidateTripCache(id);
       setMembers((current) => current.filter((member) => member.id !== memberId));
     } catch (error) {
       setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Unable to remove member.' });
@@ -262,7 +260,7 @@ export default function TripSettingsScreen() {
       if (!response.ok) {
         throw new Error((await response.text()) || 'Unable to remove invite.');
       }
-      invalidateCache(`/api/trips/${id}/invites`);
+      invalidateTripCache(id);
       setInvites((current) => current.filter((invite) => invite.id !== inviteId));
     } catch (error) {
       setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Unable to remove invite.' });
@@ -297,7 +295,7 @@ export default function TripSettingsScreen() {
         body: JSON.stringify({ email: normalizedEmail }),
       });
 
-      invalidateCache(`/api/trips/${id}/invites`);
+      invalidateTripCache(id);
       setInvites((current) => [...current, invite]);
       setInviteEmail('');
       setInviteMessage('Invite sent.');
@@ -317,8 +315,7 @@ export default function TripSettingsScreen() {
         setMessage({ type: 'error', text: text || 'Unable to leave this adventure.' });
         return;
       }
-      invalidateCache(`/api/trips`);
-      invalidateCache(`/api/trips/${id}`);
+      invalidateTripCache(id);
       router.replace('/(tabs)');
     } catch {
       setMessage({ type: 'error', text: 'Unable to leave this adventure.' });

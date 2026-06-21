@@ -23,7 +23,7 @@ import HeroShell from '@/components/hero-shell';
 import { useAuth } from '@/components/auth-provider';
 import { useI18n } from '@/components/i18n-provider';
 import { apiFetch, apiJson } from '@/lib/api';
-import { invalidateCache } from '@/lib/cache';
+import { invalidateTripCache } from '@/lib/cache';
 import { getCategorySymbol } from '@/lib/category-symbol';
 import { buildGoogleMapsSearchUrl, extractLocationQuery, extractStoredMapPlace, stripLocationMarker } from '@/lib/sidequest-location';
 import { extractFlightRoute, formatFlightRoute, hasFlightRoute, stripFlightMarkers } from '@/lib/flight-route';
@@ -164,7 +164,7 @@ export default function SideQuestDetailScreen() {
       if (!response.ok) {
         throw new Error((await response.text()) || 'Could not reveal this SideQuest.');
       }
-      invalidateCache(`/api/trips/${id}/activities`);
+      invalidateTripCache(id);
       // Re-fetch so the screen reflects the now-public state.
       const fresh = await apiJson<SideQuestActivity>(`/api/trips/${id}/activities/${encodeURIComponent(sidequestId)}`);
       setActivity(fresh);
