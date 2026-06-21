@@ -50,10 +50,16 @@ export default function HeroShell({ imageUrl, fallback, imageBlurRadius, style, 
 
       {/* Stacked semi-transparent layers fake a bottom-to-top dark gradient
           without pulling in expo-linear-gradient. Keeps text legible on
-          top of any photo (or the dark fallback). */}
+          top of any photo (or the dark fallback). Six narrow steps instead
+          of three wide ones — fewer/wider bands have hard edges that read as
+          visible lines cutting across a real photo; more, smaller steps
+          approximate a smooth gradient closely enough to hide them. */}
       <View pointerEvents="none" style={styles.gradient1} />
       <View pointerEvents="none" style={styles.gradient2} />
       <View pointerEvents="none" style={styles.gradient3} />
+      <View pointerEvents="none" style={styles.gradient4} />
+      <View pointerEvents="none" style={styles.gradient5} />
+      <View pointerEvents="none" style={styles.gradient6} />
 
       {children}
     </View>
@@ -83,23 +89,47 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    height: '40%',
+    height: '15%',
     backgroundColor: 'rgba(0,0,0,0.55)',
   },
   gradient2: {
     position: 'absolute',
     left: 0,
     right: 0,
-    bottom: '40%',
-    height: '20%',
-    backgroundColor: 'rgba(0,0,0,0.28)',
+    bottom: '15%',
+    height: '12%',
+    backgroundColor: 'rgba(0,0,0,0.42)',
   },
   gradient3: {
     position: 'absolute',
     left: 0,
     right: 0,
-    bottom: '60%',
-    height: '15%',
+    bottom: '27%',
+    height: '12%',
+    backgroundColor: 'rgba(0,0,0,0.30)',
+  },
+  gradient4: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: '39%',
+    height: '12%',
+    backgroundColor: 'rgba(0,0,0,0.20)',
+  },
+  gradient5: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: '51%',
+    height: '12%',
     backgroundColor: 'rgba(0,0,0,0.12)',
+  },
+  gradient6: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: '63%',
+    height: '12%',
+    backgroundColor: 'rgba(0,0,0,0.06)',
   },
 });

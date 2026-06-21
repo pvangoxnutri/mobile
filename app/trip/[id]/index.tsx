@@ -443,11 +443,13 @@ export default function TripDetailsScreen() {
           </View>
 
           <HeroShell imageUrl={trip?.imageUrl} style={styles.heroCardSize}>
-            <View style={styles.heroPatternRow}>
-              {[0, 1, 2, 3, 4, 5].map((i) => (
-                <View key={i} style={styles.heroPatternCell} />
-              ))}
-            </View>
+            {!trip?.imageUrl ? (
+              <View style={styles.heroPatternRow}>
+                {[0, 1, 2, 3, 4, 5].map((i) => (
+                  <View key={i} style={styles.heroPatternCell} />
+                ))}
+              </View>
+            ) : null}
             <View style={styles.heroBody}>
               <Text style={styles.heroEyebrow}>{trip?.destination ?? 'Upcoming adventure'}</Text>
               <Text style={styles.heroTitle}>{trip?.title ?? 'Loading adventure...'}</Text>

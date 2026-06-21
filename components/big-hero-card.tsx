@@ -108,10 +108,15 @@ export function BigHeroCard({
 
       {/* Stacked semi-transparent layers fake a bottom-to-top dark gradient
           without pulling in expo-linear-gradient. Keeps white text legible
-          on top of any photo. */}
+          on top of any photo. Six narrow steps instead of three wide ones —
+          fewer/wider bands have hard edges that read as visible lines
+          cutting across a real photo. */}
       <View pointerEvents="none" style={styles.bigHeroGradient1} />
       <View pointerEvents="none" style={styles.bigHeroGradient2} />
       <View pointerEvents="none" style={styles.bigHeroGradient3} />
+      <View pointerEvents="none" style={styles.bigHeroGradient4} />
+      <View pointerEvents="none" style={styles.bigHeroGradient5} />
+      <View pointerEvents="none" style={styles.bigHeroGradient6} />
 
       {/* Top row: location pill (left) + LIVE / UPCOMING pill (right) */}
       <View style={styles.bigHeroTopRow}>
@@ -210,20 +215,38 @@ const styles = StyleSheet.create({
   bigHeroGradient1: {
     position: 'absolute',
     left: 0, right: 0, bottom: 0,
-    height: '40%',
+    height: '15%',
     backgroundColor: 'rgba(0,0,0,0.55)',
   },
   bigHeroGradient2: {
     position: 'absolute',
-    left: 0, right: 0, bottom: '40%',
-    height: '20%',
-    backgroundColor: 'rgba(0,0,0,0.28)',
+    left: 0, right: 0, bottom: '15%',
+    height: '12%',
+    backgroundColor: 'rgba(0,0,0,0.42)',
   },
   bigHeroGradient3: {
     position: 'absolute',
-    left: 0, right: 0, bottom: '60%',
-    height: '15%',
+    left: 0, right: 0, bottom: '27%',
+    height: '12%',
+    backgroundColor: 'rgba(0,0,0,0.30)',
+  },
+  bigHeroGradient4: {
+    position: 'absolute',
+    left: 0, right: 0, bottom: '39%',
+    height: '12%',
+    backgroundColor: 'rgba(0,0,0,0.20)',
+  },
+  bigHeroGradient5: {
+    position: 'absolute',
+    left: 0, right: 0, bottom: '51%',
+    height: '12%',
     backgroundColor: 'rgba(0,0,0,0.12)',
+  },
+  bigHeroGradient6: {
+    position: 'absolute',
+    left: 0, right: 0, bottom: '63%',
+    height: '12%',
+    backgroundColor: 'rgba(0,0,0,0.06)',
   },
   bigHeroTopRow: {
     position: 'absolute',
