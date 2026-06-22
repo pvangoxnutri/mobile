@@ -19,6 +19,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/components/auth-provider';
+import { useI18n } from '@/components/i18n-provider';
 import { apiFetch, apiJson } from '@/lib/api';
 import { getCached, setCached } from '@/lib/cache';
 import { uploadImageIfNeeded } from '@/lib/uploads';
@@ -58,9 +59,9 @@ function getInitials(name?: string | null) {
     .join('');
 }
 
-function formatDate(dateStr: string) {
+function formatDate(dateStr: string, locale: string) {
   try {
-    return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(
+    return new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric', year: 'numeric' }).format(
       new Date(`${dateStr}T12:00:00`),
     );
   } catch {
@@ -68,8 +69,8 @@ function formatDate(dateStr: string) {
   }
 }
 
-function formatAmount(amount: number) {
-  return amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+function formatAmount(amount: number, locale: string) {
+  return amount.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function todayIso() {
@@ -91,6 +92,8 @@ export default function CostSplitScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuth();
+  const { t, language } = useI18n();
+  const locale = language === 'sv' ? 'sv-SE' : 'en-US';
 
   const [activeTab, setActiveTab] = useState<'expenses' | 'balances' | 'settle'>('expenses');
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -160,11 +163,11 @@ export default function CostSplitScreen() {
       setMembers(mem);
       setCached(membersUrl, mem);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to load cost split data.');
+      setError(err instanceof Error ? err.message : t('trip.split.error.loadFailed'));
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, t]);
 
   useFocusEffect(
     useCallback(() => {
@@ -217,7 +220,7 @@ export default function CostSplitScreen() {
     try {
       const permission = await ImagePicker.requestCameraPermissionsAsync();
       if (!permission.granted) {
-        setSubmitError('Camera access is needed to photograph a receipt. You can still add the expense without one.');
+        setSubmitError(t('trip.split.error.cameraAccess'));
         return;
       }
       // No allowsEditing: iOS's built-in crop is locked to a square, which
@@ -241,7 +244,7 @@ export default function CostSplitScreen() {
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
-        setSubmitError('Photo library access is needed to attach a receipt. You can still add the expense without one.');
+        setSubmitError(t('trip.split.error.photoAccess'));
         return;
       }
       // Same reasoning as the camera path — no forced square crop.
@@ -287,11 +290,11 @@ export default function CostSplitScreen() {
   async function handleSubmitExpense() {
     setSubmitError('');
     const totalAmount = parseFloat(form.amount);
-    if (!form.description.trim()) { setSubmitError('Enter a description.'); return; }
-    if (isNaN(totalAmount) || totalAmount <= 0) { setSubmitError('Enter a valid amount.'); return; }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(form.date)) { setSubmitError('Date must be YYYY-MM-DD.'); return; }
-    if (form.selectedPayers.size === 0) { setSubmitError('Select at least one payer.'); return; }
-    if (form.selectedParticipants.size === 0) { setSubmitError('Select at least one participant.'); return; }
+    if (!form.description.trim()) { setSubmitError(t('trip.split.error.emptyDescription')); return; }
+    if (isNaN(totalAmount) || totalAmount <= 0) { setSubmitError(t('trip.split.error.invalidAmount')); return; }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(form.date)) { setSubmitError(t('trip.split.error.invalidDate')); return; }
+    if (form.selectedPayers.size === 0) { setSubmitError(t('trip.split.error.noPayer')); return; }
+    if (form.selectedParticipants.size === 0) { setSubmitError(t('trip.split.error.noParticipant')); return; }
 
     const payersList = Array.from(form.selectedPayers).map((uid) => ({
       userId: uid,
@@ -305,7 +308,7 @@ export default function CostSplitScreen() {
 
     const payersSum = payersList.reduce((s, p) => s + p.amount, 0);
     if (Math.abs(payersSum - totalAmount) > 0.01) {
-      setSubmitError(`Payer amounts must sum to ${formatAmount(totalAmount)} (currently ${formatAmount(payersSum)}).`);
+      setSubmitError(t('trip.split.error.payerSumMismatch', { total: formatAmount(totalAmount, locale), current: formatAmount(payersSum, locale) }));
       return;
     }
 
@@ -316,8 +319,8 @@ export default function CostSplitScreen() {
 
     if (form.splitMode === 'percentage') {
       const pctSum = participantValues.reduce((s, p) => s + p.value, 0);
-      if (pctSum <= 0) { setSubmitError('Enter percentages for all participants.'); return; }
-      if (Math.abs(pctSum - 100) > 5) { setSubmitError(`Percentages sum to ${pctSum.toFixed(1)}% — must be close to 100%.`); return; }
+      if (pctSum <= 0) { setSubmitError(t('trip.split.error.emptyPercentages')); return; }
+      if (Math.abs(pctSum - 100) > 5) { setSubmitError(t('trip.split.error.percentageSumMismatch', { sum: pctSum.toFixed(1) })); return; }
       // Auto-normalize so they sum to exactly 100
       participantValues = participantValues.map((p) => ({ ...p, value: Math.round((p.value / pctSum) * 10000) / 100 }));
     }
@@ -334,7 +337,7 @@ export default function CostSplitScreen() {
         try {
           receiptUrl = await uploadImageIfNeeded(form.receiptImage, 'receipt');
         } catch (err) {
-          setSubmitError(err instanceof Error ? err.message : 'Could not upload the receipt photo.');
+          setSubmitError(err instanceof Error ? err.message : t('trip.split.error.receiptUploadFailed'));
           setSubmitting(false);
           return;
         }
@@ -356,7 +359,7 @@ export default function CostSplitScreen() {
       setAddModalOpen(false);
       await loadAll();
     } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : 'Unable to save expense.');
+      setSubmitError(err instanceof Error ? err.message : t('trip.split.error.saveExpenseFailed'));
     } finally {
       setSubmitting(false);
     }
@@ -372,11 +375,11 @@ export default function CostSplitScreen() {
     setActionError('');
     try {
       const res = await apiFetch(`/api/trips/${encodeURIComponent(id)}/expenses/${encodeURIComponent(deletingExpenseId)}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error((await res.text()) || 'Unable to remove expense.');
+      if (!res.ok) throw new Error((await res.text()) || t('trip.split.error.removeExpenseFailed'));
       setDeletingExpenseId(null);
       await loadAll();
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Unable to remove expense.');
+      setActionError(err instanceof Error ? err.message : t('trip.split.error.removeExpenseFailed'));
     } finally {
       setDeletingBusy(false);
     }
@@ -402,10 +405,10 @@ export default function CostSplitScreen() {
           fromUserId: settlingDebt.fromUserId,
           toUserId: settlingDebt.toUserId,
           amount: settlingDebt.amount,
-          note: 'Settled via Cost Split',
+          note: t('trip.split.settledViaCostSplit'),
         }),
       });
-      if (!res.ok) throw new Error((await res.text()) || 'Unable to record settlement.');
+      if (!res.ok) throw new Error((await res.text()) || t('trip.split.error.recordSettlementFailed'));
       setSettlingDebt(null);
       await loadAll();
       setSettledKeys((prev) => {
@@ -414,7 +417,7 @@ export default function CostSplitScreen() {
         return next;
       });
     } catch (err) {
-      setSettleError(err instanceof Error ? err.message : 'Unable to record settlement.');
+      setSettleError(err instanceof Error ? err.message : t('trip.split.error.recordSettlementFailed'));
       setSettledKeys((prev) => {
         const next = new Set(prev);
         next.delete(key);
@@ -431,11 +434,11 @@ export default function CostSplitScreen() {
     setActionError('');
     try {
       const res = await apiFetch(`/api/trips/${encodeURIComponent(id)}/expenses/settlements/${encodeURIComponent(deletingSettlementId)}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error((await res.text()) || 'Unable to remove settlement.');
+      if (!res.ok) throw new Error((await res.text()) || t('trip.split.error.removeSettlementFailed'));
       setDeletingSettlementId(null);
       await loadAll();
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Unable to remove settlement.');
+      setActionError(err instanceof Error ? err.message : t('trip.split.error.removeSettlementFailed'));
     } finally {
       setDeletingBusy(false);
     }
@@ -462,7 +465,7 @@ export default function CostSplitScreen() {
         <TouchableOpacity style={styles.backButton} activeOpacity={0.88} onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color="#11131a" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Cost Split</Text>
+        <Text style={styles.headerTitle}>{t('trip.costSplit')}</Text>
         <View style={styles.headerSpacer} />
       </View>
 
@@ -475,7 +478,7 @@ export default function CostSplitScreen() {
             style={[styles.tabPill, activeTab === tab && [styles.tabPillActive, { backgroundColor: PRIMARY_COLOR }]]}
             onPress={() => setActiveTab(tab)}>
             <Text style={[styles.tabPillText, activeTab === tab && styles.tabPillTextActive]}>
-              {tab === 'expenses' ? 'Expenses' : tab === 'balances' ? 'Balances' : 'Settle Up'}
+              {tab === 'expenses' ? t('trip.split.tabExpenses') : tab === 'balances' ? t('trip.split.tabBalances') : t('trip.split.tabSettleUp')}
             </Text>
           </TouchableOpacity>
         ))}
@@ -489,7 +492,7 @@ export default function CostSplitScreen() {
         <View style={styles.errorWrap}>
           <Text style={styles.errorText}>{error}</Text>
           <TouchableOpacity style={[styles.retryButton, { backgroundColor: PRIMARY_COLOR }]} onPress={() => void loadAll()}>
-            <Text style={styles.retryButtonText}>Retry</Text>
+            <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -505,8 +508,8 @@ export default function CostSplitScreen() {
                   <View style={styles.emptyIcon}>
                     <Ionicons name="wallet-outline" size={32} color="#b0b6c0" />
                   </View>
-                  <Text style={styles.emptyTitle}>No expenses yet</Text>
-                  <Text style={styles.emptyCopy}>Add your first shared expense and track who owes what.</Text>
+                  <Text style={styles.emptyTitle}>{t('trip.split.emptyExpensesTitle')}</Text>
+                  <Text style={styles.emptyCopy}>{t('trip.split.emptyExpensesCopy')}</Text>
                 </View>
               ) : (
                 expenses.map((expense) => (
@@ -521,25 +524,25 @@ export default function CostSplitScreen() {
                       ) : null}
                       <View style={styles.expenseMain}>
                         <Text style={styles.expenseDescription}>{expense.description}</Text>
-                        <Text style={styles.expenseDate}>{formatDate(expense.date)}</Text>
+                        <Text style={styles.expenseDate}>{formatDate(expense.date, locale)}</Text>
                       </View>
                       <View style={styles.expenseRight}>
                         <Text style={styles.expenseAmount}>
-                          {expense.currency ? `${expense.currency} ` : ''}{formatAmount(expense.totalAmount)}
+                          {expense.currency ? `${expense.currency} ` : ''}{formatAmount(expense.totalAmount, locale)}
                         </Text>
                         <View style={[styles.splitModeChip, { backgroundColor: splitModeColor(expense.splitMode) }]}>
-                          <Text style={styles.splitModeChipText}>{expense.splitMode}</Text>
+                          <Text style={styles.splitModeChipText}>{splitModeLabel(expense.splitMode, t)}</Text>
                         </View>
                       </View>
                     </View>
                     <View style={styles.expenseMeta}>
                       <Text style={styles.expenseMetaText}>
                         {expense.payers.length === 1
-                          ? `Paid by ${expense.payers[0].userName}`
-                          : `Paid by ${expense.payers.map((p) => `${p.userName} (${expense.currency} ${formatAmount(p.amount)})`).join(', ')}`}
+                          ? t('trip.split.paidBySingle', { name: expense.payers[0].userName })
+                          : t('trip.split.paidByMultiple', { names: expense.payers.map((p) => `${p.userName} (${expense.currency} ${formatAmount(p.amount, locale)})`).join(', ') })}
                       </Text>
                       <Text style={styles.expenseMetaText}>
-                        Split between {expense.participants.length} · {expense.splitMode}
+                        {t('trip.split.splitBetween', { count: expense.participants.length, mode: splitModeLabel(expense.splitMode, t) })}
                       </Text>
                     </View>
                     <TouchableOpacity
@@ -547,7 +550,7 @@ export default function CostSplitScreen() {
                       activeOpacity={0.8}
                       onPress={() => { setActionError(''); setDeletingExpenseId(expense.id); }}>
                       <Ionicons name="trash-outline" size={16} color="#d95f6a" />
-                      <Text style={styles.deleteButtonText}>Remove</Text>
+                      <Text style={styles.deleteButtonText}>{t('common.remove')}</Text>
                     </TouchableOpacity>
                   </View>
                 ))
@@ -563,9 +566,9 @@ export default function CostSplitScreen() {
               showsVerticalScrollIndicator={false}>
               {balancesData?.balances && balancesData.balances.length > 0 ? (
                 <>
-                  <Text style={styles.sectionLabel}>NET BALANCES</Text>
+                  <Text style={styles.sectionLabel}>{t('trip.split.netBalances')}</Text>
                   <Text style={styles.sectionHelperText}>
-                    Tap a name to see which expenses make up their balance.
+                    {t('trip.split.netBalancesHint')}
                   </Text>
                   {[...balancesData.balances]
                     .sort((a, b) => {
@@ -581,7 +584,7 @@ export default function CostSplitScreen() {
                       e.payers.some((p) => p.userId === bal.userId)
                     );
                     const isSettled = Math.abs(bal.net) < 0.005;
-                    const netLabel = isSettled ? 'Settled up' : bal.net > 0 ? 'is owed' : 'owes';
+                    const netLabel = isSettled ? t('trip.split.settledUp') : bal.net > 0 ? t('trip.split.isOwed') : t('trip.split.owes');
                     return (
                       <View key={bal.userId}>
                         <TouchableOpacity
@@ -601,7 +604,7 @@ export default function CostSplitScreen() {
                             <Ionicons name="checkmark-circle" size={20} color="#27b371" />
                           ) : (
                             <Text style={[styles.balanceNet, bal.net > 0 ? styles.balancePositive : styles.balanceNegative]}>
-                              {commonCurrency ? `${commonCurrency} ` : ''}{formatAmount(Math.abs(bal.net))}
+                              {commonCurrency ? `${commonCurrency} ` : ''}{formatAmount(Math.abs(bal.net), locale)}
                             </Text>
                           )}
                           <Ionicons
@@ -622,11 +625,11 @@ export default function CostSplitScreen() {
                                   <View style={styles.balanceExpenseAmounts}>
                                     {paid && (
                                       <Text style={styles.balanceExpensePaid}>
-                                        paid {e.currency ? `${e.currency} ` : ''}{formatAmount(paid.amount)}
+                                        {t('trip.split.paidAmount', { amount: `${e.currency ? `${e.currency} ` : ''}${formatAmount(paid.amount, locale)}` })}
                                       </Text>
                                     )}
                                     <Text style={styles.balanceExpenseShare}>
-                                      share {e.currency ? `${e.currency} ` : ''}{formatAmount(share?.amount ?? 0)}
+                                      {t('trip.split.shareAmount', { amount: `${e.currency ? `${e.currency} ` : ''}${formatAmount(share?.amount ?? 0, locale)}` })}
                                     </Text>
                                   </View>
                                 </View>
@@ -640,7 +643,7 @@ export default function CostSplitScreen() {
 
                   {balancesData.simplifiedDebts && balancesData.simplifiedDebts.length > 0 ? (
                     <>
-                      <Text style={[styles.sectionLabel, { marginTop: 24 }]}>HOW TO SETTLE UP</Text>
+                      <Text style={[styles.sectionLabel, { marginTop: 24 }]}>{t('trip.split.howToSettleUp')}</Text>
                       {balancesData.simplifiedDebts.map((debt, i) => (
                         <View key={i} style={styles.debtCard}>
                           <View style={styles.debtRow}>
@@ -655,11 +658,11 @@ export default function CostSplitScreen() {
                             </View>
                             <View style={styles.debtCopy}>
                               <Text style={styles.debtText}>
-                                <Text style={styles.debtName}>{debt.fromUserName}</Text> pays{' '}
+                                <Text style={styles.debtName}>{debt.fromUserName}</Text> {t('trip.split.pays')}{' '}
                                 <Text style={styles.debtName}>{debt.toUserName}</Text>
                               </Text>
                               <Text style={[styles.debtAmount, { color: PRIMARY_COLOR }]}>
-                                {commonCurrency ? `${commonCurrency} ` : ''}{formatAmount(debt.amount)}
+                                {commonCurrency ? `${commonCurrency} ` : ''}{formatAmount(debt.amount, locale)}
                               </Text>
                             </View>
                           </View>
@@ -669,7 +672,7 @@ export default function CostSplitScreen() {
                   ) : (
                     <View style={styles.allSettledWrap}>
                       <Ionicons name="checkmark-circle-outline" size={24} color="#27b371" />
-                      <Text style={styles.allSettledText}>All settled up!</Text>
+                      <Text style={styles.allSettledText}>{t('trip.split.allSettledUp')}</Text>
                     </View>
                   )}
                 </>
@@ -678,8 +681,8 @@ export default function CostSplitScreen() {
                   <View style={styles.emptyIcon}>
                     <Ionicons name="scale-outline" size={32} color="#b0b6c0" />
                   </View>
-                  <Text style={styles.emptyTitle}>No balances yet</Text>
-                  <Text style={styles.emptyCopy}>Add expenses to see who owes what.</Text>
+                  <Text style={styles.emptyTitle}>{t('trip.split.emptyBalancesTitle')}</Text>
+                  <Text style={styles.emptyCopy}>{t('trip.split.emptyBalancesCopy')}</Text>
                 </View>
               )}
             </ScrollView>
@@ -697,19 +700,19 @@ export default function CostSplitScreen() {
                   return (
                     <View style={styles.allSettledWrap}>
                       <Ionicons name="checkmark-circle-outline" size={40} color="#27b371" />
-                      <Text style={styles.allSettledTitle}>All settled up!</Text>
-                      <Text style={styles.emptyCopy}>No outstanding debts to settle.</Text>
+                      <Text style={styles.allSettledTitle}>{t('trip.split.allSettledUp')}</Text>
+                      <Text style={styles.emptyCopy}>{t('trip.split.noOutstandingDebts')}</Text>
                     </View>
                   );
                 }
                 return (
                   <>
-                    <Text style={styles.sectionLabel}>OUTSTANDING</Text>
+                    <Text style={styles.sectionLabel}>{t('trip.split.outstanding')}</Text>
                     {hasMixedCurrencies ? (
                       <View style={styles.warningCard}>
                         <Ionicons name="alert-circle-outline" size={16} color="#b46b00" />
                         <Text style={styles.warningCardText}>
-                          Multiple currencies detected ({tripCurrencies.join(', ')}). Amounts shown are aggregated raw — convert manually before settling.
+                          {t('trip.split.mixedCurrenciesWarning', { currencies: tripCurrencies.join(', ') })}
                         </Text>
                       </View>
                     ) : null}
@@ -733,11 +736,11 @@ export default function CostSplitScreen() {
                             <View style={styles.debtCopy}>
                               <Text style={styles.debtText}>
                                 <Text style={styles.debtName}>{debt.fromUserName}</Text>
-                                {' owes '}
+                                {` ${t('trip.split.owes')} `}
                                 <Text style={styles.debtName}>{debt.toUserName}</Text>
                               </Text>
                               <Text style={[styles.debtAmount, { color: PRIMARY_COLOR }]}>
-                                {commonCurrency ? `${commonCurrency} ` : ''}{formatAmount(debt.amount)}
+                                {commonCurrency ? `${commonCurrency} ` : ''}{formatAmount(debt.amount, locale)}
                               </Text>
                             </View>
                           </View>
@@ -748,7 +751,7 @@ export default function CostSplitScreen() {
                             onPress={() => setExpandedDebtKey(expanded ? null : key)}>
                             <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={14} color={PRIMARY_COLOR} />
                             <Text style={[styles.whyButtonText, { color: PRIMARY_COLOR }]}>
-                              {expanded ? 'Hide breakdown' : `Why? (${related.length} expense${related.length === 1 ? '' : 's'})`}
+                              {expanded ? t('trip.split.hideBreakdown') : t(related.length === 1 ? 'trip.split.whyExpenseCount_one' : 'trip.split.whyExpenseCount_other', { count: related.length })}
                             </Text>
                           </TouchableOpacity>
 
@@ -756,7 +759,7 @@ export default function CostSplitScreen() {
                             <View style={styles.breakdownWrap}>
                               {related.length === 0 ? (
                                 <Text style={styles.breakdownEmpty}>
-                                  This debt comes from earlier settlements between {debt.fromUserName} and {debt.toUserName}.
+                                  {t('trip.split.debtFromSettlements', { from: debt.fromUserName, to: debt.toUserName })}
                                 </Text>
                               ) : (
                                 related.map((e) => {
@@ -768,24 +771,24 @@ export default function CostSplitScreen() {
                                     <View key={e.id} style={styles.breakdownRow}>
                                       <View style={styles.breakdownHeader}>
                                         <Text style={styles.breakdownDesc} numberOfLines={1}>{e.description}</Text>
-                                        <Text style={styles.breakdownDate}>{formatDate(e.date)}</Text>
+                                        <Text style={styles.breakdownDate}>{formatDate(e.date, locale)}</Text>
                                       </View>
                                       {toPaid > 0 && fromShare > 0 ? (
                                         <Text style={styles.breakdownLine}>
-                                          <Text style={styles.breakdownName}>{debt.toUserName}</Text> paid{' '}
-                                          <Text style={styles.breakdownBold}>{e.currency} {formatAmount(toPaid)}</Text>
+                                          <Text style={styles.breakdownName}>{debt.toUserName}</Text> {t('trip.split.paidWord')}{' '}
+                                          <Text style={styles.breakdownBold}>{e.currency} {formatAmount(toPaid, locale)}</Text>
                                           {' · '}
-                                          <Text style={styles.breakdownName}>{debt.fromUserName}</Text>'s share{' '}
-                                          <Text style={styles.breakdownBold}>{e.currency} {formatAmount(fromShare)}</Text>
+                                          <Text style={styles.breakdownName}>{debt.fromUserName}{t('trip.split.shareConnector')}</Text>{' '}
+                                          <Text style={styles.breakdownBold}>{e.currency} {formatAmount(fromShare, locale)}</Text>
                                         </Text>
                                       ) : null}
                                       {fromPaid > 0 && toShare > 0 ? (
                                         <Text style={styles.breakdownLine}>
-                                          <Text style={styles.breakdownName}>{debt.fromUserName}</Text> paid{' '}
-                                          <Text style={styles.breakdownBold}>{e.currency} {formatAmount(fromPaid)}</Text>
+                                          <Text style={styles.breakdownName}>{debt.fromUserName}</Text> {t('trip.split.paidWord')}{' '}
+                                          <Text style={styles.breakdownBold}>{e.currency} {formatAmount(fromPaid, locale)}</Text>
                                           {' · '}
-                                          <Text style={styles.breakdownName}>{debt.toUserName}</Text>'s share{' '}
-                                          <Text style={styles.breakdownBold}>{e.currency} {formatAmount(toShare)}</Text>
+                                          <Text style={styles.breakdownName}>{debt.toUserName}{t('trip.split.shareConnector')}</Text>{' '}
+                                          <Text style={styles.breakdownBold}>{e.currency} {formatAmount(toShare, locale)}</Text>
                                         </Text>
                                       ) : null}
                                     </View>
@@ -809,7 +812,7 @@ export default function CostSplitScreen() {
                             ) : (
                               <Ionicons name="checkmark-circle-outline" size={16} color="#fff" />
                             )}
-                            <Text style={styles.markSettledButtonText}>{isBusy ? 'Settling…' : 'Mark as Settled'}</Text>
+                            <Text style={styles.markSettledButtonText}>{isBusy ? t('trip.split.settling') : t('trip.split.markAsSettled')}</Text>
                           </TouchableOpacity>
                         </View>
                       );
@@ -820,22 +823,22 @@ export default function CostSplitScreen() {
 
               {settlements.length > 0 ? (
                 <>
-                  <Text style={[styles.sectionLabel, { marginTop: 28 }]}>SETTLED</Text>
+                  <Text style={[styles.sectionLabel, { marginTop: 28 }]}>{t('trip.split.settledHeading')}</Text>
                   {settlements.map((s) => (
                     <View key={s.id} style={styles.settlementHistoryCard}>
                       <View style={styles.settlementPaidBadge}>
                         <Ionicons name="checkmark-circle" size={16} color="#27b371" />
-                        <Text style={styles.settlementPaidText}>Paid</Text>
+                        <Text style={styles.settlementPaidText}>{t('trip.split.paidBadge')}</Text>
                       </View>
                       <View style={styles.settlementHistoryRow}>
                         <View style={styles.settlementHistoryCopy}>
                           <Text style={styles.settlementHistoryText}>
                             <Text style={styles.debtName}>{s.fromUserName}</Text>
-                            {' paid '}
+                            {` ${t('trip.split.paidWord')} `}
                             <Text style={styles.debtName}>{s.toUserName}</Text>
                           </Text>
                           <Text style={styles.settlementHistoryDate}>
-                            {formatDate(s.createdAt.slice(0, 10))} · {commonCurrency ? `${commonCurrency} ` : ''}{formatAmount(s.amount)}
+                            {formatDate(s.createdAt.slice(0, 10), locale)} · {commonCurrency ? `${commonCurrency} ` : ''}{formatAmount(s.amount, locale)}
                           </Text>
                         </View>
                         <TouchableOpacity
@@ -859,7 +862,7 @@ export default function CostSplitScreen() {
         <View style={[styles.fab, { bottom: Math.max(insets.bottom, 16) + 10 }]}>
           <TouchableOpacity activeOpacity={0.92} style={[styles.fabButton, { backgroundColor: PRIMARY_COLOR, shadowColor: PRIMARY_COLOR }]} onPress={openAddModal}>
             <Ionicons name="add" size={22} color="#fff" />
-            <Text style={styles.fabText}>Add Expense</Text>
+            <Text style={styles.fabText}>{t('trip.split.addExpense')}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -871,7 +874,7 @@ export default function CostSplitScreen() {
           <View style={[styles.modalCard, { paddingBottom: Math.max(insets.bottom, 18) + 12, zIndex: 1 }]}>
             <View style={styles.modalHandle} />
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add Expense</Text>
+              <Text style={styles.modalTitle}>{t('trip.split.addExpense')}</Text>
               <TouchableOpacity
                 style={styles.modalCloseButton}
                 activeOpacity={0.88}
@@ -882,10 +885,10 @@ export default function CostSplitScreen() {
 
             <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
               {/* Description */}
-              <Text style={styles.fieldLabel}>Description <Text style={styles.fieldLabelRequired}>*</Text></Text>
+              <Text style={styles.fieldLabel}>{t('trip.split.description')} <Text style={styles.fieldLabelRequired}>*</Text></Text>
               <TextInput
                 style={styles.textInput}
-                placeholder="e.g. Dinner at restaurant"
+                placeholder={t('trip.split.descriptionPlaceholder')}
                 placeholderTextColor="#afb5bf"
                 value={form.description}
                 onChangeText={(v) => setField('description', v)}
@@ -895,7 +898,7 @@ export default function CostSplitScreen() {
                   No currency selector: we don't do conversion, we just sum
                   whatever the user typed, so picking a currency would imply
                   a precision this app doesn't have. */}
-              <Text style={styles.fieldLabel}>Amount <Text style={styles.fieldLabelRequired}>*</Text></Text>
+              <Text style={styles.fieldLabel}>{t('trip.split.amount')} <Text style={styles.fieldLabelRequired}>*</Text></Text>
               <TextInput
                 style={styles.textInput}
                 placeholder="250"
@@ -905,13 +908,13 @@ export default function CostSplitScreen() {
                 onChangeText={(v) => setField('amount', v)}
               />
               <Text style={[styles.fieldHint, { marginTop: 6 }]}>
-                Enter the amount in your own currency, as shown on your bank statement.
+                {t('trip.split.amountHint')}
               </Text>
 
               {/* Receipt — optional. Picking a photo only stores a local
                   URI; the actual upload happens on submit (see
                   handleSubmitExpense) so cancelling never orphans a file. */}
-              <Text style={[styles.fieldLabel, { marginTop: 18 }]}>Receipt <Text style={styles.fieldLabelOptional}>(optional)</Text></Text>
+              <Text style={[styles.fieldLabel, { marginTop: 18 }]}>{t('trip.split.receipt')} <Text style={styles.fieldLabelOptional}>{t('trip.split.optionalSuffix')}</Text></Text>
               {form.receiptImage ? (
                 <View style={styles.receiptPreviewWrap}>
                   <Image source={{ uri: form.receiptImage }} style={styles.receiptPreviewImage} />
@@ -922,14 +925,14 @@ export default function CostSplitScreen() {
                       disabled={pickingReceipt}
                       onPress={() => void handlePickReceiptFromGallery()}>
                       <Ionicons name="image-outline" size={15} color="#4a5068" />
-                      <Text style={styles.receiptActionText}>Replace</Text>
+                      <Text style={styles.receiptActionText}>{t('common.replace')}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={[styles.receiptActionButton, styles.receiptRemoveButton]}
                       activeOpacity={0.85}
                       onPress={handleRemoveReceipt}>
                       <Ionicons name="trash-outline" size={15} color="#d95f6a" />
-                      <Text style={[styles.receiptActionText, { color: '#d95f6a' }]}>Remove</Text>
+                      <Text style={[styles.receiptActionText, { color: '#d95f6a' }]}>{t('common.remove')}</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -941,7 +944,7 @@ export default function CostSplitScreen() {
                     disabled={pickingReceipt}
                     onPress={() => void handleTakeReceiptPhoto()}>
                     <Ionicons name="camera-outline" size={18} color="#4a5068" />
-                    <Text style={styles.receiptPickButtonText}>Take photo</Text>
+                    <Text style={styles.receiptPickButtonText}>{t('trip.split.takePhoto')}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.receiptPickButton}
@@ -949,7 +952,7 @@ export default function CostSplitScreen() {
                     disabled={pickingReceipt}
                     onPress={() => void handlePickReceiptFromGallery()}>
                     <Ionicons name="images-outline" size={18} color="#4a5068" />
-                    <Text style={styles.receiptPickButtonText}>Choose from gallery</Text>
+                    <Text style={styles.receiptPickButtonText}>{t('trip.split.chooseFromGallery')}</Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -957,7 +960,7 @@ export default function CostSplitScreen() {
               {/* Date — same tap-to-open native picker pattern used for
                   activity dates elsewhere in the app, instead of free-typed
                   YYYY-MM-DD text. */}
-              <Text style={styles.fieldLabel}>Date <Text style={styles.fieldLabelRequired}>*</Text></Text>
+              <Text style={styles.fieldLabel}>{t('activity.date')} <Text style={styles.fieldLabelRequired}>*</Text></Text>
               {Platform.OS === 'web' ? (
                 <TextInput
                   style={styles.textInput}
@@ -971,7 +974,7 @@ export default function CostSplitScreen() {
                   activeOpacity={0.88}
                   style={styles.dateSelectionCard}
                   onPress={() => setDatePickerOpen((open) => !open)}>
-                  <Text style={styles.dateSelectionValue}>{formatDate(form.date)}</Text>
+                  <Text style={styles.dateSelectionValue}>{formatDate(form.date, locale)}</Text>
                   <Ionicons name={datePickerOpen ? 'chevron-up' : 'calendar-outline'} size={20} color="#5f6570" />
                 </TouchableOpacity>
               )}
@@ -980,7 +983,7 @@ export default function CostSplitScreen() {
                   touches on Android. */}
               {datePickerOpen && Platform.OS !== 'web' ? (
                 <View style={styles.dateInlinePickerWrap}>
-                  <PickerErrorBoundary>
+                  <PickerErrorBoundary t={t}>
                     <DateTimePicker
                       value={isDateInputValid(form.date) ? new Date(`${form.date}T12:00:00`) : new Date()}
                       mode="date"
@@ -996,14 +999,14 @@ export default function CostSplitScreen() {
                       activeOpacity={0.9}
                       style={[styles.datePickerDoneButton, { backgroundColor: PRIMARY_COLOR }]}
                       onPress={() => setDatePickerOpen(false)}>
-                      <Text style={styles.datePickerDoneText}>Done</Text>
+                      <Text style={styles.datePickerDoneText}>{t('common.done')}</Text>
                     </TouchableOpacity>
                   ) : null}
                 </View>
               ) : null}
 
               {/* Paid By */}
-              <Text style={styles.fieldLabel}>Paid By <Text style={styles.fieldLabelRequired}>*</Text></Text>
+              <Text style={styles.fieldLabel}>{t('trip.split.paidBy')} <Text style={styles.fieldLabelRequired}>*</Text></Text>
               {members.map((member) => {
                 const selected = form.selectedPayers.has(member.id);
                 const isCurrentUser = member.id === user?.id;
@@ -1016,12 +1019,12 @@ export default function CostSplitScreen() {
                       {selected && <Ionicons name="checkmark" size={14} color="#fff" />}
                     </TouchableOpacity>
                     <Text style={styles.memberName}>
-                      {member.name}{isCurrentUser ? ' (You)' : ''}
+                      {member.name}{isCurrentUser ? t('trip.split.youSuffix') : ''}
                     </Text>
                     {selected && form.selectedPayers.size > 1 && (
                       <TextInput
                         style={styles.inlineAmountInput}
-                        placeholder="Amount"
+                        placeholder={t('trip.split.amount')}
                         placeholderTextColor="#afb5bf"
                         keyboardType="decimal-pad"
                         value={form.payerAmounts[member.id] ?? ''}
@@ -1035,7 +1038,7 @@ export default function CostSplitScreen() {
                     )}
                     {selected && form.selectedPayers.size === 1 && (
                       <Text style={styles.fullAmountLabel}>
-                        {form.amount ? formatAmount(parseFloat(form.amount) || 0) : 'Full amount'}
+                        {form.amount ? formatAmount(parseFloat(form.amount) || 0, locale) : t('trip.split.fullAmount')}
                       </Text>
                     )}
                   </View>
@@ -1043,7 +1046,7 @@ export default function CostSplitScreen() {
               })}
 
               {/* Split Mode */}
-              <Text style={[styles.fieldLabel, { marginTop: 20 }]}>Split Mode</Text>
+              <Text style={[styles.fieldLabel, { marginTop: 20 }]}>{t('trip.split.splitModeLabel')}</Text>
               <View style={styles.chipRow}>
                 {(['equal', 'exact', 'percentage'] as SplitMode[]).map((mode) => (
                   <TouchableOpacity
@@ -1052,21 +1055,21 @@ export default function CostSplitScreen() {
                     style={[styles.modeChip, form.splitMode === mode && [styles.modeChipActive, { backgroundColor: PRIMARY_COLOR, borderColor: PRIMARY_COLOR }]]}
                     onPress={() => setField('splitMode', mode)}>
                     <Text style={[styles.modeChipText, form.splitMode === mode && styles.modeChipTextActive]}>
-                      {mode.charAt(0).toUpperCase() + mode.slice(1)}
+                      {splitModeLabel(mode, t)}
                     </Text>
                   </TouchableOpacity>
                 ))}
               </View>
 
               {/* Participants */}
-              <Text style={styles.fieldLabel}>Split Between <Text style={styles.fieldLabelRequired}>*</Text></Text>
+              <Text style={styles.fieldLabel}>{t('trip.split.splitBetweenLabel')} <Text style={styles.fieldLabelRequired}>*</Text></Text>
               {form.splitMode === 'equal' ? (
-                <Text style={styles.fieldHint}>All selected members split equally.</Text>
+                <Text style={styles.fieldHint}>{t('trip.split.splitEquallyHint')}</Text>
               ) : (
                 <Text style={styles.fieldHint}>
                   {form.splitMode === 'percentage'
-                    ? 'Enter % for each (must sum to 100)'
-                    : 'Enter exact amount for each'}
+                    ? t('trip.split.percentageHint')
+                    : t('trip.split.exactHint')}
                 </Text>
               )}
               {(form.splitMode === 'exact' || form.splitMode === 'percentage') && (() => {
@@ -1079,7 +1082,7 @@ export default function CostSplitScreen() {
                   const isOver = remaining < -0.005;
                   return total > 0 ? (
                     <Text style={[styles.fieldHint, { color: isOver ? '#d95f6a' : '#27b371', fontWeight: '600' }]}>
-                      {isOver ? `Over by ${formatAmount(Math.abs(remaining))}` : `Remaining: ${formatAmount(remaining)}`}
+                      {isOver ? t('trip.split.overBy', { value: formatAmount(Math.abs(remaining), locale) }) : t('trip.split.remaining', { value: formatAmount(remaining, locale) })}
                     </Text>
                   ) : null;
                 } else {
@@ -1090,7 +1093,7 @@ export default function CostSplitScreen() {
                   const isOver = remaining < -0.05;
                   return (
                     <Text style={[styles.fieldHint, { color: isOver ? '#d95f6a' : Math.abs(remaining) < 2 ? '#27b371' : '#8a909b', fontWeight: '600' }]}>
-                      {isOver ? `Over by ${Math.abs(remaining).toFixed(1)}%` : `Remaining: ${remaining.toFixed(1)}%`}
+                      {isOver ? t('trip.split.overBy', { value: `${Math.abs(remaining).toFixed(1)}%` }) : t('trip.split.remaining', { value: `${remaining.toFixed(1)}%` })}
                     </Text>
                   );
                 }
@@ -1107,12 +1110,12 @@ export default function CostSplitScreen() {
                       {selected && <Ionicons name="checkmark" size={14} color="#fff" />}
                     </TouchableOpacity>
                     <Text style={styles.memberName}>
-                      {member.name}{isCurrentUser ? ' (You)' : ''}
+                      {member.name}{isCurrentUser ? t('trip.split.youSuffix') : ''}
                     </Text>
                     {selected && form.splitMode !== 'equal' && (
                       <TextInput
                         style={styles.inlineAmountInput}
-                        placeholder={form.splitMode === 'percentage' ? '%' : 'amount'}
+                        placeholder={form.splitMode === 'percentage' ? t('trip.split.percentPlaceholder') : t('trip.split.amountPlaceholder')}
                         placeholderTextColor="#afb5bf"
                         keyboardType="decimal-pad"
                         value={form.participantValues[member.id] ?? ''}
@@ -1143,7 +1146,7 @@ export default function CostSplitScreen() {
                 activeOpacity={0.9}
                 disabled={submitting}
                 onPress={() => void handleSubmitExpense()}>
-                <Text style={styles.submitButtonText}>{submitting ? 'Saving...' : 'Add Expense'}</Text>
+                <Text style={styles.submitButtonText}>{submitting ? t('trip.saving') : t('trip.split.addExpense')}</Text>
               </TouchableOpacity>
             </ScrollView>
           </View>
@@ -1163,14 +1166,14 @@ export default function CostSplitScreen() {
             onPress={() => !settleSubmitting && setSettlingDebt(null)}
           />
           <View style={styles.confirmCard}>
-            <Text style={styles.confirmTitle}>Mark as Settled</Text>
+            <Text style={styles.confirmTitle}>{t('trip.split.markAsSettled')}</Text>
             {settlingDebt ? (
               <Text style={styles.confirmBody}>
-                Record that{' '}
-                <Text style={styles.confirmBold}>{settlingDebt.fromUserName}</Text> has paid{' '}
+                {t('trip.split.confirmSettlePrefix')}{' '}
+                <Text style={styles.confirmBold}>{settlingDebt.fromUserName}</Text> {t('trip.split.hasPaid')}{' '}
                 <Text style={styles.confirmBold}>{settlingDebt.toUserName}</Text>{' '}
                 <Text style={styles.confirmBold}>
-                  {commonCurrency ? `${commonCurrency} ` : ''}{formatAmount(settlingDebt.amount)}
+                  {commonCurrency ? `${commonCurrency} ` : ''}{formatAmount(settlingDebt.amount, locale)}
                 </Text>?
               </Text>
             ) : null}
@@ -1181,7 +1184,7 @@ export default function CostSplitScreen() {
                 activeOpacity={0.88}
                 disabled={settleSubmitting}
                 onPress={() => setSettlingDebt(null)}>
-                <Text style={styles.confirmCancelText}>Cancel</Text>
+                <Text style={styles.confirmCancelText}>{t('common.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.confirmOkButton, { backgroundColor: PRIMARY_COLOR }, settleSubmitting && styles.submitButtonDisabled]}
@@ -1191,7 +1194,7 @@ export default function CostSplitScreen() {
                 {settleSubmitting ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
-                  <Text style={styles.confirmOkText}>Confirm</Text>
+                  <Text style={styles.confirmOkText}>{t('common.confirm')}</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -1212,9 +1215,9 @@ export default function CostSplitScreen() {
             onPress={() => !deletingBusy && setDeletingExpenseId(null)}
           />
           <View style={styles.confirmCard}>
-            <Text style={styles.confirmTitle}>Remove this expense?</Text>
+            <Text style={styles.confirmTitle}>{t('trip.split.confirmDeleteExpenseTitle')}</Text>
             <Text style={styles.confirmBody}>
-              This will permanently delete the expense and recalculate everyone&apos;s balance.
+              {t('trip.split.confirmDeleteExpenseBody')}
             </Text>
             {actionError ? <Text style={styles.submitError}>{actionError}</Text> : null}
             <View style={styles.confirmButtons}>
@@ -1223,14 +1226,14 @@ export default function CostSplitScreen() {
                 activeOpacity={0.88}
                 disabled={deletingBusy}
                 onPress={() => setDeletingExpenseId(null)}>
-                <Text style={styles.confirmCancelText}>Cancel</Text>
+                <Text style={styles.confirmCancelText}>{t('common.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.confirmOkButton, { backgroundColor: '#d95f6a' }, deletingBusy && styles.submitButtonDisabled]}
                 activeOpacity={0.9}
                 disabled={deletingBusy}
                 onPress={() => void handleConfirmDeleteExpense()}>
-                {deletingBusy ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.confirmOkText}>Remove</Text>}
+                {deletingBusy ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.confirmOkText}>{t('common.remove')}</Text>}
               </TouchableOpacity>
             </View>
           </View>
@@ -1274,9 +1277,9 @@ export default function CostSplitScreen() {
             onPress={() => !deletingBusy && setDeletingSettlementId(null)}
           />
           <View style={styles.confirmCard}>
-            <Text style={styles.confirmTitle}>Undo this settlement?</Text>
+            <Text style={styles.confirmTitle}>{t('trip.split.confirmUndoSettlementTitle')}</Text>
             <Text style={styles.confirmBody}>
-              The debt will reappear as outstanding.
+              {t('trip.split.confirmUndoSettlementBody')}
             </Text>
             {actionError ? <Text style={styles.submitError}>{actionError}</Text> : null}
             <View style={styles.confirmButtons}>
@@ -1285,14 +1288,14 @@ export default function CostSplitScreen() {
                 activeOpacity={0.88}
                 disabled={deletingBusy}
                 onPress={() => setDeletingSettlementId(null)}>
-                <Text style={styles.confirmCancelText}>Cancel</Text>
+                <Text style={styles.confirmCancelText}>{t('common.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.confirmOkButton, { backgroundColor: '#d95f6a' }, deletingBusy && styles.submitButtonDisabled]}
                 activeOpacity={0.9}
                 disabled={deletingBusy}
                 onPress={() => void handleConfirmDeleteSettlement()}>
-                {deletingBusy ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.confirmOkText}>Undo</Text>}
+                {deletingBusy ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.confirmOkText}>{t('trip.split.undo')}</Text>}
               </TouchableOpacity>
             </View>
           </View>
@@ -1305,7 +1308,7 @@ export default function CostSplitScreen() {
 
 // Catches render-time errors from the native date picker so a bad value
 // surfaces as an on-screen message instead of taking down the whole app.
-class PickerErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+class PickerErrorBoundary extends Component<{ children: ReactNode; t: (key: string, vars?: Record<string, string | number>) => string }, { error: Error | null }> {
   state: { error: Error | null } = { error: null };
 
   static getDerivedStateFromError(error: Error) {
@@ -1316,7 +1319,7 @@ class PickerErrorBoundary extends Component<{ children: ReactNode }, { error: Er
     if (this.state.error) {
       return (
         <Text style={{ color: '#d95f6a', fontSize: 13, padding: 16, textAlign: 'center' }}>
-          Couldn&apos;t open the date picker: {this.state.error.message}
+          {this.props.t('trip.split.datePickerError', { message: this.state.error.message })}
         </Text>
       );
     }
@@ -1331,6 +1334,16 @@ function splitModeColor(mode: string) {
     case 'percentage': return '#eefff5';
     case 'shares': return '#fdf0ff';
     default: return '#f0f2f5';
+  }
+}
+
+function splitModeLabel(mode: string, t: (key: string, vars?: Record<string, string | number>) => string) {
+  switch (mode) {
+    case 'equal': return t('trip.split.modeEqual');
+    case 'exact': return t('trip.split.modeExact');
+    case 'percentage': return t('trip.split.modePercentage');
+    case 'shares': return t('trip.split.modeShares');
+    default: return mode;
   }
 }
 

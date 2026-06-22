@@ -10,6 +10,7 @@ import {
   registerPushTokenIfPermitted,
   type PushNotificationData,
 } from '@/lib/push-notifications';
+import { markStartup } from '@/lib/startup-timing'; // TEMPORARY — see lib/startup-timing.ts
 
 // Invalidates whatever cache could be stale for the screen a push is about
 // to land on — called BEFORE router.push() so that screen's own existing
@@ -65,10 +66,21 @@ export function PushNotificationBootstrap() {
   const { user } = useAuth();
   const consumedColdStart = useRef(false);
 
+  // Mount marker — fires once per actual mount (not per render), so a
+  // count > 1 in the log during a single cold start proves this component
+  // is remounting instead of just re-rendering.
+  useEffect(() => {
+    markStartup('[PUSH] PushNotificationBootstrap mounted');
+  }, []);
+
   // Re-registers the token (if permission was already granted) every time
   // the signed-in user is known — covers token rotation and app updates.
   // Does NOT prompt for permission; that only happens at the contextual
   // moments wired via maybeRequestPushPermission() elsewhere.
+  // registerPushTokenIfPermitted() itself caps to one automatic attempt per
+  // session and dedupes concurrent calls — see lib/push-notifications.ts —
+  // so it's safe for this effect to fire on every `user` reference change
+  // without that translating into repeated network/native calls.
   useEffect(() => {
     if (!user) return;
     void registerPushTokenIfPermitted();

@@ -36,7 +36,8 @@ type CalendarItem = {
 };
 
 export default function CalendarScreen() {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
+  const locale = language === 'sv' ? 'sv-SE' : 'en-US';
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView | null>(null);
   const [quests, setQuests] = useState<Quest[]>([]);
@@ -71,20 +72,20 @@ export default function CalendarScreen() {
       })
       .catch((err: Error) => {
         if (!active) return;
-        setError(err.message || 'Unable to load calendar.');
+        setError(err.message || t('calendar.unableToLoad'));
       });
 
     return () => {
       active = false;
     };
-  }, []);
+  }, [t]);
 
   useFocusEffect(loadCalendar);
 
   const dayItemsMap = useMemo(() => buildDayItemsMap(quests, activities, t), [activities, quests, t]);
   const monthTitle = useMemo(
-    () => new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(monthDate),
-    [monthDate],
+    () => new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' }).format(monthDate),
+    [monthDate, locale],
   );
   const visibleDates = useMemo(
     () =>
@@ -184,14 +185,14 @@ export default function CalendarScreen() {
               <Ionicons name="airplane" size={16} color={COLORS.white} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.activeLabel}>ACTIVE TRIP</Text>
+              <Text style={styles.activeLabel}>{t('calendar.activeTrip')}</Text>
               <Text style={styles.activeTitle} numberOfLines={1}>
-                {activeTrip.title ?? 'Trip'} · {formatTripRange(activeTrip.startDate, activeTrip.endDate)}
+                {activeTrip.title ?? t('home.defaultTripName')} · {formatTripRange(activeTrip.startDate, activeTrip.endDate, locale)}
               </Text>
             </View>
             {activeTripDay ? (
               <View style={[styles.dayBadge, { backgroundColor: COLORS.primary }]}>
-                <Text style={styles.dayBadgeText}>Day {activeTripDay}</Text>
+                <Text style={styles.dayBadgeText}>{t('trip.dayNumber', { day: activeTripDay })}</Text>
               </View>
             ) : null}
           </TouchableOpacity>
@@ -220,7 +221,7 @@ export default function CalendarScreen() {
                   style={[styles.dateChip, isSelected && styles.dateChipSelected]}
                   onPress={() => jumpToSelectedDay(dateKey)}>
                   <Text style={[styles.dateChipWeekday, isSelected && { color: COLORS.primary }]}>
-                    {new Intl.DateTimeFormat('en-US', { weekday: 'short' }).format(date).toUpperCase()}
+                    {new Intl.DateTimeFormat(locale, { weekday: 'short' }).format(date).toUpperCase()}
                   </Text>
                   <Text style={[styles.dateChipDay, isSelected && { color: COLORS.primary }]}>{date.getDate()}</Text>
                   <View style={styles.dateChipDots}>
@@ -256,7 +257,7 @@ export default function CalendarScreen() {
             <>
               {/* Section header: eyebrow + hairline + count + Add */}
               <View style={styles.selectedDayHeader}>
-                <Text style={styles.sectionEyebrow}>{formatSelectedDateEyebrow(selectedDate)}</Text>
+                <Text style={styles.sectionEyebrow}>{formatSelectedDateEyebrow(selectedDate, locale)}</Text>
                 <View style={styles.sectionLine} />
                 {activityItems.length > 0 ? (
                   <Text style={styles.sectionMeta}>
@@ -300,7 +301,7 @@ export default function CalendarScreen() {
                 <View style={styles.upcomingRow}>
                   {activityItems.map((item) => {
                     const symbol = getCategorySymbol(item.category);
-                    const dateLabel = formatUpcomingDate(item.date, now, t);
+                    const dateLabel = formatUpcomingDate(item.date, now, t, locale);
                     const timeLabel = item.time ? ` · ${item.time}` : '';
                     const tripTitle = tripsById.get(item.tripId)?.title ?? null;
 
@@ -392,7 +393,7 @@ function buildDayItemsMap(quests: Quest[], activities: SideQuestActivity[], t: (
       kind: 'activity',
       tripId: activity.tripId,
       activityId: activity.id,
-      title: activity.visibility === 'hidden' ? t('calendar.activity.hidden') : activity.title ?? 'Untitled plan',
+      title: activity.visibility === 'hidden' ? t('calendar.activity.hidden') : activity.title ?? t('calendar.untitledPlan'),
       date: activity.date,
       time: activity.time,
       meta: activity.category?.trim() || (activity.visibility === 'hidden' ? 'Hidden SideQuest' : 'SideQuest'),
@@ -446,28 +447,28 @@ function parseDateKey(value: string) {
   return new Date(`${value}T12:00:00`);
 }
 
-function formatSelectedDateEyebrow(value: string) {
+function formatSelectedDateEyebrow(value: string, locale: string) {
   const d = parseDateKey(value);
-  const weekday = new Intl.DateTimeFormat('en-US', { weekday: 'long' }).format(d).toUpperCase();
-  const month = new Intl.DateTimeFormat('en-US', { month: 'long' }).format(d).toUpperCase();
+  const weekday = new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(d).toUpperCase();
+  const month = new Intl.DateTimeFormat(locale, { month: 'long' }).format(d).toUpperCase();
   return `${weekday} · ${month}`;
 }
 
-function formatUpcomingDate(value: string, now: Date, t: (key: string) => string) {
+function formatUpcomingDate(value: string, now: Date, t: (key: string) => string, locale: string) {
   const todayStr = toDateKey(now);
   const tomorrow = new Date(now);
   tomorrow.setDate(tomorrow.getDate() + 1);
   const tomorrowStr = toDateKey(tomorrow);
   if (value === todayStr) return t('home.today');
   if (value === tomorrowStr) return t('home.tomorrow');
-  return new Intl.DateTimeFormat(undefined, { weekday: 'short', day: 'numeric' }).format(parseDateKey(value));
+  return new Intl.DateTimeFormat(locale, { weekday: 'short', day: 'numeric' }).format(parseDateKey(value));
 }
 
-function formatTripRange(start: string, end: string) {
+function formatTripRange(start: string, end: string, locale: string) {
   const s = parseDateKey(start);
   const e = parseDateKey(end);
-  const startStr = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(s);
-  const endStr = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(e);
+  const startStr = new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric' }).format(s);
+  const endStr = new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric' }).format(e);
   return `${startStr} — ${endStr}`;
 }
 

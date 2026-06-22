@@ -29,9 +29,23 @@ type ChatMsg = {
   text: string;
   imageUrl?: string | null;
   isSystem: boolean;
+  // Lets us render a localized string for known system events instead of
+  // the English text the backend stores for old-client compatibility. Null
+  // for ordinary messages and for system messages predating this field.
+  systemEventType?: string | null;
   createdAt: string;
   linkPreview?: LinkPreview | null;
 };
+
+// Maps a known SystemEventType to its translated rendering. Falls back to
+// the message's own (English, backend-authored) text for unknown/missing
+// event types — covers chat history from before this field existed.
+function renderSystemMessage(message: ChatMsg, t: (key: string, vars?: Record<string, string | number>) => string): string {
+  if (message.systemEventType === 'member_joined') {
+    return t('trip.chat.systemMemberJoined', { name: message.userName });
+  }
+  return message.text;
+}
 
 type ChatPresenceUser = {
   userId: string;
@@ -51,7 +65,8 @@ export default function TripDetailsScreen() {
   const scrollRef = useRef<ScrollView | null>(null);
   const { id, openChat: openChatParam } = useLocalSearchParams<{ id: string; openChat?: string }>();
   const { user } = useAuth();
-  const { t } = useI18n();
+  const { t, language } = useI18n();
+  const locale = language === 'sv' ? 'sv-SE' : 'en-US';
   const [trip, setTrip] = useState<Quest | null>(null);
   const [members, setMembers] = useState<TripMember[]>([]);
   const [invites, setInvites] = useState<TripInvite[]>([]);
@@ -136,7 +151,7 @@ export default function TripDetailsScreen() {
           setError('');
         } catch (err) {
           if (!active) return;
-          setError(err instanceof Error ? err.message : 'Unable to load this adventure.');
+          setError(err instanceof Error ? err.message : t('trip.error.loadFailed'));
         }
       }
 
@@ -165,10 +180,10 @@ export default function TripDetailsScreen() {
     const groups = new Map<string, { label: string; emoji: string; items: SideQuestActivity[] }>();
 
     // Initialize category groups
-    groups.set('flight', { label: 'Flights', emoji: '✈️', items: [] });
-    groups.set('food', { label: 'Restaurants', emoji: '🍽️', items: [] });
-    groups.set('activities', { label: 'Activities', emoji: '🎯', items: [] });
-    groups.set('other', { label: 'Övrigt', emoji: '⭐', items: [] });
+    groups.set('flight', { label: t('trip.category.flight'), emoji: '✈️', items: [] });
+    groups.set('food', { label: t('trip.category.food'), emoji: '🍽️', items: [] });
+    groups.set('activities', { label: t('trip.category.activities'), emoji: '🎯', items: [] });
+    groups.set('other', { label: t('trip.category.other'), emoji: '⭐', items: [] });
 
     // Group activities by category
     for (const activity of sortedActivities) {
@@ -187,7 +202,7 @@ export default function TripDetailsScreen() {
     return Array.from(groups.entries())
       .filter(([_, group]) => group.items.length > 0)
       .map(([key, group]) => ({ key, ...group }));
-  }, [sortedActivities]);
+  }, [sortedActivities, t]);
 
   const activityDayGroups = useMemo(() => {
     const map = new Map<string, SideQuestActivity[]>();
@@ -256,17 +271,17 @@ export default function TripDetailsScreen() {
     const normalizedEmail = inviteEmail.trim().toLowerCase();
 
     if (!normalizedEmail) {
-      setInviteMessage('Enter an email address first.');
+      setInviteMessage(t('trip.error.emptyEmail'));
       return;
     }
 
     if (!/\S+@\S+\.\S+/.test(normalizedEmail)) {
-      setInviteMessage('That email address does not look valid.');
+      setInviteMessage(t('trip.error.invalidEmail'));
       return;
     }
 
     if (invites.some((invite) => invite.email.toLowerCase() === normalizedEmail)) {
-      setInviteMessage('That person is already invited.');
+      setInviteMessage(t('trip.error.emailAlreadyInvited'));
       return;
     }
 
@@ -284,9 +299,9 @@ export default function TripDetailsScreen() {
       setInvites((current) => [...current, invite]);
       setInviteEmail('');
       setInviteComposerOpen(false);
-      setInviteMessage('Invite sent.');
+      setInviteMessage(t('trip.invite.sent'));
     } catch (err) {
-      setInviteMessage(err instanceof Error ? err.message : 'Unable to invite right now.');
+      setInviteMessage(err instanceof Error ? err.message : t('trip.error.inviteFailed'));
     } finally {
       setInviteSubmitting(false);
     }
@@ -301,9 +316,10 @@ export default function TripDetailsScreen() {
 
   async function handleShareInvite() {
     if (!trip?.inviteCode) return;
+    const shareTitle = trip.title ?? t('home.defaultTripName');
     await Share.share({
-      title: `Join ${trip.title ?? 'my adventure'}`,
-      message: `Join ${trip.title ?? 'my SideQuest adventure'} with code ${trip.inviteCode}.`,
+      title: t('trip.share.title', { title: shareTitle }),
+      message: t('trip.share.message', { title: shareTitle, code: trip.inviteCode }),
       url: trip.imageUrl ?? undefined,
     });
   }
@@ -350,7 +366,7 @@ export default function TripDetailsScreen() {
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
-        setError('Photo library access is required to attach images.');
+        setError(t('trip.error.photoAccessRequired'));
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -360,7 +376,7 @@ export default function TripDetailsScreen() {
       if (result.canceled || !result.assets[0]) return;
       setChatPendingImage(result.assets[0].uri);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not open the photo library.');
+      setError(err instanceof Error ? err.message : t('trip.error.photoLibraryOpenFailed'));
     }
   }
 
@@ -389,7 +405,7 @@ export default function TripDetailsScreen() {
       setChatPendingImage(null);
       lastChatTimestampRef.current = msg.createdAt;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to send message right now.');
+      setError(err instanceof Error ? err.message : t('trip.error.chatSendFailed'));
     } finally {
       setChatSending(false);
     }
@@ -409,7 +425,7 @@ export default function TripDetailsScreen() {
       });
 
       if (!response.ok) {
-        throw new Error((await response.text()) || 'Unable to save the Spotify link right now.');
+        throw new Error((await response.text()) || t('trip.error.spotifySaveFailed'));
       }
 
       const updated = (await response.json()) as Quest;
@@ -417,9 +433,9 @@ export default function TripDetailsScreen() {
       setTrip(updated);
       setSpotifyUrlDraft(updated.spotifyUrl ?? '');
       setSpotifyModalOpen(false);
-      setSpotifyMessage(updated.spotifyUrl ? 'Shared Spotify link updated.' : 'Shared Spotify link removed.');
+      setSpotifyMessage(updated.spotifyUrl ? t('trip.spotify.updated') : t('trip.spotify.removed'));
     } catch (err) {
-      setSpotifyMessage(err instanceof Error ? err.message : 'Unable to save the Spotify link right now.');
+      setSpotifyMessage(err instanceof Error ? err.message : t('trip.error.spotifySaveFailed'));
     } finally {
       setSpotifySaving(false);
     }
@@ -437,7 +453,7 @@ export default function TripDetailsScreen() {
             <TouchableOpacity style={styles.backButton} activeOpacity={0.88} onPress={() => router.back()}>
               <Ionicons name="arrow-back" size={24} color="#11131a" />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>{trip?.title ?? 'Adventure'}</Text>
+            <Text style={styles.headerTitle}>{trip?.title ?? t('home.defaultTripName')}</Text>
             <TouchableOpacity style={styles.settingsButton} activeOpacity={0.88} onPress={() => router.push(`/trip/${id}/settings`)}>
               <Ionicons name="settings-outline" size={20} color="#11131a" />
             </TouchableOpacity>
@@ -452,12 +468,12 @@ export default function TripDetailsScreen() {
               </View>
             ) : null}
             <View style={styles.heroBody}>
-              <Text style={styles.heroEyebrow}>{trip?.destination ?? 'Upcoming adventure'}</Text>
-              <Text style={styles.heroTitle}>{trip?.title ?? 'Loading adventure...'}</Text>
-              <Text style={styles.heroDate}>{formatTripDateRange(trip?.startDate, trip?.endDate)}</Text>
+              <Text style={styles.heroEyebrow}>{trip?.destination ?? t('trip.upcomingAdventure')}</Text>
+              <Text style={styles.heroTitle}>{trip?.title ?? t('trip.loadingAdventure')}</Text>
+              <Text style={styles.heroDate}>{formatTripDateRange(trip?.startDate, trip?.endDate, locale, t)}</Text>
               <View style={styles.heroMetaRow}>
-                <TripMetaChip icon="people-outline" label={`${members.length || 1} travelers`} onPress={() => setPeopleSheetOpen(true)} />
-                <TripMetaChip icon="mail-outline" label={`${invites.length} pending`} onPress={() => setPeopleSheetOpen(true)} />
+                <TripMetaChip icon="people-outline" label={t('trip.travelersCount', { count: members.length || 1 })} onPress={() => setPeopleSheetOpen(true)} />
+                <TripMetaChip icon="mail-outline" label={t('trip.pendingCount', { count: invites.length })} onPress={() => setPeopleSheetOpen(true)} />
               </View>
             </View>
           </HeroShell>
@@ -468,7 +484,7 @@ export default function TripDetailsScreen() {
             </View>
             <View style={styles.spotifyRowBody}>
               <Text style={styles.spotifyRowTitle}>Spotify</Text>
-              <Text style={styles.spotifyRowSubtitle}>{trip?.spotifyUrl ? 'Linked for this trip' : 'No playlist linked yet'}</Text>
+              <Text style={styles.spotifyRowSubtitle}>{trip?.spotifyUrl ? t('trip.spotify.linked') : t('trip.spotify.notLinked')}</Text>
             </View>
             <View style={styles.spotifyRowButtons}>
               {trip?.spotifyUrl ? (
@@ -478,7 +494,7 @@ export default function TripDetailsScreen() {
                     style={[styles.spotifyRowBtn, styles.spotifyRowBtnPrimary]}
                     onPress={() => void openSpotifyLink(trip.spotifyUrl!)}>
                     <Ionicons name="play" size={11} color="#1cb35b" />
-                    <Text style={styles.spotifyRowBtnPrimaryText}>Open</Text>
+                    <Text style={styles.spotifyRowBtnPrimaryText}>{t('common.open')}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     activeOpacity={0.85}
@@ -489,7 +505,7 @@ export default function TripDetailsScreen() {
                       setSpotifyModalOpen(true);
                     }}>
                     <Ionicons name="pencil" size={11} color="#161821" />
-                    <Text style={styles.spotifyRowBtnGhostText}>Change</Text>
+                    <Text style={styles.spotifyRowBtnGhostText}>{t('common.change')}</Text>
                   </TouchableOpacity>
                 </>
               ) : (
@@ -502,7 +518,7 @@ export default function TripDetailsScreen() {
                     setSpotifyModalOpen(true);
                   }}>
                   <Ionicons name="add" size={13} color="#1cb35b" />
-                  <Text style={styles.spotifyRowBtnPrimaryText}>Add</Text>
+                  <Text style={styles.spotifyRowBtnPrimaryText}>{t('common.add')}</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -513,23 +529,23 @@ export default function TripDetailsScreen() {
             <View style={styles.costSplitRowIcon}>
               <Ionicons name="calculator-outline" size={18} color={COLORS.primary} />
             </View>
-            <Text style={styles.costSplitRowLabel}>Cost Split</Text>
+            <Text style={styles.costSplitRowLabel}>{t('trip.costSplit')}</Text>
             <Ionicons name="chevron-forward" size={20} color="#b2b7c0" />
           </TouchableOpacity>
 
 
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionEyebrow}>SIDEQUEST FEED</Text>
-            <Text style={styles.sectionTitle}>What the group{'\n'}will discover</Text>
-            <Text style={styles.sectionCopy}>Group plans, day by day.</Text>
+            <Text style={styles.sectionEyebrow}>{t('trip.feedEyebrow')}</Text>
+            <Text style={styles.sectionTitle}>{t('trip.feedTitle')}</Text>
+            <Text style={styles.sectionCopy}>{t('trip.feedSubtitle')}</Text>
           </View>
 
           {activityDayGroups.length > 0 ? (
             activityDayGroups.map((group) => (
               <View key={group.date} style={styles.dayGroup}>
                 <View style={styles.dayHeader}>
-                  <Text style={styles.dayHeaderText}>{formatDayHeaderDate(group.date)}</Text>
-                  <Text style={styles.dayHeaderDay}>Day {dayNumberRelative(group.date, trip?.startDate)}</Text>
+                  <Text style={styles.dayHeaderText}>{formatDayHeaderDate(group.date, locale)}</Text>
+                  <Text style={styles.dayHeaderDay}>{t('trip.dayNumber', { day: dayNumberRelative(group.date, trip?.startDate) })}</Text>
                   <View style={styles.dayHeaderLine} />
                 </View>
                 {group.items.map((activity) => {
@@ -543,7 +559,7 @@ export default function TripDetailsScreen() {
                         id={activity.id}
                         revealAt={activity.revealAt}
                         timeLabel={timeLabel}
-                        formatTimeUntilReveal={formatTimeUntilReveal}
+                        formatTimeUntilReveal={(revealAt) => formatTimeUntilReveal(revealAt, t)}
                         onPress={() => router.push(`/trip/${id}/sidequest/${activity.id}`)}
                       />
                     );
@@ -564,7 +580,7 @@ export default function TripDetailsScreen() {
                       </View>
                       <View style={styles.timelineBody}>
                         <Text style={styles.timelineTitle} numberOfLines={1}>
-                          {activity.title?.trim() || 'Activity'}
+                          {activity.title?.trim() || t('trip.activityFallbackTitle')}
                         </Text>
                         <Text style={styles.timelineSubtitle} numberOfLines={1}>
                           {formatActivityAuthorSubtitle(activity)}
@@ -579,8 +595,8 @@ export default function TripDetailsScreen() {
           ) : (
             <EmptyState
               icon="sparkles-outline"
-              title="Inga aktiviteter än"
-              description="Skapa det första överraskningsuppdraget, avslöjningsmomentet eller planen för äventyret."
+              title={t('trip.empty.title')}
+              description={t('trip.empty.description')}
             />
           )}
 
@@ -597,7 +613,7 @@ export default function TripDetailsScreen() {
         <View pointerEvents="box-none" style={[styles.floatingWrap, { bottom: Math.max(insets.bottom, 16) + 6 }]}>
           <TouchableOpacity activeOpacity={0.92} style={[styles.floatingButton, { backgroundColor: COLORS.primary, shadowColor: COLORS.primary }]} onPress={() => router.push(`/trip/${id}/sidequest/new`)}>
             <Ionicons name="add" size={20} color="#fff" />
-            <Text style={styles.floatingButtonText}>Lägg till aktivitet</Text>
+            <Text style={styles.floatingButtonText}>{t('trip.addActivity')}</Text>
           </TouchableOpacity>
         </View>
 
@@ -605,8 +621,8 @@ export default function TripDetailsScreen() {
           <View style={styles.sheetHandle} />
           <View style={styles.sheetHeader}>
             <View>
-              <Text style={styles.sheetEyebrow}>TRAVELERS</Text>
-              <Text style={styles.sheetTitle}>Everyone on this adventure</Text>
+              <Text style={styles.sheetEyebrow}>{t('trip.travelersEyebrow')}</Text>
+              <Text style={styles.sheetTitle}>{t('trip.everyoneOnAdventure')}</Text>
             </View>
             <TouchableOpacity style={styles.sheetCloseButton} activeOpacity={0.88} onPress={() => setPeopleSheetOpen(false)}>
               <Ionicons name="close" size={20} color="#161821" />
@@ -615,7 +631,7 @@ export default function TripDetailsScreen() {
 
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.sheetContent, { paddingBottom: Math.max(insets.bottom, 18) + 12 }]}>
                 <View style={styles.peopleSection}>
-                  <Text style={styles.peopleSectionTitle}>Travelers</Text>
+                  <Text style={styles.peopleSectionTitle}>{t('trip.travelersSectionTitle')}</Text>
                   {members.map((member) => (
                     <Pressable
                       key={member.id}
@@ -638,7 +654,7 @@ export default function TripDetailsScreen() {
                       </View>
                       <View style={styles.personCopy}>
                         <Text style={styles.personName}>{member.name}</Text>
-                        <Text style={styles.personMeta}>{member.isOwner ? 'Owner' : 'Member'}</Text>
+                        <Text style={styles.personMeta}>{member.isOwner ? t('common.owner') : t('common.member')}</Text>
                       </View>
                     </Pressable>
                   ))}
@@ -655,8 +671,8 @@ export default function TripDetailsScreen() {
                           <Ionicons name="add" size={20} color={COLORS.primary} />
                         </View>
                         <View style={styles.personCopy}>
-                          <Text style={styles.personName}>Invite traveler</Text>
-                          <Text style={styles.personMeta}>Add by email or share the invite code</Text>
+                          <Text style={styles.personName}>{t('trip.inviteTraveler')}</Text>
+                          <Text style={styles.personMeta}>{t('trip.inviteTravelerHint')}</Text>
                         </View>
                         <Ionicons name={inviteComposerOpen ? 'chevron-up' : 'chevron-forward'} size={18} color="#8e95a2" />
                       </TouchableOpacity>
@@ -682,7 +698,7 @@ export default function TripDetailsScreen() {
                                     useNativeDriver: false,
                                   }).start();
                                 }}
-                                placeholder="friend@example.com"
+                                placeholder={t('trip.invites.placeholder')}
                                 placeholderTextColor="#afb5bf"
                                 keyboardType="email-address"
                                 autoCapitalize="none"
@@ -695,23 +711,23 @@ export default function TripDetailsScreen() {
                               style={[styles.inviteAddButton, { backgroundColor: COLORS.primary }, inviteSubmitting ? styles.inviteAddButtonDisabled : null]}
                               disabled={inviteSubmitting}
                               onPress={() => void handleAddInvite()}>
-                              <Text style={styles.inviteAddButtonText}>{inviteSubmitting ? 'Adding...' : 'Invite'}</Text>
+                              <Text style={styles.inviteAddButtonText}>{inviteSubmitting ? t('trip.inviting') : t('common.invite')}</Text>
                             </TouchableOpacity>
                           </View>
 
                           <View style={styles.inviteActions}>
                             <TouchableOpacity activeOpacity={0.9} style={styles.secondaryInviteButton} onPress={() => void handleCopyInviteCode()}>
                               <Ionicons name="copy-outline" size={16} color={COLORS.primary} />
-                              <Text style={[styles.secondaryInviteButtonText, { color: COLORS.primary }]}>Copy code</Text>
+                              <Text style={[styles.secondaryInviteButtonText, { color: COLORS.primary }]}>{t('trip.copyCode')}</Text>
                             </TouchableOpacity>
                             <TouchableOpacity activeOpacity={0.9} style={styles.secondaryInviteButton} onPress={() => void handleShareInvite()}>
                               <Ionicons name="share-social-outline" size={16} color={COLORS.primary} />
-                              <Text style={[styles.secondaryInviteButtonText, { color: COLORS.primary }]}>Share</Text>
+                              <Text style={[styles.secondaryInviteButtonText, { color: COLORS.primary }]}>{t('common.share')}</Text>
                             </TouchableOpacity>
                           </View>
 
                           <View style={styles.inviteHintRow}>
-                            <Text style={styles.inviteHintLabel}>Invite code</Text>
+                            <Text style={styles.inviteHintLabel}>{t('trip.invite_code_section')}</Text>
                             <Text style={[styles.inviteHintCode, { color: COLORS.primary }]}>{trip?.inviteCode ?? '------'}</Text>
                           </View>
 
@@ -723,7 +739,7 @@ export default function TripDetailsScreen() {
                 </View>
 
                 <View style={styles.peopleSection}>
-                  <Text style={styles.peopleSectionTitle}>Pending invites</Text>
+                  <Text style={styles.peopleSectionTitle}>{t('trip.pendingInvites')}</Text>
                   {invites.length > 0 ? (
                     invites.map((invite) => (
                       <View key={invite.id} style={styles.personRow}>
@@ -732,12 +748,12 @@ export default function TripDetailsScreen() {
                         </View>
                         <View style={styles.personCopy}>
                           <Text style={styles.personName}>{invite.email}</Text>
-                          <Text style={styles.personMeta}>Waiting for response</Text>
+                          <Text style={styles.personMeta}>{t('trip.waitingForResponse')}</Text>
                         </View>
                       </View>
                     ))
                   ) : (
-                    <Text style={styles.peopleEmpty}>No pending invites yet.</Text>
+                    <Text style={styles.peopleEmpty}>{t('trip.no_invites')}</Text>
                   )}
                 </View>
               </ScrollView>
@@ -752,8 +768,8 @@ export default function TripDetailsScreen() {
             <View style={[styles.chatPanel, { paddingTop: 18, paddingBottom: 14 }]}>
               <View style={styles.chatPanelHeader}>
                 <View style={styles.chatPanelHeaderLeft}>
-                  <Text style={styles.chatPanelEyebrow}>GROUP CHAT</Text>
-                  <Text style={styles.chatPanelTitle}>{trip?.title ?? 'Adventure chat'}</Text>
+                  <Text style={styles.chatPanelEyebrow}>{t('trip.groupChatEyebrow')}</Text>
+                  <Text style={styles.chatPanelTitle}>{trip?.title ?? t('trip.adventureChatFallback')}</Text>
                 </View>
                 <TouchableOpacity style={styles.chatPanelClose} activeOpacity={0.88} onPress={closeChat}>
                   <Ionicons name="close" size={20} color="#161821" />
@@ -763,9 +779,15 @@ export default function TripDetailsScreen() {
               {chatPresence.length > 0 ? (
                 <View style={styles.chatPresenceRow}>
                   {chatPresence.slice(0, 6).map((u) => (
-                    <View key={u.userId} style={styles.chatPresenceBubble}>
-                      <Text style={[styles.chatPresenceBubbleText, { color: COLORS.secondary }]}>{getInitials(u.userName)}</Text>
-                    </View>
+                    <Avatar
+                      key={u.userId}
+                      uri={u.avatarUrl}
+                      name={u.userName}
+                      size={30}
+                      style={styles.chatPresenceBubble}
+                      fallbackBackgroundColor="#e8f4f7"
+                      fallbackTextColor={COLORS.secondary}
+                    />
                   ))}
                   {chatPresence.length > 6 ? (
                     <View style={styles.chatPresenceBubble}>
@@ -773,7 +795,7 @@ export default function TripDetailsScreen() {
                     </View>
                   ) : null}
                   <Text style={styles.chatPresenceLabel}>
-                    {chatPresence.length === 1 ? '1 in chat' : `${chatPresence.length} in chat`}
+                    {t('trip.inChat', { count: chatPresence.length })}
                   </Text>
                 </View>
               ) : null}
@@ -791,10 +813,10 @@ export default function TripDetailsScreen() {
                   return (
                     <View key={message.id}>
                       {showTime ? (
-                        <Text style={styles.chatTimeLabel}>{formatChatTimestamp(message.createdAt)}</Text>
+                        <Text style={styles.chatTimeLabel}>{formatChatTimestamp(message.createdAt, locale)}</Text>
                       ) : null}
                       {systemMessage ? (
-                        <Text style={styles.chatSystemLabel}>{message.text}</Text>
+                        <Text style={styles.chatSystemLabel}>{renderSystemMessage(message, t)}</Text>
                       ) : ownMessage ? (
                         <View style={styles.chatMessageWrapOwn}>
                           {message.imageUrl ? (
@@ -862,7 +884,7 @@ export default function TripDetailsScreen() {
                   </TouchableOpacity>
                   {chatImageUploading ? (
                     <View style={styles.chatPendingImageUploading}>
-                      <Text style={styles.chatPendingImageUploadingText}>Uploading…</Text>
+                      <Text style={styles.chatPendingImageUploadingText}>{t('trip.uploadingImage')}</Text>
                     </View>
                   ) : null}
                 </View>
@@ -894,7 +916,7 @@ export default function TripDetailsScreen() {
                         useNativeDriver: false,
                       }).start();
                     }}
-                    placeholder="Send a message to the group"
+                    placeholder={t('trip.chatPlaceholder')}
                     placeholderTextColor="#afb5bf"
                     style={styles.chatInput}
                     multiline
@@ -923,8 +945,8 @@ export default function TripDetailsScreen() {
               <View style={styles.sheetHandle} />
               <View style={styles.sheetHeader}>
                 <View>
-                  <Text style={styles.sheetEyebrow}>SHARED SPOTIFY</Text>
-                  <Text style={styles.sheetTitle}>Spotify for this event</Text>
+                  <Text style={styles.sheetEyebrow}>{t('trip.sharedSpotifyEyebrow')}</Text>
+                  <Text style={styles.sheetTitle}>{t('trip.spotifyForEvent')}</Text>
                 </View>
                 <TouchableOpacity style={styles.sheetCloseButton} activeOpacity={0.88} onPress={() => setSpotifyModalOpen(false)}>
                   <Ionicons name="close" size={20} color="#161821" />
@@ -932,7 +954,7 @@ export default function TripDetailsScreen() {
               </View>
 
               <View style={styles.spotifySheetBody}>
-                <Text style={styles.spotifySheetCopy}>Paste a public Spotify playlist, album, or track link that everyone can use.</Text>
+                <Text style={styles.spotifySheetCopy}>{t('trip.spotifyPasteHint')}</Text>
                 <Animated.View style={[{ opacity: spotifyUrlOpacityRef }]}>
                   <TextInput
                     value={spotifyUrlDraft}
@@ -961,14 +983,14 @@ export default function TripDetailsScreen() {
                 </Animated.View>
                 <View style={styles.spotifySheetButtons}>
                   <TouchableOpacity activeOpacity={0.88} style={styles.spotifySheetSecondaryButton} onPress={() => void handleSaveTripSpotify(null)}>
-                    <Text style={styles.spotifySheetSecondaryButtonText}>Remove</Text>
+                    <Text style={styles.spotifySheetSecondaryButtonText}>{t('common.remove')}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     activeOpacity={0.9}
                     style={[styles.spotifySheetPrimaryButton, spotifySaving ? styles.spotifySheetPrimaryButtonDisabled : null]}
                     disabled={spotifySaving}
                     onPress={() => void handleSaveTripSpotify(spotifyUrlDraft)}>
-                    <Text style={styles.spotifySheetPrimaryButtonText}>{spotifySaving ? 'Saving...' : 'Save link'}</Text>
+                    <Text style={styles.spotifySheetPrimaryButtonText}>{spotifySaving ? t('trip.saving') : t('trip.saveLink')}</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -1009,7 +1031,7 @@ export default function TripDetailsScreen() {
                         <Text style={styles.categoryModalEmoji}>{selected.emoji}</Text>
                         <View>
                           <Text style={styles.categoryModalLabel}>{selected.label}</Text>
-                          <Text style={styles.categoryModalCount}>{selected.items.length} activities</Text>
+                          <Text style={styles.categoryModalCount}>{t('trip.activitiesCount', { count: selected.items.length })}</Text>
                         </View>
                       </View>
 
@@ -1035,7 +1057,7 @@ export default function TripDetailsScreen() {
                                   <View>
                                     <Text style={styles.categoryModalActivityTitle}>{activity.title}</Text>
                                     <Text style={styles.categoryModalActivityDate} numberOfLines={1}>
-                                      {formatActivityDate(activity.date)}
+                                      {formatActivityDate(activity.date, locale)}
                                     </Text>
                                   </View>
                                   <Ionicons name="chevron-forward" size={18} color="#c5cad2" />
@@ -1043,13 +1065,13 @@ export default function TripDetailsScreen() {
                               ) : (
                                 <>
                                   <View>
-                                    <Text style={styles.categoryModalActivityTitle}>1 hidden sidequest</Text>
+                                    <Text style={styles.categoryModalActivityTitle}>{t('trip.oneHiddenSidequest')}</Text>
                                     <Text style={styles.categoryModalActivityDate} numberOfLines={1}>
-                                      {formatTimeUntilReveal(activity.revealAt)}
+                                      {formatTimeUntilReveal(activity.revealAt, t)}
                                     </Text>
                                   </View>
                                   <View style={styles.lockedBadge}>
-                                    <Text style={styles.lockedBadgeText}>LOCKED</Text>
+                                    <Text style={styles.lockedBadgeText}>{t('trip.locked')}</Text>
                                   </View>
                                 </>
                               )}
@@ -1174,21 +1196,21 @@ function TripMetaChip({
   );
 }
 
-function formatTripDateRange(startDate?: string, endDate?: string) {
-  if (!startDate || !endDate) return 'Dates coming soon';
-  const formatter = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
+function formatTripDateRange(startDate: string | undefined, endDate: string | undefined, locale: string, t: (key: string, vars?: Record<string, string | number>) => string) {
+  if (!startDate || !endDate) return t('trip.datesComingSoon');
+  const formatter = new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric' });
   return `${formatter.format(new Date(`${startDate}T12:00:00`))} - ${formatter.format(new Date(`${endDate}T12:00:00`))}`;
 }
 
-function formatActivityDate(date: string) {
-  return new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(`${date}T12:00:00`));
+function formatActivityDate(date: string, locale: string) {
+  return new Intl.DateTimeFormat(locale, { weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(`${date}T12:00:00`));
 }
 
-function formatDayHeaderDate(dateIso: string) {
+function formatDayHeaderDate(dateIso: string, locale: string) {
   const d = new Date(`${dateIso.slice(0, 10)}T12:00:00`);
   if (isNaN(d.getTime())) return '';
-  const weekday = new Intl.DateTimeFormat('en-US', { weekday: 'short' }).format(d);
-  const monthDay = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(d);
+  const weekday = new Intl.DateTimeFormat(locale, { weekday: 'short' }).format(d);
+  const monthDay = new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric' }).format(d);
   return `${weekday} · ${monthDay}`;
 }
 
@@ -1217,25 +1239,25 @@ function formatActivityRevealDate(revealAt?: string | null) {
   return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(revealAt));
 }
 
-function formatTimeUntilReveal(revealAt?: string | null) {
-  if (!revealAt) return 'Reveals soon';
+function formatTimeUntilReveal(revealAt: string | null | undefined, t: (key: string, vars?: Record<string, string | number>) => string) {
+  if (!revealAt) return t('trip.revealsSoon');
   const now = Date.now();
   const reveal = new Date(revealAt).getTime();
   const diffMs = reveal - now;
 
-  if (diffMs <= 0) return 'Revealed';
+  if (diffMs <= 0) return t('trip.revealed');
 
   const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
   const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
   const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
 
   if (days > 0) {
-    return `Reveals in ${days} d ${hours} h ${minutes} m`;
+    return t('trip.revealsInDHM', { days, hours, minutes });
   }
   if (hours > 0) {
-    return `Reveals in ${hours} h ${minutes} m`;
+    return t('trip.revealsInHM', { hours, minutes });
   }
-  return `Reveals in ${minutes} m`;
+  return t('trip.revealsInM', { minutes });
 }
 
 function formatRevealChip(value: string) {
@@ -1254,8 +1276,8 @@ function formatSpotifyDisplayUrl(url?: string | null) {
   }
 }
 
-function formatChatTimestamp(value: string) {
-  return new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(new Date(value));
+function formatChatTimestamp(value: string, locale: string) {
+  return new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' }).format(new Date(value));
 }
 
 function getInitials(name?: string | null) {
@@ -2264,6 +2286,12 @@ const styles = StyleSheet.create({
     borderColor: '#e6e9ef',
     backgroundColor: '#f9fafc',
     paddingHorizontal: 16,
+    // Multiline TextInput defaults to top-aligned text on both platforms —
+    // without this the placeholder/draft sits at the top of the 54px box
+    // instead of centered. textAlignVertical only affects Android; the
+    // paddingVertical keeps a single line of text centered on iOS too.
+    paddingVertical: 15,
+    textAlignVertical: 'center',
     color: '#161821',
     fontSize: 15,
   },

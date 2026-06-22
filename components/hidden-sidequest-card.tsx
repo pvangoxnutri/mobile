@@ -3,6 +3,7 @@ import { Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native
 import { useCallback, useMemo, useRef, useEffect } from 'react';
 import { COLORS, SPACING, TYPOGRAPHY, RADIUS } from '@/constants/design-tokens';
 import { useScalePress } from '@/hooks/useMotion';
+import { useI18n } from '@/components/i18n-provider';
 
 interface HiddenSidequestCardProps {
   id: string;
@@ -19,6 +20,7 @@ export default function HiddenSidequestCard({
   timeLabel,
   formatTimeUntilReveal,
 }: HiddenSidequestCardProps) {
+  const { t } = useI18n();
   const shimmerOpacityRef = useRef(new Animated.Value(1)).current;
 
   // Check if reveal is imminent (within 1 hour)
@@ -89,7 +91,7 @@ export default function HiddenSidequestCard({
 
       <View style={styles.timelineBody}>
         <Text style={styles.timelineTitle} numberOfLines={1}>
-          Hidden quest
+          {t('trip.hiddenQuest')}
         </Text>
         <Text style={styles.timelineSubtitle} numberOfLines={1}>
           {formatTimeUntilReveal(revealAt)}

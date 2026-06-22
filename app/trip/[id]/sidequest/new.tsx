@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import SideQuestForm, { type SideQuestFormHandle, type SideQuestFormValues } from '@/components/sidequest-form';
 import { UnsavedChangesModal, useUnsavedChanges } from '@/components/unsaved-changes';
+import { useI18n } from '@/components/i18n-provider';
 import { apiJson } from '@/lib/api';
 import { extractLocationQuery, extractStoredMapPlace, stripLocationMarker } from '@/lib/sidequest-location';
 import { extractFlightRoute, stripFlightMarkers } from '@/lib/flight-route';
@@ -15,6 +16,7 @@ import { PRIMARY_COLOR } from '@/constants/colors';
 import { COLORS, SPACING, RADIUS, TYPOGRAPHY } from '@/constants/design-tokens';
 
 export default function NewSideQuestScreen() {
+  const { t } = useI18n();
   const insets = useSafeAreaInsets();
   const { id, editId, initialDate } = useLocalSearchParams<{ id: string; editId?: string; initialDate?: string }>();
   const [trip, setTrip] = useState<Quest | null>(null);
@@ -59,7 +61,7 @@ export default function NewSideQuestScreen() {
         })
         .catch((err: Error) => {
           if (!active) return;
-          setError(err.message || 'Unable to load details.');
+          setError(err.message || t('sidequest.form.loadDetailsFailed'));
         })
         .finally(() => {
           if (active) {
@@ -70,7 +72,7 @@ export default function NewSideQuestScreen() {
       return () => {
         active = false;
       };
-    }, [id, editId]),
+    }, [id, editId, t]),
   );
 
   const initialValues = useMemo<Partial<SideQuestFormValues> | undefined>(() => {
@@ -113,9 +115,9 @@ export default function NewSideQuestScreen() {
             <Ionicons name="arrow-back" size={24} color={COLORS.textPrimary} />
           </TouchableOpacity>
           <View>
-            <Text style={styles.title}>{isEditMode ? 'Redigera aktivitet' : 'Lägg till aktivitet'}</Text>
+            <Text style={styles.title}>{isEditMode ? t('sidequest.form.editActivityTitle') : t('sidequest.form.addActivity')}</Text>
             <Text style={styles.subtitle}>
-              {isEditMode ? 'Resans medlemmar kan uppdatera planen tillsammans.' : 'Bygg något kul för den här resan.'}
+              {isEditMode ? t('sidequest.form.editActivitySubtitle') : t('sidequest.form.addActivitySubtitle')}
             </Text>
           </View>
         </View>

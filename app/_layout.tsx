@@ -10,13 +10,17 @@ import { I18nProvider } from '@/components/i18n-provider';
 import { NetworkStatusBar } from '@/components/network-status-bar';
 import { PushNotificationBootstrap } from '@/components/push-notification-bootstrap';
 import { useColorScheme } from 'react-native';
+import { markStartup } from '@/lib/startup-timing'; // TEMPORARY — see lib/startup-timing.ts
 
 export const unstable_settings = {
   anchor: '(tabs)',
 };
 
+markStartup('[LAYOUT] _layout.tsx module evaluated');
+
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  markStartup('[LAYOUT] RootLayout render');
 
   return (
     <SafeAreaProvider>

@@ -3,6 +3,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { Image as CachedImage } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BrandMark from '@/components/brand-mark';
 import Avatar from '@/components/avatar';
@@ -17,7 +18,9 @@ import { getCategorySymbol } from '@/lib/category-symbol';
 import { BigHeroCard, getInitials, type TripWithEvent, type TripMember } from '@/components/big-hero-card';
 import { apiFetch, apiJson } from '@/lib/api';
 import { getCached, setCached, invalidateCache, invalidateTripCache } from '@/lib/cache';
+import { prefetchAvatars } from '@/lib/avatar-prefetch';
 import { maybeRequestPushPermission } from '@/lib/push-notifications';
+import { markStartup, markStartupSync } from '@/lib/startup-timing'; // TEMPORARY — see lib/startup-timing.ts
 import { useScalePress } from '@/hooks/useMotion';
 import type { PendingInvite, Quest, SideQuestActivity, TripEvent } from '@/lib/types';
 import { COLORS, SHADOWS, SPACING, RADIUS, TYPOGRAPHY } from '@/constants/design-tokens';
@@ -26,6 +29,7 @@ import { COLORS, SHADOWS, SPACING, RADIUS, TYPOGRAPHY } from '@/constants/design
 // so the create-trip preview can reuse the exact same rendering as home.
 
 export default function HomeScreen() {
+  markStartup('[HOME] HomeScreen render');
   const { user, signOut } = useAuth();
   const { t } = useI18n();
   const insets = useSafeAreaInsets();
@@ -53,7 +57,11 @@ export default function HomeScreen() {
   const [profileCardUserId, setProfileCardUserId] = useState<string | null>(null);
   const [selectedTripIndex, setSelectedTripIndex] = useState(0);
   const [failedMemberAvatars, setFailedMemberAvatars] = useState<Set<string>>(new Set());
-  const [homeMembers, setHomeMembers] = useState<TripMember[]>([]);
+  // Keyed by trip id, populated for every trip (not just the featured one) —
+  // see loadQuests. This is what lets every BigHeroCard in the carousel show
+  // its own avatars immediately, instead of only the currently-featured one,
+  // so swiping between trips never blanks-then-reloads avatars.
+  const [membersByTripId, setMembersByTripId] = useState<Record<string, TripMember[]>>({});
   const [tripEvents, setTripEvents] = useState<TripEvent[]>([]);
   const eventFade = useRef(new Animated.Value(1)).current;
   const carouselRef = useRef<ScrollView>(null);
@@ -70,48 +78,72 @@ export default function HomeScreen() {
 
   const loadQuests = useCallback(() => {
     let active = true;
+    markStartup('[HOME] loadQuests → start');
 
     // Show cached trips + activities INSTANTLY so a tab switch back to home
     // doesn't flash a loading state. We then refetch in the background and
     // update if anything has changed.
-    const cachedTrips = getCached<Quest[]>('/api/trips');
+    const cachedTrips = markStartupSync('[HOME] cache read /api/trips', () => getCached<Quest[]>('/api/trips'));
     if (cachedTrips) {
       setQuests(cachedTrips);
       const cachedActs: SideQuestActivity[] = [];
+      const cachedMembersByTrip: Record<string, TripMember[]> = {};
       for (const trip of cachedTrips) {
         const acts = getCached<SideQuestActivity[]>(`/api/trips/${trip.id}/activities`);
         if (acts) cachedActs.push(...acts);
+        const members = getCached<TripMember[]>(`/api/trips/${trip.id}/members`);
+        if (members) cachedMembersByTrip[trip.id] = members;
       }
       if (cachedActs.length > 0) setActivities(cachedActs);
+      if (Object.keys(cachedMembersByTrip).length > 0) {
+        setMembersByTripId((prev) => ({ ...prev, ...cachedMembersByTrip }));
+      }
       setLoading(false);
+      markStartup('[HOME] cache HIT — rendering cached trips, loading=false');
     } else {
       setLoading(true);
+      markStartup('[HOME] cache MISS — loading=true, showing skeleton until network resolves');
     }
     setError('');
 
     console.log('[HOME] loading trips...');
+    const tripsFetchStart = Date.now();
     void apiJson<Quest[]>('/api/trips')
       .then(async (data) => {
+        markStartup(`[HOME] GET /api/trips resolved (${Date.now() - tripsFetchStart}ms)`);
         if (!active) return;
         const tripList = Array.isArray(data) ? data : [];
         setCached('/api/trips', tripList);
 
-        const activityGroups = await Promise.all(
+        const activitiesFetchStart = Date.now();
+        const perTripResults = await Promise.all(
           tripList.map(async (trip) => {
-            try {
-              const acts = await apiJson<SideQuestActivity[]>(`/api/trips/${trip.id}/activities`);
-              setCached(`/api/trips/${trip.id}/activities`, acts);
-              return acts;
-            } catch (err) {
-              console.warn(`[HOME] loadActivities failed for trip ${trip.id}:`, err instanceof Error ? err.message : err);
-              return [];
-            }
+            const [acts, members] = await Promise.all([
+              apiJson<SideQuestActivity[]>(`/api/trips/${trip.id}/activities`).catch((err) => {
+                console.warn(`[HOME] loadActivities failed for trip ${trip.id}:`, err instanceof Error ? err.message : err);
+                return [] as SideQuestActivity[];
+              }),
+              apiJson<TripMember[]>(`/api/trips/${trip.id}/members`).catch((err) => {
+                console.warn(`[HOME] loadMembers failed for trip ${trip.id}:`, err instanceof Error ? err.message : err);
+                return [] as TripMember[];
+              }),
+            ]);
+            setCached(`/api/trips/${trip.id}/activities`, acts);
+            setCached(`/api/trips/${trip.id}/members`, members);
+            return { tripId: trip.id, acts, members };
           }),
         );
+        markStartup(`[HOME] all per-trip /activities + /members resolved in parallel (${Date.now() - activitiesFetchStart}ms, ${tripList.length} trips)`);
 
         if (!active) return;
         setQuests(tripList);
-        setActivities(activityGroups.flat());
+        setActivities(perTripResults.flatMap((r) => r.acts));
+        setMembersByTripId((prev) => {
+          const next = { ...prev };
+          for (const r of perTripResults) next[r.tripId] = r.members;
+          return next;
+        });
+        markStartup(`[HOME] loadQuests → fully done (${Date.now() - tripsFetchStart}ms total since fetch start)`);
 
         // Contextual permission prompt: the moment a user has at least one
         // adventure (created or joined) is when push notifications first
@@ -121,6 +153,7 @@ export default function HomeScreen() {
         }
       })
       .catch(async (err: Error) => {
+        markStartup(`[HOME] GET /api/trips FAILED (${Date.now() - tripsFetchStart}ms)`, { message: err.message });
         if (!active) return;
         setError(err.message || 'Unable to load quests.');
         // Only wipe state if we don't have a cached snapshot still on screen
@@ -142,29 +175,37 @@ export default function HomeScreen() {
   }, [signOut]);
 
   const loadInvites = useCallback(() => {
+    markStartup('[HOME] loadInvites → start');
     const cached = getCached<PendingInvite[]>('/api/trips/invites/me');
     if (cached) setPendingInvites(cached);
 
+    const start = Date.now();
     void apiJson<PendingInvite[]>('/api/trips/invites/me')
       .then((data) => {
+        markStartup(`[HOME] GET /api/trips/invites/me resolved (${Date.now() - start}ms)`);
         setCached('/api/trips/invites/me', data);
         setPendingInvites(data);
       })
       .catch((err: unknown) => {
+        markStartup(`[HOME] GET /api/trips/invites/me FAILED (${Date.now() - start}ms)`);
         console.warn('[HOME] loadInvites failed:', err instanceof Error ? err.message : err);
       });
   }, []);
 
   const loadTripEvents = useCallback(() => {
+    markStartup('[HOME] loadTripEvents → start');
     const cached = getCached<TripEvent[]>('/api/trips/events/me');
     if (cached) setTripEvents(cached);
 
+    const start = Date.now();
     void apiJson<TripEvent[]>('/api/trips/events/me')
       .then((data) => {
+        markStartup(`[HOME] GET /api/trips/events/me resolved (${Date.now() - start}ms)`);
         setCached('/api/trips/events/me', data);
         setTripEvents(data);
       })
       .catch((err: unknown) => {
+        markStartup(`[HOME] GET /api/trips/events/me FAILED (${Date.now() - start}ms)`);
         console.warn('[HOME] loadTripEvents failed:', err instanceof Error ? err.message : err);
       });
   }, []);
@@ -188,32 +229,15 @@ export default function HomeScreen() {
     setFeaturedEventIndex(0);
   }, [featuredTrip?.quest.id]);
 
-  // Load members for the featured trip so the BigHeroCard can show avatar
-  // overlay. Re-fires when the user swipes to a different trip. Cached
-  // per-trip so re-visiting a swiped-to-trip is instant.
+  // Background-only: warms expo-image's disk cache for every visible
+  // member avatar across all of this user's trips (not just the featured
+  // one) so swiping the carousel never shows a fade-in pop — every card's
+  // avatars are already prefetched by the time it becomes featured. Never
+  // awaited, never blocks rendering — Avatar already renders correctly
+  // without this.
   useEffect(() => {
-    if (!featuredTrip) {
-      setHomeMembers([]);
-      return;
-    }
-    let active = true;
-    const url = `/api/trips/${featuredTrip.quest.id}/members`;
-    const cached = getCached<TripMember[]>(url);
-    if (cached) setHomeMembers(cached);
-
-    void apiJson<TripMember[]>(url)
-      .then((data) => {
-        setCached(url, data);
-        if (active) setHomeMembers(data);
-      })
-      .catch((err: unknown) => {
-        console.warn('[HOME] homeMembers load failed:', err instanceof Error ? err.message : err);
-        if (active && !cached) setHomeMembers([]);
-      });
-    return () => {
-      active = false;
-    };
-  }, [featuredTrip?.quest.id]);
+    prefetchAvatars(Object.values(membersByTripId).flat().map((m) => m.avatarUrl));
+  }, [membersByTripId]);
 
   useEffect(() => {
     if (!featuredTrip || featuredTrip.upcomingEvents.length <= 1) return;
@@ -307,13 +331,13 @@ export default function HomeScreen() {
     setMembersOpen(true);
     setFailedMemberAvatars(new Set());
 
-    // homeMembers already holds this exact trip's member list — the effect
-    // that populates it fires the moment this trip became featured, and is
-    // itself cache-backed. Reuse it instead of re-fetching data we already
-    // have; only hit the network if we genuinely don't have anything yet
-    // (e.g. that effect's fetch hasn't resolved, or it failed).
-    if (homeMembers.length > 0) {
-      setFeaturedMembers(homeMembers);
+    // membersByTripId already holds this exact trip's member list — loadQuests
+    // populates it for every trip up front. Reuse it instead of re-fetching
+    // data we already have; only hit the network if we genuinely don't have
+    // anything yet (e.g. that fetch hasn't resolved, or it failed).
+    const known = membersByTripId[featuredTrip.quest.id];
+    if (known && known.length > 0) {
+      setFeaturedMembers(known);
       setMembersLoading(false);
       return;
     }
@@ -435,7 +459,14 @@ export default function HomeScreen() {
           </View>
         ) : null}
 
-        {loading ? (
+        {/* Once we have trips to show, a later loading=true from a
+            background refetch (e.g. after invalidateTripCache on an
+            invite accept/decline) must NOT swap this whole tree back out
+            for the skeleton — that unmounts every BigHeroCard + Avatar
+            underneath, which is what caused avatars to blank and re-fade-in
+            on every refresh even though the image itself was cached. Only
+            show the skeleton when we have nothing at all to show yet. */}
+        {loading && quests.length === 0 ? (
           <View style={styles.loadingState}>
             <Text style={styles.loadingText}>{t('home.loading')}</Text>
           </View>
@@ -464,7 +495,7 @@ export default function HomeScreen() {
                   width={upcomingCardWidth}
                   cardHeight={Math.min(upcomingCardWidth * 0.92, screenHeight * 0.36, 320)}
                   sealedCount={activities.filter((a) => a.tripId === entry.quest.id && a.isHidden && !a.isRevealed).length}
-                  members={entry.quest.id === featuredTrip?.quest.id ? homeMembers : []}
+                  members={membersByTripId[entry.quest.id] ?? []}
                   failedAvatars={failedMemberAvatars}
                   onAvatarError={(id) => setFailedMemberAvatars((prev) => new Set([...prev, id]))}
                   now={now}
@@ -502,7 +533,7 @@ export default function HomeScreen() {
               tripId={featuredTrip?.quest.id}
               events={tripEvents}
               activities={activities.filter((a) => a.tripId === featuredTrip?.quest.id)}
-              members={homeMembers}
+              members={featuredTrip ? membersByTripId[featuredTrip.quest.id] ?? [] : []}
               failedAvatars={failedMemberAvatars}
               onAvatarError={(id) => setFailedMemberAvatars((prev) => new Set([...prev, id]))}
               now={now}
@@ -1027,7 +1058,13 @@ function UpNextCard({
       style={[styles.upNextCard, isSealed && styles.upNextCardSealed]}>
       <View style={[styles.upNextImageBox, isSealed && styles.upNextImageBoxSealed]}>
         {!isSealed && activity.imageUrl ? (
-          <Image source={{ uri: activity.imageUrl }} style={styles.upNextImage} resizeMode="cover" />
+          <CachedImage
+            source={{ uri: activity.imageUrl }}
+            style={styles.upNextImage}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+            transition={150}
+          />
         ) : !isSealed ? (
           <ActivityImageFallback category={activity.category} size="medium" style={styles.upNextFallback} />
         ) : null}

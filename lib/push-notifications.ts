@@ -1,8 +1,9 @@
 import * as Notifications from 'expo-notifications';
-import Constants from 'expo-constants';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiFetch } from '@/lib/api';
+import { markStartup } from '@/lib/startup-timing'; // TEMPORARY — see lib/startup-timing.ts
 
 // Whether we've ever shown the OS permission dialog. Used so we only ever
 // ask once — re-asking after a "no" is both impossible on iOS (the system
@@ -26,6 +27,24 @@ function getProjectId(): string | undefined {
   return Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
 }
 
+// Expo Go can't register a real remote push token (it has no native
+// APNs/FCM credential of its own) and getExpoPushTokenAsync() behaves
+// unreliably there — this is also what was hammered in a loop during the
+// startup investigation. Push only matters in dev-client/standalone builds,
+// so skip retrieval entirely in Expo Go rather than trying to make a flaky
+// path "work".
+function isExpoGo(): boolean {
+  return Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+}
+
+// Module-level singleton: at most one getExpoPushTokenAsync + POST
+// /api/push-tokens attempt may be in flight at a time, no matter how many
+// call sites (bootstrap effect, contextual permission prompt, token
+// rotation listener) try to trigger one concurrently. Every caller below
+// funnels through requestPushRegistration() instead of calling
+// pushCurrentToken() directly.
+let pushRegistrationPromise: Promise<void> | null = null;
+
 async function pushCurrentToken(): Promise<void> {
   const projectId = getProjectId();
   const tokenData = await Notifications.getExpoPushTokenAsync(projectId ? { projectId } : undefined);
@@ -42,15 +61,49 @@ async function pushCurrentToken(): Promise<void> {
   await AsyncStorage.setItem(LAST_TOKEN_KEY, token);
 }
 
+function requestPushRegistration(): Promise<void> {
+  if (pushRegistrationPromise) {
+    markStartup('[PUSH] duplicate call prevented — registration already in flight');
+    return pushRegistrationPromise;
+  }
+
+  markStartup('[PUSH] registration starting');
+  pushRegistrationPromise = pushCurrentToken()
+    .then(() => {
+      markStartup('[PUSH] registration completed');
+    })
+    .catch((err) => {
+      markStartup('[PUSH] registration failed');
+      console.warn('[PUSH] registration failed:', err instanceof Error ? err.message : err);
+    })
+    .finally(() => {
+      pushRegistrationPromise = null;
+    });
+  return pushRegistrationPromise;
+}
+
+// Caps the AUTOMATIC startup sync (called from PushNotificationBootstrap's
+// effect and from home's first-trips-loaded hook) to one attempt per app
+// session. Explicit user actions — the contextual permission prompt
+// (maybeRequestPushPermission) and the profile toggle — are NOT gated by
+// this flag, since those represent a real state change (permission status
+// changed, or the user explicitly opted in/out) and must still run.
+let autoSyncAttemptedThisSession = false;
+
 // Call on every app start (once a user is signed in). No-ops quietly if
 // permission was never granted — this is the "keep the token fresh" path,
-// not the "ask for permission" path.
+// not the "ask for permission" path. Safe to call from multiple effects:
+// the in-flight guard above and this session flag together mean only the
+// first call in a session ever reaches the network.
 export async function registerPushTokenIfPermitted(): Promise<void> {
-  if (Platform.OS === 'web') return;
+  if (Platform.OS === 'web' || isExpoGo()) return;
+  if (autoSyncAttemptedThisSession) return;
+  autoSyncAttemptedThisSession = true;
+
   try {
     const { status } = await Notifications.getPermissionsAsync();
     if (status !== 'granted') return;
-    await pushCurrentToken();
+    await requestPushRegistration();
   } catch (err) {
     console.warn('[PUSH] registerPushTokenIfPermitted failed:', err);
   }
@@ -60,18 +113,22 @@ export async function registerPushTokenIfPermitted(): Promise<void> {
 // a first hidden SideQuest) — NOT on app launch. Only actually shows the OS
 // dialog the first time it's ever called across the app's lifetime.
 export async function maybeRequestPushPermission(): Promise<void> {
-  if (Platform.OS === 'web') return;
+  if (Platform.OS === 'web' || isExpoGo()) return;
   try {
     const alreadyAsked = await AsyncStorage.getItem(ASKED_KEY);
     if (alreadyAsked) {
-      await registerPushTokenIfPermitted();
+      // Permission was already decided previously — this is still an
+      // explicit, user-triggered call (e.g. opening home after creating a
+      // first trip), so go straight through the shared singleton instead of
+      // the auto-sync path (which intentionally only fires once a session).
+      await requestPushRegistration();
       return;
     }
 
     const { status: currentStatus } = await Notifications.getPermissionsAsync();
     if (currentStatus === 'granted') {
       await AsyncStorage.setItem(ASKED_KEY, '1');
-      await pushCurrentToken();
+      await requestPushRegistration();
       return;
     }
 
@@ -86,7 +143,7 @@ export async function maybeRequestPushPermission(): Promise<void> {
     const { status: newStatus } = await Notifications.requestPermissionsAsync();
     await AsyncStorage.setItem(ASKED_KEY, '1');
     if (newStatus === 'granted') {
-      await pushCurrentToken();
+      await requestPushRegistration();
     }
   } catch (err) {
     console.warn('[PUSH] maybeRequestPushPermission failed:', err);
@@ -97,6 +154,7 @@ export async function maybeRequestPushPermission(): Promise<void> {
 // off — deactivates this device's token server-side so it stops receiving
 // sends, without revoking the OS-level permission itself.
 export async function disablePushNotifications(): Promise<void> {
+  if (isExpoGo()) return;
   try {
     const projectId = getProjectId();
     const tokenData = await Notifications.getExpoPushTokenAsync(projectId ? { projectId } : undefined);
@@ -168,7 +226,8 @@ export async function getInitialNotificationData(): Promise<PushNotificationData
 // immediately so we're never silently stuck on a stale token.
 export function addPushTokenRotationListener(onNewToken: () => void) {
   return Notifications.addPushTokenListener(() => {
-    void pushCurrentToken().catch((err) => console.warn('[PUSH] re-registration after token rotation failed:', err));
+    if (isExpoGo()) return;
+    void requestPushRegistration();
     onNewToken();
   });
 }

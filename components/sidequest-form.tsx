@@ -1,9 +1,13 @@
 ﻿import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
+import * as Haptics from 'expo-haptics';
+import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { Component, forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState, type ReactNode, type Ref } from 'react';
 import {
+  Alert,
+  Animated,
   Image,
   KeyboardAvoidingView,
   Modal,
@@ -32,6 +36,8 @@ import { uploadImageIfNeeded } from '@/lib/uploads';
 import { maybeRequestPushPermission } from '@/lib/push-notifications';
 import { useI18n } from '@/components/i18n-provider';
 import { PRIMARY_COLOR, PRIMARY_08, PRIMARY_20, SECONDARY_COLOR } from '@/constants/colors';
+import { MOTION_TIMING, MOTION_SPRING, MOTION_TRANSLATE, MOTION_STAGGER } from '@/MOTION_CONSTANTS';
+import { useListItemStagger } from '@/hooks/useMotion';
 
 type PickerTarget = 'date' | 'revealDate' | 'revealTime' | null;
 type MessageState = { type: 'success' | 'error'; text: string } | null;
@@ -57,6 +63,15 @@ export type SideQuestFormValues = {
 // Category values now come from the shared category visual system
 // (lib/category-symbol.ts). Labels are localized via i18n; icons + colors
 // come from getCategorySymbol(value).
+//
+// "sidequest" is excluded from the user-facing chip row — it's no longer a
+// category the user picks directly. It's set automatically (see
+// applySideQuestToggle below) when "Make this a SideQuest" is switched on,
+// and the rest of the app (cards, previews, the detail screen) already
+// renders it correctly via getCategorySymbol('sidequest') with no further
+// changes, since that's the exact same value this form used to let people
+// choose by hand.
+const NON_SIDEQUEST_CATEGORY_VALUES = CATEGORY_VALUES.filter((value) => value !== 'sidequest');
 
 /**
  * Strips a leading emoji + optional space from i18n strings like "✈️ Flight"
@@ -93,9 +108,9 @@ const TITLE_MAX_LENGTH = 45;
 const TEASER_MAX_LENGTH = 35;
 
 const TEASER_OPTIONS = [
-  { label: '2h innan', value: 120 },
-  { label: '12h innan', value: 720 },
-  { label: '1 dag innan', value: 1440 },
+  { labelKey: 'sidequest.form.teaserOffset2h', value: 120 },
+  { labelKey: 'sidequest.form.teaserOffset12h', value: 720 },
+  { labelKey: 'sidequest.form.teaserOffset1d', value: 1440 },
 ];
 
 function SideQuestFormInner({
@@ -110,7 +125,8 @@ function SideQuestFormInner({
   onSaved,
 }: Props, ref: Ref<SideQuestFormHandle>) {
   const insets = useSafeAreaInsets();
-  const { t } = useI18n();
+  const { t, language } = useI18n();
+  const locale = language === 'sv' ? 'sv-SE' : 'en-US';
   const [title, setTitle] = useState(initialValues?.title ?? '');
   const [description, setDescription] = useState(initialValues?.description ?? '');
   const [category, setCategory] = useState<string | null>(initialValues?.category ?? null);
@@ -132,14 +148,109 @@ function SideQuestFormInner({
   const [teaserOffsetMinutes, setTeaserOffsetMinutes] = useState<number | null>(initialValues?.teaserOffsetMinutes ?? 120);
   const [imageUrl, setImageUrl] = useState<string | null>(initialValues?.imageUrl ?? initialImageUrl ?? null);
   const [blurAmount, setBlurAmount] = useState<number>(initialValues?.blurAmount ?? DEFAULT_BLUR);
+  // SideQuest mode is a UI-level concept layered on top of the existing
+  // category + visibility fields — no new backend field. An activity is
+  // "a SideQuest" if it was tagged category=sidequest OR is hidden (hidden
+  // activities are inherently SideQuest moments regardless of how their
+  // category happened to be set before this toggle existed).
+  const [sideQuestMode, setSideQuestMode] = useState<boolean>(
+    (initialValues?.category ?? null) === 'sidequest' || (initialValues?.visibility ?? 'public') === 'hidden',
+  );
+  // Remembers the category the user had selected (flight/food/sight/other/
+  // none) from before SideQuest mode was switched on, so turning it back off
+  // restores their original tag instead of leaving it blank.
+  const previousCategoryRef = useRef<string | null>(
+    (initialValues?.category ?? null) === 'sidequest' ? null : (initialValues?.category ?? null),
+  );
   const [pickerTarget, setPickerTarget] = useState<PickerTarget>(null);
   const [message, setMessage] = useState<MessageState>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const bottomPadding = useMemo(() => Math.max(insets.bottom, 18) + 60, [insets.bottom]);
-  const revealAtPreview = visibility === 'hidden' ? formatRevealPreview(revealDate, revealTime) : 'Avslöjas direkt';
+  // Applies the actual state change once we know it's safe to (i.e. the
+  // turn-off-while-hidden confirmation, if needed, has already been accepted).
+  function applySideQuestToggle(next: boolean) {
+    if (next) {
+      previousCategoryRef.current = category === 'sidequest' ? null : category;
+      setCategory('sidequest');
+    } else {
+      setCategory(previousCategoryRef.current);
+      setVisibility('public');
+    }
+    setSideQuestMode(next);
+  }
+
+  function handleToggleSideQuest(next: boolean) {
+    if (!next && visibility === 'hidden') {
+      // Turning SideQuest off while Hidden is selected would silently make
+      // the activity public and drop its reveal/teaser settings — surface
+      // that consequence before it happens instead of doing it quietly.
+      Alert.alert(
+        t('sidequest.turnOffConfirmTitle'),
+        t('sidequest.turnOffConfirmBody'),
+        [
+          { text: t('common.cancel'), style: 'cancel' },
+          { text: t('sidequest.turnOff'), style: 'destructive', onPress: () => applySideQuestToggle(false) },
+        ],
+      );
+      return;
+    }
+    applySideQuestToggle(next);
+  }
+
+  // Soft expand + fade + slight upward motion for the Visible/Hidden choice
+  // revealed under the toggle. Mirrors useRevealAnimation's hand-built
+  // Animated.Value pattern (no layout-height measuring needed, since this is
+  // a fade+translate, not an actual height animation) — kept local to this
+  // form rather than a shared hook since nothing else needs this exact shape.
+  const [sideQuestSectionVisible, setSideQuestSectionVisible] = useState(sideQuestMode);
+  const sideQuestSectionOpacity = useRef(new Animated.Value(sideQuestMode ? 1 : 0)).current;
+  const sideQuestSectionTranslateY = useRef(new Animated.Value(sideQuestMode ? 0 : MOTION_TRANSLATE.smallY)).current;
+  const sideQuestHasMountedRef = useRef(false);
+  // Very slight stagger between the two revealed options so the transition
+  // reads as intentional rather than everything popping in at once.
+  const visibilityOptionStagger = useListItemStagger({
+    itemCount: 2,
+    gap: MOTION_STAGGER.tight,
+    duration: MOTION_TIMING.standard,
+    autoStart: false,
+  });
+
+  useEffect(() => {
+    // Skip the entrance animation on initial mount — an activity opened in
+    // edit mode that's already a SideQuest shouldn't animate in every time
+    // the screen opens, only in direct response to the user toggling it.
+    if (!sideQuestHasMountedRef.current) {
+      sideQuestHasMountedRef.current = true;
+      return;
+    }
+
+    if (sideQuestMode) {
+      setSideQuestSectionVisible(true);
+      Animated.parallel([
+        Animated.timing(sideQuestSectionOpacity, { toValue: 1, duration: MOTION_TIMING.standard, useNativeDriver: true }),
+        Animated.timing(sideQuestSectionTranslateY, { toValue: 0, duration: MOTION_TIMING.standard, useNativeDriver: true }),
+      ]).start();
+      visibilityOptionStagger.start();
+    } else {
+      // Calm collapse — quicker than the reveal, no bounce, no layout yank
+      // (it fades + slides down slightly before actually unmounting).
+      Animated.parallel([
+        Animated.timing(sideQuestSectionOpacity, { toValue: 0, duration: MOTION_TIMING.quick, useNativeDriver: true }),
+        Animated.timing(sideQuestSectionTranslateY, { toValue: MOTION_TRANSLATE.smallY, duration: MOTION_TIMING.quick, useNativeDriver: true }),
+      ]).start(() => setSideQuestSectionVisible(false));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sideQuestMode]);
+
+  // Matches create-trip.tsx's identical "cover + fields + primary button"
+  // layout convention (insets.bottom + 32) — this form previously used +60,
+  // which left a noticeable dead-space gap below the button when scrolled
+  // all the way down, making it feel like the button wasn't really at the
+  // bottom.
+  const bottomPadding = useMemo(() => Math.max(insets.bottom, 18) + 32, [insets.bottom]);
+  const revealAtPreview = visibility === 'hidden' ? formatRevealPreview(revealDate, revealTime, locale, t) : t('sidequest.form.revealsNow');
   const tripRangeText =
-    tripStartDate && tripEndDate ? `${formatShortDate(tripStartDate)} – ${formatShortDate(tripEndDate)}` : 'Laddar resans datum';
+    tripStartDate && tripEndDate ? `${formatShortDate(tripStartDate, locale)} – ${formatShortDate(tripEndDate, locale)}` : t('sidequest.form.loadingTripDates');
   const today = getDefaultDate();
   const selectedDateBeforeToday = isDateInputValid(date) && date < today;
   const selectedDateOutOfRange =
@@ -213,18 +324,18 @@ function SideQuestFormInner({
         })
         .catch((err) => {
           setLocationSuggestions([]);
-          setLocationError(err instanceof Error ? err.message : 'Kunde inte ladda kartförslag.');
+          setLocationError(err instanceof Error ? err.message : t('sidequest.form.placeSuggestionsFailed'));
         })
         .finally(() => setLocationLoading(false));
     }, 260);
 
     return () => clearTimeout(handle);
-  }, [locationPlace, locationQuery]);
+  }, [locationPlace, locationQuery, t]);
 
   async function handlePickImage() {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      setMessage({ type: 'error', text: 'Fototillstånd krävs för att lägga till en bild.' });
+      setMessage({ type: 'error', text: t('sidequest.form.photoPermissionRequired') });
       return;
     }
 
@@ -258,7 +369,7 @@ function SideQuestFormInner({
       setLocationError('');
       setMessage(null);
     } catch {
-      setLocationError('Kunde inte ladda detaljer för platsen.');
+      setLocationError(t('sidequest.form.placeDetailsFailed'));
     }
   }
 
@@ -275,7 +386,7 @@ function SideQuestFormInner({
       const selectedDateStr = toDateInput(selectedDate);
       const today = getDefaultDate();
       if (selectedDateStr < today) {
-        setMessage({ type: 'error', text: 'Aktiviteter kan inte vara tidigare än dagens datum.' });
+        setMessage({ type: 'error', text: t('sidequest.form.dateNotInPast') });
         return;
       }
       setDate(selectedDateStr);
@@ -294,7 +405,7 @@ function SideQuestFormInner({
   function handleActivityDateInput(value: string) {
     const today = getDefaultDate();
     if (isDateInputValid(value) && value < today) {
-      setMessage({ type: 'error', text: 'Aktiviteter kan inte vara tidigare än dagens datum.' });
+      setMessage({ type: 'error', text: t('sidequest.form.dateNotInPast') });
       return;
     }
     setDate(value);
@@ -305,20 +416,20 @@ function SideQuestFormInner({
     const normalizedTitle = title.trim();
 
     if (!normalizedTitle && visibility !== 'hidden') {
-      setMessage({ type: 'error', text: 'Ange en titel för aktiviteten.' });
+      setMessage({ type: 'error', text: t('sidequest.form.emptyTitle') });
       return null;
     }
 
     const today = getDefaultDate();
     if (date < today) {
-      setMessage({ type: 'error', text: 'Aktiviteter kan inte vara tidigare än dagens datum.' });
+      setMessage({ type: 'error', text: t('sidequest.form.dateNotInPast') });
       return null;
     }
 
     // The activity must fall inside the trip's date range — otherwise it
     // shows up on the calendar before the trip even starts.
     if (tripStartDate && tripEndDate && !isWithinRange(date, tripStartDate, tripEndDate)) {
-      setMessage({ type: 'error', text: `Aktiviteten måste vara inom resans datum (${formatShortDate(tripStartDate)} – ${formatShortDate(tripEndDate)}).` });
+      setMessage({ type: 'error', text: t('sidequest.form.outsideTripRange', { range: `${formatShortDate(tripStartDate, locale)} – ${formatShortDate(tripEndDate, locale)}` }) });
       return null;
     }
 
@@ -328,7 +439,7 @@ function SideQuestFormInner({
     if (visibility === 'hidden') {
       const revealMs = localDateTime(revealDate, revealTime).getTime();
       if (!Number.isFinite(revealMs) || revealMs <= Date.now()) {
-        setMessage({ type: 'error', text: 'Avslöjandetiden måste vara i framtiden — annars syns aktiviteten direkt.' });
+        setMessage({ type: 'error', text: t('sidequest.form.revealMustBeFuture') });
         return null;
       }
     }
@@ -379,7 +490,7 @@ function SideQuestFormInner({
         });
 
         if (!response.ok) {
-          throw new Error((await response.text()) || 'Kunde inte uppdatera aktiviteten.');
+          throw new Error((await response.text()) || t('sidequest.form.updateFailed'));
         }
 
         // Activities list for this trip just changed — invalidate the
@@ -399,7 +510,7 @@ function SideQuestFormInner({
         return { id: response.id };
       }
     } catch (error) {
-      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Kunde inte spara aktiviteten.' });
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : t('sidequest.form.saveFailed') });
       return null;
     } finally {
       setSubmitting(false);
@@ -520,37 +631,46 @@ function SideQuestFormInner({
       <TouchableOpacity activeOpacity={0.9} style={styles.coverCard} onPress={() => void handlePickImage()}>
         {imageUrl ? <Image source={{ uri: imageUrl }} style={styles.coverImage} /> : null}
         {!imageUrl ? <View style={styles.coverPlaceholderLayer} /> : null}
+        {sideQuestMode && visibility === 'public' ? (
+          // Subtle identity marker for a visible SideQuest — same compass
+          // glyph getCategorySymbol('sidequest') already renders everywhere
+          // else, not a new badge design.
+          <View style={styles.sideQuestCoverBadge}>
+            <Ionicons name="compass" size={13} color="#fff" />
+            <Text style={styles.coverBadgeText}>SideQuest</Text>
+          </View>
+        ) : null}
         {!imageUrl ? (
           <View style={styles.coverContent}>
             <View style={styles.coverIconCircle}>
               <Ionicons name="image-outline" size={30} color="#fff" />
             </View>
-            <Text style={styles.coverTitle}>Lägg till omslag (valfritt)</Text>
-            <Text style={styles.coverCopy}>Få aktiviteten att kännas spännande i flödet.</Text>
+            <Text style={styles.coverTitle}>{t('sidequest.form.addCoverTitle')}</Text>
+            <Text style={styles.coverCopy}>{t('sidequest.form.addCoverCopy')}</Text>
           </View>
         ) : (
           <View style={styles.coverBadgeRow}>
             <View style={styles.coverBadge}>
               <Ionicons name="camera-outline" size={14} color="#fff" />
-              <Text style={styles.coverBadgeText}>Ändra bild</Text>
+              <Text style={styles.coverBadgeText}>{t('sidequest.form.changeImage')}</Text>
             </View>
             <TouchableOpacity
               activeOpacity={0.88}
               style={[styles.coverBadge, styles.coverBadgeGhost]}
               onPress={() => setImageUrl(null)}>
               <Ionicons name="trash-outline" size={14} color="#fff" />
-              <Text style={styles.coverBadgeText}>Ta bort</Text>
+              <Text style={styles.coverBadgeText}>{t('common.remove')}</Text>
             </TouchableOpacity>
           </View>
         )}
       </TouchableOpacity>
 
       <View style={styles.block}>
-        <Text style={styles.label}>Titel <Text style={styles.labelRequired}>*</Text></Text>
+        <Text style={styles.label}>{t('sidequest.form.titleLabel')} <Text style={styles.labelRequired}>*</Text></Text>
         <TextInput
           value={title}
           onChangeText={setTitle}
-          placeholder="Vad ska aktiviteten heta?"
+          placeholder={t('sidequest.form.titlePlaceholder')}
           placeholderTextColor="#b7bcc7"
           style={styles.titleInput}
           maxLength={TITLE_MAX_LENGTH}
@@ -558,38 +678,40 @@ function SideQuestFormInner({
         <Text style={styles.charCounter}>{title.length}/{TITLE_MAX_LENGTH}</Text>
       </View>
 
-      <View style={styles.block}>
-        <Text style={styles.label}>Kategori <Text style={styles.labelOptional}>(valfritt)</Text></Text>
-        <View style={styles.categoryRow}>
-          {CATEGORY_VALUES.map((value) => {
-            const symbol = getCategorySymbol(value);
-            const active = category === value;
-            const label = stripLeadingEmoji(t(symbol.labelKey));
-            return (
-              <TouchableOpacity
-                key={value}
-                activeOpacity={0.8}
-                style={[styles.categoryChip, active && { borderColor: PRIMARY_COLOR, backgroundColor: PRIMARY_08 }]}
-                onPress={() => setCategory(active ? null : value)}>
-                <Ionicons
-                  name={symbol.icon}
-                  size={16}
-                  color={active ? PRIMARY_COLOR : symbol.iconColor}
-                  style={{ marginRight: 6 }}
-                />
-                <Text style={[styles.categoryLabel, active && { color: PRIMARY_COLOR, fontWeight: '600' }]}>{label}</Text>
-              </TouchableOpacity>
-            );
-          })}
+      {!sideQuestMode ? (
+        <View style={styles.block}>
+          <Text style={styles.label}>{t('sidequest.form.categoryLabel')} <Text style={styles.labelOptional}>{t('common.optionalSuffix')}</Text></Text>
+          <View style={styles.categoryRow}>
+            {NON_SIDEQUEST_CATEGORY_VALUES.map((value) => {
+              const symbol = getCategorySymbol(value);
+              const active = category === value;
+              const label = stripLeadingEmoji(t(symbol.labelKey));
+              return (
+                <TouchableOpacity
+                  key={value}
+                  activeOpacity={0.8}
+                  style={[styles.categoryChip, active && { borderColor: PRIMARY_COLOR, backgroundColor: PRIMARY_08 }]}
+                  onPress={() => setCategory(active ? null : value)}>
+                  <Ionicons
+                    name={symbol.icon}
+                    size={16}
+                    color={active ? PRIMARY_COLOR : symbol.iconColor}
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text style={[styles.categoryLabel, active && { color: PRIMARY_COLOR, fontWeight: '600' }]}>{label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
         </View>
-      </View>
+      ) : null}
 
       {category === 'flight' ? (
         <View style={styles.block}>
-          <Text style={styles.label}>Flygrutt <Text style={styles.labelOptional}>(valfritt)</Text></Text>
+          <Text style={styles.label}>{t('sidequest.form.flightRouteLabel')} <Text style={styles.labelOptional}>{t('common.optionalSuffix')}</Text></Text>
           <View style={styles.flightRow}>
             <View style={styles.flightField}>
-              <Text style={styles.flightFieldLabel}>FRÅN</Text>
+              <Text style={styles.flightFieldLabel}>{t('sidequest.form.flightFrom')}</Text>
               <TextInput
                 value={flightFrom}
                 onChangeText={setFlightFrom}
@@ -603,7 +725,7 @@ function SideQuestFormInner({
               <Ionicons name="airplane" size={18} color={SECONDARY_COLOR} />
             </View>
             <View style={styles.flightField}>
-              <Text style={styles.flightFieldLabel}>TILL</Text>
+              <Text style={styles.flightFieldLabel}>{t('sidequest.form.flightTo')}</Text>
               <TextInput
                 value={flightTo}
                 onChangeText={setFlightTo}
@@ -628,11 +750,11 @@ function SideQuestFormInner({
       ) : null}
 
       <View style={styles.block}>
-        <Text style={styles.label}>Beskrivning <Text style={styles.labelOptional}>(valfritt)</Text></Text>
+        <Text style={styles.label}>{t('sidequest.form.descriptionLabel')} <Text style={styles.labelOptional}>{t('common.optionalSuffix')}</Text></Text>
         <TextInput
           value={description}
           onChangeText={setDescription}
-          placeholder="En ledtråd, känsla eller hemlig plan för gruppen."
+          placeholder={t('sidequest.form.descriptionPlaceholder')}
           placeholderTextColor="#b7bcc7"
           multiline
           textAlignVertical="top"
@@ -641,7 +763,7 @@ function SideQuestFormInner({
       </View>
 
       <View style={styles.block}>
-        <Text style={styles.label}>Plats <Text style={styles.labelOptional}>(valfritt)</Text></Text>
+        <Text style={styles.label}>{t('sidequest.form.locationLabel')} <Text style={styles.labelOptional}>{t('common.optionalSuffix')}</Text></Text>
         <TextInput
           value={locationQuery}
           onChangeText={(value) => {
@@ -650,12 +772,12 @@ function SideQuestFormInner({
               setLocationPlace(null);
             }
           }}
-          placeholder="Sök en plats"
+          placeholder={t('sidequest.form.locationPlaceholder')}
           placeholderTextColor="#b7bcc7"
           style={styles.input}
         />
-        <Text style={styles.helperText}>Sök och välj en plats från Google Maps.</Text>
-        {locationLoading ? <Text style={styles.locationStatus}>Söker platser...</Text> : null}
+        <Text style={styles.helperText}>{t('sidequest.form.locationHelper')}</Text>
+        {locationLoading ? <Text style={styles.locationStatus}>{t('sidequest.form.searchingPlaces')}</Text> : null}
         {locationError ? <Text style={styles.locationError}>{locationError}</Text> : null}
         {locationSuggestions.length > 0 ? (
           <View style={styles.locationSuggestions}>
@@ -677,11 +799,11 @@ function SideQuestFormInner({
       </View>
 
       <View style={styles.block}>
-        <Text style={styles.label}>När händer det? <Text style={styles.labelRequired}>*</Text></Text>
+        <Text style={styles.label}>{t('sidequest.form.whenLabel')} <Text style={styles.labelRequired}>*</Text></Text>
         {Platform.OS === 'web' ? (
           <View style={[styles.selectionCard, selectedDateOutOfRange || selectedDateBeforeToday ? styles.selectionCardError : null]}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.selectionEyebrow}>AKTIVITETSDATUM</Text>
+              <Text style={styles.selectionEyebrow}>{t('sidequest.form.activityDateEyebrow')}</Text>
               <TextInput
                 value={date}
                 onChangeText={handleActivityDateInput}
@@ -691,7 +813,7 @@ function SideQuestFormInner({
                 keyboardType="numbers-and-punctuation"
                 maxLength={10}
               />
-              <Text style={styles.selectionHint}>Inom {tripRangeText}</Text>
+              <Text style={styles.selectionHint}>{t('sidequest.form.withinRange', { range: tripRangeText })}</Text>
             </View>
             <Ionicons name="calendar-outline" size={22} color="#5f6570" />
           </View>
@@ -705,9 +827,9 @@ function SideQuestFormInner({
             ]}
             onPress={() => setPickerTarget('date')}>
             <View>
-              <Text style={styles.selectionEyebrow}>AKTIVITETSDATUM</Text>
-              <Text style={styles.selectionValue}>{formatLongDate(date)}</Text>
-              <Text style={styles.selectionHint}>Inom {tripRangeText}</Text>
+              <Text style={styles.selectionEyebrow}>{t('sidequest.form.activityDateEyebrow')}</Text>
+              <Text style={styles.selectionValue}>{formatLongDate(date, locale)}</Text>
+              <Text style={styles.selectionHint}>{t('sidequest.form.withinRange', { range: tripRangeText })}</Text>
             </View>
             <Ionicons name="calendar-outline" size={22} color="#5f6570" />
           </TouchableOpacity>
@@ -715,35 +837,53 @@ function SideQuestFormInner({
       </View>
 
       <View style={styles.block}>
-        <Text style={styles.label}>Synlighet</Text>
-        <View style={styles.segmented}>
-          <VisibilityOption
-            label="Synlig"
-            subtitle="Alla ser den direkt"
-            active={visibility === 'public'}
-            onPress={() => {
-              setVisibility('public');
-              setPickerTarget(null);
-            }}
-          />
-          <VisibilityOption
-            label="Dold"
-            subtitle="Hemlig tills avslöjandet"
-            active={visibility === 'hidden'}
-            onPress={() => setVisibility('hidden')}
-          />
-        </View>
+        {sideQuestMode ? (
+          <SideQuestActiveStatusRow onTurnOff={() => handleToggleSideQuest(false)} />
+        ) : (
+          <SideQuestSlideToActivate onActivate={() => applySideQuestToggle(true)} />
+        )}
+        {sideQuestSectionVisible ? (
+          <Animated.View
+            style={{
+              marginTop: 20,
+              opacity: sideQuestSectionOpacity,
+              transform: [{ translateY: sideQuestSectionTranslateY }],
+            }}>
+            <Text style={styles.label}>{t('sidequest.form.visibilityLabel')}</Text>
+            <View style={styles.segmented}>
+              <Animated.View style={visibilityOptionStagger.getAnimatedStyle(0)}>
+                <VisibilityOption
+                  label={t('sidequest.form.visiblePublicLabel')}
+                  subtitle={t('sidequest.form.visiblePublicSubtitle')}
+                  active={visibility === 'public'}
+                  onPress={() => {
+                    setVisibility('public');
+                    setPickerTarget(null);
+                  }}
+                />
+              </Animated.View>
+              <Animated.View style={visibilityOptionStagger.getAnimatedStyle(1)}>
+                <VisibilityOption
+                  label={t('sidequest.form.visibleHiddenLabel')}
+                  subtitle={t('sidequest.form.visibleHiddenSubtitle')}
+                  active={visibility === 'hidden'}
+                  onPress={() => setVisibility('hidden')}
+                />
+              </Animated.View>
+            </View>
+          </Animated.View>
+        ) : null}
       </View>
 
       {visibility === 'hidden' ? (
         <>
           <View style={styles.block}>
-            <Text style={styles.label}>Avslöjandeschema <Text style={styles.labelRequired}>*</Text></Text>
+            <Text style={styles.label}>{t('sidequest.form.revealScheduleLabel')} <Text style={styles.labelRequired}>*</Text></Text>
             <View style={styles.revealRow}>
               {Platform.OS === 'web' ? (
                 <View style={[styles.selectionCard, styles.revealCard, revealDateOutOfRange ? styles.selectionCardError : null]}>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.selectionEyebrow}>AVSLÖJANDEDATUM</Text>
+                    <Text style={styles.selectionEyebrow}>{t('sidequest.form.revealDateEyebrow')}</Text>
                     <TextInput
                       value={revealDate}
                       onChangeText={setRevealDate}
@@ -753,7 +893,7 @@ function SideQuestFormInner({
                       keyboardType="numbers-and-punctuation"
                       maxLength={10}
                     />
-                    <Text style={styles.selectionHint} numberOfLines={1}>{`${formatShortDate(revealRange.min)} – ${formatShortDate(revealRange.max)}`}</Text>
+                    <Text style={styles.selectionHint} numberOfLines={1}>{`${formatShortDate(revealRange.min, locale)} – ${formatShortDate(revealRange.max, locale)}`}</Text>
                   </View>
                   <Ionicons name="calendar-outline" size={22} color="#5f6570" />
                 </View>
@@ -768,9 +908,9 @@ function SideQuestFormInner({
                   ]}
                   onPress={() => setPickerTarget('revealDate')}>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.selectionEyebrow}>AVSLÖJANDEDATUM</Text>
-                    <Text style={styles.selectionValue} numberOfLines={1}>{formatShortDate(revealDate)}</Text>
-                    <Text style={styles.selectionHint} numberOfLines={1}>{`${formatShortDate(revealRange.min)} – ${formatShortDate(revealRange.max)}`}</Text>
+                    <Text style={styles.selectionEyebrow}>{t('sidequest.form.revealDateEyebrow')}</Text>
+                    <Text style={styles.selectionValue} numberOfLines={1}>{formatShortDate(revealDate, locale)}</Text>
+                    <Text style={styles.selectionHint} numberOfLines={1}>{`${formatShortDate(revealRange.min, locale)} – ${formatShortDate(revealRange.max, locale)}`}</Text>
                   </View>
                   <Ionicons name="calendar-outline" size={22} color="#5f6570" />
                 </TouchableOpacity>
@@ -778,7 +918,7 @@ function SideQuestFormInner({
               {Platform.OS === 'web' ? (
                 <View style={[styles.selectionCard, styles.revealCard]}>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.selectionEyebrow}>AVSLÖJANDETID</Text>
+                    <Text style={styles.selectionEyebrow}>{t('sidequest.form.revealTimeEyebrow')}</Text>
                     <TextInput
                       value={revealTime}
                       onChangeText={setRevealTime}
@@ -793,7 +933,7 @@ function SideQuestFormInner({
               ) : (
                 <TouchableOpacity activeOpacity={0.92} style={[styles.selectionCard, styles.revealCard, pickerTarget === 'revealTime' ? styles.selectionCardActive : null]} onPress={() => setPickerTarget('revealTime')}>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.selectionEyebrow}>AVSLÖJANDETID</Text>
+                    <Text style={styles.selectionEyebrow}>{t('sidequest.form.revealTimeEyebrow')}</Text>
                     <Text style={styles.selectionValue} numberOfLines={1}>{formatTime(revealTime)}</Text>
                   </View>
                   <Ionicons name="time-outline" size={22} color="#5f6570" />
@@ -807,17 +947,17 @@ function SideQuestFormInner({
                 color={revealIsPast ? '#a52617' : PRIMARY_COLOR}
               />
               <Text style={[styles.revealSummaryText, revealIsPast ? styles.revealSummaryTextWarn : null]} numberOfLines={2}>
-                {revealIsPast ? 'Avslöjandetiden har redan passerat — välj en tid i framtiden.' : revealAtPreview}
+                {revealIsPast ? t('sidequest.form.revealTimePast') : revealAtPreview}
               </Text>
             </View>
           </View>
 
           <View style={styles.block}>
-            <Text style={styles.label}>Teaser <Text style={styles.labelOptional}>(valfritt)</Text></Text>
+            <Text style={styles.label}>{t('sidequest.form.teaserLabel')} <Text style={styles.labelOptional}>{t('common.optionalSuffix')}</Text></Text>
             <TextInput
               value={teaser}
               onChangeText={setTeaser}
-              placeholder="Frivillig ledtråd till gruppen innan avslöjandet"
+              placeholder={t('sidequest.form.teaserPlaceholder')}
               placeholderTextColor="#b7bcc7"
               style={styles.input}
               maxLength={TEASER_MAX_LENGTH}
@@ -832,26 +972,26 @@ function SideQuestFormInner({
                     style={[styles.teaserChip, teaserOffsetMinutes === option.value ? styles.teaserChipActive : null]}
                     onPress={() => setTeaserOffsetMinutes(option.value)}>
                     <Text style={[styles.teaserChipText, teaserOffsetMinutes === option.value ? styles.teaserChipTextActive : null]}>
-                      {option.label}
+                      {t(option.labelKey)}
                     </Text>
                   </TouchableOpacity>
                 ))}
               </View>
             ) : (
-              <Text style={styles.helperText}>Lägg bara till en ledtråd om du vill bygga spänning innan avslöjandet.</Text>
+              <Text style={styles.helperText}>{t('sidequest.form.teaserHelper')}</Text>
             )}
           </View>
 
           {imageUrl ? (
             <View style={styles.block}>
-              <Text style={styles.label}>Förhandsvisning</Text>
-              <Text style={styles.helperText}>Så här ser bilden ut för gruppen innan avslöjandet. Dra för mer eller mindre oskärpa.</Text>
+              <Text style={styles.label}>{t('sidequest.form.previewLabel')}</Text>
+              <Text style={styles.helperText}>{t('sidequest.form.previewHelper')}</Text>
               <View style={styles.blurPreviewCard}>
                 <Image source={{ uri: imageUrl }} style={styles.blurPreviewImage} blurRadius={blurAmount} />
                 <View style={styles.blurPreviewOverlay} />
                 <View style={styles.blurPreviewBadge}>
                   <Ionicons name="eye-off-outline" size={14} color="#fff" />
-                  <Text style={styles.blurPreviewBadgeText}>Dold tills avslöjandet</Text>
+                  <Text style={styles.blurPreviewBadgeText}>{t('sidequest.form.hiddenUntilReveal')}</Text>
                 </View>
                 {teaser.trim() ? (
                   <Text style={styles.blurPreviewTeaser} numberOfLines={2}>{teaser.trim()}</Text>
@@ -859,8 +999,8 @@ function SideQuestFormInner({
               </View>
               <BlurSlider value={blurAmount} min={MIN_BLUR} max={MAX_BLUR} onChange={setBlurAmount} />
               <View style={styles.blurSliderLabels}>
-                <Text style={styles.blurSliderLabel}>Mindre oskärpa</Text>
-                <Text style={styles.blurSliderLabel}>Mer oskärpa</Text>
+                <Text style={styles.blurSliderLabel}>{t('sidequest.form.lessBlur')}</Text>
+                <Text style={styles.blurSliderLabel}>{t('sidequest.form.moreBlur')}</Text>
               </View>
             </View>
           ) : null}
@@ -875,14 +1015,14 @@ function SideQuestFormInner({
       ) : null}
 
       <TouchableOpacity activeOpacity={0.92} style={[styles.primaryButton, { backgroundColor: PRIMARY_COLOR, shadowColor: PRIMARY_COLOR }, submitting ? styles.primaryButtonDisabled : null]} disabled={submitting} onPress={() => void handleSubmit()}>
-        <Text style={styles.primaryButtonText}>{submitting ? 'Sparar...' : mode === 'edit' ? 'Spara ändringar' : 'Lägg till aktivitet'}</Text>
+        <Text style={styles.primaryButtonText}>{submitting ? t('sidequest.form.saving') : mode === 'edit' ? t('sidequest.form.saveChanges') : t('sidequest.form.addActivity')}</Text>
       </TouchableOpacity>
 
       {Platform.OS !== 'web' ? (
         <PickerSheet
           visible={pickerTarget !== null}
-          title={getPickerTitle(pickerTarget)}
-          subtitle={pickerTarget === 'date' ? `Tillåtet intervall: ${tripRangeText}` : pickerTarget === 'revealDate' ? 'Välj när aktiviteten ska avslöjas.' : 'Välj avslöjandetid.'}
+          title={getPickerTitle(pickerTarget, t)}
+          subtitle={pickerTarget === 'date' ? t('sidequest.form.allowedRange', { range: tripRangeText }) : pickerTarget === 'revealDate' ? t('sidequest.form.chooseRevealMoment') : t('sidequest.form.chooseRevealTime')}
           onClose={() => setPickerTarget(null)}>
           {pickerTarget === 'revealTime' ? (
             // Custom on-brand time wheel. Avoids the native time picker, whose
@@ -1075,7 +1215,7 @@ function BlurSlider({ value, min, max, onChange }: { value: number; min: number;
 
 // Catches render-time errors from the native date/time picker so a bad value
 // surfaces as an on-screen message instead of taking down the whole app.
-class PickerErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+class PickerErrorBoundary extends Component<{ children: ReactNode; t: (key: string, vars?: Record<string, string | number>) => string }, { error: Error | null }> {
   state: { error: Error | null } = { error: null };
 
   static getDerivedStateFromError(error: Error) {
@@ -1086,7 +1226,7 @@ class PickerErrorBoundary extends Component<{ children: ReactNode }, { error: Er
     if (this.state.error) {
       return (
         <Text style={{ color: '#a52617', fontSize: 13, padding: 16, textAlign: 'center' }}>
-          Tidsväljaren kunde inte öppnas: {this.state.error.message}
+          {this.props.t('sidequest.form.timePickerFailed', { message: this.state.error.message })}
         </Text>
       );
     }
@@ -1106,7 +1246,9 @@ function PickerSheet({
   subtitle: string;
   onClose: () => void;
   children: React.ReactNode;
-}) {  return (
+}) {
+  const { t } = useI18n();
+  return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.modalBackdrop}>
         <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={onClose} />
@@ -1115,10 +1257,10 @@ function PickerSheet({
           <Text style={styles.modalTitle}>{title}</Text>
           <Text style={styles.modalSubtitle}>{subtitle}</Text>
           <View style={styles.modalPickerWrap}>
-            <PickerErrorBoundary>{children}</PickerErrorBoundary>
+            <PickerErrorBoundary t={t}>{children}</PickerErrorBoundary>
           </View>
           <TouchableOpacity activeOpacity={0.9} style={[styles.doneButton, { backgroundColor: PRIMARY_COLOR }]} onPress={onClose}>
-            <Text style={styles.doneButtonText}>Klar</Text>
+            <Text style={styles.doneButtonText}>{t('common.done')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -1141,6 +1283,226 @@ function VisibilityOption({
       <Text style={[styles.segmentTitle, active && { color: PRIMARY_COLOR }]}>{label}</Text>
       <Text style={[styles.segmentSubtitle, active && { color: PRIMARY_20 }]}>{subtitle}</Text>
     </TouchableOpacity>
+  );
+}
+
+// ── SideQuest mode toggle ───────────────────────────────────────────────────
+// A normal activity is "made into" a SideQuest here, at Visibility — not
+// chosen as a category up front. Uses the same compass glyph as
+// getCategorySymbol('sidequest') so the toggle's steady-state icon matches
+// every card/preview that will render this activity once saved. The brief
+// sparkle pop on activation is the "unlock" moment; turning off never plays
+// it in reverse — just a calm fade, per the brief.
+
+const SIDEQUEST_ICON_COLOR_ON = '#7c3aed'; // matches CATEGORY_SYMBOLS.sidequest.iconColor
+const SIDEQUEST_ICON_COLOR_OFF = '#b7bcc7';
+
+// ── Slide-to-activate (OFF state) ───────────────────────────────────────────
+// A phone-unlock-style drag, not a flip switch — SideQuest is the app's
+// signature feature, so turning it on gets its own small ceremony. Built on
+// the same hand-rolled PanResponder approach as BlurSlider above (no new
+// gesture dependency), but deliberately does NOT claim the responder on
+// touch-start the way BlurSlider does: BlurSlider's touch target is a thin
+// track where that's harmless, but this control is full-width and tall, so
+// claiming every touch-down would eat vertical scroll gestures that happen
+// to start on top of it. Only claiming once a move is clearly horizontal
+// (see onMoveShouldSetPanResponder) keeps the ScrollView free to scroll.
+const SLIDE_TRACK_HEIGHT = 54;
+const SLIDE_THUMB_SIZE = 46;
+const SLIDE_TRACK_PADDING = 4;
+const SLIDE_COMPLETION_THRESHOLD = 0.82;
+const SLIDE_HAPTIC_THRESHOLD = 0.45;
+// Bold, saturated gradient backdrop — deliberately more vivid than the rest
+// of the form's pastel palette, since this one control is meant to stand out
+// as the app's signature moment rather than blend in. Built from the app's
+// own brand colors (secondary teal → primary pink) rather than an unrelated
+// palette, so it still reads as "this app" instead of a generic gradient.
+const SLIDE_TRACK_GRADIENT_COLORS = [SECONDARY_COLOR, PRIMARY_COLOR] as const;
+
+// Scattered, independently-timed glints across the track — an idle ambient
+// loop, unrelated to drag progress, so it keeps going at rest. Positions/
+// delays/durations are hand-picked (not randomized at runtime) so they're
+// stable across re-renders and don't all happen to sync up.
+const TRACK_SPARKLES = [
+  { left: '6%', topOffset: -7, delay: 0, duration: 2200 },
+  { left: '18%', topOffset: 5, delay: 750, duration: 2000 },
+  { left: '30%', topOffset: 6, delay: 600, duration: 2600 },
+  { left: '41%', topOffset: -6, delay: 1400, duration: 2300 },
+  { left: '52%', topOffset: -5, delay: 1200, duration: 1900 },
+  { left: '63%', topOffset: 7, delay: 200, duration: 2500 },
+  { left: '72%', topOffset: 7, delay: 300, duration: 2400 },
+  { left: '80%', topOffset: -6, delay: 1050, duration: 2100 },
+  { left: '88%', topOffset: -4, delay: 900, duration: 2100 },
+  { left: '95%', topOffset: 5, delay: 450, duration: 2350 },
+] as const;
+
+function TrackSparkle({ left, topOffset, delay, duration }: { left: `${number}%`; topOffset: number; delay: number; duration: number }) {
+  const opacity = useRef(new Animated.Value(0)).current;
+  const scale = useRef(new Animated.Value(0.5)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.delay(delay),
+        Animated.parallel([
+          Animated.timing(opacity, { toValue: 1, duration: duration * 0.35, useNativeDriver: true }),
+          Animated.timing(scale, { toValue: 1, duration: duration * 0.35, useNativeDriver: true }),
+        ]),
+        Animated.parallel([
+          Animated.timing(opacity, { toValue: 0, duration: duration * 0.45, useNativeDriver: true }),
+          Animated.timing(scale, { toValue: 0.5, duration: duration * 0.45, useNativeDriver: true }),
+        ]),
+        Animated.delay(duration * 0.4),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [delay, duration, opacity, scale]);
+
+  return (
+    <Animated.View
+      style={[
+        styles.trackSparkle,
+        { left, top: SLIDE_TRACK_HEIGHT / 2 - 2 + topOffset, opacity, transform: [{ scale }] },
+      ]}
+    />
+  );
+}
+
+function SideQuestSlideToActivate({ onActivate }: { onActivate: () => void }) {
+  const { t } = useI18n();
+  const [trackWidth, setTrackWidth] = useState(0);
+  const progressAnim = useRef(new Animated.Value(0)).current; // 0..1, JS-driven (drives width + translateX)
+  const sparkOpacity = useRef(new Animated.Value(0)).current;
+  const hapticFiredRef = useRef(false);
+  // PanResponder.create() below runs ONCE (it's memoized in a useRef), so its
+  // callbacks close over whatever maxTranslate was on that first render —
+  // which is computed from trackWidth before onLayout has ever measured
+  // anything (0). Without this ref, every drag would divide by that stale,
+  // near-zero value and "complete" after a couple of pixels. Reading a ref
+  // inside the callback (instead of a plain closed-over number) means the
+  // callback sees whatever the latest layout measured, not the first one.
+  const maxTranslateRef = useRef(1);
+  const maxTranslate = Math.max(1, trackWidth - SLIDE_THUMB_SIZE - SLIDE_TRACK_PADDING * 2);
+  maxTranslateRef.current = maxTranslate;
+
+  function springBack() {
+    Animated.spring(progressAnim, { toValue: 0, useNativeDriver: false, ...MOTION_SPRING.smooth }).start();
+  }
+
+  function completeActivation() {
+    Animated.timing(progressAnim, { toValue: 1, duration: 120, useNativeDriver: false }).start(() => {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      Animated.sequence([
+        Animated.timing(sparkOpacity, { toValue: 1, duration: 100, useNativeDriver: true }),
+        Animated.timing(sparkOpacity, { toValue: 0, duration: 160, useNativeDriver: true }),
+      ]).start();
+      onActivate();
+    });
+  }
+
+  const responder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_evt, gesture) =>
+        Math.abs(gesture.dx) > 6 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.5,
+      onPanResponderGrant: () => {
+        hapticFiredRef.current = false;
+      },
+      onPanResponderMove: (_evt, gesture) => {
+        const progress = Math.max(0, Math.min(1, gesture.dx / maxTranslateRef.current));
+        progressAnim.setValue(progress);
+        if (!hapticFiredRef.current && progress >= SLIDE_HAPTIC_THRESHOLD) {
+          hapticFiredRef.current = true;
+          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+        }
+      },
+      onPanResponderRelease: (_evt, gesture) => {
+        const progress = Math.max(0, Math.min(1, gesture.dx / maxTranslateRef.current));
+        if (progress >= SLIDE_COMPLETION_THRESHOLD) {
+          completeActivation();
+        } else {
+          springBack();
+        }
+      },
+      // Without this, the surrounding ScrollView can reclaim the gesture
+      // mid-drag the moment the finger drifts even slightly off-axis (which
+      // is normal for a real thumb — fingers don't move in a perfectly
+      // straight line), and RN hands control back to the scroll view via
+      // onPanResponderTerminate, snapping the thumb back. Once we've been
+      // granted the gesture, keep it until the finger actually lifts.
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderTerminate: () => springBack(),
+    }),
+  ).current;
+
+  const thumbTranslate = progressAnim.interpolate({ inputRange: [0, 1], outputRange: [0, maxTranslate] });
+  const labelOpacity = progressAnim.interpolate({ inputRange: [0, 0.3], outputRange: [1, 0], extrapolate: 'clamp' });
+  const lockOpacity = progressAnim.interpolate({ inputRange: [0, 0.7, 1], outputRange: [1, 0.15, 0], extrapolate: 'clamp' });
+  const compassOpacity = progressAnim.interpolate({ inputRange: [0, 0.7, 1], outputRange: [0, 0.85, 1], extrapolate: 'clamp' });
+
+  return (
+    <View
+      style={styles.slideTrack}
+      onLayout={(e) => setTrackWidth(e.nativeEvent.layout.width)}
+      accessible
+      accessibilityRole="button"
+      accessibilityLabel={t('sidequest.activateAccessibleLabel')}
+      accessibilityHint={t('sidequest.activateAccessibleHint')}
+      onAccessibilityTap={completeActivation}>
+      <LinearGradient
+        colors={SLIDE_TRACK_GRADIENT_COLORS}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={StyleSheet.absoluteFillObject}
+      />
+      <View pointerEvents="none" style={StyleSheet.absoluteFillObject}>
+        {TRACK_SPARKLES.map((s, i) => (
+          <TrackSparkle key={i} left={s.left} topOffset={s.topOffset} delay={s.delay} duration={s.duration} />
+        ))}
+      </View>
+      <View style={[StyleSheet.absoluteFillObject, { justifyContent: 'center' }]} importantForAccessibility="no-hide-descendants">
+        <Animated.Text style={[styles.slideTrackLabel, { opacity: labelOpacity }]} numberOfLines={1}>
+          {t('sidequest.slideToActivate')}
+        </Animated.Text>
+        <Animated.View
+          style={[styles.slideThumb, { transform: [{ translateX: thumbTranslate }] }]}
+          hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
+          {...responder.panHandlers}>
+          <Animated.View style={[StyleSheet.absoluteFillObject, styles.slideThumbIconLayer, { opacity: lockOpacity }]}>
+            <Ionicons name="lock-closed" size={18} color={SIDEQUEST_ICON_COLOR_ON} />
+          </Animated.View>
+          <Animated.View style={[styles.slideThumbIconLayer, { opacity: compassOpacity }]}>
+            <Ionicons name="compass" size={18} color={SIDEQUEST_ICON_COLOR_ON} />
+          </Animated.View>
+          <Animated.View pointerEvents="none" style={[styles.sideQuestSpark, { opacity: sparkOpacity }]}>
+            <Ionicons name="sparkles" size={13} color={SIDEQUEST_ICON_COLOR_ON} />
+          </Animated.View>
+        </Animated.View>
+      </View>
+    </View>
+  );
+}
+
+// ── Enabled status row (ON state) ───────────────────────────────────────────
+// Replaces the slide control entirely once active — per the brief, the
+// activated state is calm and permanent-feeling, not a switch left sitting
+// in the "on" position.
+function SideQuestActiveStatusRow({ onTurnOff }: { onTurnOff: () => void }) {
+  const { t } = useI18n();
+  return (
+    <View style={styles.sideQuestStatusRow}>
+      <View style={styles.sideQuestToggleIconWrap}>
+        <Ionicons name="compass" size={20} color={SIDEQUEST_ICON_COLOR_ON} />
+      </View>
+      <View style={styles.sideQuestToggleCopy}>
+        <Text style={styles.sideQuestToggleLabel}>{t('sidequest.activeStatusLabel')}</Text>
+        <Text style={styles.sideQuestToggleHelper}>{t('sidequest.activeStatusHelper')}</Text>
+      </View>
+      <TouchableOpacity activeOpacity={0.7} onPress={onTurnOff} hitSlop={8}>
+        <Text style={styles.sideQuestTurnOffText}>{t('sidequest.turnOff')}</Text>
+      </TouchableOpacity>
+    </View>
   );
 }
 
@@ -1179,12 +1541,12 @@ function formatDateParts(year: number, month: number, day: number) {
   return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
-function formatLongDate(value: string) {
-  return new Intl.DateTimeFormat('sv-SE', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(`${value}T12:00:00`));
+function formatLongDate(value: string, locale: string) {
+  return new Intl.DateTimeFormat(locale, { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(`${value}T12:00:00`));
 }
 
-function formatShortDate(value: string) {
-  return new Intl.DateTimeFormat('sv-SE', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(`${value}T12:00:00`));
+function formatShortDate(value: string, locale: string) {
+  return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(`${value}T12:00:00`));
 }
 
 function formatTime(value: string) {
@@ -1224,8 +1586,8 @@ function localDateTime(date: string, time: string): Date {
   );
 }
 
-function formatRevealPreview(date: string, time: string) {
-  return `Avslöjas ${formatShortDate(date)} kl ${formatTime(time)}`;
+function formatRevealPreview(date: string, time: string, locale: string, t: (key: string, vars?: Record<string, string | number>) => string) {
+  return t('sidequest.form.revealsAt', { date: formatShortDate(date, locale), time: formatTime(time) });
 }
 
 function combineDateAndTime(date: string, time: string) {
@@ -1242,11 +1604,11 @@ function isWithinRange(value: string, min: string, max: string) {
   return current >= start && current <= end;
 }
 
-function getPickerTitle(target: PickerTarget) {
-  if (target === 'date') return 'Välj aktivitetsdatum';
-  if (target === 'revealDate') return 'Välj avslöjandedatum';
-  if (target === 'revealTime') return 'Välj avslöjandetid';
-  return 'Välj datum';
+function getPickerTitle(target: PickerTarget, t: (key: string, vars?: Record<string, string | number>) => string) {
+  if (target === 'date') return t('sidequest.form.pickActivityDate');
+  if (target === 'revealDate') return t('sidequest.form.pickRevealDate');
+  if (target === 'revealTime') return t('sidequest.form.pickRevealTime');
+  return t('sidequest.form.pickDate');
 }
 
 function getRevealRange(tripStartDate?: string | null, tripEndDate?: string | null, sideQuestDate?: string | null) {
@@ -1396,6 +1758,18 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
   },
+  sideQuestCoverBadge: {
+    position: 'absolute',
+    left: 16,
+    top: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    backgroundColor: 'rgba(124,58,237,0.55)',
+  },
   block: {
     marginTop: 24,
   },
@@ -1513,6 +1887,101 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: '800',
+  },
+  sideQuestStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: '#eaedf2',
+    backgroundColor: '#fff',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+  },
+  sideQuestToggleIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f5f3ff',
+  },
+  sideQuestSpark: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+  },
+  sideQuestToggleCopy: {
+    flex: 1,
+  },
+  sideQuestToggleLabel: {
+    color: '#161821',
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+  },
+  sideQuestToggleHelper: {
+    marginTop: 3,
+    color: '#7d8491',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  sideQuestTurnOffText: {
+    color: '#9298a4',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  // Slide-to-activate track. Height/padding chosen to match this form's
+  // other interactive rows (selectionCard etc. sit around 84px tall with
+  // 16-18px internal padding) while staying within the 52-56px ask for this
+  // specific control.
+  slideTrack: {
+    height: SLIDE_TRACK_HEIGHT,
+    borderRadius: SLIDE_TRACK_HEIGHT / 2,
+    backgroundColor: '#f5f3ff',
+    overflow: 'hidden',
+    justifyContent: 'center',
+  },
+  slideTrackLabel: {
+    textAlign: 'center',
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+    textShadowColor: 'rgba(0,0,0,0.18)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  trackSparkle: {
+    position: 'absolute',
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#fff',
+    shadowColor: '#fff',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.95,
+    shadowRadius: 3,
+  },
+  slideThumb: {
+    position: 'absolute',
+    left: SLIDE_TRACK_PADDING,
+    top: SLIDE_TRACK_PADDING,
+    width: SLIDE_THUMB_SIZE,
+    height: SLIDE_THUMB_SIZE,
+    borderRadius: SLIDE_THUMB_SIZE / 2,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.16,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  slideThumbIconLayer: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   segmented: {
     gap: 10,

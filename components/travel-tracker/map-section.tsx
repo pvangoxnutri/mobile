@@ -55,7 +55,7 @@ function buildStats(statusMap: StatusMap): ContinentStats[] {
 export default function WorldOverview({ statusMap, onContinentPress, activeContinentFilter }: WorldOverviewProps) {
   const { width } = useWindowDimensions();
   const stats = buildStats(statusMap);
-  const cardWidth = (width - 40 - 12) / 2; // 2 columns, 20px side padding, 12px gap
+  const cardWidth = (width - 40 - 2 * 10) / 3; // 3 columns, 20px side padding, 10px gaps — ~30% smaller than the old 2-column layout
 
   const { language } = useI18n();
 
@@ -82,7 +82,7 @@ export default function WorldOverview({ statusMap, onContinentPress, activeConti
             <View pointerEvents="none" style={styles.watermark}>
               <MaterialCommunityIcons
                 name={meta.icon}
-                size={130}
+                size={90}
                 color={meta.color}
                 style={{ opacity: 0.10 }}
               />
@@ -91,11 +91,11 @@ export default function WorldOverview({ statusMap, onContinentPress, activeConti
             {/* Foreground icon tile + checkmark badge */}
             <View style={styles.iconTileWrap}>
               <View style={[styles.iconTile, { backgroundColor: meta.lightBg }]}>
-                <MaterialCommunityIcons name={meta.icon} size={26} color={meta.color} />
+                <MaterialCommunityIcons name={meta.icon} size={18} color={meta.color} />
               </View>
               {hasVisited ? (
                 <View style={styles.checkBadge}>
-                  <Ionicons name="checkmark" size={11} color="#fff" />
+                  <Ionicons name="checkmark" size={8} color="#fff" />
                 </View>
               ) : null}
             </View>
@@ -133,18 +133,18 @@ const styles = StyleSheet.create({
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    gap: 10,
   },
   card: {
-    borderRadius: 22,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: '#ECE7DD',
     backgroundColor: '#fff',
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 14,
+    paddingHorizontal: 11,
+    paddingTop: 11,
+    paddingBottom: 10,
     overflow: 'hidden',
-    minHeight: 150,
+    minHeight: 108,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.05,
@@ -153,28 +153,28 @@ const styles = StyleSheet.create({
   },
   watermark: {
     position: 'absolute',
-    right: -18,
-    top: -8,
+    right: -12,
+    top: -6,
   },
   iconTileWrap: {
-    width: 48,
-    height: 48,
-    marginBottom: 14,
+    width: 34,
+    height: 34,
+    marginBottom: 10,
   },
   iconTile: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
+    width: 34,
+    height: 34,
+    borderRadius: 9,
     alignItems: 'center',
     justifyContent: 'center',
   },
   checkBadge: {
     position: 'absolute',
-    top: -4,
-    right: -4,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    top: -3,
+    right: -3,
+    width: 13,
+    height: 13,
+    borderRadius: 7,
     backgroundColor: PRIMARY_COLOR,
     alignItems: 'center',
     justifyContent: 'center',
@@ -182,25 +182,25 @@ const styles = StyleSheet.create({
     borderColor: '#fff',
   },
   cardName: {
-    fontSize: 17,
+    fontSize: 12,
     fontWeight: '800',
     color: '#141720',
-    letterSpacing: -0.4,
-    marginBottom: 4,
+    letterSpacing: -0.3,
+    marginBottom: 3,
   },
   statsRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    marginBottom: 10,
+    marginBottom: 7,
   },
   statsValue: {
-    fontSize: 15,
+    fontSize: 11,
     fontWeight: '800',
     color: '#141720',
-    letterSpacing: -0.3,
+    letterSpacing: -0.2,
   },
   statsOf: {
-    fontSize: 13,
+    fontSize: 10,
     color: '#8A909D',
     fontWeight: '500',
   },

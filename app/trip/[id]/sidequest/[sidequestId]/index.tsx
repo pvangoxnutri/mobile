@@ -5,6 +5,7 @@ import * as Linking from 'expo-linking';
 import { useCallback, useMemo, useRef, useState, useEffect } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   Image,
   KeyboardAvoidingView,
@@ -49,6 +50,7 @@ export default function SideQuestDetailScreen() {
   const [commentText, setCommentText] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [revealing, setRevealing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [profileCardUserId, setProfileCardUserId] = useState<string | null>(null);
   const inputRef = useRef<TextInput>(null);
 
@@ -175,6 +177,39 @@ export default function SideQuestDetailScreen() {
     }
   }, [id, sidequestId, revealing]);
 
+  const handleDelete = useCallback(() => {
+    if (deleting) return;
+    Alert.alert(
+      t('activity.deleteConfirmTitle'),
+      t('activity.deleteConfirmMessage'),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('common.delete'),
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              setDeleting(true);
+              try {
+                const response = await apiFetch(`/api/trips/${id}/activities/${encodeURIComponent(sidequestId)}`, {
+                  method: 'DELETE',
+                });
+                if (!response.ok && response.status !== 404) {
+                  throw new Error((await response.text()) || 'Could not delete this SideQuest.');
+                }
+                invalidateTripCache(id);
+                router.replace(`/trip/${encodeURIComponent(id)}`);
+              } catch (err) {
+                setDeleting(false);
+                setError(err instanceof Error ? err.message : 'Could not delete this SideQuest.');
+              }
+            })();
+          },
+        },
+      ],
+    );
+  }, [id, sidequestId, deleting, t]);
+
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
@@ -188,7 +223,21 @@ export default function SideQuestDetailScreen() {
             <Ionicons name="arrow-back" size={24} color="#11131a" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>{t('activity.sidequest')}</Text>
-          <View style={styles.headerSpacer} />
+          {activity?.canEdit ? (
+            <TouchableOpacity
+              style={styles.deleteButton}
+              activeOpacity={0.88}
+              disabled={deleting}
+              onPress={handleDelete}>
+              {deleting ? (
+                <ActivityIndicator size="small" color="#d92d4c" />
+              ) : (
+                <Ionicons name="trash-outline" size={20} color="#d92d4c" />
+              )}
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.headerSpacer} />
+          )}
         </View>
 
         {loading ? (
@@ -452,6 +501,14 @@ const styles = StyleSheet.create({
   },
   headerSpacer: {
     width: 42,
+  },
+  deleteButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fdeaee',
   },
   centerState: {
     minHeight: 300,

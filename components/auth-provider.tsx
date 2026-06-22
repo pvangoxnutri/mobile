@@ -6,6 +6,7 @@ import { getEmailAuthRedirectUrl } from '@/lib/auth-redirect';
 import { disablePushNotifications } from '@/lib/push-notifications';
 import { supabase } from '@/lib/supabase';
 import type { UserInfo } from '@/lib/types';
+import { markStartup, timeStartup } from '@/lib/startup-timing'; // TEMPORARY — see lib/startup-timing.ts
 
 type AuthContextValue = {
   loading: boolean;
@@ -42,7 +43,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function syncProfileWithBackend(accessToken: string): Promise<UserInfo> {
+    const getUserStart = Date.now();
     const { data: userData } = await supabase.auth.getUser();
+    markStartup(`[AUTH] supabase.auth.getUser() (${Date.now() - getUserStart}ms)`);
     const fallbackProfile = buildFallbackUser(userData.user);
 
     const auth: 'yes' | 'no' = accessToken ? 'yes' : 'no';
@@ -99,14 +102,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  const refreshProfile = useCallback(async (): Promise<UserInfo | null> => {
+  const refreshProfile = useCallback(async (callerLabel = 'unknown'): Promise<UserInfo | null> => {
     if (inFlightRefresh.current) {
+      markStartup(`[AUTH] refreshProfile(${callerLabel}): deduped, awaiting in-flight call`);
       console.log('[AUTH] refreshProfile: awaiting in-flight call');
       return inFlightRefresh.current;
     }
 
+    markStartup(`[AUTH] refreshProfile(${callerLabel}) → start (NOT deduped — see if this fires twice)`);
     const runner = (async (): Promise<UserInfo | null> => {
+      const sessionStart = Date.now();
       const { data, error } = await supabase.auth.getSession();
+      markStartup(`[AUTH] supabase.auth.getSession() in refreshProfile (${Date.now() - sessionStart}ms)`);
 
       const sessionState = data.session ? 'yes' : 'no';
       console.log(`[AUTH] session: ${sessionState}${error ? ` (error: ${error.message})` : ''}`);
@@ -116,7 +123,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return null;
       }
 
-      const profile = await syncProfileWithBackend(data.session.access_token);
+      const profile = await timeStartup('[AUTH] syncProfileWithBackend', () => syncProfileWithBackend(data.session.access_token));
       const { data: userData } = await supabase.auth.getUser();
       await setLanguage(normalizeLanguage(userData.user?.user_metadata?.language as string | undefined));
       setUser(profile);
@@ -128,33 +135,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return await runner;
     } finally {
       inFlightRefresh.current = null;
+      markStartup(`[AUTH] refreshProfile(${callerLabel}) → end`);
     }
   }, [setLanguage]);
 
   useEffect(() => {
+    markStartup('[AUTH] AuthProvider mount effect → start');
     console.log('[AUTH] mount: restoring session...');
     void (async () => {
       try {
-        await refreshProfile();
+        await refreshProfile('mount-iife');
       } catch {
         setUser(null);
       } finally {
         setLoading(false);
+        markStartup('[AUTH] loading=false (from mount-iife path)');
       }
     })();
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event) => {
+      markStartup(`[AUTH] onAuthStateChange fired: ${event}`);
       console.log('[AUTH] state change:', event);
       queueMicrotask(async () => {
         try {
-          await refreshProfile();
+          await refreshProfile(`onAuthStateChange:${event}`);
         } catch (refreshError) {
           console.warn('[AUTH] refreshProfile failed:', refreshError instanceof Error ? refreshError.message : refreshError);
           setUser(null);
         } finally {
           setLoading(false);
+          markStartup(`[AUTH] loading=false (from onAuthStateChange:${event} path)`);
         }
       });
     });
@@ -241,6 +253,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   const { loading } = useAuth();
 
   if (loading) {
+    markStartup('[AUTH] AuthGate rendering spinner (children NOT mounted yet)');
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' }}>
         <ActivityIndicator size="large" color="#ff4f74" />{/* default brand color — theme not yet loaded */}
@@ -248,6 +261,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     );
   }
 
+  markStartup('[AUTH] AuthGate rendering children (home tab + PushNotificationBootstrap now mounting)');
   return <>{children}</>;
 }
 

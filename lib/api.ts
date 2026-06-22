@@ -2,6 +2,7 @@ import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { Platform } from 'react-native';
 import { supabase } from '@/lib/supabase';
+import { markStartup } from '@/lib/startup-timing'; // TEMPORARY — see lib/startup-timing.ts
 
 const PRODUCTION_API_URL = 'https://api.sidequesttravel.app';
 
@@ -40,8 +41,19 @@ export const API_URL = inferApiBaseUrl();
 console.log('[API] Base URL:', API_URL);
 
 export async function apiFetch(path: string, options: RequestInit = {}, timeoutMs = DEFAULT_TIMEOUT_MS) {
+  const method = (options.method ?? 'GET').toUpperCase();
   const headers = new Headers(options.headers);
+
+  // TEMPORARY — isolates "waiting on Supabase's local/refresh session read"
+  // from "waiting on our own backend". No timeout wraps this call today,
+  // which is exactly the suspected gap: if Supabase's internal token
+  // refresh stalls, this can hang far longer than our 15s fetch timeout
+  // ever gets a chance to matter.
+  const sessionStart = Date.now();
   const { data } = await supabase.auth.getSession();
+  const sessionMs = Date.now() - sessionStart;
+  markStartup(`[API] getSession() for ${method} ${path} (${sessionMs}ms)`);
+
   const token = data.session?.access_token;
   const auth = token ? 'yes' : 'no';
 
@@ -49,9 +61,9 @@ export async function apiFetch(path: string, options: RequestInit = {}, timeoutM
     headers.set('Authorization', `Bearer ${token}`);
   }
 
-  const method = (options.method ?? 'GET').toUpperCase();
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  const fetchStart = Date.now();
 
   try {
     const response = await fetch(`${API_URL}${path}`, {
@@ -59,6 +71,7 @@ export async function apiFetch(path: string, options: RequestInit = {}, timeoutM
       headers,
       signal: controller.signal,
     });
+    markStartup(`[API] fetch ${method} ${path} → ${response.status} (${Date.now() - fetchStart}ms, getSession was ${sessionMs}ms)`);
 
     if (response.status === 401) {
       console.warn(`[API] ${method} ${path} → 401 (auth: ${auth}) — signing out`);
@@ -80,10 +93,12 @@ export async function apiFetch(path: string, options: RequestInit = {}, timeoutM
   } catch (error) {
     if (controller.signal.aborted) {
       const timeoutMessage = `TIMEOUT after ${timeoutMs}ms`;
+      markStartup(`[API] fetch ${method} ${path} → TIMEOUT (${Date.now() - fetchStart}ms, getSession was ${sessionMs}ms)`);
       console.error(`[API] ${method} ${path} → ${timeoutMessage} (auth: ${auth})`);
       throw new Error(`Request timed out after ${Math.round(timeoutMs / 1000)}s. Check your connection and try again.`);
     }
     const message = error instanceof Error ? error.message : String(error);
+    markStartup(`[API] fetch ${method} ${path} → NETWORK_ERROR (${Date.now() - fetchStart}ms, getSession was ${sessionMs}ms)`, { message });
     console.error(`[API] ${method} ${path} → NETWORK_ERROR (auth: ${auth}): ${message}`);
     throw error;
   } finally {

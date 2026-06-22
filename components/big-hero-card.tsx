@@ -37,7 +37,11 @@ export function getTripDayInfo(startDateStr?: string, endDateStr?: string, now: 
   return { dayOfTrip, totalDays };
 }
 
-export function formatTimeLeft(targetDateStr?: string, now: Date = new Date()): string | null {
+export function formatTimeLeft(
+  targetDateStr: string | undefined,
+  now: Date,
+  t: (key: string, vars?: Record<string, string | number>) => string,
+): string | null {
   if (!targetDateStr) return null;
   const target = new Date(targetDateStr);
   const targetEnd = new Date(target.getFullYear(), target.getMonth(), target.getDate(), 23, 59, 59);
@@ -45,7 +49,7 @@ export function formatTimeLeft(targetDateStr?: string, now: Date = new Date()): 
   if (diffMs <= 0) return null;
   const days = Math.floor(diffMs / (24 * 60 * 60 * 1000));
   const hours = Math.floor((diffMs % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
-  return `${days}d ${hours}h left`;
+  return t('home.time_left', { days, hours });
 }
 
 export function getInitials(name?: string | null) {
@@ -90,8 +94,8 @@ export function BigHeroCard({
   const isOngoing = trip.isOngoing;
   const dayInfo = getTripDayInfo(quest.startDate, quest.endDate, now);
   const timeLeft = isOngoing
-    ? formatTimeLeft(quest.endDate, now)
-    : formatTimeLeft(quest.startDate, now);
+    ? formatTimeLeft(quest.endDate, now, t)
+    : formatTimeLeft(quest.startDate, now, t);
   const visibleAvatars = members.slice(0, 3);
 
   const handlePress = onPress ?? (() => router.push(`/trip/${quest.id}`));
@@ -146,7 +150,7 @@ export function BigHeroCard({
       <View style={styles.bigHeroBottom}>
         {dayInfo && isOngoing ? (
           <Text style={styles.bigHeroDayLine}>
-            Day {dayInfo.dayOfTrip} of {dayInfo.totalDays}
+            {t('home.day_of_trip', { day: dayInfo.dayOfTrip, total: dayInfo.totalDays })}
             {timeLeft ? ` · ${timeLeft}` : ''}
           </Text>
         ) : null}

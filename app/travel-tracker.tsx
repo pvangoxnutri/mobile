@@ -14,6 +14,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useI18n } from '@/components/i18n-provider';
 import WorldOverview from '@/components/travel-tracker/map-section';
 import StatusSheet from '@/components/travel-tracker/status-sheet';
 import {
@@ -35,14 +36,16 @@ type Filter = 'all' | 'visited' | 'planned' | 'living';
 const STORAGE_KEY = 'travel_tracker_status_map';
 const TOTAL_CONTINENTS = 6;
 
-const STATUS_LABEL: Record<CountryStatus, string> = {
-  none: '',
-  visited: 'Visited',
-  planned: 'Planned',
-  living: 'Living here',
+const FILTER_LABEL_KEY: Record<Filter, string> = {
+  all: 'travel.filterAll',
+  visited: 'travel.visited',
+  planned: 'travel.planned',
+  living: 'travel.filterLiving',
 };
 
+
 export default function TravelTrackerScreen() {
+  const { t } = useI18n();
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
   const searchInputRef = useRef<TextInput>(null);
@@ -188,40 +191,40 @@ export default function TravelTrackerScreen() {
         {/* Back navigation */}
         <TouchableOpacity style={styles.backRow} activeOpacity={0.7} onPress={() => router.back()}>
           <Ionicons name="chevron-back" size={22} color="#1B1E28" />
-          <Text style={styles.backText}>Profile</Text>
+          <Text style={styles.backText}>{t('profile.title')}</Text>
         </TouchableOpacity>
 
         {/* Title block */}
-        <Text style={styles.bigTitle}>Travel{'\n'}Tracker</Text>
+        <Text style={styles.bigTitle}>{t('travel.title')}</Text>
 
         {/* Dark stats card */}
         <View style={styles.heroCard}>
           <View style={styles.heroStat}>
-            <Text style={styles.heroStatLabel}>VISITED</Text>
+            <Text style={styles.heroStatLabel} numberOfLines={1} adjustsFontSizeToFit>{t('travel.visitedStat')}</Text>
             <View style={styles.heroStatValueRow}>
               <Text style={styles.heroStatBig}>{visitedCount}</Text>
-              <Text style={styles.heroStatSmall}>countries</Text>
+              <Text style={styles.heroStatSmall}>{t('travel.countriesUnit')}</Text>
             </View>
           </View>
 
           <View style={styles.heroDivider} />
 
           <View style={styles.heroStat}>
-            <Text style={styles.heroStatLabel}>CONTINENTS</Text>
+            <Text style={styles.heroStatLabel} numberOfLines={1} adjustsFontSizeToFit>{t('travel.continentsStat')}</Text>
             <View style={styles.heroStatValueRow}>
               <Text style={styles.heroStatBig}>{continentsVisited}</Text>
-              <Text style={styles.heroStatSmall}>of {TOTAL_CONTINENTS}</Text>
+              <Text style={styles.heroStatSmall}>{t('travel.ofTotal', { total: TOTAL_CONTINENTS })}</Text>
             </View>
           </View>
 
           <TouchableOpacity style={styles.addButton} activeOpacity={0.85} onPress={handleAddPress}>
             <Ionicons name="add" size={18} color="#fff" />
-            <Text style={styles.addButtonText}>Add</Text>
+            <Text style={styles.addButtonText}>{t('common.add')}</Text>
           </TouchableOpacity>
         </View>
 
         {/* By Continent grid */}
-        <Text style={styles.sectionEyebrow}>BY CONTINENT</Text>
+        <Text style={styles.sectionEyebrow}>{t('travel.byContinent')}</Text>
         <WorldOverview
           statusMap={mergedMap}
           onContinentPress={handleContinentFilter}
@@ -230,7 +233,7 @@ export default function TravelTrackerScreen() {
 
         {/* Countries section anchor */}
         <View onLayout={(e) => { listAnchorY.current = e.nativeEvent.layout.y; }}>
-          <Text style={[styles.sectionEyebrow, { marginTop: 28 }]}>COUNTRIES</Text>
+          <Text style={[styles.sectionEyebrow, { marginTop: 28 }]}>{t('travel.countriesEyebrow')}</Text>
 
           <View style={styles.filterRow}>
             {(['all', 'visited', 'planned', 'living'] as Filter[]).map((f) => {
@@ -245,7 +248,7 @@ export default function TravelTrackerScreen() {
                     activeOpacity={0.8}
                     onPress={() => pressFilter(f)}>
                     <Text style={[styles.filterChipText, isActive && { color: '#fff' }]}>
-                      {f.charAt(0).toUpperCase() + f.slice(1)}
+                      {t(FILTER_LABEL_KEY[f])}
                     </Text>
                   </TouchableOpacity>
                 </Animated.View>
@@ -260,7 +263,7 @@ export default function TravelTrackerScreen() {
               style={styles.searchInput}
               value={search}
               onChangeText={setSearch}
-              placeholder="Search countries..."
+              placeholder={t('travel.search_countries')}
               placeholderTextColor="#B0B7C3"
               autoCapitalize="none"
               autoCorrect={false}
@@ -277,7 +280,7 @@ export default function TravelTrackerScreen() {
             {filtered.length === 0 ? (
               <View style={styles.emptyState}>
                 <Ionicons name="globe-outline" size={40} color="#9AA2AE" style={{ marginBottom: 10 }} />
-                <Text style={styles.emptyText}>No countries match your filter</Text>
+                <Text style={styles.emptyText}>{t('travel.noCountriesMatch')}</Text>
               </View>
             ) : (
               filtered.map((entry, index) => {
@@ -295,7 +298,7 @@ export default function TravelTrackerScreen() {
                         {fromTrip ? (
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                             <Ionicons name="airplane" size={11} color="#9AA2AE" />
-                            <Text style={styles.fromTripLabel}>from trip</Text>
+                            <Text style={styles.fromTripLabel}>{t('travel.fromTrip')}</Text>
                           </View>
                         ) : null}
                       </View>
@@ -326,17 +329,24 @@ export default function TravelTrackerScreen() {
 }
 
 function StatusBadge({ status }: { status: CountryStatus }) {
+  const { t } = useI18n();
   const config: Record<CountryStatus, { bg: string; color: string } | null> = {
     none:    null,
     visited: { bg: PRIMARY_12,  color: PRIMARY_COLOR },
     planned: { bg: SECONDARY_12, color: SECONDARY_COLOR },
     living:  { bg: '#FEF3C7', color: '#D97706' },
   };
+  const labelKey: Record<CountryStatus, string> = {
+    none: '',
+    visited: 'travel.visited',
+    planned: 'travel.planned',
+    living: 'travel.livingHere',
+  };
   const c = config[status];
   if (!c) return null;
   return (
     <View style={[styles.badge, { backgroundColor: c.bg }]}>
-      <Text style={[styles.badgeText, { color: c.color }]}>{STATUS_LABEL[status]}</Text>
+      <Text style={[styles.badgeText, { color: c.color }]}>{t(labelKey[status])}</Text>
     </View>
   );
 }
@@ -404,7 +414,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     color: '#9AA2AE',
-    letterSpacing: 1.6,
+    letterSpacing: 1.0,
     marginBottom: 6,
   },
   heroStatValueRow: {
