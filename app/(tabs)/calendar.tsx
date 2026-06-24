@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { findNodeHandle, Image, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ActivityImageFallback from '@/components/activity-image-fallback';
 import TabHeader from '@/components/tab-header';
@@ -10,6 +10,7 @@ import { useI18n } from '@/components/i18n-provider';
 import { apiJson } from '@/lib/api';
 import { getCategorySymbol } from '@/lib/category-symbol';
 import type { Quest, SideQuestActivity } from '@/lib/types';
+import { DEFAULT_BLUR, isSealedInLists } from '@/lib/activity-blur';
 import { SPACING, TYPOGRAPHY, COLORS, RADIUS, SHADOWS } from '@/constants/design-tokens';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -22,6 +23,7 @@ type CalendarItem = {
   title: string;
   date: string;
   time?: string | null;
+  sortIndex?: number;
   meta: string;
   hidden?: boolean;
   imageUrl?: string | null;
@@ -40,12 +42,17 @@ export default function CalendarScreen() {
   const locale = language === 'sv' ? 'sv-SE' : 'en-US';
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView | null>(null);
+  const selectedDayHeaderRef = useRef<View | null>(null);
   const [quests, setQuests] = useState<Quest[]>([]);
   const [activities, setActivities] = useState<SideQuestActivity[]>([]);
   const [monthDate, setMonthDate] = useState(() => startOfMonth(new Date()));
   const [selectedDate, setSelectedDate] = useState(toDateKey(new Date()));
   const [now] = useState(() => new Date());
   const [error, setError] = useState('');
+  // Only jump the visible month away from "today" once, the first time data
+  // loads — never again afterwards, so it doesn't fight the user's own
+  // manual month navigation (the chevron buttons) on later re-renders.
+  const hasAutoSelectedMonth = useRef(false);
 
   const loadCalendar = useCallback(() => {
     let active = true;
@@ -83,6 +90,32 @@ export default function CalendarScreen() {
   useFocusEffect(loadCalendar);
 
   const dayItemsMap = useMemo(() => buildDayItemsMap(quests, activities, t), [activities, quests, t]);
+
+  // If the real-world current month has no trips/activities at all, jump to
+  // the nearest month that does — preferring the closest upcoming one (e.g.
+  // it's June, nothing's planned until July: open on July instead of an
+  // empty June). Falls back to the most recent past month if everything is
+  // already over, and never auto-jumps if today's month already has data.
+  useEffect(() => {
+    if (hasAutoSelectedMonth.current) return;
+    if (dayItemsMap.size === 0) return;
+    hasAutoSelectedMonth.current = true;
+
+    const currentMonthHasData = Array.from(dayItemsMap.keys()).some((key) => {
+      const d = parseDateKey(key);
+      return d.getMonth() === monthDate.getMonth() && d.getFullYear() === monthDate.getFullYear();
+    });
+    if (currentMonthHasData) return;
+
+    const todayKey = toDateKey(new Date());
+    const sortedKeys = Array.from(dayItemsMap.keys()).sort();
+    const nearestUpcoming = sortedKeys.find((key) => key >= todayKey);
+    const fallbackKey = nearestUpcoming ?? sortedKeys[sortedKeys.length - 1];
+    if (!fallbackKey) return;
+
+    setMonthDate(startOfMonth(parseDateKey(fallbackKey)));
+  }, [dayItemsMap, monthDate]);
+
   const monthTitle = useMemo(
     () => new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' }).format(monthDate),
     [monthDate, locale],
@@ -143,9 +176,21 @@ export default function CalendarScreen() {
 
   function jumpToSelectedDay(dateKey: string) {
     setSelectedDate(dateKey);
+    // Scroll to the selected-day section itself, not the very bottom of the
+    // screen — scrollToEnd overshot past short days straight to the blank
+    // padding under the content. Measures fresh at tap time (rather than
+    // trusting an earlier onLayout) so it can't go stale.
     setTimeout(() => {
-      scrollRef.current?.scrollToEnd({ animated: true });
-    }, 10);
+      const scrollNode = findNodeHandle(scrollRef.current);
+      if (!scrollNode || !selectedDayHeaderRef.current) return;
+      selectedDayHeaderRef.current.measureLayout(
+        scrollNode,
+        (_left, top) => {
+          scrollRef.current?.scrollTo({ y: Math.max(0, top - 12), animated: true });
+        },
+        () => {},
+      );
+    }, 50);
   }
 
   function handleAddPress() {
@@ -256,7 +301,7 @@ export default function CalendarScreen() {
           return (
             <>
               {/* Section header: eyebrow + hairline + count + Add */}
-              <View style={styles.selectedDayHeader}>
+              <View ref={selectedDayHeaderRef} style={styles.selectedDayHeader}>
                 <Text style={styles.sectionEyebrow}>{formatSelectedDateEyebrow(selectedDate, locale)}</Text>
                 <View style={styles.sectionLine} />
                 {activityItems.length > 0 ? (
@@ -311,13 +356,18 @@ export default function CalendarScreen() {
                         activeOpacity={0.88}
                         onPress={() => router.push(`/trip/${encodeURIComponent(item.tripId)}/sidequest/${encodeURIComponent(item.activityId ?? item.id)}`)}
                         style={[styles.upcomingCard, item.hidden && styles.upcomingCardSealed]}>
-                        <View style={[styles.upcomingImageBox, item.hidden && styles.upcomingImageBoxSealed]}>
-                          {!item.hidden && item.imageUrl ? (
-                            <Image source={{ uri: item.imageUrl }} style={styles.upcomingImage} resizeMode="cover" />
+                        <View style={[styles.upcomingImageBox, item.hidden && !item.imageUrl && styles.upcomingImageBoxSealed]}>
+                          {item.imageUrl ? (
+                            <Image
+                              source={{ uri: item.imageUrl }}
+                              style={styles.upcomingImage}
+                              resizeMode="cover"
+                              blurRadius={item.hidden ? DEFAULT_BLUR : undefined}
+                            />
                           ) : !item.hidden ? (
                             <ActivityImageFallback category={item.category} size="medium" style={styles.upcomingFallback} />
                           ) : null}
-                          <View style={[styles.upcomingIconBadge, item.hidden && styles.upcomingIconBadgeSealed]}>
+                          <View style={[styles.upcomingIconBadge, item.hidden && !item.imageUrl && styles.upcomingIconBadgeSealed]}>
                             <Ionicons
                               name={item.hidden ? 'lock-closed' : symbol.icon}
                               size={14}
@@ -388,16 +438,19 @@ function buildDayItemsMap(quests: Quest[], activities: SideQuestActivity[], t: (
 
   for (const activity of activities) {
     const items = map.get(activity.date) ?? [];
+    // Sealed for every viewer (including the creator) — see isSealedInLists.
+    const sealed = isSealedInLists(activity);
     items.push({
       id: activity.id,
       kind: 'activity',
       tripId: activity.tripId,
       activityId: activity.id,
-      title: activity.visibility === 'hidden' ? t('calendar.activity.hidden') : activity.title ?? t('calendar.untitledPlan'),
+      title: sealed ? t('calendar.activity.hidden') : activity.title ?? t('calendar.untitledPlan'),
       date: activity.date,
       time: activity.time,
-      meta: activity.category?.trim() || (activity.visibility === 'hidden' ? 'Hidden SideQuest' : 'SideQuest'),
-      hidden: activity.visibility === 'hidden',
+      sortIndex: activity.sortIndex,
+      meta: activity.category?.trim() || (sealed ? 'Hidden SideQuest' : 'SideQuest'),
+      hidden: sealed,
       imageUrl: activity.imageUrl,
       description: activity.description,
       teaser: activity.teaser,
@@ -416,6 +469,12 @@ function buildDayItemsMap(quests: Quest[], activities: SideQuestActivity[], t: (
 function sortCalendarItems(left: CalendarItem, right: CalendarItem) {
   if (left.kind !== right.kind) {
     return left.kind === 'activity' ? -1 : 1;
+  }
+
+  // Activities: same manual drag order as the trip's day list (sortIndex),
+  // not time/title — a dragged reorder should look identical here.
+  if (left.sortIndex != null && right.sortIndex != null) {
+    return left.sortIndex - right.sortIndex;
   }
 
   if (left.time && right.time) {
