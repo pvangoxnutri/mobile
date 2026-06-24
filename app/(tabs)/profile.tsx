@@ -6,7 +6,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Easing, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Animated, Easing, Image, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ActivityImageFallback from '@/components/activity-image-fallback';
 import { useAuth } from '@/components/auth-provider';
@@ -42,7 +42,8 @@ export default function ProfileScreen() {
   const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferences>(getDefaultNotificationPreferences());
   const [osPermissionDenied, setOsPermissionDenied] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [busy, setBusy] = useState<'name' | 'bio' | 'password' | 'avatar' | 'language' | 'delete' | 'support' | null>(null);
+  const [busy, setBusy] = useState<'name' | 'bio' | 'password' | 'avatar' | 'language' | 'delete' | 'support' | 'pushTest' | null>(null);
+  const [pushTestResult, setPushTestResult] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [supportModal, setSupportModal] = useState<'bug' | 'feedback' | null>(null);
   const [supportText, setSupportText] = useState('');
   const [supportError, setSupportError] = useState<string | null>(null);
@@ -251,6 +252,26 @@ export default function ProfileScreen() {
       await disablePushNotifications();
     }
     setOsPermissionDenied((await getCurrentPermissionStatus()) === 'denied');
+  }
+
+  // Sends a push straight to this account's own registered token(s),
+  // bypassing Push:Enabled and the recipient/dedupe machinery entirely —
+  // the one true "does delivery work end-to-end" check. See backend
+  // POST /api/push-tokens/test-send.
+  async function handleSendTestPush() {
+    try {
+      setBusy('pushTest');
+      setPushTestResult(null);
+      await apiJson('/api/push-tokens/test-send', { method: 'POST' });
+      setPushTestResult({ type: 'success', text: t('profile.notifications.testSendSuccess') });
+    } catch (error) {
+      setPushTestResult({
+        type: 'error',
+        text: error instanceof Error && error.message ? error.message : t('profile.notifications.testSendFailed'),
+      });
+    } finally {
+      setBusy(null);
+    }
   }
 
   async function handleNameSave() {
@@ -641,7 +662,7 @@ export default function ProfileScreen() {
           { icon: 'person-circle-outline', label: t('profile.editProfile.changeName'), accent: COLORS.primary, onPress: () => setEditingName(true) },
           { icon: 'text-outline', label: t('profile.editProfile.editBio'), accent: COLORS.primary, onPress: () => setEditingBio(true) },
           { icon: 'camera-outline', label: busy === 'avatar' ? t('profile.editProfile.uploading') : t('profile.editProfile.changeImage'), accent: COLORS.primary, onPress: () => void handleAvatarPick() },
-          { icon: 'notifications-outline', label: t('profile.notifications.title'), accent: COLORS.primary, onPress: () => setEditingNotifications(true) },
+          { icon: 'notifications-outline', label: t('profile.notifications.title'), accent: COLORS.primary, onPress: () => { setPushTestResult(null); setEditingNotifications(true); } },
           { icon: 'lock-closed-outline', label: t('profile.accountSettings.changePassword'), accent: COLORS.secondary, onPress: () => setEditingPassword(true) },
           { icon: 'language-outline', label: t('profile.accountSettings.changeLanguage'), accent: COLORS.secondary, onPress: () => setEditingLanguage(true) },
         ]}
@@ -652,7 +673,14 @@ export default function ProfileScreen() {
           <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setEditingName(false)} />
           <View style={styles.confirmCard}>
             <Text style={styles.confirmTitle}>{t('profile.modals.changeName')}</Text>
-            <TextInput value={name} onChangeText={setName} placeholder={t('profile.editProfile.displayNamePlaceholder')} style={[styles.input, { marginTop: 16 }]} />
+            <TextInput
+              value={name}
+              onChangeText={setName}
+              placeholder={t('profile.editProfile.displayNamePlaceholder')}
+              style={[styles.input, { marginTop: 16 }]}
+              returnKeyType="done"
+              onSubmitEditing={() => Keyboard.dismiss()}
+            />
             <View style={styles.confirmActions}>
               <TouchableOpacity style={styles.confirmCancel} activeOpacity={0.88} onPress={() => setEditingName(false)}>
                 <Text style={styles.confirmCancelText}>Cancel</Text>
@@ -779,6 +807,8 @@ export default function ProfileScreen() {
               placeholder={t('profile.password.newPasswordPlaceholder')}
               secureTextEntry
               style={[styles.input, { marginTop: 16 }]}
+              returnKeyType="done"
+              onSubmitEditing={() => Keyboard.dismiss()}
             />
             <Text style={[styles.helperText, { marginTop: 12 }]}>{t('profile.password.hint')}</Text>
             <View style={styles.confirmActions}>
@@ -833,6 +863,30 @@ export default function ProfileScreen() {
                 onValueChange={(value) => void handleTogglePush(value)}
               />
             </View>
+            {!osPermissionDenied && notificationPreferences.pushEnabled ? (
+              <>
+                <TouchableOpacity
+                  style={[styles.confirmCancel, { marginTop: 14 }]}
+                  activeOpacity={0.88}
+                  disabled={busy === 'pushTest'}
+                  onPress={() => void handleSendTestPush()}>
+                  {busy === 'pushTest' ? (
+                    <ActivityIndicator color={COLORS.textPrimary} />
+                  ) : (
+                    <Text style={styles.confirmCancelText}>{t('profile.notifications.sendTestPush')}</Text>
+                  )}
+                </TouchableOpacity>
+                {pushTestResult ? (
+                  <Text
+                    style={[
+                      styles.helperText,
+                      { marginTop: 8, color: pushTestResult.type === 'success' ? '#0b9b72' : COLORS.error },
+                    ]}>
+                    {pushTestResult.text}
+                  </Text>
+                ) : null}
+              </>
+            ) : null}
             <View style={styles.confirmActions}>
               <TouchableOpacity style={[styles.confirmCancel, { flex: 1 }]} activeOpacity={0.88} onPress={() => setEditingNotifications(false)}>
                 <Text style={styles.confirmCancelText}>Done</Text>
