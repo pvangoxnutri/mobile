@@ -90,6 +90,7 @@ export default function NewSideQuestScreen() {
         flightTo: flightRoute.to,
         blurAmount: extractBlur(activity.description) ?? DEFAULT_BLUR,
         date: activity.date,
+        time: activity.time ?? '',
         visibility: activity.visibility,
         revealDate: activity.revealAt ? activity.revealAt.slice(0, 10) : activity.date,
         revealTime: activity.revealAt ? formatTimeForInput(activity.revealAt) : '18:00',

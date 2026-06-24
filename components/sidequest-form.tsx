@@ -9,6 +9,7 @@ import {
   Alert,
   Animated,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   type NativeScrollEvent,
@@ -25,6 +26,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { apiFetch, apiJson } from '@/lib/api';
+import { useKeyboardFocusScroll } from '@/hooks/useKeyboardFocusScroll';
 import { invalidateCache } from '@/lib/cache';
 import { CATEGORY_VALUES, getCategorySymbol, type ActivityCategoryValue } from '@/lib/category-symbol';
 import { fetchPlaceSuggestions, type PlaceAutocompleteSuggestion } from '@/lib/maps-api';
@@ -39,7 +41,7 @@ import { PRIMARY_COLOR, PRIMARY_08, PRIMARY_20, SECONDARY_COLOR } from '@/consta
 import { MOTION_TIMING, MOTION_SPRING, MOTION_TRANSLATE, MOTION_STAGGER } from '@/MOTION_CONSTANTS';
 import { useListItemStagger } from '@/hooks/useMotion';
 
-type PickerTarget = 'date' | 'revealDate' | 'revealTime' | null;
+type PickerTarget = 'date' | 'time' | 'revealDate' | 'revealTime' | null;
 type MessageState = { type: 'success' | 'error'; text: string } | null;
 
 export type SideQuestFormValues = {
@@ -51,6 +53,7 @@ export type SideQuestFormValues = {
   flightFrom: string;
   flightTo: string;
   date: string;
+  time: string;
   visibility: 'public' | 'hidden';
   revealDate: string;
   revealTime: string;
@@ -141,6 +144,7 @@ function SideQuestFormInner({
   // "today", which let you create an activity before the trip even starts
   // (e.g. trip starts the 29th but the activity landed on today's date).
   const [date, setDate] = useState(initialValues?.date ?? defaultActivityDate(tripStartDate, tripEndDate));
+  const [time, setTime] = useState(initialValues?.time ?? '');
   const [visibility, setVisibility] = useState<'public' | 'hidden'>(initialValues?.visibility ?? 'public');
   const [revealDate, setRevealDate] = useState(initialValues?.revealDate ?? getDefaultDate());
   const [revealTime, setRevealTime] = useState(initialValues?.revealTime ?? '18:00');
@@ -165,6 +169,13 @@ function SideQuestFormInner({
   const [pickerTarget, setPickerTarget] = useState<PickerTarget>(null);
   const [message, setMessage] = useState<MessageState>(null);
   const [submitting, setSubmitting] = useState(false);
+  const { scrollRef, onFocusField, scrollViewProps } = useKeyboardFocusScroll();
+  const titleRef = useRef<TextInput>(null);
+  const flightFromRef = useRef<TextInput>(null);
+  const flightToRef = useRef<TextInput>(null);
+  const descriptionRef = useRef<TextInput>(null);
+  const locationQueryRef = useRef<TextInput>(null);
+  const teaserRef = useRef<TextInput>(null);
 
   // Applies the actual state change once we know it's safe to (i.e. the
   // turn-off-while-hidden confirmation, if needed, has already been accepted).
@@ -213,6 +224,7 @@ function SideQuestFormInner({
     gap: MOTION_STAGGER.tight,
     duration: MOTION_TIMING.standard,
     autoStart: false,
+    initialValue: sideQuestMode ? 1 : 0,
   });
 
   useEffect(() => {
@@ -399,6 +411,11 @@ function SideQuestFormInner({
       return;
     }
 
+    if (pickerTarget === 'time') {
+      setTime(toTimeInput(selectedDate));
+      return;
+    }
+
     setRevealTime(toTimeInput(selectedDate));
   }
 
@@ -469,6 +486,9 @@ function SideQuestFormInner({
         description: finalDescription,
         category: category || null,
         date,
+        // Empty string (not null) so PATCH correctly clears a previously-set
+        // time when the user removes it on edit — see UpdateActivityDto.Time.
+        time: time.trim(),
         visibility,
         revealAt,
         teaser: visibility === 'hidden' ? teaser.trim() || null : null,
@@ -624,10 +644,11 @@ function SideQuestFormInner({
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
     <ScrollView
+      ref={scrollRef}
       style={styles.scroll}
       contentContainerStyle={[styles.content, { paddingBottom: bottomPadding }]}
-      keyboardShouldPersistTaps="handled"
-      showsVerticalScrollIndicator={false}>
+      showsVerticalScrollIndicator={false}
+      {...scrollViewProps}>
       <TouchableOpacity activeOpacity={0.9} style={styles.coverCard} onPress={() => void handlePickImage()}>
         {imageUrl ? <Image source={{ uri: imageUrl }} style={styles.coverImage} /> : null}
         {!imageUrl ? <View style={styles.coverPlaceholderLayer} /> : null}
@@ -668,12 +689,16 @@ function SideQuestFormInner({
       <View style={styles.block}>
         <Text style={styles.label}>{t('sidequest.form.titleLabel')} <Text style={styles.labelRequired}>*</Text></Text>
         <TextInput
+          ref={titleRef}
           value={title}
           onChangeText={setTitle}
           placeholder={t('sidequest.form.titlePlaceholder')}
           placeholderTextColor="#b7bcc7"
           style={styles.titleInput}
           maxLength={TITLE_MAX_LENGTH}
+          onFocus={onFocusField(titleRef)}
+          returnKeyType="next"
+          onSubmitEditing={() => (category === 'flight' ? flightFromRef.current?.focus() : descriptionRef.current?.focus())}
         />
         <Text style={styles.charCounter}>{title.length}/{TITLE_MAX_LENGTH}</Text>
       </View>
@@ -713,12 +738,16 @@ function SideQuestFormInner({
             <View style={styles.flightField}>
               <Text style={styles.flightFieldLabel}>{t('sidequest.form.flightFrom')}</Text>
               <TextInput
+                ref={flightFromRef}
                 value={flightFrom}
                 onChangeText={setFlightFrom}
                 placeholder="CPH"
                 placeholderTextColor="#b7bcc7"
                 autoCapitalize="characters"
                 style={styles.flightInput}
+                onFocus={onFocusField(flightFromRef)}
+                returnKeyType="next"
+                onSubmitEditing={() => flightToRef.current?.focus()}
               />
             </View>
             <View style={styles.flightArrow}>
@@ -727,12 +756,16 @@ function SideQuestFormInner({
             <View style={styles.flightField}>
               <Text style={styles.flightFieldLabel}>{t('sidequest.form.flightTo')}</Text>
               <TextInput
+                ref={flightToRef}
                 value={flightTo}
                 onChangeText={setFlightTo}
                 placeholder="HND"
                 placeholderTextColor="#b7bcc7"
                 autoCapitalize="characters"
                 style={styles.flightInput}
+                onFocus={onFocusField(flightToRef)}
+                returnKeyType="next"
+                onSubmitEditing={() => descriptionRef.current?.focus()}
               />
             </View>
           </View>
@@ -752,6 +785,7 @@ function SideQuestFormInner({
       <View style={styles.block}>
         <Text style={styles.label}>{t('sidequest.form.descriptionLabel')} <Text style={styles.labelOptional}>{t('common.optionalSuffix')}</Text></Text>
         <TextInput
+          ref={descriptionRef}
           value={description}
           onChangeText={setDescription}
           placeholder={t('sidequest.form.descriptionPlaceholder')}
@@ -759,12 +793,14 @@ function SideQuestFormInner({
           multiline
           textAlignVertical="top"
           style={styles.textArea}
+          onFocus={onFocusField(descriptionRef)}
         />
       </View>
 
       <View style={styles.block}>
         <Text style={styles.label}>{t('sidequest.form.locationLabel')} <Text style={styles.labelOptional}>{t('common.optionalSuffix')}</Text></Text>
         <TextInput
+          ref={locationQueryRef}
           value={locationQuery}
           onChangeText={(value) => {
             setLocationQuery(value);
@@ -775,6 +811,9 @@ function SideQuestFormInner({
           placeholder={t('sidequest.form.locationPlaceholder')}
           placeholderTextColor="#b7bcc7"
           style={styles.input}
+          onFocus={onFocusField(locationQueryRef)}
+          returnKeyType="done"
+          onSubmitEditing={() => Keyboard.dismiss()}
         />
         <Text style={styles.helperText}>{t('sidequest.form.locationHelper')}</Text>
         {locationLoading ? <Text style={styles.locationStatus}>{t('sidequest.form.searchingPlaces')}</Text> : null}
@@ -800,40 +839,82 @@ function SideQuestFormInner({
 
       <View style={styles.block}>
         <Text style={styles.label}>{t('sidequest.form.whenLabel')} <Text style={styles.labelRequired}>*</Text></Text>
-        {Platform.OS === 'web' ? (
-          <View style={[styles.selectionCard, selectedDateOutOfRange || selectedDateBeforeToday ? styles.selectionCardError : null]}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.selectionEyebrow}>{t('sidequest.form.activityDateEyebrow')}</Text>
-              <TextInput
-                value={date}
-                onChangeText={handleActivityDateInput}
-                placeholder="ÅÅÅÅ-MM-DD"
-                placeholderTextColor="#b7bcc7"
-                style={styles.webDateInput}
-                keyboardType="numbers-and-punctuation"
-                maxLength={10}
-              />
-              <Text style={styles.selectionHint}>{t('sidequest.form.withinRange', { range: tripRangeText })}</Text>
+        <View style={styles.revealRow}>
+          {Platform.OS === 'web' ? (
+            <View style={[styles.selectionCard, styles.revealCard, selectedDateOutOfRange || selectedDateBeforeToday ? styles.selectionCardError : null]}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.selectionEyebrow}>{t('sidequest.form.activityDateEyebrow')}</Text>
+                <TextInput
+                  value={date}
+                  onChangeText={handleActivityDateInput}
+                  placeholder="ÅÅÅÅ-MM-DD"
+                  placeholderTextColor="#b7bcc7"
+                  style={styles.webDateInput}
+                  keyboardType="numbers-and-punctuation"
+                  maxLength={10}
+                />
+                <Text style={styles.selectionHint}>{t('sidequest.form.withinRange', { range: tripRangeText })}</Text>
+              </View>
+              <Ionicons name="calendar-outline" size={22} color="#5f6570" />
             </View>
-            <Ionicons name="calendar-outline" size={22} color="#5f6570" />
-          </View>
-        ) : (
-          <TouchableOpacity
-            activeOpacity={0.92}
-            style={[
-              styles.selectionCard,
-              pickerTarget === 'date' ? styles.selectionCardActive : null,
-              selectedDateOutOfRange || selectedDateBeforeToday ? styles.selectionCardError : null,
-            ]}
-            onPress={() => setPickerTarget('date')}>
-            <View>
-              <Text style={styles.selectionEyebrow}>{t('sidequest.form.activityDateEyebrow')}</Text>
-              <Text style={styles.selectionValue}>{formatLongDate(date, locale)}</Text>
-              <Text style={styles.selectionHint}>{t('sidequest.form.withinRange', { range: tripRangeText })}</Text>
+          ) : (
+            <TouchableOpacity
+              activeOpacity={0.92}
+              style={[
+                styles.selectionCard,
+                styles.revealCard,
+                pickerTarget === 'date' ? styles.selectionCardActive : null,
+                selectedDateOutOfRange || selectedDateBeforeToday ? styles.selectionCardError : null,
+              ]}
+              onPress={() => setPickerTarget('date')}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.selectionEyebrow}>{t('sidequest.form.activityDateEyebrow')}</Text>
+                <Text style={styles.selectionValue} numberOfLines={1}>{formatLongDate(date, locale)}</Text>
+                <Text style={styles.selectionHint}>{t('sidequest.form.withinRange', { range: tripRangeText })}</Text>
+              </View>
+              <Ionicons name="calendar-outline" size={22} color="#5f6570" />
+            </TouchableOpacity>
+          )}
+          {Platform.OS === 'web' ? (
+            <View style={[styles.selectionCard, styles.revealCard]}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.selectionEyebrow}>{t('sidequest.form.activityTimeEyebrow')} <Text style={styles.labelOptional}>{t('common.optionalSuffix')}</Text></Text>
+                <TextInput
+                  value={time}
+                  onChangeText={setTime}
+                  placeholder="HH:MM"
+                  placeholderTextColor="#b7bcc7"
+                  style={styles.webDateInput}
+                  maxLength={5}
+                />
+              </View>
+              <Ionicons name="time-outline" size={22} color="#5f6570" />
             </View>
-            <Ionicons name="calendar-outline" size={22} color="#5f6570" />
-          </TouchableOpacity>
-        )}
+          ) : (
+            <TouchableOpacity
+              activeOpacity={0.92}
+              style={[styles.selectionCard, styles.revealCard, pickerTarget === 'time' ? styles.selectionCardActive : null]}
+              onPress={() => setPickerTarget('time')}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.selectionEyebrow}>{t('sidequest.form.activityTimeEyebrow')} <Text style={styles.labelOptional}>{t('common.optionalSuffix')}</Text></Text>
+                <Text style={styles.selectionValue} numberOfLines={1}>{time ? formatTime(time) : t('sidequest.form.activityTimeEmpty')}</Text>
+              </View>
+              {time ? (
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    setTime('');
+                  }}>
+                  <Ionicons name="close-circle" size={22} color="#b7bcc7" />
+                </TouchableOpacity>
+              ) : (
+                <Ionicons name="time-outline" size={22} color="#5f6570" />
+              )}
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       <View style={styles.block}>
@@ -955,12 +1036,16 @@ function SideQuestFormInner({
           <View style={styles.block}>
             <Text style={styles.label}>{t('sidequest.form.teaserLabel')} <Text style={styles.labelOptional}>{t('common.optionalSuffix')}</Text></Text>
             <TextInput
+              ref={teaserRef}
               value={teaser}
               onChangeText={setTeaser}
               placeholder={t('sidequest.form.teaserPlaceholder')}
               placeholderTextColor="#b7bcc7"
               style={styles.input}
               maxLength={TEASER_MAX_LENGTH}
+              onFocus={onFocusField(teaserRef)}
+              returnKeyType="done"
+              onSubmitEditing={() => Keyboard.dismiss()}
             />
             <Text style={styles.charCounter}>{teaser.length}/{TEASER_MAX_LENGTH}</Text>
             {teaser.trim() ? (
@@ -1022,14 +1107,22 @@ function SideQuestFormInner({
         <PickerSheet
           visible={pickerTarget !== null}
           title={getPickerTitle(pickerTarget, t)}
-          subtitle={pickerTarget === 'date' ? t('sidequest.form.allowedRange', { range: tripRangeText }) : pickerTarget === 'revealDate' ? t('sidequest.form.chooseRevealMoment') : t('sidequest.form.chooseRevealTime')}
+          subtitle={
+            pickerTarget === 'date' ? t('sidequest.form.allowedRange', { range: tripRangeText })
+              : pickerTarget === 'time' ? t('sidequest.form.chooseActivityTime')
+              : pickerTarget === 'revealDate' ? t('sidequest.form.chooseRevealMoment')
+              : t('sidequest.form.chooseRevealTime')
+          }
           onClose={() => setPickerTarget(null)}>
-          {pickerTarget === 'revealTime' ? (
+          {pickerTarget === 'revealTime' || pickerTarget === 'time' ? (
             // Custom on-brand time wheel. Avoids the native time picker, whose
             // spinner display hard-crashes under the New Architecture (Fabric)
             // that Expo Go force-enables, and whose 'default' display looks
             // out of place inside this sheet.
-            <TimeWheel value={revealTime} onChange={setRevealTime} />
+            <TimeWheel
+              value={pickerTarget === 'time' ? time : revealTime}
+              onChange={pickerTarget === 'time' ? setTime : setRevealTime}
+            />
           ) : pickerTarget ? (
             <DateTimePicker
               // Force a fresh native picker view per target so Fabric never
@@ -1606,6 +1699,7 @@ function isWithinRange(value: string, min: string, max: string) {
 
 function getPickerTitle(target: PickerTarget, t: (key: string, vars?: Record<string, string | number>) => string) {
   if (target === 'date') return t('sidequest.form.pickActivityDate');
+  if (target === 'time') return t('sidequest.form.pickActivityTime');
   if (target === 'revealDate') return t('sidequest.form.pickRevealDate');
   if (target === 'revealTime') return t('sidequest.form.pickRevealTime');
   return t('sidequest.form.pickDate');
@@ -2230,7 +2324,10 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 16,
     right: 16,
-    top: WHEEL_PAD + 8,
+    // Matches wheelColumn's effective top (0, not paddingTop) — wheelColumn
+    // is as tall as wheelWrap itself, so wheelWrap's centering collapses its
+    // own paddingVertical to nothing instead of shifting the column down by it.
+    top: WHEEL_PAD,
     height: WHEEL_ITEM_HEIGHT,
     borderRadius: 16,
     backgroundColor: PRIMARY_08,

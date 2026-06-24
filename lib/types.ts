@@ -64,6 +64,7 @@ export interface SideQuestActivity {
   title?: string | null;
   description?: string | null;
   time?: string | null;
+  sortIndex: number;
   category?: string | null;
   imageUrl?: string | null;
   spotifyUrl?: string | null;

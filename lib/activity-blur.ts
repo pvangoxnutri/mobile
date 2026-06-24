@@ -34,6 +34,17 @@ export function extractBlur(description?: string | null): number | null {
   return Number.isFinite(parsed) ? clampBlur(parsed) : null;
 }
 
+/**
+ * Whether a hidden SideQuest should appear sealed (blurred cover + lock) in
+ * list/preview surfaces — calendar, trip feed — for EVERY viewer, including
+ * its own creator. The backend's isHiddenForViewer is creator-aware (so the
+ * owner can open the detail screen and see the real photo as usual); this is
+ * deliberately not, so the surprise can't be spoiled by a glance at a list.
+ */
+export function isSealedInLists(activity: { visibility: 'public' | 'hidden'; isRevealed: boolean }): boolean {
+  return activity.visibility === 'hidden' && !activity.isRevealed;
+}
+
 /** Appends a blur marker (replacing any existing one). */
 export function withBlurMarker(
   description: string | null | undefined,

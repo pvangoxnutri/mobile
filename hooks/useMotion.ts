@@ -224,6 +224,7 @@ interface ListItemStaggerConfig {
   gap?: number;
   duration?: number;
   autoStart?: boolean;
+  initialValue?: number;
 }
 
 export function useListItemStagger(config: ListItemStaggerConfig) {
@@ -232,10 +233,11 @@ export function useListItemStagger(config: ListItemStaggerConfig) {
     gap = MOTION_STAGGER.standard,
     duration = MOTION_TIMING.standard,
     autoStart = true,
+    initialValue = 0,
   } = config;
 
   const animatedValues = useRef(
-    Array.from({ length: itemCount }, () => new Animated.Value(0))
+    Array.from({ length: itemCount }, () => new Animated.Value(initialValue))
   ).current;
 
   const start = useCallback(() => {

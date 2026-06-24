@@ -1,21 +1,31 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Animated, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useCallback, useMemo, useRef, useEffect } from 'react';
 import { COLORS, SPACING, TYPOGRAPHY, RADIUS } from '@/constants/design-tokens';
 import { useScalePress } from '@/hooks/useMotion';
 import { useI18n } from '@/components/i18n-provider';
+import ActivityImageFallback from '@/components/activity-image-fallback';
+import { DEFAULT_BLUR } from '@/lib/activity-blur';
 
 interface HiddenSidequestCardProps {
   id: string;
   revealAt?: string | null;
+  imageUrl?: string | null;
+  category?: string | null;
   onPress: () => void;
   timeLabel?: string;
   formatTimeUntilReveal: (revealAt?: string | null) => string;
 }
 
+// Same row shape as a normal (visible) activity row in the trip timeline —
+// same image box, same title/subtitle/time layout — so a hidden SideQuest
+// sits in the feed exactly where it would for its own creator, just with the
+// cover photo blurred and a lock badge over it instead of the real title.
 export default function HiddenSidequestCard({
   id,
   revealAt,
+  imageUrl,
+  category,
   onPress,
   timeLabel,
   formatTimeUntilReveal,
@@ -33,7 +43,7 @@ export default function HiddenSidequestCard({
   }, [revealAt]);
 
   // Scale press animation
-  const { scaleValue, handlePressIn, handlePressOut, animatedStyle } = useScalePress({
+  const { handlePressIn, handlePressOut, animatedStyle } = useScalePress({
     scale: 0.96,
     triggerHaptics: true,
   });
@@ -74,19 +84,19 @@ export default function HiddenSidequestCard({
       onPressOut={handlePressOut}
       onPress={handlePress}>
       <Animated.View style={[styles.timelineIconWrap, animatedStyle]}>
-        <Animated.View
-          style={[
-            styles.timelineIcon,
-            styles.timelineIconHidden,
-            { opacity: shimmerOpacityRef },
-          ]}>
-          <Ionicons name="lock-closed" size={18} color="#fff" />
-          {isRevealImminent && (
-            <View style={styles.revealBadge}>
-              <View style={styles.revealDot} />
-            </View>
-          )}
+        {imageUrl ? (
+          <Image source={{ uri: imageUrl }} style={styles.timelineIcon} blurRadius={DEFAULT_BLUR} />
+        ) : (
+          <ActivityImageFallback category={category} size="small" style={styles.timelineIcon} />
+        )}
+        <Animated.View style={[styles.lockScrim, { opacity: shimmerOpacityRef }]}>
+          <Ionicons name="lock-closed" size={15} color="#fff" />
         </Animated.View>
+        {isRevealImminent && (
+          <View style={styles.revealBadge}>
+            <View style={styles.revealDot} />
+          </View>
+        )}
       </Animated.View>
 
       <View style={styles.timelineBody}>
@@ -104,13 +114,14 @@ export default function HiddenSidequestCard({
 }
 
 const styles = StyleSheet.create({
+  // Mirrors app/trip/[id]/index.tsx's own timelineRow/timelineIconWrap/
+  // timelineIcon/timelineBody/timelineTitle/timelineSubtitle/timelineTime
+  // exactly, so a hidden card lines up pixel-for-pixel with a visible one.
   timelineRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SPACING.sm,
-    paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.md,
-    marginLeft: SPACING.lg,
+    gap: SPACING.md,
+    paddingVertical: SPACING.md,
   },
   timelineIconWrap: {
     width: 42,
@@ -119,12 +130,16 @@ const styles = StyleSheet.create({
   timelineIcon: {
     width: 42,
     height: 42,
-    borderRadius: RADIUS.md,
+    borderRadius: RADIUS.xs,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  timelineIconHidden: {
-    backgroundColor: COLORS.primary,
+  lockScrim: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: RADIUS.xs,
+    backgroundColor: 'rgba(15, 17, 23, 0.38)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   revealBadge: {
     position: 'absolute',
@@ -148,19 +163,19 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   timelineTitle: {
-    ...TYPOGRAPHY.body,
+    ...TYPOGRAPHY.cardTitle,
     color: COLORS.textPrimary,
     fontWeight: '800',
-    marginBottom: 2,
   },
   timelineSubtitle: {
+    marginTop: 2,
     ...TYPOGRAPHY.meta,
-    color: COLORS.textSecondary,
+    color: COLORS.textMeta,
+    fontWeight: '500',
   },
   timelineTime: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textSecondary,
-    fontWeight: '600',
+    color: COLORS.textMeta,
     marginLeft: SPACING.sm,
   },
 });
