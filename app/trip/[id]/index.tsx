@@ -5,20 +5,41 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Linking from 'expo-linking';
 import { useFocusEffect } from '@react-navigation/native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Image, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import {
+  Animated,
+  FlatList,
+  Image,
+  Keyboard,
+  KeyboardAvoidingView,
+  Modal,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+  Platform,
+  Pressable,
+  ScrollView,
+  Share,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/components/auth-provider';
-import Avatar from '@/components/avatar';
+import Avatar, { getInitials } from '@/components/avatar';
 import { useI18n } from '@/components/i18n-provider';
 import UserProfileCard from '@/components/user-profile-card';
 import HiddenSidequestCard from '@/components/hidden-sidequest-card';
+import DraggableDayList from '@/components/draggable-day-list';
 import ActivityImageFallback from '@/components/activity-image-fallback';
 import HeroShell from '@/components/hero-shell';
 import ModalSheet from '@/components/modal-sheet';
 import { EmptyState } from '@/components/ui/empty-state';
+import { useKeyboardFocusScroll } from '@/hooks/useKeyboardFocusScroll';
 import { apiFetch, apiJson } from '@/lib/api';
-import { getCached, setCached, invalidateTripCache } from '@/lib/cache';
+import { getCached, setCached, invalidateCache, invalidateTripCache } from '@/lib/cache';
 import { uploadImageIfNeeded } from '@/lib/uploads';
+import { isSealedInLists } from '@/lib/activity-blur';
 import type { Quest, SideQuestActivity, TripInvite, LinkPreview } from '@/lib/types';
 import { COLORS, SHADOWS, SPACING, RADIUS, TYPOGRAPHY } from '@/constants/design-tokens';
 
@@ -35,6 +56,15 @@ type ChatMsg = {
   systemEventType?: string | null;
   createdAt: string;
   linkPreview?: LinkPreview | null;
+  // Client-only — absent on every message that came from the server as-is.
+  // Set on the locally-created optimistic entry while a send is in flight
+  // or has failed; cleared (the whole entry gets replaced by the real
+  // server message) once it succeeds.
+  status?: 'pending' | 'failed';
+  // Local file URI to preview/re-upload while status is 'pending' or
+  // 'failed' — the real (remote) imageUrl only exists once the upload and
+  // the POST have both succeeded.
+  localImageUri?: string | null;
 };
 
 // Maps a known SystemEventType to its translated rendering. Falls back to
@@ -46,6 +76,11 @@ function renderSystemMessage(message: ChatMsg, t: (key: string, vars?: Record<st
   }
   return message.text;
 }
+
+// Below this distance (px) from the bottom of the chat list, an incoming
+// message is still allowed to auto-scroll the view — beyond it, the user is
+// treated as "reading history" and left alone.
+const CHAT_NEAR_BOTTOM_THRESHOLD = 80;
 
 type ChatPresenceUser = {
   userId: string;
@@ -85,9 +120,20 @@ export default function TripDetailsScreen() {
   const [chatFullscreenImage, setChatFullscreenImage] = useState<string | null>(null);
   const [chatPresence, setChatPresence] = useState<ChatPresenceUser[]>([]);
   const [chatUnread, setChatUnread] = useState(false);
+  const [chatLoading, setChatLoading] = useState(false);
+  const [chatLoadError, setChatLoadError] = useState<string | null>(null);
+  // Transient banner for things other than a single message failing to
+  // send (that has its own inline pending/failed treatment per-bubble) —
+  // image-picker permission/access errors mainly. Auto-clears itself.
+  const [chatError, setChatError] = useState<string | null>(null);
+  const chatErrorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastChatTimestampRef = useRef<string | null>(null);
   const lastReadAtRef = useRef<string>(new Date(Date.now() - 24 * 3600 * 1000).toISOString());
-  const chatScrollRef = useRef<ScrollView | null>(null);
+  const chatScrollRef = useRef<FlatList<ChatMsg> | null>(null);
+  // Whether the user is currently scrolled near the bottom of the chat —
+  // drives whether an incoming message should auto-scroll into view or
+  // leave them undisturbed while reading older history.
+  const chatNearBottomRef = useRef(true);
   const [spotifyModalOpen, setSpotifyModalOpen] = useState(false);
   const [spotifyUrlDraft, setSpotifyUrlDraft] = useState('');
   const [spotifySaving, setSpotifySaving] = useState(false);
@@ -99,6 +145,8 @@ export default function TripDetailsScreen() {
   const chatInputOpacityRef = useRef(new Animated.Value(0.5)).current;
   const inviteEmailOpacityRef = useRef(new Animated.Value(0.5)).current;
   const spotifyUrlOpacityRef = useRef(new Animated.Value(0.5)).current;
+  const inviteEmailRef = useRef<TextInput>(null);
+  const { scrollRef: peopleSheetScrollRef, onFocusField: onFocusPeopleSheetField, scrollViewProps: peopleSheetScrollViewProps } = useKeyboardFocusScroll();
 
   useFocusEffect(
     useCallback(() => {
@@ -214,7 +262,9 @@ export default function TripDetailsScreen() {
     return Array.from(map.entries())
       .map(([date, items]) => ({
         date,
-        items: items.sort((x, y) => (x.time ?? '').localeCompare(y.time ?? '')),
+        // Manual drag order from the backend (SortIndex), not time — letting
+        // the group be freely reordered is the whole point of the drag list.
+        items: items.sort((x, y) => x.sortIndex - y.sortIndex),
       }))
       .sort((a, b) => a.date.localeCompare(b.date));
   }, [sortedActivities]);
@@ -242,30 +292,61 @@ export default function TripDetailsScreen() {
     lastReadAtRef.current = new Date().toISOString();
     setChatUnread(false);
     lastChatTimestampRef.current = null;
+    chatNearBottomRef.current = true;
+    setChatLoadError(null);
+    setChatLoading(true);
 
-    void loadChatMessages(true);
+    let active = true;
+    let msgPollId: ReturnType<typeof setInterval> | null = null;
+
+    // Only start polling for new messages once the initial load has
+    // actually landed. Starting the interval immediately (the old code)
+    // risked a fast incremental poll resolving before the slower initial
+    // full load — the initial load's setChatMessages(msgs) is a full
+    // replace, so it could wipe out whatever the poll had just merged in.
+    void loadChatMessages(true).finally(() => {
+      if (!active) return;
+      msgPollId = setInterval(() => void loadChatMessages(false), 3000);
+    });
     void sendChatHeartbeat();
     void loadChatPresence();
 
-    const msgPollId = setInterval(() => void loadChatMessages(false), 3000);
     const heartbeatId = setInterval(() => void sendChatHeartbeat(), 15000);
     const presencePollId = setInterval(() => void loadChatPresence(), 5000);
 
     return () => {
-      clearInterval(msgPollId);
+      active = false;
+      if (msgPollId) clearInterval(msgPollId);
       clearInterval(heartbeatId);
       clearInterval(presencePollId);
+      if (chatErrorTimeoutRef.current) clearTimeout(chatErrorTimeoutRef.current);
       void apiFetch(`/api/trips/${id}/chat/presence`, { method: 'DELETE' }).catch(() => {});
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatOpen, id]);
 
-  // Auto-scroll chat to bottom when messages arrive
+  // Auto-scroll chat to bottom when messages arrive — but only if the user
+  // is already near the bottom (or this is the initial load / their own
+  // send, which force chatNearBottomRef true at the source). Reading older
+  // history shouldn't get yanked back down by an incoming message.
   useEffect(() => {
     if (!chatOpen || chatMessages.length === 0) return;
+    if (!chatNearBottomRef.current) return;
     const timer = setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: true }), 80);
     return () => clearTimeout(timer);
-  }, [chatMessages, chatOpen]);
+  }, [chatMessages.length, chatOpen]);
+
+  function handleChatScroll(e: NativeSyntheticEvent<NativeScrollEvent>) {
+    const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+    const distanceFromBottom = contentSize.height - contentOffset.y - layoutMeasurement.height;
+    chatNearBottomRef.current = distanceFromBottom < CHAT_NEAR_BOTTOM_THRESHOLD;
+  }
+
+  function showChatError(message: string) {
+    setChatError(message);
+    if (chatErrorTimeoutRef.current) clearTimeout(chatErrorTimeoutRef.current);
+    chatErrorTimeoutRef.current = setTimeout(() => setChatError(null), 4000);
+  }
 
   async function handleAddInvite() {
     const normalizedEmail = inviteEmail.trim().toLowerCase();
@@ -332,16 +413,52 @@ export default function TripDetailsScreen() {
       if (initial) {
         setChatMessages(msgs);
         lastChatTimestampRef.current = msgs.length > 0 ? msgs[msgs.length - 1].createdAt : null;
+        setChatLoadError(null);
       } else if (msgs.length > 0) {
         setChatMessages((prev) => {
           const existingIds = new Set(prev.map((m) => m.id));
-          const fresh = msgs.filter((m) => !existingIds.has(m.id));
-          return fresh.length > 0 ? [...prev, ...fresh] : prev;
+          let next = prev;
+          const trulyNew: ChatMsg[] = [];
+
+          for (const incoming of msgs) {
+            if (existingIds.has(incoming.id)) continue; // already have this exact server message
+
+            // Does this resolve one of OUR OWN optimistic entries that's
+            // still in flight (poll won the race against our own POST's
+            // response)? Can't match by id — temp ids and server ids are
+            // never the same — so match on what the message actually is:
+            // same author, same text, same image-presence, created within
+            // a few seconds of each other.
+            const pendingIndex = next.findIndex(
+              (m) =>
+                (m.status === 'pending' || m.status === 'failed') &&
+                m.userId === incoming.userId &&
+                m.text === incoming.text &&
+                Boolean(m.localImageUri) === Boolean(incoming.imageUrl) &&
+                Math.abs(new Date(m.createdAt).getTime() - new Date(incoming.createdAt).getTime()) < 15000,
+            );
+
+            if (pendingIndex !== -1) {
+              next = next.map((m, i) => (i === pendingIndex ? incoming : m));
+            } else {
+              trulyNew.push(incoming);
+            }
+          }
+
+          return trulyNew.length > 0 ? [...next, ...trulyNew] : next;
         });
         lastChatTimestampRef.current = msgs[msgs.length - 1].createdAt;
       }
-    } catch {
-      // ignore poll errors
+    } catch (err) {
+      // Background polls fail silently — the next 3s tick just retries.
+      // The initial load is the one case the user would otherwise be
+      // staring at a blank, unexplained panel for, so that one gets a
+      // visible, retryable error instead.
+      if (initial) {
+        setChatLoadError(err instanceof Error ? err.message : t('trip.error.chatLoadFailed'));
+      }
+    } finally {
+      if (initial) setChatLoading(false);
     }
   }
 
@@ -366,7 +483,7 @@ export default function TripDetailsScreen() {
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
-        setError(t('trip.error.photoAccessRequired'));
+        showChatError(t('trip.error.photoAccessRequired'));
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -376,21 +493,22 @@ export default function TripDetailsScreen() {
       if (result.canceled || !result.assets[0]) return;
       setChatPendingImage(result.assets[0].uri);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('trip.error.photoLibraryOpenFailed'));
+      showChatError(err instanceof Error ? err.message : t('trip.error.photoLibraryOpenFailed'));
     }
   }
 
-  async function handleSendChat() {
-    const trimmed = chatDraft.trim();
-    const hasImage = chatPendingImage !== null;
-    if ((!trimmed && !hasImage) || chatSending || chatImageUploading) return;
+  // Shared by a fresh send and a retry of a previously-failed one — takes
+  // the (already in the list, as a 'pending' entry) message's id, uploads
+  // its image if it has a local one still to send, POSTs, then swaps the
+  // optimistic entry for the real server message (or flips it to 'failed').
+  async function performChatSend(tempId: string, text: string, localImageUri: string | null) {
     setChatSending(true);
     try {
       let uploadedImageUrl: string | null = null;
-      if (hasImage && chatPendingImage) {
+      if (localImageUri) {
         setChatImageUploading(true);
         try {
-          uploadedImageUrl = await uploadImageIfNeeded(chatPendingImage, 'chat');
+          uploadedImageUrl = await uploadImageIfNeeded(localImageUri, 'chat');
         } finally {
           setChatImageUploading(false);
         }
@@ -398,17 +516,131 @@ export default function TripDetailsScreen() {
       const msg = await apiJson<ChatMsg>(`/api/trips/${id}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: trimmed, imageUrl: uploadedImageUrl }),
+        body: JSON.stringify({ text, imageUrl: uploadedImageUrl }),
       });
-      setChatMessages((prev) => [...prev, msg]);
-      setChatDraft('');
-      setChatPendingImage(null);
+      setChatMessages((prev) => prev.map((m) => (m.id === tempId ? msg : m)));
       lastChatTimestampRef.current = msg.createdAt;
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('trip.error.chatSendFailed'));
+      setChatMessages((prev) => prev.map((m) => (m.id === tempId ? { ...m, status: 'failed' as const } : m)));
+      showChatError(err instanceof Error ? err.message : t('trip.error.chatSendFailed'));
     } finally {
       setChatSending(false);
     }
+  }
+
+  async function handleSendChat() {
+    const trimmed = chatDraft.trim();
+    const hasImage = chatPendingImage !== null;
+    if ((!trimmed && !hasImage) || chatSending || chatImageUploading) return;
+
+    const tempId = `pending-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const localImageUri = chatPendingImage;
+
+    chatNearBottomRef.current = true; // sending always means "take me to the bottom"
+    setChatMessages((prev) => [
+      ...prev,
+      {
+        id: tempId,
+        userId: user?.id ?? null,
+        userName: user?.name ?? '',
+        text: trimmed,
+        localImageUri,
+        isSystem: false,
+        createdAt: new Date().toISOString(),
+        status: 'pending',
+      },
+    ]);
+    setChatDraft('');
+    setChatPendingImage(null);
+
+    await performChatSend(tempId, trimmed, localImageUri);
+  }
+
+  async function handleRetryChat(message: ChatMsg) {
+    if (chatSending || message.status !== 'failed') return;
+    chatNearBottomRef.current = true;
+    setChatMessages((prev) => prev.map((m) => (m.id === message.id ? { ...m, status: 'pending' as const } : m)));
+    await performChatSend(message.id, message.text, message.localImageUri ?? null);
+  }
+
+  function renderChatMessageItem(message: ChatMsg, index: number) {
+    const ownMessage = message.userId === user?.id;
+    const systemMessage = message.isSystem;
+    const prevMessage = index > 0 ? chatMessages[index - 1] : null;
+    const showTime =
+      !prevMessage ||
+      new Date(message.createdAt).getTime() - new Date(prevMessage.createdAt).getTime() >= 5 * 60 * 1000;
+    const avatarUrl = message.userId ? (memberAvatarMap.get(message.userId) ?? null) : null;
+    const imageSource = message.localImageUri ?? message.imageUrl;
+    const isPending = message.status === 'pending';
+    const isFailed = message.status === 'failed';
+
+    return (
+      <View>
+        {showTime ? (
+          <Text style={styles.chatTimeLabel}>{formatChatTimestamp(message.createdAt, locale)}</Text>
+        ) : null}
+        {systemMessage ? (
+          <Text style={styles.chatSystemLabel}>{renderSystemMessage(message, t)}</Text>
+        ) : ownMessage ? (
+          <View style={styles.chatMessageWrapOwn}>
+            {imageSource ? (
+              <Pressable onPress={() => setChatFullscreenImage(imageSource)} disabled={isPending || isFailed}>
+                <Image source={{ uri: imageSource }} style={[styles.chatMessageImage, isPending && styles.chatMessagePending]} />
+              </Pressable>
+            ) : null}
+            <View
+              style={[
+                styles.chatBubbleCard,
+                styles.chatBubbleCardOwn,
+                { backgroundColor: COLORS.primary },
+                isPending && styles.chatMessagePending,
+                isFailed && styles.chatBubbleCardFailed,
+              ]}>
+              {message.text ? <ChatMessageText text={message.text} isOwn={true} /> : null}
+              {message.linkPreview ? <LinkPreviewCardInline preview={message.linkPreview} isOwn={true} /> : null}
+            </View>
+            {isPending ? (
+              <Text style={styles.chatStatusPending}>{t('trip.chat.sending')}</Text>
+            ) : isFailed ? (
+              <TouchableOpacity activeOpacity={0.7} onPress={() => void handleRetryChat(message)}>
+                <Text style={styles.chatStatusFailed}>{t('trip.chat.sendFailedRetry')}</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        ) : (
+          <View style={styles.chatMessageRow}>
+            <TouchableOpacity
+              style={styles.chatAvatar}
+              activeOpacity={0.7}
+              onPress={() => message.userId && setProfileCardUserId(message.userId)}>
+              <Avatar
+                uri={avatarUrl}
+                name={message.userName}
+                fallbackText={getInitials(message.userName)}
+                forceFallback={failedAvatars.has(message.userId || '')}
+                onError={() => message.userId && setFailedAvatars((prev) => new Set([...prev, message.userId!]))}
+                size={28}
+                fallbackBackgroundColor="#1d212a"
+                fallbackTextColor="#fff"
+              />
+            </TouchableOpacity>
+            <View style={styles.chatMessageContent}>
+              <Text style={styles.chatAuthor}>{message.userName}</Text>
+              {imageSource ? (
+                <Pressable onPress={() => setChatFullscreenImage(imageSource)}>
+                  <Image source={{ uri: imageSource }} style={styles.chatMessageImage} />
+                </Pressable>
+              ) : null}
+              <View style={styles.chatBubbleCard}>
+                {message.text ? <ChatMessageText text={message.text} isOwn={false} /> : null}
+                {message.linkPreview ? <LinkPreviewCardInline preview={message.linkPreview} isOwn={false} /> : null}
+              </View>
+            </View>
+          </View>
+        )}
+      </View>
+    );
   }
 
   async function handleSaveTripSpotify(value: string | null) {
@@ -438,6 +670,34 @@ export default function TripDetailsScreen() {
       setSpotifyMessage(err instanceof Error ? err.message : t('trip.error.spotifySaveFailed'));
     } finally {
       setSpotifySaving(false);
+    }
+  }
+
+  async function handleReorderActivities(date: string, reordered: SideQuestActivity[]) {
+    const reorderedWithIndex = reordered.map((a, i) => ({ ...a, sortIndex: i }));
+    const reorderedIds = new Set(reorderedWithIndex.map((a) => a.id));
+
+    // Optimistic: drop the moved day's items back into the flat list with
+    // their new SortIndex so the feed reflects the drop immediately.
+    setActivities((prev) => [...prev.filter((a) => !reorderedIds.has(a.id)), ...reorderedWithIndex]);
+
+    try {
+      const response = await apiFetch(`/api/trips/${id}/activities/reorder`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date, activityIds: reorderedWithIndex.map((a) => a.id) }),
+      });
+      if (!response.ok) throw new Error(await response.text());
+      invalidateCache(`/api/trips/${id}/activities`);
+    } catch {
+      // Resync with the server's actual order rather than leaving a
+      // possibly-wrong optimistic order in place.
+      try {
+        const fresh = await apiJson<SideQuestActivity[]>(`/api/trips/${id}/activities`);
+        setActivities(fresh);
+      } catch {
+        // best effort
+      }
     }
   }
 
@@ -548,8 +808,20 @@ export default function TripDetailsScreen() {
                   <Text style={styles.dayHeaderDay}>{t('trip.dayNumber', { day: dayNumberRelative(group.date, trip?.startDate) })}</Text>
                   <View style={styles.dayHeaderLine} />
                 </View>
-                {group.items.map((activity) => {
-                  const hidden = activity.isHiddenForViewer;
+                <DraggableDayList
+                  items={group.items}
+                  keyExtractor={(activity) => activity.id}
+                  // Reordering is a trip-wide collaborative action gated by
+                  // MembersCanEdit (or trip ownership) on the backend's
+                  // reorder endpoint — NOT per-activity canEdit, which is
+                  // creator-only for editing/deleting an activity's own
+                  // content. Using canEdit here would silently disable drag
+                  // for an entire day whenever its first item happens to be
+                  // someone else's activity, even for your own items below it.
+                  enabled={canManageTrip || (trip?.membersCanEdit ?? true)}
+                  onReorder={(reordered) => void handleReorderActivities(group.date, reordered)}
+                  renderItem={(activity) => {
+                  const hidden = isSealedInLists(activity);
                   const timeLabel = formatActivityTimeShort(activity.time);
 
                   if (hidden) {
@@ -558,6 +830,8 @@ export default function TripDetailsScreen() {
                         key={activity.id}
                         id={activity.id}
                         revealAt={activity.revealAt}
+                        imageUrl={activity.imageUrl}
+                        category={activity.category}
                         timeLabel={timeLabel}
                         formatTimeUntilReveal={(revealAt) => formatTimeUntilReveal(revealAt, t)}
                         onPress={() => router.push(`/trip/${id}/sidequest/${activity.id}`)}
@@ -589,7 +863,8 @@ export default function TripDetailsScreen() {
                       {timeLabel ? <Text style={styles.timelineTime}>{timeLabel}</Text> : null}
                     </TouchableOpacity>
                   );
-                })}
+                  }}
+                />
               </View>
             ))
           ) : (
@@ -618,6 +893,7 @@ export default function TripDetailsScreen() {
         </View>
 
         <ModalSheet visible={peopleSheetOpen} onClose={() => setPeopleSheetOpen(false)}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
           <View style={styles.sheetHandle} />
           <View style={styles.sheetHeader}>
             <View>
@@ -629,7 +905,11 @@ export default function TripDetailsScreen() {
             </TouchableOpacity>
           </View>
 
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.sheetContent, { paddingBottom: Math.max(insets.bottom, 18) + 12 }]}>
+          <ScrollView
+            ref={peopleSheetScrollRef}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={[styles.sheetContent, { paddingBottom: Math.max(insets.bottom, 18) + 12 }]}
+            {...peopleSheetScrollViewProps}>
                 <View style={styles.peopleSection}>
                   <Text style={styles.peopleSectionTitle}>{t('trip.travelersSectionTitle')}</Text>
                   {members.map((member) => (
@@ -682,6 +962,7 @@ export default function TripDetailsScreen() {
                           <View style={styles.inviteComposer}>
                             <Animated.View style={[{ opacity: inviteEmailOpacityRef }]}>
                               <TextInput
+                                ref={inviteEmailRef}
                                 value={inviteEmail}
                                 onChangeText={setInviteEmail}
                                 onFocus={() => {
@@ -690,6 +971,7 @@ export default function TripDetailsScreen() {
                                     duration: 300,
                                     useNativeDriver: false,
                                   }).start();
+                                  onFocusPeopleSheetField(inviteEmailRef)();
                                 }}
                                 onBlur={() => {
                                   Animated.timing(inviteEmailOpacityRef, {
@@ -704,6 +986,8 @@ export default function TripDetailsScreen() {
                                 autoCapitalize="none"
                                 autoCorrect={false}
                                 style={styles.inviteInput}
+                                returnKeyType="done"
+                                onSubmitEditing={() => Keyboard.dismiss()}
                               />
                             </Animated.View>
                             <TouchableOpacity
@@ -757,6 +1041,7 @@ export default function TripDetailsScreen() {
                   )}
                 </View>
               </ScrollView>
+          </KeyboardAvoidingView>
         </ModalSheet>
 
         <Modal visible={chatOpen} transparent animationType="fade" onRequestClose={closeChat}>
@@ -800,78 +1085,52 @@ export default function TripDetailsScreen() {
                 </View>
               ) : null}
 
-              <ScrollView ref={chatScrollRef} style={styles.chatListScroll} showsVerticalScrollIndicator={false} contentContainerStyle={styles.chatList}>
-                {chatMessages.map((message, index) => {
-                  const ownMessage = message.userId === user?.id;
-                  const systemMessage = message.isSystem;
-                  const prevMessage = index > 0 ? chatMessages[index - 1] : null;
-                  const showTime =
-                    !prevMessage ||
-                    new Date(message.createdAt).getTime() - new Date(prevMessage.createdAt).getTime() >= 5 * 60 * 1000;
-                  const avatarUrl = message.userId ? (memberAvatarMap.get(message.userId) ?? null) : null;
+              {chatError ? (
+                <View style={styles.chatErrorBanner}>
+                  <Ionicons name="alert-circle" size={14} color={COLORS.error} />
+                  <Text style={styles.chatErrorBannerText} numberOfLines={2}>{chatError}</Text>
+                </View>
+              ) : null}
 
-                  return (
-                    <View key={message.id}>
-                      {showTime ? (
-                        <Text style={styles.chatTimeLabel}>{formatChatTimestamp(message.createdAt, locale)}</Text>
-                      ) : null}
-                      {systemMessage ? (
-                        <Text style={styles.chatSystemLabel}>{renderSystemMessage(message, t)}</Text>
-                      ) : ownMessage ? (
-                        <View style={styles.chatMessageWrapOwn}>
-                          {message.imageUrl ? (
-                            <Pressable onPress={() => setChatFullscreenImage(message.imageUrl ?? null)}>
-                              <Image source={{ uri: message.imageUrl }} style={styles.chatMessageImage} />
-                            </Pressable>
-                          ) : null}
-                          <View style={[styles.chatBubbleCard, styles.chatBubbleCardOwn, { backgroundColor: COLORS.primary }]}>
-                            {message.text ? (
-                              <ChatMessageText text={message.text} isOwn={true} />
-                            ) : null}
-                            {message.linkPreview ? (
-                              <LinkPreviewCardInline preview={message.linkPreview} isOwn={true} />
-                            ) : null}
-                          </View>
-                        </View>
-                      ) : (
-                        <View style={styles.chatMessageRow}>
-                          <TouchableOpacity
-                            style={styles.chatAvatar}
-                            activeOpacity={0.7}
-                            onPress={() => message.userId && setProfileCardUserId(message.userId)}>
-                            <Avatar
-                              uri={avatarUrl}
-                              name={message.userName}
-                              fallbackText={getInitials(message.userName)}
-                              forceFallback={failedAvatars.has(message.userId || '')}
-                              onError={() => message.userId && setFailedAvatars(prev => new Set([...prev, message.userId!]))}
-                              size={28}
-                              fallbackBackgroundColor="#1d212a"
-                              fallbackTextColor="#fff"
-                            />
-                          </TouchableOpacity>
-                          <View style={styles.chatMessageContent}>
-                            <Text style={styles.chatAuthor}>{message.userName}</Text>
-                            {message.imageUrl ? (
-                              <Pressable onPress={() => setChatFullscreenImage(message.imageUrl ?? null)}>
-                                <Image source={{ uri: message.imageUrl }} style={styles.chatMessageImage} />
-                              </Pressable>
-                            ) : null}
-                            <View style={styles.chatBubbleCard}>
-                              {message.text ? (
-                                <ChatMessageText text={message.text} isOwn={false} />
-                              ) : null}
-                              {message.linkPreview ? (
-                                <LinkPreviewCardInline preview={message.linkPreview} isOwn={false} />
-                              ) : null}
-                            </View>
-                          </View>
-                        </View>
-                      )}
-                    </View>
-                  );
-                })}
-              </ScrollView>
+              {chatLoading && chatMessages.length === 0 ? (
+                <View style={styles.chatListScroll}>
+                  <ChatLoadingSkeleton />
+                </View>
+              ) : chatLoadError && chatMessages.length === 0 ? (
+                <View style={styles.chatListScroll}>
+                  <EmptyState
+                    icon="cloud-offline-outline"
+                    title={t('trip.chat.loadFailedTitle')}
+                    description={chatLoadError}
+                    action={{
+                      label: t('common.retry'),
+                      onPress: () => {
+                        setChatLoading(true);
+                        void loadChatMessages(true);
+                      },
+                    }}
+                  />
+                </View>
+              ) : (
+                <FlatList
+                  ref={chatScrollRef}
+                  data={chatMessages}
+                  keyExtractor={(message) => message.id}
+                  style={styles.chatListScroll}
+                  contentContainerStyle={styles.chatList}
+                  showsVerticalScrollIndicator={false}
+                  onScroll={handleChatScroll}
+                  scrollEventThrottle={100}
+                  renderItem={({ item, index }) => renderChatMessageItem(item, index)}
+                  ListEmptyComponent={
+                    <EmptyState
+                      icon="chatbubbles-outline"
+                      title={t('trip.chat.emptyTitle')}
+                      description={t('trip.chat.emptyDescription')}
+                    />
+                  }
+                />
+              )}
 
               {chatPendingImage ? (
                 <View style={styles.chatPendingImageWrap}>
@@ -979,6 +1238,8 @@ export default function TripDetailsScreen() {
                     autoCorrect={false}
                     keyboardType="url"
                     style={styles.spotifyInput}
+                    returnKeyType="done"
+                    onSubmitEditing={() => Keyboard.dismiss()}
                   />
                 </Animated.View>
                 <View style={styles.spotifySheetButtons}>
@@ -1112,6 +1373,26 @@ async function openSpotifyLink(url: string) {
 }
 
 const URL_REGEX = /https?:\/\/[^\s]+/g;
+
+// Plain (non-animated, by design — keeps this dependency-free and cheap)
+// placeholder rows shown only on a true cold-start chat load, alternating
+// sides so it reads as "messages are coming" rather than a generic spinner.
+function ChatLoadingSkeleton() {
+  const widths = [0.55, 0.4, 0.62];
+  return (
+    <View style={styles.chatSkeletonWrap}>
+      {widths.map((width, i) => (
+        <View
+          key={i}
+          style={[
+            styles.chatSkeletonBubble,
+            { width: `${width * 100}%`, alignSelf: i % 2 === 0 ? 'flex-start' : 'flex-end' },
+          ]}
+        />
+      ))}
+    </View>
+  );
+}
 
 function ChatMessageText({ text, isOwn }: { text: string; isOwn: boolean }) {
   const parts = text.split(URL_REGEX);
@@ -1278,20 +1559,6 @@ function formatSpotifyDisplayUrl(url?: string | null) {
 
 function formatChatTimestamp(value: string, locale: string) {
   return new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' }).format(new Date(value));
-}
-
-function getInitials(name?: string | null) {
-  const parts = (name ?? '')
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
-
-  if (parts.length === 0) return '?';
-
-  return parts
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? '')
-    .join('');
 }
 
 const styles = StyleSheet.create({
@@ -2203,6 +2470,55 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-end',
     maxWidth: '70%',
     backgroundColor: '#ff4f74',
+  },
+  chatMessagePending: {
+    opacity: 0.55,
+  },
+  chatBubbleCardFailed: {
+    borderWidth: 1.5,
+    borderColor: COLORS.error,
+  },
+  chatStatusPending: {
+    alignSelf: 'flex-end',
+    marginTop: 3,
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#a4aab4',
+  },
+  chatStatusFailed: {
+    alignSelf: 'flex-end',
+    marginTop: 3,
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.error,
+  },
+  chatErrorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 14,
+    backgroundColor: COLORS.errorLight,
+    borderWidth: 1,
+    borderColor: COLORS.errorBorder,
+  },
+  chatErrorBannerText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.error,
+  },
+  chatSkeletonWrap: {
+    flex: 1,
+    paddingTop: 18,
+    gap: 10,
+  },
+  chatSkeletonBubble: {
+    height: 38,
+    borderRadius: 18,
+    backgroundColor: '#f0f1f4',
   },
   chatBubbleText: {
     color: '#161821',
