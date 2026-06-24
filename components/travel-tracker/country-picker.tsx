@@ -11,6 +11,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useMemo, useState } from 'react';
 import {
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -138,6 +139,8 @@ export default function CountryPicker({ value, onChange, label = 'Countries' }: 
               placeholderTextColor="#B0B7C3"
               autoCapitalize="none"
               autoCorrect={false}
+              returnKeyType="search"
+              onSubmitEditing={() => Keyboard.dismiss()}
             />
             {search.length > 0 ? (
               <TouchableOpacity onPress={() => setSearch('')} hitSlop={8}>

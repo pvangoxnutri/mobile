@@ -1,8 +1,9 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as WebBrowser from 'expo-web-browser';
 import {
   ActivityIndicator,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -17,8 +18,10 @@ import BrandMark from '@/components/brand-mark';
 import { useAuth } from '@/components/auth-provider';
 import { useI18n, type AppLanguage } from '@/components/i18n-provider';
 import LanguagePicker from '@/components/language-picker';
+import PasswordStrengthMeter from '@/components/password-strength-meter';
 import { supabase } from '@/lib/supabase';
 import { PRIMARY_COLOR } from '@/constants/colors';
+import { useKeyboardFocusScroll } from '@/hooks/useKeyboardFocusScroll';
 
 export default function LoginScreen() {
   const { signIn, signUp } = useAuth();
@@ -40,6 +43,11 @@ export default function LoginScreen() {
   // so we don't overwrite a returning user's saved preference with the
   // device-locale default they never touched.
   const [userChangedLanguage, setUserChangedLanguage] = useState(false);
+  const { scrollRef, onFocusField, scrollViewProps } = useKeyboardFocusScroll();
+  const nameRef = useRef<TextInput>(null);
+  const emailRef = useRef<TextInput>(null);
+  const passwordRef = useRef<TextInput>(null);
+  const confirmPasswordRef = useRef<TextInput>(null);
 
   useEffect(() => {
     setSelectedLanguage(language);
@@ -51,21 +59,28 @@ export default function LoginScreen() {
     void setLanguage(next);
   }
 
-  const cooldownSeconds = cooldownUntil ? Math.max(0, Math.ceil((cooldownUntil - Date.now()) / 1000)) : 0;
+  // `now` exists purely to force a re-render every tick — cooldownSeconds is
+  // derived from it instead of calling Date.now() straight in the render
+  // body, which would only ever recompute when something else re-rendered
+  // and otherwise just sit frozen until the cooldown silently expired.
+  const [now, setNow] = useState(Date.now());
+  const cooldownSeconds = cooldownUntil ? Math.max(0, Math.ceil((cooldownUntil - now) / 1000)) : 0;
 
   useEffect(() => {
-    if (!cooldownUntil || cooldownSeconds <= 0) {
+    if (!cooldownUntil) {
       return;
     }
 
     const interval = setInterval(() => {
       if (cooldownUntil <= Date.now()) {
         setCooldownUntil(null);
+      } else {
+        setNow(Date.now());
       }
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [cooldownSeconds, cooldownUntil]);
+  }, [cooldownUntil]);
 
   async function handleSubmit() {
     try {
@@ -120,12 +135,13 @@ export default function LoginScreen() {
       <View style={styles.backgroundGlowTop} />
       <View style={styles.backgroundGlowBottom} />
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingTop: Math.max(insets.top, 18) + 10, paddingBottom: Math.max(insets.bottom, 24) + 20 },
+          { paddingTop: Math.max(insets.top, 18) + 24, paddingBottom: Math.max(insets.bottom, 18) + 32 },
         ]}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}>
+        showsVerticalScrollIndicator={false}
+        {...scrollViewProps}>
       <View style={styles.hero}>
         <BrandMark size="md" />
         <Text style={styles.tagline}>{t('auth.tagline')}</Text>
@@ -148,23 +164,37 @@ export default function LoginScreen() {
         {mode === 'signup' ? (
           <View style={styles.fieldBlock}>
             <Text style={styles.fieldLabel}>{t('auth.full_name')}</Text>
-            <TextInput style={styles.input} placeholder={t('auth.full_name_placeholder')} value={name} onChangeText={setName} />
+            <TextInput
+              ref={nameRef}
+              style={styles.input}
+              placeholder={t('auth.full_name_placeholder')}
+              value={name}
+              onChangeText={setName}
+              onFocus={onFocusField(nameRef)}
+              returnKeyType="next"
+              onSubmitEditing={() => emailRef.current?.focus()}
+            />
           </View>
         ) : null}
         <View style={styles.fieldBlock}>
           <Text style={styles.fieldLabel}>{t('auth.email')}</Text>
           <TextInput
+            ref={emailRef}
             style={styles.input}
             placeholder={t('auth.email_placeholder')}
             keyboardType="email-address"
             autoCapitalize="none"
             value={email}
             onChangeText={setEmail}
+            onFocus={onFocusField(emailRef)}
+            returnKeyType="next"
+            onSubmitEditing={() => passwordRef.current?.focus()}
           />
         </View>
         <View style={styles.fieldBlock}>
           <Text style={styles.fieldLabel}>{t('auth.password')}</Text>
           <TextInput
+            ref={passwordRef}
             style={styles.input}
             placeholder={mode === 'signin' ? t('auth.password_signin_placeholder') : t('auth.password_signup_placeholder')}
             secureTextEntry
@@ -179,12 +209,17 @@ export default function LoginScreen() {
             passwordRules={mode === 'signup' ? 'minlength: 6;' : undefined}
             value={password}
             onChangeText={setPassword}
+            onFocus={onFocusField(passwordRef)}
+            returnKeyType={mode === 'signup' ? 'next' : 'done'}
+            onSubmitEditing={() => (mode === 'signup' ? confirmPasswordRef.current?.focus() : Keyboard.dismiss())}
           />
+          {mode === 'signup' ? <PasswordStrengthMeter password={password} /> : null}
         </View>
         {mode === 'signup' ? (
           <View style={styles.fieldBlock}>
             <Text style={styles.fieldLabel}>{t('auth.password_confirm')}</Text>
             <TextInput
+              ref={confirmPasswordRef}
               style={styles.input}
               placeholder={t('auth.password_confirm_placeholder')}
               secureTextEntry
@@ -195,6 +230,9 @@ export default function LoginScreen() {
               passwordRules="minlength: 6;"
               value={confirmPassword}
               onChangeText={setConfirmPassword}
+              onFocus={onFocusField(confirmPasswordRef)}
+              returnKeyType="done"
+              onSubmitEditing={() => Keyboard.dismiss()}
             />
           </View>
         ) : null}
@@ -283,10 +321,12 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(13, 144, 168, 0.10)',
   },
   scrollContent: {
-    flexGrow: 1,
-    justifyContent: 'center',
+    // No flexGrow/justifyContent:center here — those stretch the content
+    // container to exactly fill the visible frame whenever the form is
+    // shorter than the screen, which leaves zero scrollable overflow for
+    // useKeyboardFocusScroll to scroll into (matches the padding-only
+    // pattern used by create-trip.tsx / sidequest-form.tsx).
     paddingHorizontal: 24,
-    paddingVertical: 28,
   },
   hero: {
     alignItems: 'center',

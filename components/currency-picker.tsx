@@ -2,6 +2,7 @@
 import { useMemo, useState } from 'react';
 import {
   FlatList,
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -143,6 +144,8 @@ export function CurrencyPicker({ value, onChange }: Props) {  const insets = use
                 value={query}
                 onChangeText={setQuery}
                 autoFocus
+                returnKeyType="search"
+                onSubmitEditing={() => Keyboard.dismiss()}
               />
               {query.length > 0 && (
                 <TouchableOpacity onPress={() => setQuery('')}>

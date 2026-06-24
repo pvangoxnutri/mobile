@@ -3,10 +3,11 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
-import { Component, useCallback, useState, type ReactNode } from 'react';
+import { Component, useCallback, useRef, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -20,6 +21,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/components/auth-provider';
 import { useI18n } from '@/components/i18n-provider';
+import { useKeyboardFocusScroll } from '@/hooks/useKeyboardFocusScroll';
 import { apiFetch, apiJson } from '@/lib/api';
 import { getCached, setCached } from '@/lib/cache';
 import { uploadImageIfNeeded } from '@/lib/uploads';
@@ -108,6 +110,9 @@ export default function CostSplitScreen() {
   const [submitError, setSubmitError] = useState('');
   const [pickingReceipt, setPickingReceipt] = useState(false);
   const [datePickerOpen, setDatePickerOpen] = useState(false);
+  const { scrollRef: addExpenseScrollRef, onFocusField, scrollViewProps: addExpenseScrollViewProps } = useKeyboardFocusScroll();
+  const descriptionRef = useRef<TextInput>(null);
+  const amountRef = useRef<TextInput>(null);
 
   const [form, setForm] = useState<AddExpenseForm>({
     description: '',
@@ -883,15 +888,19 @@ export default function CostSplitScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            <ScrollView ref={addExpenseScrollRef} showsVerticalScrollIndicator={false} {...addExpenseScrollViewProps}>
               {/* Description */}
               <Text style={styles.fieldLabel}>{t('trip.split.description')} <Text style={styles.fieldLabelRequired}>*</Text></Text>
               <TextInput
+                ref={descriptionRef}
                 style={styles.textInput}
                 placeholder={t('trip.split.descriptionPlaceholder')}
                 placeholderTextColor="#afb5bf"
                 value={form.description}
                 onChangeText={(v) => setField('description', v)}
+                onFocus={onFocusField(descriptionRef)}
+                returnKeyType="next"
+                onSubmitEditing={() => amountRef.current?.focus()}
               />
 
               {/* Amount — just the number from the receipt/bank statement.
@@ -900,12 +909,16 @@ export default function CostSplitScreen() {
                   a precision this app doesn't have. */}
               <Text style={styles.fieldLabel}>{t('trip.split.amount')} <Text style={styles.fieldLabelRequired}>*</Text></Text>
               <TextInput
+                ref={amountRef}
                 style={styles.textInput}
                 placeholder="250"
                 placeholderTextColor="#afb5bf"
                 keyboardType="decimal-pad"
                 value={form.amount}
                 onChangeText={(v) => setField('amount', v)}
+                onFocus={onFocusField(amountRef)}
+                returnKeyType="done"
+                onSubmitEditing={() => Keyboard.dismiss()}
               />
               <Text style={[styles.fieldHint, { marginTop: 6 }]}>
                 {t('trip.split.amountHint')}
@@ -1034,6 +1047,8 @@ export default function CostSplitScreen() {
                             payerAmounts: { ...prev.payerAmounts, [member.id]: v },
                           }))
                         }
+                        returnKeyType="done"
+                        onSubmitEditing={() => Keyboard.dismiss()}
                       />
                     )}
                     {selected && form.selectedPayers.size === 1 && (
@@ -1133,6 +1148,8 @@ export default function CostSplitScreen() {
                             participantValues: { ...prev.participantValues, [member.id]: v },
                           }));
                         }}
+                        returnKeyType="done"
+                        onSubmitEditing={() => Keyboard.dismiss()}
                       />
                     )}
                   </View>

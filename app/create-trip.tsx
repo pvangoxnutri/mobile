@@ -1,8 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -24,6 +25,7 @@ import { apiFetch, apiJson } from '@/lib/api';
 import { invalidateCache } from '@/lib/cache';
 import type { Quest } from '@/lib/types';
 import { SPACING, TYPOGRAPHY, COLORS, RADIUS, SHADOWS } from '@/constants/design-tokens';
+import { useKeyboardFocusScroll } from '@/hooks/useKeyboardFocusScroll';
 
 type MessageState = { type: 'success' | 'error'; text: string } | null;
 
@@ -53,6 +55,9 @@ export default function CreateTripScreen() {
   const [rangePickerOpen, setRangePickerOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<MessageState>(null);
+  const { scrollRef, onFocusField, scrollViewProps } = useKeyboardFocusScroll();
+  const titleRef = useRef<TextInput>(null);
+  const destinationRef = useRef<TextInput>(null);
 
   const contentBottomPadding = useMemo(() => Math.max(insets.bottom, 18) + 32, [insets.bottom]);
 
@@ -214,10 +219,11 @@ export default function CreateTripScreen() {
   return (
     <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView
+        ref={scrollRef}
         style={styles.scroll}
         contentContainerStyle={[styles.content, { paddingTop: Math.max(insets.top, 14) + 6, paddingBottom: contentBottomPadding }]}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}>
+        showsVerticalScrollIndicator={false}
+        {...scrollViewProps}>
         <View style={styles.header}>
           <TouchableOpacity style={styles.backButton} activeOpacity={0.8} onPress={unsaved.requestBack}>
             <Ionicons name="arrow-back" size={28} color={COLORS.primary} />
@@ -257,12 +263,16 @@ export default function CreateTripScreen() {
           {t('trip.what_to_call')} <Text style={styles.requiredAsterisk}>*</Text>
         </Text>
         <TextInput
+          ref={titleRef}
           value={title}
           onChangeText={setTitle}
           placeholder={t('trip.trip_name_placeholder')}
           placeholderTextColor={COLORS.placeholderText}
           style={styles.titleInput}
           maxLength={TITLE_MAX_LENGTH}
+          onFocus={onFocusField(titleRef)}
+          returnKeyType="next"
+          onSubmitEditing={() => destinationRef.current?.focus()}
         />
         <Text style={styles.charCounter}>{title.length}/{TITLE_MAX_LENGTH}</Text>
 
@@ -271,12 +281,16 @@ export default function CreateTripScreen() {
           {t('trip.where_going')} <Text style={styles.requiredAsterisk}>*</Text>
         </Text>
         <TextInput
+          ref={destinationRef}
           value={destination}
           onChangeText={setDestination}
           placeholder={t('trip.destination_placeholder')}
           placeholderTextColor={COLORS.placeholderText}
           style={styles.destinationInput}
           maxLength={DESTINATION_MAX_LENGTH}
+          onFocus={onFocusField(destinationRef)}
+          returnKeyType="done"
+          onSubmitEditing={() => Keyboard.dismiss()}
         />
         <Text style={styles.charCounter}>{destination.length}/{DESTINATION_MAX_LENGTH}</Text>
 

@@ -6,6 +6,7 @@ import {
   ActivityIndicator,
   Animated,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -23,6 +24,7 @@ import LanguagePicker from '@/components/language-picker';
 import { apiFetch } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
 import { PRIMARY_COLOR, PRIMARY_08 } from '@/constants/colors';
+import { useKeyboardFocusScroll } from '@/hooks/useKeyboardFocusScroll';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -56,6 +58,7 @@ export default function OnboardingScreen() {
 
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const progressAnim = useRef(new Animated.Value(1)).current;
+  const { scrollRef, onFocusField, scrollViewProps } = useKeyboardFocusScroll();
 
   async function handleLanguageChange(next: AppLanguage) {
     await setLanguage(next);
@@ -197,9 +200,10 @@ export default function OnboardingScreen() {
         {/* ── Step content ────────────────────────────────── */}
         <Animated.View style={[styles.contentWrap, { opacity: fadeAnim }]}>
           <ScrollView
+            ref={scrollRef}
             contentContainerStyle={[styles.scrollContent, { paddingBottom: 32 }]}
             showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled">
+            {...scrollViewProps}>
             {step === 1 && (
               <StepDiscovery
                 foundVia={foundVia}
@@ -208,6 +212,7 @@ export default function OnboardingScreen() {
                 setPurpose={setPurpose}
                 purposeOther={purposeOther}
                 setPurposeOther={setPurposeOther}
+                onFocusField={onFocusField}
                 t={t}
               />
             )}
@@ -219,6 +224,7 @@ export default function OnboardingScreen() {
                 initials={initials}
                 uploadBusy={uploadBusy}
                 onPickAvatar={() => void handleAvatarPick()}
+                onFocusField={onFocusField}
                 t={t}
               />
             )}
@@ -254,6 +260,7 @@ function StepDiscovery({
   setPurpose,
   purposeOther,
   setPurposeOther,
+  onFocusField,
   t,
 }: {
   foundVia: string | null;
@@ -262,8 +269,10 @@ function StepDiscovery({
   setPurpose: (v: string | null) => void;
   purposeOther: string;
   setPurposeOther: (v: string) => void;
+  onFocusField: (ref: { current: TextInput | null }) => () => void;
   t: (key: string, vars?: Record<string, string | number>) => string;
 }) {
+  const purposeOtherRef = useRef<TextInput>(null);
   return (
     <View>
       <Text style={styles.stepHeading}>{t('onboarding.discovery.heading')} 👋</Text>
@@ -301,11 +310,15 @@ function StepDiscovery({
 
       {purpose === 'other' ? (
         <TextInput
+          ref={purposeOtherRef}
           style={styles.otherInput}
           placeholder={t('onboarding.purpose.otherPlaceholder')}
           placeholderTextColor="#b2b7c2"
           value={purposeOther}
           onChangeText={setPurposeOther}
+          onFocus={onFocusField(purposeOtherRef)}
+          returnKeyType="done"
+          onSubmitEditing={() => Keyboard.dismiss()}
         />
       ) : null}
     </View>
@@ -321,6 +334,7 @@ function StepProfile({
   initials,
   uploadBusy,
   onPickAvatar,
+  onFocusField,
   t,
 }: {
   bio: string;
@@ -329,8 +343,10 @@ function StepProfile({
   initials: string;
   uploadBusy: boolean;
   onPickAvatar: () => void;
+  onFocusField: (ref: { current: TextInput | null }) => () => void;
   t: (key: string, vars?: Record<string, string | number>) => string;
 }) {
+  const bioRef = useRef<TextInput>(null);
   return (
     <View>
       <Text style={styles.stepHeading}>{t('onboarding.profile.heading')} 🙌</Text>
@@ -361,11 +377,13 @@ function StepProfile({
       <View style={styles.bioBlock}>
         <Text style={styles.bioLabel}>{t('onboarding.profile.bioLabel')}</Text>
         <TextInput
+          ref={bioRef}
           style={styles.bioInput}
           placeholder={t('onboarding.profile.bioPlaceholder')}
           placeholderTextColor="#b2b7c2"
           value={bio}
           onChangeText={setBio}
+          onFocus={onFocusField(bioRef)}
           multiline
           numberOfLines={4}
           textAlignVertical="top"

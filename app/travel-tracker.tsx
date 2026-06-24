@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -27,6 +28,7 @@ import {
   type CountryStatus,
   type StatusMap,
 } from '@/components/travel-tracker/country-data';
+import { useKeyboardFocusScroll } from '@/hooks/useKeyboardFocusScroll';
 import { apiJson } from '@/lib/api';
 import type { Quest } from '@/lib/types';
 import { PRIMARY_COLOR, PRIMARY_12, SECONDARY_COLOR, SECONDARY_12 } from '@/constants/colors';
@@ -50,6 +52,10 @@ export default function TravelTrackerScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const searchInputRef = useRef<TextInput>(null);
   const listAnchorY = useRef(0);
+  // Reuses this screen's own scrollRef (already driven by the filter-chip
+  // "scroll to list anchor" logic below) instead of creating a second,
+  // independent scroll controller for the same ScrollView.
+  const { onFocusField, scrollViewProps } = useKeyboardFocusScroll(scrollRef);
 
   const [statusMap, setStatusMap] = useState<StatusMap>({});
   const [tripDerivedMap, setTripDerivedMap] = useState<StatusMap>({});
@@ -186,7 +192,7 @@ export default function TravelTrackerScreen() {
           { paddingTop: Math.max(insets.top, 16) + 8, paddingBottom: Math.max(insets.bottom, 20) + 112 },
         ]}
         showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled">
+        {...scrollViewProps}>
 
         {/* Back navigation */}
         <TouchableOpacity style={styles.backRow} activeOpacity={0.7} onPress={() => router.back()}>
@@ -267,7 +273,9 @@ export default function TravelTrackerScreen() {
               placeholderTextColor="#B0B7C3"
               autoCapitalize="none"
               autoCorrect={false}
+              onFocus={onFocusField(searchInputRef)}
               returnKeyType="search"
+              onSubmitEditing={() => Keyboard.dismiss()}
             />
             {search.length > 0 ? (
               <TouchableOpacity onPress={() => setSearch('')} hitSlop={8}>

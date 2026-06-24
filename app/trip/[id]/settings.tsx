@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -25,6 +26,7 @@ import { useI18n } from '@/components/i18n-provider';
 import RangeDatePicker, { formatRangeDisplay } from '@/components/range-date-picker';
 import CountryPicker from '@/components/travel-tracker/country-picker';
 import { UnsavedChangesModal, useUnsavedChanges } from '@/components/unsaved-changes';
+import { useKeyboardFocusScroll } from '@/hooks/useKeyboardFocusScroll';
 import { apiFetch, apiJson } from '@/lib/api';
 import { getCached, setCached, invalidateTripCache } from '@/lib/cache';
 import type { Quest, TripInvite } from '@/lib/types';
@@ -63,6 +65,10 @@ export default function TripSettingsScreen() {
   const [inviteMessage, setInviteMessage] = useState('');
   const [inviteSubmitting, setInviteSubmitting] = useState(false);
   const [leaving, setLeaving] = useState(false);
+  const { scrollRef, onFocusField, scrollViewProps } = useKeyboardFocusScroll();
+  const titleRef = useRef<TextInput>(null);
+  const destinationRef = useRef<TextInput>(null);
+  const inviteEmailRef = useRef<TextInput>(null);
   const [confirmingLeave, setConfirmingLeave] = useState(false);
 
   // Guards re-seeding the editable form fields from a background refetch —
@@ -345,9 +351,10 @@ export default function TripSettingsScreen() {
       <Stack.Screen options={{ headerShown: false }} />
       <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
+          ref={scrollRef}
           contentContainerStyle={[styles.content, { paddingTop: Math.max(insets.top, 18) + 4, paddingBottom: Math.max(insets.bottom, 24) + 40 }]}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}>
+          showsVerticalScrollIndicator={false}
+          {...scrollViewProps}>
           <View style={styles.header}>
             <TouchableOpacity style={styles.backButton} activeOpacity={0.88} onPress={unsaved.requestBack}>
               <Ionicons name="arrow-back" size={24} color="#11131a" />
@@ -374,9 +381,27 @@ export default function TripSettingsScreen() {
 
               <View style={styles.card}>
                 <Text style={styles.label}>Trip title</Text>
-                <TextInput value={title} onChangeText={setTitle} placeholder="Trip title" style={styles.input} />
+                <TextInput
+                  ref={titleRef}
+                  value={title}
+                  onChangeText={setTitle}
+                  placeholder="Trip title"
+                  style={styles.input}
+                  onFocus={onFocusField(titleRef)}
+                  returnKeyType="next"
+                  onSubmitEditing={() => destinationRef.current?.focus()}
+                />
                 <Text style={styles.label}>Destination</Text>
-                <TextInput value={destination} onChangeText={setDestination} placeholder="Destination" style={styles.input} />
+                <TextInput
+                  ref={destinationRef}
+                  value={destination}
+                  onChangeText={setDestination}
+                  placeholder="Destination"
+                  style={styles.input}
+                  onFocus={onFocusField(destinationRef)}
+                  returnKeyType="done"
+                  onSubmitEditing={() => Keyboard.dismiss()}
+                />
                 <Text style={styles.label}>Countries</Text>
                 <CountryPicker value={tripCountries} onChange={setTripCountries} label="Select countries" />
                 <Text style={styles.label}>Dates</Text>
@@ -419,6 +444,7 @@ export default function TripSettingsScreen() {
                   </View>
                   <View style={styles.inviteComposer}>
                     <TextInput
+                      ref={inviteEmailRef}
                       value={inviteEmail}
                       onChangeText={setInviteEmail}
                       placeholder="friend@example.com"
@@ -427,6 +453,9 @@ export default function TripSettingsScreen() {
                       autoCapitalize="none"
                       autoCorrect={false}
                       style={styles.inviteInput}
+                      onFocus={onFocusField(inviteEmailRef)}
+                      returnKeyType="done"
+                      onSubmitEditing={() => Keyboard.dismiss()}
                     />
                     <TouchableOpacity
                       activeOpacity={0.9}
