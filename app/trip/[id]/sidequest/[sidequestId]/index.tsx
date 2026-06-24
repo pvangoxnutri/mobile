@@ -24,12 +24,13 @@ import HeroShell from '@/components/hero-shell';
 import { useAuth } from '@/components/auth-provider';
 import { useI18n } from '@/components/i18n-provider';
 import { apiFetch, apiJson } from '@/lib/api';
-import { invalidateTripCache } from '@/lib/cache';
+import { getCached, setCached, invalidateTripCache } from '@/lib/cache';
 import { getCategorySymbol } from '@/lib/category-symbol';
 import { buildGoogleMapsSearchUrl, extractLocationQuery, extractStoredMapPlace, stripLocationMarker } from '@/lib/sidequest-location';
 import { extractFlightRoute, formatFlightRoute, hasFlightRoute, stripFlightMarkers } from '@/lib/flight-route';
 import { extractBlur, stripBlurMarker, DEFAULT_BLUR } from '@/lib/activity-blur';
 import { useRevealAnimation } from '@/hooks/useMotion';
+import { useKeyboardFocusScroll } from '@/hooks/useKeyboardFocusScroll';
 import type { ActivityComment, SideQuestActivity } from '@/lib/types';
 import { COLORS } from '@/constants/design-tokens';
 import { PRIMARY_COLOR, SECONDARY_COLOR } from '@/constants/colors';
@@ -53,6 +54,7 @@ export default function SideQuestDetailScreen() {
   const [deleting, setDeleting] = useState(false);
   const [profileCardUserId, setProfileCardUserId] = useState<string | null>(null);
   const inputRef = useRef<TextInput>(null);
+  const { scrollRef, onFocusField, scrollViewProps } = useKeyboardFocusScroll();
 
   // Reveal animation for hidden SideQuest
   const { blurValue, contentTranslateY, contentOpacity, glowOpacity, startReveal } = useRevealAnimation({
@@ -63,22 +65,41 @@ export default function SideQuestDetailScreen() {
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      setLoading(true);
       hasTriggeredReveal.current = false;
 
+      const activityUrl = `/api/trips/${id}/activities/${encodeURIComponent(sidequestId)}`;
+      const commentsUrl = `${activityUrl}/comments`;
+
+      // Show cached data INSTANTLY so revisiting an already-opened activity
+      // doesn't flash a loading state — then refetch in the background.
+      const cachedActivity = getCached<SideQuestActivity>(activityUrl);
+      const cachedComments = getCached<ActivityComment[]>(commentsUrl);
+      if (cachedActivity) {
+        setActivity(cachedActivity);
+        setComments(cachedComments ?? []);
+        setError('');
+        setLoading(false);
+      } else {
+        setLoading(true);
+      }
+
       void Promise.all([
-        apiJson<SideQuestActivity>(`/api/trips/${id}/activities/${encodeURIComponent(sidequestId)}`),
-        apiJson<ActivityComment[]>(`/api/trips/${id}/activities/${encodeURIComponent(sidequestId)}/comments`).catch(() => [] as ActivityComment[]),
+        apiJson<SideQuestActivity>(activityUrl),
+        apiJson<ActivityComment[]>(commentsUrl).catch(() => [] as ActivityComment[]),
       ])
         .then(([activityData, commentData]) => {
           if (!active) return;
           setActivity(activityData);
           setComments(commentData);
           setError('');
+          setCached(activityUrl, activityData);
+          setCached(commentsUrl, commentData);
         })
         .catch((err: Error) => {
           if (!active) return;
-          setError(err.message || 'Unable to load this SideQuest.');
+          if (!cachedActivity) {
+            setError(err.message || 'Unable to load this SideQuest.');
+          }
         })
         .finally(() => {
           if (active) {
@@ -170,6 +191,7 @@ export default function SideQuestDetailScreen() {
       // Re-fetch so the screen reflects the now-public state.
       const fresh = await apiJson<SideQuestActivity>(`/api/trips/${id}/activities/${encodeURIComponent(sidequestId)}`);
       setActivity(fresh);
+      setCached(`/api/trips/${id}/activities/${encodeURIComponent(sidequestId)}`, fresh);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not reveal this SideQuest.');
     } finally {
@@ -213,11 +235,12 @@ export default function SideQuestDetailScreen() {
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={styles.screenBackground} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={[styles.screen, { paddingTop: Math.max(insets.top, 18) + 4, paddingBottom: Math.max(insets.bottom, 24) + 34 }]}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}>
+        showsVerticalScrollIndicator={false}
+        {...scrollViewProps}>
         <View style={styles.header}>
           <TouchableOpacity style={styles.backButton} activeOpacity={0.88} onPress={() => router.back()}>
             <Ionicons name="arrow-back" size={24} color="#11131a" />
@@ -417,6 +440,7 @@ export default function SideQuestDetailScreen() {
                     placeholderTextColor="#aab0bc"
                     value={commentText}
                     onChangeText={setCommentText}
+                    onFocus={onFocusField(inputRef)}
                     multiline
                     returnKeyType="send"
                     onSubmitEditing={() => void submitComment()}
@@ -474,8 +498,15 @@ function formatReveal(value: string) {
 }
 
 const styles = StyleSheet.create({
-  screen: {
+  // On the outer flex:1 container, not just the ScrollView's content box —
+  // otherwise, whenever content is shorter than the screen (e.g. the
+  // loading spinner), the area below it falls through to the navigator's
+  // own (dark) default screen background instead of staying white.
+  screenBackground: {
+    flex: 1,
     backgroundColor: '#fff',
+  },
+  screen: {
     paddingHorizontal: 22,
   },
   header: {
