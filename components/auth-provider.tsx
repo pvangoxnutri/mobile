@@ -66,6 +66,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         body: JSON.stringify({
           name: userData.user?.user_metadata?.name ?? userData.user?.email ?? '',
           avatarUrl: userData.user?.user_metadata?.avatar_url ?? null,
+          language: normalizeLanguage(userData.user?.user_metadata?.language as string | undefined),
         }),
         signal: controller.signal,
       });
