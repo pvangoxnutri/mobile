@@ -118,14 +118,19 @@ export default function HomeScreen() {
         const activitiesFetchStart = Date.now();
         const perTripResults = await Promise.all(
           tripList.map(async (trip) => {
+            // On a transient failure (flaky connection — most common while
+            // actually travelling), fall back to whatever's still cached for
+            // THIS trip instead of swallowing to []. Otherwise one dropped
+            // request silently blanks "Up Next" and the activity feed until
+            // the next focus event happens to succeed.
             const [acts, members] = await Promise.all([
               apiJson<SideQuestActivity[]>(`/api/trips/${trip.id}/activities`).catch((err) => {
                 console.warn(`[HOME] loadActivities failed for trip ${trip.id}:`, err instanceof Error ? err.message : err);
-                return [] as SideQuestActivity[];
+                return getCached<SideQuestActivity[]>(`/api/trips/${trip.id}/activities`) ?? [];
               }),
               apiJson<TripMember[]>(`/api/trips/${trip.id}/members`).catch((err) => {
                 console.warn(`[HOME] loadMembers failed for trip ${trip.id}:`, err instanceof Error ? err.message : err);
-                return [] as TripMember[];
+                return getCached<TripMember[]>(`/api/trips/${trip.id}/members`) ?? [];
               }),
             ]);
             setCached(`/api/trips/${trip.id}/activities`, acts);
