@@ -403,7 +403,7 @@ export default function HomeScreen() {
           style={{ flex: 1 }}
           contentContainerStyle={[
             styles.emptyScreenContent,
-            { paddingTop: 12, paddingBottom: floatingBottom + 96 },
+            { paddingTop: 18, paddingBottom: floatingBottom + 96 },
           ]}
           showsVerticalScrollIndicator={false}>
           {pendingInvites.length > 0 ? (
@@ -471,7 +471,7 @@ export default function HomeScreen() {
         style={{ flex: 1 }}
         contentContainerStyle={[
           styles.screenContent,
-          { paddingTop: 12, paddingBottom: Math.max(insets.bottom, 14) + 100 },
+          { paddingTop: 18, paddingBottom: Math.max(insets.bottom, 14) + 100 },
         ]}
         showsVerticalScrollIndicator={false}>
 
@@ -1360,6 +1360,7 @@ const styles = StyleSheet.create({
   // the logo/bell/avatar land at the same x as the scrolled content below.
   fixedHeader: {
     paddingHorizontal: SPACING.xl,
+    paddingBottom: 10,
     backgroundColor: COLORS.white,
   },
   screenContent: {
