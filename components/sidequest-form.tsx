@@ -1410,8 +1410,11 @@ const SIDEQUEST_ICON_COLOR_OFF = '#b7bcc7';
 const SLIDE_TRACK_HEIGHT = 54;
 const SLIDE_THUMB_SIZE = 46;
 const SLIDE_TRACK_PADDING = 4;
-const SLIDE_COMPLETION_THRESHOLD = 0.82;
-const SLIDE_HAPTIC_THRESHOLD = 0.45;
+// Was 0.82 — needing the thumb dragged almost flush against the far edge
+// read as "stuck"/unresponsive. 0.62 still feels deliberate (not an
+// accidental flick) without demanding the very last few pixels of travel.
+const SLIDE_COMPLETION_THRESHOLD = 0.62;
+const SLIDE_HAPTIC_THRESHOLD = 0.35;
 // Bold, saturated gradient backdrop — deliberately more vivid than the rest
 // of the form's pastel palette, since this one control is meant to stand out
 // as the app's signature moment rather than blend in. Built from the app's
@@ -1512,8 +1515,13 @@ function SideQuestSlideToActivate({
   const responder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => false,
+      // Was dx > 6 && dx > dy * 1.5 — needed an almost perfectly straight
+      // drag to even start, which combined with the thumb-only touch target
+      // (see panHandlers placement below) made the very first pixels of a
+      // real-thumb drag get ignored. Loosened on both axes now that the
+      // whole track is the touch target, not just the small thumb.
       onMoveShouldSetPanResponder: (_evt, gesture) =>
-        Math.abs(gesture.dx) > 6 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.5,
+        Math.abs(gesture.dx) > 3 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.1,
       onPanResponderGrant: () => {
         hapticFiredRef.current = false;
         onDragStateChange?.(true);
@@ -1562,7 +1570,14 @@ function SideQuestSlideToActivate({
       accessibilityRole="button"
       accessibilityLabel={t('sidequest.activateAccessibleLabel')}
       accessibilityHint={t('sidequest.activateAccessibleHint')}
-      onAccessibilityTap={completeActivation}>
+      onAccessibilityTap={completeActivation}
+      // The drag surface is the whole track, not just the small thumb —
+      // grabbing a precise 46px target was the main reason this felt hard
+      // to use. Matches how iOS/Android's own slide-to-unlock sliders work:
+      // touch anywhere along the track and drag: progress still tracks
+      // relative finger movement (gesture.dx), so this is a pure expansion
+      // of *where* a drag can start, not a change to how far it must travel.
+      {...responder.panHandlers}>
       <LinearGradient
         colors={SLIDE_TRACK_GRADIENT_COLORS}
         start={{ x: 0, y: 0 }}
@@ -1578,10 +1593,7 @@ function SideQuestSlideToActivate({
         <Animated.Text style={[styles.slideTrackLabel, { opacity: labelOpacity }]} numberOfLines={1}>
           {t('sidequest.slideToActivate')}
         </Animated.Text>
-        <Animated.View
-          style={[styles.slideThumb, { transform: [{ translateX: thumbTranslate }] }]}
-          hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
-          {...responder.panHandlers}>
+        <Animated.View style={[styles.slideThumb, { transform: [{ translateX: thumbTranslate }] }]}>
           <Animated.View style={[StyleSheet.absoluteFillObject, styles.slideThumbIconLayer, { opacity: lockOpacity }]}>
             <Ionicons name="lock-closed" size={18} color={SIDEQUEST_ICON_COLOR_ON} />
           </Animated.View>
