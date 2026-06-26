@@ -396,14 +396,16 @@ export default function HomeScreen() {
   if (!loading && quests.length === 0) {
     return (
       <View style={styles.screen}>
+        <View style={[styles.fixedHeader, { paddingTop: Math.max(insets.top, 16) + 8 }]}>
+          <TabHeader inviteCount={pendingInvites.length} />
+        </View>
         <ScrollView
+          style={{ flex: 1 }}
           contentContainerStyle={[
             styles.emptyScreenContent,
-            { paddingTop: Math.max(insets.top, 16) + 8, paddingBottom: floatingBottom + 96 },
+            { paddingTop: 12, paddingBottom: floatingBottom + 96 },
           ]}
           showsVerticalScrollIndicator={false}>
-          <TabHeader inviteCount={pendingInvites.length} />
-
           {pendingInvites.length > 0 ? (
             <View style={[styles.inviteSection, { marginTop: 20 }]}>
               <View style={styles.inviteSectionHeader}>
@@ -462,13 +464,16 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.screen}>
+      <View style={[styles.fixedHeader, { paddingTop: Math.max(insets.top, 16) + 8 }]}>
+        <TabHeader inviteCount={pendingInvites.length} />
+      </View>
       <ScrollView
+        style={{ flex: 1 }}
         contentContainerStyle={[
           styles.screenContent,
-          { paddingTop: Math.max(insets.top, 16) + 8, paddingBottom: Math.max(insets.bottom, 14) + 100 },
+          { paddingTop: 12, paddingBottom: Math.max(insets.bottom, 14) + 100 },
         ]}
         showsVerticalScrollIndicator={false}>
-        <TabHeader inviteCount={pendingInvites.length} />
 
         {pendingInvites.length > 0 ? (
           <View style={styles.inviteSection}>
@@ -1344,6 +1349,16 @@ function getMembersLabel(quest?: Quest | null, t?: (key: string, vars?: Record<s
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
+    backgroundColor: COLORS.white,
+  },
+  // A sibling ABOVE the ScrollView, not its first scrolled child — locks the
+  // header in place so it never moves with Home's (by far the longest)
+  // scroll content, matching how Calendar/Profile feel even though their
+  // headers happen to scroll away too (just less noticeably, with less to
+  // scroll). paddingHorizontal mirrors screenContent/emptyScreenContent so
+  // the logo/bell/avatar land at the same x as the scrolled content below.
+  fixedHeader: {
+    paddingHorizontal: SPACING.xl,
     backgroundColor: COLORS.white,
   },
   screenContent: {
