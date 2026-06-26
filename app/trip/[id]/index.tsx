@@ -6,6 +6,8 @@ import * as Linking from 'expo-linking';
 import { useFocusEffect } from '@react-navigation/native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   Animated,
   FlatList,
   Image,
@@ -109,6 +111,7 @@ export default function TripDetailsScreen() {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteMessage, setInviteMessage] = useState('');
   const [inviteSubmitting, setInviteSubmitting] = useState(false);
+  const [inviteDeletingId, setInviteDeletingId] = useState<string | null>(null);
   const [peopleSheetOpen, setPeopleSheetOpen] = useState(false);
   const [inviteComposerOpen, setInviteComposerOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
@@ -386,6 +389,37 @@ export default function TripDetailsScreen() {
     } finally {
       setInviteSubmitting(false);
     }
+  }
+
+  function handleDeleteInvite(invite: TripInvite) {
+    Alert.alert(
+      t('trip.invites.deleteConfirmTitle'),
+      t('trip.invites.deleteConfirmMessage', { email: invite.email }),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('common.delete'),
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              setInviteDeletingId(invite.id);
+              try {
+                const response = await apiFetch(`/api/trips/${id}/invites/${encodeURIComponent(invite.id)}`, { method: 'DELETE' });
+                if (!response.ok && response.status !== 404) {
+                  throw new Error((await response.text()) || t('trip.error.inviteFailed'));
+                }
+                invalidateTripCache(id);
+                setInvites((current) => current.filter((i) => i.id !== invite.id));
+              } catch (err) {
+                setInviteMessage(err instanceof Error ? err.message : t('trip.error.inviteFailed'));
+              } finally {
+                setInviteDeletingId(null);
+              }
+            })();
+          },
+        },
+      ],
+    );
   }
 
   async function handleCopyInviteCode() {
@@ -996,7 +1030,11 @@ export default function TripDetailsScreen() {
                               style={[styles.inviteAddButton, { backgroundColor: COLORS.primary }, inviteSubmitting ? styles.inviteAddButtonDisabled : null]}
                               disabled={inviteSubmitting}
                               onPress={() => void handleAddInvite()}>
-                              <Text style={styles.inviteAddButtonText}>{inviteSubmitting ? t('trip.inviting') : t('common.invite')}</Text>
+                              {inviteSubmitting ? (
+                                <ActivityIndicator size="small" color="#fff" />
+                              ) : (
+                                <Text style={styles.inviteAddButtonText}>{t('common.invite')}</Text>
+                              )}
                             </TouchableOpacity>
                           </View>
 
@@ -1035,6 +1073,19 @@ export default function TripDetailsScreen() {
                           <Text style={styles.personName}>{invite.email}</Text>
                           <Text style={styles.personMeta}>{t('trip.waitingForResponse')}</Text>
                         </View>
+                        {canManageTrip ? (
+                          <TouchableOpacity
+                            activeOpacity={0.7}
+                            hitSlop={10}
+                            disabled={inviteDeletingId === invite.id}
+                            onPress={() => handleDeleteInvite(invite)}>
+                            {inviteDeletingId === invite.id ? (
+                              <ActivityIndicator size="small" color="#8e95a2" />
+                            ) : (
+                              <Ionicons name="close-circle-outline" size={20} color="#8e95a2" />
+                            )}
+                          </TouchableOpacity>
+                        ) : null}
                       </View>
                     ))
                   ) : (
@@ -2064,6 +2115,10 @@ const styles = StyleSheet.create({
   },
   inviteAddButton: {
     minHeight: 56,
+    // Fixed so swapping the label for a spinner (or "Invite" -> "Adding...")
+    // never resizes the button — it used to visibly shift/resize every time
+    // inviteSubmitting flipped, since width was purely text-driven.
+    minWidth: 92,
     borderRadius: 18,
     backgroundColor: '#ff4f74',
     alignItems: 'center',
