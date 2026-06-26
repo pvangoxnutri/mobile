@@ -24,6 +24,12 @@ export default function ProfileScreen() {
   const { user, signOut, refreshProfile, deleteAccount } = useAuth();
   const { language, setLanguage, t } = useI18n();
   const insets = useSafeAreaInsets();
+  // See Home's app/(tabs)/index.tsx for why this is measured — the header
+  // floats on top of the ScrollView, so its rendered height (not a guess)
+  // is what tells the ScrollView how much paddingTop clears it at rest.
+  const [headerHeight, setHeaderHeight] = useState(0);
+  const headerTop = Math.max(insets.top, 16) + 8;
+  const headerClearance = headerTop + (headerHeight || 76) + 14;
   const [joinedTrips, setJoinedTrips] = useState(0);
   const [createdQuests, setCreatedQuests] = useState(0);
   const [tripDerivedVisited, setTripDerivedVisited] = useState<Record<string, string>>({});
@@ -522,17 +528,11 @@ export default function ProfileScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.white }}>
-      <View style={[styles.fixedHeader, { marginTop: Math.max(insets.top, 16) + 8 }]}>
-        <TabHeader
-          bellAnimatedStyle={bellAnimatedStyle}
-          avatarAnimatedStyle={headerAvatarAnimatedStyle}
-        />
-      </View>
       <ScrollView
         style={styles.screen}
         contentContainerStyle={[
           styles.content,
-          { paddingTop: 18, paddingBottom: Math.max(insets.bottom, 20) + 112 },
+          { paddingTop: headerClearance, paddingBottom: Math.max(insets.bottom, 20) + 112 },
         ]}
         showsVerticalScrollIndicator={false}>
 
@@ -951,6 +951,15 @@ export default function ProfileScreen() {
         </KeyboardAvoidingView>
       </Modal>
     </ScrollView>
+
+    <View
+      style={[styles.fixedHeader, { top: headerTop }]}
+      onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}>
+      <TabHeader
+        bellAnimatedStyle={bellAnimatedStyle}
+        avatarAnimatedStyle={headerAvatarAnimatedStyle}
+      />
+    </View>
     </View>
   );
 }
@@ -1046,11 +1055,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.white,
   },
-  // Fixed sibling above the ScrollView (see Home's app/(tabs)/index.tsx for
-  // the same pattern) — keeps the header from scrolling away with the page.
-  // Same floating-pill look as the bottom tab bar (app/(tabs)/_layout.tsx).
+  // Floats ON TOP of the ScrollView (see Home's app/(tabs)/index.tsx for the
+  // full explanation) — same look as the bottom tab bar too.
   fixedHeader: {
-    marginHorizontal: 16,
+    position: 'absolute',
+    left: 16,
+    right: 16,
     paddingHorizontal: SPACING.lg,
     paddingVertical: 10,
     borderRadius: 999,

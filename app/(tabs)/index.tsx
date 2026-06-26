@@ -41,6 +41,10 @@ export default function HomeScreen() {
   // tapping the notification doesn't just land "somewhere on home".
   const { inviteId: focusInviteId } = useLocalSearchParams<{ inviteId?: string }>();
   const { width, height: screenHeight } = useWindowDimensions();
+  // Measured height of the floating header pill — lets the ScrollView's
+  // paddingTop clear it exactly (see headerTop/headerClearance below), no
+  // matter how tall TabHeader actually renders on a given device/font scale.
+  const [headerHeight, setHeaderHeight] = useState(0);
   const [quests, setQuests] = useState<Quest[]>([]);
   const [activities, setActivities] = useState<SideQuestActivity[]>([]);
   const [loading, setLoading] = useState(true);
@@ -71,6 +75,14 @@ export default function HomeScreen() {
   const selectedTripIdRef = useRef<string | null>(null);
   const prevQuestIdsKeyRef = useRef<string | null>(null);
   const floatingBottom = Math.max(insets.bottom, 14) + 78;
+  // The header floats ON TOP of the ScrollView now (position: absolute),
+  // the same way the bottom tab bar floats on top of it from below — so
+  // content scrolling past actually goes behind the translucent pill,
+  // instead of there being dead space behind a fully-reserved header.
+  // headerClearance is what the ScrollView's own paddingTop needs to be so
+  // content starts just below the pill at rest (scroll position 0).
+  const headerTop = Math.max(insets.top, 16) + 8;
+  const headerClearance = headerTop + (headerHeight || 76) + 14;
   // Hero card fills the viewport leaving ~24px peek of the next card on the
   // right, signalling "swipe for more". snapToInterval below locks one card
   // per page.
@@ -396,14 +408,11 @@ export default function HomeScreen() {
   if (!loading && quests.length === 0) {
     return (
       <View style={styles.screen}>
-        <View style={[styles.fixedHeader, { marginTop: Math.max(insets.top, 16) + 8 }]}>
-          <TabHeader inviteCount={pendingInvites.length} />
-        </View>
         <ScrollView
           style={{ flex: 1 }}
           contentContainerStyle={[
             styles.emptyScreenContent,
-            { paddingTop: 18, paddingBottom: floatingBottom + 96 },
+            { paddingTop: headerClearance, paddingBottom: floatingBottom + 96 },
           ]}
           showsVerticalScrollIndicator={false}>
           {pendingInvites.length > 0 ? (
@@ -437,6 +446,12 @@ export default function HomeScreen() {
           <Text style={styles.emptyHint}>{t('home.tap_to_create')}</Text>
         </ScrollView>
 
+        <View
+          style={[styles.fixedHeader, { top: headerTop }]}
+          onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}>
+          <TabHeader inviteCount={pendingInvites.length} />
+        </View>
+
         <FloatingFab
           open={fabOpen}
           bottom={floatingBottom}
@@ -464,14 +479,11 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.screen}>
-      <View style={[styles.fixedHeader, { marginTop: Math.max(insets.top, 16) + 8 }]}>
-        <TabHeader inviteCount={pendingInvites.length} />
-      </View>
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={[
           styles.screenContent,
-          { paddingTop: 18, paddingBottom: Math.max(insets.bottom, 14) + 100 },
+          { paddingTop: headerClearance, paddingBottom: Math.max(insets.bottom, 14) + 100 },
         ]}
         showsVerticalScrollIndicator={false}>
 
@@ -586,6 +598,12 @@ export default function HomeScreen() {
         )}
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
       </ScrollView>
+
+      <View
+        style={[styles.fixedHeader, { top: headerTop }]}
+        onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}>
+        <TabHeader inviteCount={pendingInvites.length} />
+      </View>
 
       {/* Bottom-floating countdown card removed: the new BigHeroCard already
           surfaces day-of-trip, time-left, member avatars and an Enter button
@@ -1352,17 +1370,16 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.white,
   },
-  // A sibling ABOVE the ScrollView, not its first scrolled child — locks the
-  // header in place so it never moves with Home's (by far the longest)
-  // scroll content, matching how Calendar/Profile feel even though their
-  // headers happen to scroll away too (just less noticeably, with less to
-  // scroll). paddingHorizontal mirrors screenContent/emptyScreenContent so
-  // the logo/bell/avatar land at the same x as the scrolled content below.
-  // Same floating-pill look as the bottom tab bar (app/(tabs)/_layout.tsx)
-  // — same translucent white, same full rounding, same shadow — so the
-  // header and footer read as a matched pair.
+  // Floats ON TOP of the ScrollView (position: absolute) instead of
+  // reserving its own space above it — the same relationship the bottom tab
+  // bar already has with this same ScrollView. Content scrolls behind the
+  // translucent pill instead of disappearing into dead space the moment it
+  // passes underneath. Same look as the tab bar too (app/(tabs)/_layout.tsx):
+  // translucent white, full rounding, same shadow — header/footer as a pair.
   fixedHeader: {
-    marginHorizontal: 16,
+    position: 'absolute',
+    left: 16,
+    right: 16,
     paddingHorizontal: SPACING.lg,
     paddingVertical: 10,
     borderRadius: 999,

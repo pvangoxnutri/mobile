@@ -41,6 +41,12 @@ export default function CalendarScreen() {
   const { t, language } = useI18n();
   const locale = language === 'sv' ? 'sv-SE' : 'en-US';
   const insets = useSafeAreaInsets();
+  // See Home's app/(tabs)/index.tsx for why this is measured — the header
+  // floats on top of the ScrollView, so its rendered height (not a guess)
+  // is what tells the ScrollView how much paddingTop clears it at rest.
+  const [headerHeight, setHeaderHeight] = useState(0);
+  const headerTop = Math.max(insets.top, 16) + 8;
+  const headerClearance = headerTop + (headerHeight || 76) + 14;
   const scrollRef = useRef<ScrollView | null>(null);
   const selectedDayHeaderRef = useRef<View | null>(null);
   const [quests, setQuests] = useState<Quest[]>([]);
@@ -205,13 +211,10 @@ export default function CalendarScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.white }}>
-      <View style={[styles.fixedHeader, { marginTop: Math.max(insets.top, 16) + 8 }]}>
-        <TabHeader />
-      </View>
       <ScrollView
         ref={scrollRef}
         style={{ flex: 1 }}
-        contentContainerStyle={[styles.screen, { paddingTop: 18, paddingBottom: Math.max(insets.bottom, 20) + 140 }]}
+        contentContainerStyle={[styles.screen, { paddingTop: headerClearance, paddingBottom: Math.max(insets.bottom, 20) + 140 }]}
         showsVerticalScrollIndicator={false}>
 
         {/* Month switcher */}
@@ -398,6 +401,12 @@ export default function CalendarScreen() {
 
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
       </ScrollView>
+
+      <View
+        style={[styles.fixedHeader, { top: headerTop }]}
+        onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}>
+        <TabHeader />
+      </View>
     </View>
   );
 }
@@ -546,11 +555,12 @@ const styles = StyleSheet.create({
   screen: {
     paddingHorizontal: SPACING.xl,
   },
-  // Fixed sibling above the ScrollView (see Home's app/(tabs)/index.tsx for
-  // the same pattern) — keeps the header from scrolling away with the page.
-  // Same floating-pill look as the bottom tab bar (app/(tabs)/_layout.tsx).
+  // Floats ON TOP of the ScrollView (see Home's app/(tabs)/index.tsx for the
+  // full explanation) — same look as the bottom tab bar too.
   fixedHeader: {
-    marginHorizontal: 16,
+    position: 'absolute',
+    left: 16,
+    right: 16,
     paddingHorizontal: SPACING.lg,
     paddingVertical: 10,
     borderRadius: 999,
