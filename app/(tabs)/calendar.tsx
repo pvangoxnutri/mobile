@@ -205,7 +205,7 @@ export default function CalendarScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.white }}>
-      <View style={[styles.fixedHeader, { paddingTop: Math.max(insets.top, 16) + 8 }]}>
+      <View style={[styles.fixedHeader, { marginTop: Math.max(insets.top, 16) + 8 }]}>
         <TabHeader />
       </View>
       <ScrollView
@@ -548,10 +548,18 @@ const styles = StyleSheet.create({
   },
   // Fixed sibling above the ScrollView (see Home's app/(tabs)/index.tsx for
   // the same pattern) — keeps the header from scrolling away with the page.
+  // Same floating-pill look as the bottom tab bar (app/(tabs)/_layout.tsx).
   fixedHeader: {
-    paddingHorizontal: SPACING.xl,
-    paddingBottom: 10,
-    backgroundColor: COLORS.white,
+    marginHorizontal: 16,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.97)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.07,
+    shadowRadius: 20,
+    elevation: 10,
   },
 
   // Month switcher

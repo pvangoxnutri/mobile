@@ -396,7 +396,7 @@ export default function HomeScreen() {
   if (!loading && quests.length === 0) {
     return (
       <View style={styles.screen}>
-        <View style={[styles.fixedHeader, { paddingTop: Math.max(insets.top, 16) + 8 }]}>
+        <View style={[styles.fixedHeader, { marginTop: Math.max(insets.top, 16) + 8 }]}>
           <TabHeader inviteCount={pendingInvites.length} />
         </View>
         <ScrollView
@@ -464,7 +464,7 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.screen}>
-      <View style={[styles.fixedHeader, { paddingTop: Math.max(insets.top, 16) + 8 }]}>
+      <View style={[styles.fixedHeader, { marginTop: Math.max(insets.top, 16) + 8 }]}>
         <TabHeader inviteCount={pendingInvites.length} />
       </View>
       <ScrollView
@@ -1358,10 +1358,20 @@ const styles = StyleSheet.create({
   // headers happen to scroll away too (just less noticeably, with less to
   // scroll). paddingHorizontal mirrors screenContent/emptyScreenContent so
   // the logo/bell/avatar land at the same x as the scrolled content below.
+  // Same floating-pill look as the bottom tab bar (app/(tabs)/_layout.tsx)
+  // — same translucent white, same full rounding, same shadow — so the
+  // header and footer read as a matched pair.
   fixedHeader: {
-    paddingHorizontal: SPACING.xl,
-    paddingBottom: 10,
-    backgroundColor: COLORS.white,
+    marginHorizontal: 16,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.97)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.07,
+    shadowRadius: 20,
+    elevation: 10,
   },
   screenContent: {
     paddingHorizontal: SPACING.xl,

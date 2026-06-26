@@ -37,7 +37,14 @@ function PremiumTabBar({ state, navigation }: BottomTabBarProps) {
   const pillTranslateX = useRef(new Animated.Value(0)).current;
   const isFirstLayout = useRef(true);
 
-  const tabBarHeight = 74 + Math.max(insets.bottom - 6, 0);
+  // Fixed, symmetric height — was 74 + extra safe-area height with the icons
+  // pinned to the top (alignItems: 'flex-start'), which made the pill read
+  // as lopsided: ~10px of breathing room above the icons but 30-40px below
+  // them. The icons now sit dead-center in a pill that's only as tall as it
+  // needs to be; the safe-area clearance moves to bottomGap below instead —
+  // a margin OUTSIDE the pill, not extra (asymmetric) height inside it.
+  const tabBarHeight = TAB_BAR_PADDING_TOP * 2 + PILL_SIZE;
+  const bottomGap = Math.max(insets.bottom - 16, 10);
 
   // Compute target X for the active tab whenever index or width changes.
   useEffect(() => {
@@ -68,7 +75,7 @@ function PremiumTabBar({ state, navigation }: BottomTabBarProps) {
   }
 
   return (
-    <View style={[styles.tabBar, { height: tabBarHeight }]} onLayout={onLayout}>
+    <View style={[styles.tabBar, { height: tabBarHeight, bottom: bottomGap }]} onLayout={onLayout}>
       {/* Sliding pill behind icons. Rendered first so icons sit on top. */}
       {containerWidth > 0 ? (
         <Animated.View
@@ -128,7 +135,7 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
     paddingHorizontal: TAB_BAR_PADDING_H,
     flexDirection: 'row',
-    alignItems: 'flex-start', // icons anchor at top; safe-area extends bottom
+    alignItems: 'center', // symmetric now — height exactly fits the icon row
     borderTopWidth: 0,
     borderRadius: 999,
     backgroundColor: 'rgba(255,255,255,0.97)',
