@@ -902,7 +902,9 @@ function ActivityFeedCard({
   }
 
   function eventRoute(e: TripEvent): string {
-    if (e.type === 'activity_added' && e.activityId) return `/trip/${e.tripId}/sidequest/${e.activityId}`;
+    if ((e.type === 'activity_added' || e.type === 'sidequest_revealed') && e.activityId) {
+      return `/trip/${e.tripId}/sidequest/${e.activityId}`;
+    }
     return `/trip/${e.tripId}`;
   }
 
@@ -925,19 +927,23 @@ function ActivityFeedCard({
 
       {tripEvents.map((event, index) => {
         // Hidden SideQuests must not reveal who added them — same rule as
-        // the title itself, so neither the actor's avatar nor their name
-        // is rendered for this row.
+        // the title itself, so neither the actor's avatar nor their name is
+        // rendered for this row. A reveal isn't anyone's action either — it
+        // shows the gift icon, not an avatar, regardless of who triggered it.
         const isHiddenAdd = event.type === 'activity_added' && !!event.isHidden;
-        const member = isHiddenAdd ? undefined : findMember(event.actorName);
+        const isRevealed = event.type === 'sidequest_revealed';
+        const member = isHiddenAdd || isRevealed ? undefined : findMember(event.actorName);
         return (
           <TouchableOpacity
             key={event.id}
             activeOpacity={0.84}
             onPress={() => router.push(eventRoute(event) as Href)}
             style={[styles.activityRow, index > 0 && styles.activityRowBorder]}>
-            <View style={[styles.activityAvatar, isHiddenAdd && styles.activityAvatarMuted]}>
+            <View style={[styles.activityAvatar, isHiddenAdd && styles.activityAvatarMuted, isRevealed && styles.activityAvatarGold]}>
               {isHiddenAdd ? (
                 <Ionicons name="lock-closed-outline" size={16} color="#8a909e" />
+              ) : isRevealed ? (
+                <Ionicons name="gift-outline" size={16} color="#fff" />
               ) : (
                 <Avatar
                   uri={member?.avatarUrl}
@@ -953,6 +959,11 @@ function ActivityFeedCard({
               <Text style={styles.activityTitle} numberOfLines={2}>
                 {isHiddenAdd ? (
                   t('home.activity.hidden_added')
+                ) : isRevealed ? (
+                  <>
+                    <Text style={styles.activityTitleBold}>{t('home.activity.revealed')}</Text>
+                    {event.activityTitle ? ` ${event.activityTitle}` : ''}
+                  </>
                 ) : (
                   <>
                     <Text style={styles.activityTitleBold}>{event.actorName}</Text>{' '}
@@ -1789,6 +1800,9 @@ const styles = StyleSheet.create({
   },
   activityAvatarMuted: {
     backgroundColor: '#f4f5f7',
+  },
+  activityAvatarGold: {
+    backgroundColor: '#d79a19',
   },
   activityTextBlock: {
     flex: 1,

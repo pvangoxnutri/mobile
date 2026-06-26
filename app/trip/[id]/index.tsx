@@ -832,6 +832,7 @@ export default function TripDetailsScreen() {
                         revealAt={activity.revealAt}
                         imageUrl={activity.imageUrl}
                         category={activity.category}
+                        description={activity.description}
                         timeLabel={timeLabel}
                         formatTimeUntilReveal={(revealAt) => formatTimeUntilReveal(revealAt, t)}
                         onPress={() => router.push(`/trip/${id}/sidequest/${activity.id}`)}
@@ -1121,6 +1122,14 @@ export default function TripDetailsScreen() {
                   showsVerticalScrollIndicator={false}
                   onScroll={handleChatScroll}
                   scrollEventThrottle={100}
+                  // The length-change effect below fires a scrollToEnd on a
+                  // fixed timer, which can land short if images/layout are
+                  // still settling. onContentSizeChange fires on every actual
+                  // layout commit, so it's what makes "open already at the
+                  // bottom" reliable instead of occasionally one message shy.
+                  onContentSizeChange={() => {
+                    if (chatNearBottomRef.current) chatScrollRef.current?.scrollToEnd({ animated: false });
+                  }}
                   renderItem={({ item, index }) => renderChatMessageItem(item, index)}
                   ListEmptyComponent={
                     <EmptyState
@@ -1195,6 +1204,22 @@ export default function TripDetailsScreen() {
               </View>
             </View>
             </KeyboardAvoidingView>
+
+            {/* Nested inside the chat Modal (not a sibling) — iOS can
+                silently fail to present a second top-level <Modal> while
+                one is already visible, which made tapping a chat image to
+                enlarge it do nothing. Only relevant while chat is open
+                anyway, so nesting it here costs nothing. */}
+            <Modal visible={chatFullscreenImage !== null} transparent animationType="fade" onRequestClose={() => setChatFullscreenImage(null)}>
+              <Pressable style={styles.chatFullscreenBackdrop} onPress={() => setChatFullscreenImage(null)}>
+                {chatFullscreenImage ? (
+                  <Image source={{ uri: chatFullscreenImage }} style={styles.chatFullscreenImage} resizeMode="contain" />
+                ) : null}
+                <TouchableOpacity style={[styles.chatFullscreenClose, { top: Math.max(insets.top, 16) + 8 }]} onPress={() => setChatFullscreenImage(null)}>
+                  <Ionicons name="close" size={24} color="#fff" />
+                </TouchableOpacity>
+              </Pressable>
+            </Modal>
           </View>
         </Modal>
 
@@ -1349,17 +1374,6 @@ export default function TripDetailsScreen() {
         </Modal>
 
         <UserProfileCard userId={profileCardUserId} onClose={() => setProfileCardUserId(null)} />
-
-        <Modal visible={chatFullscreenImage !== null} transparent animationType="fade" onRequestClose={() => setChatFullscreenImage(null)}>
-          <Pressable style={styles.chatFullscreenBackdrop} onPress={() => setChatFullscreenImage(null)}>
-            {chatFullscreenImage ? (
-              <Image source={{ uri: chatFullscreenImage }} style={styles.chatFullscreenImage} resizeMode="contain" />
-            ) : null}
-            <TouchableOpacity style={[styles.chatFullscreenClose, { top: Math.max(insets.top, 16) + 8 }]} onPress={() => setChatFullscreenImage(null)}>
-              <Ionicons name="close" size={24} color="#fff" />
-            </TouchableOpacity>
-          </Pressable>
-        </Modal>
       </View>
     </>
   );

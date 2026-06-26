@@ -5,6 +5,7 @@ import type { Href } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Avatar, { getInitials } from '@/components/avatar';
 import { getCached, setCached } from '@/lib/cache';
 import { formatRelativeTime } from '@/lib/format-time';
 import { loadNotifications, markNotificationsAsRead, type AppNotification } from '@/lib/social';
@@ -105,9 +106,13 @@ export default function TmpNavbarScreen() {
                   void markNotificationsAsRead();
                   if (item.route) router.push(item.route as Href);
                 }}>
-                <View style={[styles.feedIcon, { backgroundColor: icon?.background ?? '#9aa2ae' }]}>
-                  <Ionicons name={icon?.name ?? 'notifications-outline'} size={16} color={icon?.color ?? '#fff'} />
-                </View>
+                {item.actorName ? (
+                  <Avatar uri={item.actorAvatarUrl} name={item.actorName} fallbackText={getInitials(item.actorName)} size={36} />
+                ) : (
+                  <View style={[styles.feedIcon, { backgroundColor: icon?.background ?? '#9aa2ae' }]}>
+                    <Ionicons name={icon?.name ?? 'notifications-outline'} size={16} color={icon?.color ?? '#fff'} />
+                  </View>
+                )}
                 <View style={styles.feedCopy}>
                   <Text style={styles.feedTitle} numberOfLines={2}>
                     <Text style={styles.feedTitleBold}>{item.title}</Text>

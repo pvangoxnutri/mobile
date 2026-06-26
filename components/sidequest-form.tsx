@@ -169,6 +169,12 @@ function SideQuestFormInner({
   const [pickerTarget, setPickerTarget] = useState<PickerTarget>(null);
   const [message, setMessage] = useState<MessageState>(null);
   const [submitting, setSubmitting] = useState(false);
+  // Locks the form's ScrollView for the duration of a SideQuestSlideToActivate
+  // drag — belt-and-suspenders alongside that control's own PanResponder
+  // gesture-claiming (onPanResponderTerminationRequest: () => false), since
+  // Android's native scroll responder can otherwise still win the gesture
+  // race in a way a JS-only PanResponder claim doesn't always prevent.
+  const [slideToActivateDragging, setSlideToActivateDragging] = useState(false);
   const { scrollRef, onFocusField, scrollViewProps } = useKeyboardFocusScroll();
   const titleRef = useRef<TextInput>(null);
   const flightFromRef = useRef<TextInput>(null);
@@ -648,6 +654,7 @@ function SideQuestFormInner({
       style={styles.scroll}
       contentContainerStyle={[styles.content, { paddingBottom: bottomPadding }]}
       showsVerticalScrollIndicator={false}
+      scrollEnabled={!slideToActivateDragging}
       {...scrollViewProps}>
       <TouchableOpacity activeOpacity={0.9} style={styles.coverCard} onPress={() => void handlePickImage()}>
         {imageUrl ? <Image source={{ uri: imageUrl }} style={styles.coverImage} /> : null}
@@ -921,7 +928,7 @@ function SideQuestFormInner({
         {sideQuestMode ? (
           <SideQuestActiveStatusRow onTurnOff={() => handleToggleSideQuest(false)} />
         ) : (
-          <SideQuestSlideToActivate onActivate={() => applySideQuestToggle(true)} />
+          <SideQuestSlideToActivate onActivate={() => applySideQuestToggle(true)} onDragStateChange={setSlideToActivateDragging} />
         )}
         {sideQuestSectionVisible ? (
           <Animated.View
@@ -1462,7 +1469,15 @@ function TrackSparkle({ left, topOffset, delay, duration }: { left: `${number}%`
   );
 }
 
-function SideQuestSlideToActivate({ onActivate }: { onActivate: () => void }) {
+function SideQuestSlideToActivate({
+  onActivate,
+  onDragStateChange,
+}: {
+  onActivate: () => void;
+  // Lets the parent ScrollView lock scrollEnabled for the drag's duration —
+  // see the slideToActivateDragging comment at this component's call site.
+  onDragStateChange?: (dragging: boolean) => void;
+}) {
   const { t } = useI18n();
   const [trackWidth, setTrackWidth] = useState(0);
   const progressAnim = useRef(new Animated.Value(0)).current; // 0..1, JS-driven (drives width + translateX)
@@ -1501,6 +1516,7 @@ function SideQuestSlideToActivate({ onActivate }: { onActivate: () => void }) {
         Math.abs(gesture.dx) > 6 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.5,
       onPanResponderGrant: () => {
         hapticFiredRef.current = false;
+        onDragStateChange?.(true);
       },
       onPanResponderMove: (_evt, gesture) => {
         const progress = Math.max(0, Math.min(1, gesture.dx / maxTranslateRef.current));
@@ -1511,6 +1527,7 @@ function SideQuestSlideToActivate({ onActivate }: { onActivate: () => void }) {
         }
       },
       onPanResponderRelease: (_evt, gesture) => {
+        onDragStateChange?.(false);
         const progress = Math.max(0, Math.min(1, gesture.dx / maxTranslateRef.current));
         if (progress >= SLIDE_COMPLETION_THRESHOLD) {
           completeActivation();
@@ -1525,7 +1542,10 @@ function SideQuestSlideToActivate({ onActivate }: { onActivate: () => void }) {
       // onPanResponderTerminate, snapping the thumb back. Once we've been
       // granted the gesture, keep it until the finger actually lifts.
       onPanResponderTerminationRequest: () => false,
-      onPanResponderTerminate: () => springBack(),
+      onPanResponderTerminate: () => {
+        onDragStateChange?.(false);
+        springBack();
+      },
     }),
   ).current;
 

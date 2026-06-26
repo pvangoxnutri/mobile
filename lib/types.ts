@@ -136,9 +136,10 @@ export interface TripEvent {
   tripId: string;
   tripTitle?: string | null;
   actorName: string;
-  type: 'member_joined' | 'member_left' | 'activity_added';
+  type: 'member_joined' | 'member_left' | 'activity_added' | 'sidequest_revealed';
   activityId?: string | null;
   isHidden?: boolean;
+  activityTitle?: string | null;
   createdAt: string;
 }
 

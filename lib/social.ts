@@ -22,6 +22,11 @@ export type AppNotification = {
   createdAt: string;
   tripId?: string;
   route?: string;
+  // Set only when the backend allows attributing this notification to one
+  // specific person (see NotificationLog.ActorName in the backend) — null
+  // for hidden SideQuests, reveals, and aggregated "N new chat messages".
+  actorName?: string;
+  actorAvatarUrl?: string;
 };
 
 type NotificationLogResponse = {
@@ -31,6 +36,8 @@ type NotificationLogResponse = {
   body: string;
   tripId?: string | null;
   route?: string | null;
+  actorName?: string | null;
+  actorAvatarUrl?: string | null;
   createdAt: string;
 };
 
@@ -66,6 +73,8 @@ export async function loadNotifications(): Promise<AppNotification[]> {
       createdAt: row.createdAt,
       tripId: row.tripId ?? undefined,
       route: row.route ?? undefined,
+      actorName: row.actorName ?? undefined,
+      actorAvatarUrl: row.actorAvatarUrl ?? undefined,
     }));
   } catch {
     return [];
