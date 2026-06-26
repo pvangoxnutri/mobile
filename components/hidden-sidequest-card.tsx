@@ -5,13 +5,14 @@ import { COLORS, SPACING, TYPOGRAPHY, RADIUS } from '@/constants/design-tokens';
 import { useScalePress } from '@/hooks/useMotion';
 import { useI18n } from '@/components/i18n-provider';
 import ActivityImageFallback from '@/components/activity-image-fallback';
-import { DEFAULT_BLUR } from '@/lib/activity-blur';
+import { DEFAULT_BLUR, extractBlur } from '@/lib/activity-blur';
 
 interface HiddenSidequestCardProps {
   id: string;
   revealAt?: string | null;
   imageUrl?: string | null;
   category?: string | null;
+  description?: string | null;
   onPress: () => void;
   timeLabel?: string;
   formatTimeUntilReveal: (revealAt?: string | null) => string;
@@ -26,12 +27,14 @@ export default function HiddenSidequestCard({
   revealAt,
   imageUrl,
   category,
+  description,
   onPress,
   timeLabel,
   formatTimeUntilReveal,
 }: HiddenSidequestCardProps) {
   const { t } = useI18n();
   const shimmerOpacityRef = useRef(new Animated.Value(1)).current;
+  const blurAmount = useMemo(() => extractBlur(description) ?? DEFAULT_BLUR, [description]);
 
   // Check if reveal is imminent (within 1 hour)
   const isRevealImminent = useMemo(() => {
@@ -85,7 +88,7 @@ export default function HiddenSidequestCard({
       onPress={handlePress}>
       <Animated.View style={[styles.timelineIconWrap, animatedStyle]}>
         {imageUrl ? (
-          <Image source={{ uri: imageUrl }} style={styles.timelineIcon} blurRadius={DEFAULT_BLUR} />
+          <Image source={{ uri: imageUrl }} style={styles.timelineIcon} blurRadius={blurAmount} />
         ) : (
           <ActivityImageFallback category={category} size="small" style={styles.timelineIcon} />
         )}

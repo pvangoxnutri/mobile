@@ -201,7 +201,12 @@ export default function TravelTrackerScreen() {
         </TouchableOpacity>
 
         {/* Title block */}
-        <Text style={styles.bigTitle}>{t('travel.title')}</Text>
+        {/* "Resespårning" is one long word with no space to wrap at — unlike
+            "Travel Tracker" — so at this fontSize it could break mid-word.
+            Shrink to fit instead of wrapping. */}
+        <Text style={styles.bigTitle} numberOfLines={1} adjustsFontSizeToFit>
+          {t('travel.title')}
+        </Text>
 
         {/* Dark stats card */}
         <View style={styles.heroCard}>
