@@ -2,20 +2,26 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
 import type { Href } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getCached, setCached } from '@/lib/cache';
+import { formatRelativeTime } from '@/lib/format-time';
 import { loadNotifications, markNotificationsAsRead, type AppNotification } from '@/lib/social';
 import { PRIMARY_COLOR, SECONDARY_COLOR } from '@/constants/colors';
 
-const ICON_BY_TYPE: Record<AppNotification['type'], { name: keyof typeof Ionicons.glyphMap; background: string }> = {
-  member_joined: { name: 'person-add-outline', background: SECONDARY_COLOR },
-  new_activity: { name: 'calendar-outline', background: '#d79a19' },
-  new_hidden_sidequest: { name: 'lock-closed-outline', background: '#d79a19' },
-  sidequest_revealed: { name: 'gift-outline', background: '#d79a19' },
-  chat: { name: 'chatbubble-outline', background: PRIMARY_COLOR },
-  expense: { name: 'cash-outline', background: '#2f9e6f' },
+// Mirrors Home Activity's avatar slot (app/(tabs)/index.tsx) — a circular
+// 36px badge to the left of the row. Notifications don't always have one
+// single knowable actor (e.g. a hidden SideQuest, or "5 new chat messages"),
+// so this is a type icon rather than a person's photo, but the size,
+// placement, and muted treatment for "identity withheld" rows match exactly.
+const ICON_BY_TYPE: Record<AppNotification['type'], { name: keyof typeof Ionicons.glyphMap; background: string; color: string }> = {
+  member_joined: { name: 'person-add-outline', background: SECONDARY_COLOR, color: '#fff' },
+  new_activity: { name: 'calendar-outline', background: '#d79a19', color: '#fff' },
+  new_hidden_sidequest: { name: 'lock-closed-outline', background: '#f4f5f7', color: '#8a909e' },
+  sidequest_revealed: { name: 'gift-outline', background: '#d79a19', color: '#fff' },
+  chat: { name: 'chatbubble-outline', background: PRIMARY_COLOR, color: '#fff' },
+  expense: { name: 'cash-outline', background: '#2f9e6f', color: '#fff' },
 };
 
 const NOTIFICATIONS_CACHE_KEY = '/api/notifications';
@@ -24,6 +30,12 @@ export default function TmpNavbarScreen() {
   const insets = useSafeAreaInsets();
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [error, setError] = useState('');
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 30000);
+    return () => clearInterval(timer);
+  }, []);
 
   // loadNotifications() itself never touches read state — it's a plain
   // fetch. The ONLY two triggers allowed to mark notifications as read are
@@ -81,25 +93,27 @@ export default function TmpNavbarScreen() {
       <View style={styles.feedCard}>
         <Text style={styles.sectionTitle}>All activity</Text>
         {notifications.length > 0 ? (
-          notifications.map((item) => {
+          notifications.map((item, index) => {
             const icon = ICON_BY_TYPE[item.type];
             return (
               <TouchableOpacity
                 key={item.id}
                 activeOpacity={item.route ? 0.84 : 1}
                 disabled={!item.route}
-                style={styles.feedRow}
+                style={[styles.feedRow, index > 0 && styles.feedRowBorder]}
                 onPress={() => {
                   void markNotificationsAsRead();
                   if (item.route) router.push(item.route as Href);
                 }}>
                 <View style={[styles.feedIcon, { backgroundColor: icon?.background ?? '#9aa2ae' }]}>
-                  <Ionicons name={icon?.name ?? 'notifications-outline'} size={16} color="#fff" />
+                  <Ionicons name={icon?.name ?? 'notifications-outline'} size={16} color={icon?.color ?? '#fff'} />
                 </View>
                 <View style={styles.feedCopy}>
-                  <Text style={styles.feedTitle}>{item.title}</Text>
-                  <Text style={styles.feedBody}>{item.body}</Text>
-                  <Text style={styles.feedMeta}>{formatTimestamp(item.createdAt)}</Text>
+                  <Text style={styles.feedTitle} numberOfLines={2}>
+                    <Text style={styles.feedTitleBold}>{item.title}</Text>
+                    {item.body ? ` ${item.body}` : ''}
+                  </Text>
+                  <Text style={styles.feedMeta}>{formatRelativeTime(item.createdAt, now)}</Text>
                 </View>
               </TouchableOpacity>
             );
@@ -115,10 +129,6 @@ export default function TmpNavbarScreen() {
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
     </ScrollView>
   );
-}
-
-function formatTimestamp(value: string) {
-  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(value));
 }
 
 const styles = StyleSheet.create({
@@ -174,12 +184,19 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     marginBottom: 6,
   },
+  // Row tokens below intentionally mirror Home Activity's activityRow /
+  // activityAvatar / activityTextBlock / activityTitle / activityMeta (see
+  // app/(tabs)/index.tsx) — same spacing, avatar size, typography scale, and
+  // a top hairline border between rows instead of one under every row.
   feedRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f3f6',
+    alignItems: 'center',
+    paddingVertical: 9,
+    gap: 10,
+  },
+  feedRowBorder: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#eef0f4',
   },
   feedIcon: {
     width: 36,
@@ -187,27 +204,25 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    overflow: 'hidden',
   },
   feedCopy: {
     flex: 1,
+    minWidth: 0,
   },
   feedTitle: {
-    color: '#171821',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  feedBody: {
-    marginTop: 3,
-    color: '#6f7683',
     fontSize: 13,
-    lineHeight: 19,
+    color: '#14161d',
+    fontWeight: '500',
+    lineHeight: 18,
+  },
+  feedTitleBold: {
+    fontWeight: '800',
   },
   feedMeta: {
-    marginTop: 4,
-    color: '#9aa2ae',
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: 11,
+    color: '#8a909e',
+    marginTop: 2,
   },
   emptyText: {
     color: '#171821',

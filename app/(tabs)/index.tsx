@@ -22,6 +22,7 @@ import { apiFetch, apiJson } from '@/lib/api';
 import { getCached, setCached, invalidateCache, invalidateTripCache } from '@/lib/cache';
 import { prefetchAvatars } from '@/lib/avatar-prefetch';
 import { maybeRequestPushPermission } from '@/lib/push-notifications';
+import { formatRelativeTime } from '@/lib/format-time';
 import { markStartup, markStartupSync } from '@/lib/startup-timing'; // TEMPORARY — see lib/startup-timing.ts
 import { useScalePress } from '@/hooks/useMotion';
 import type { PendingInvite, Quest, SideQuestActivity, TripEvent } from '@/lib/types';
@@ -839,20 +840,6 @@ function QuestCard({
 
 // getTripDayInfo + formatTimeLeft live in components/big-hero-card.tsx now.
 
-function formatRelativeTime(dateStr: string, now: Date): string {
-  const date = new Date(dateStr);
-  const diffMs = now.getTime() - date.getTime();
-  const sec = Math.floor(diffMs / 1000);
-  const min = Math.floor(sec / 60);
-  const hour = Math.floor(min / 60);
-  const day = Math.floor(hour / 24);
-  if (sec < 60) return 'just now';
-  if (min < 60) return `${min} min ago`;
-  if (hour < 24) return `${hour}h ago`;
-  if (day < 7) return `${day}d ago`;
-  return date.toLocaleDateString();
-}
-
 function categoryIonicon(category?: string | null): keyof typeof Ionicons.glyphMap {
   // Delegates to the shared category visual system.
   return getCategorySymbol(category).icon;
@@ -937,35 +924,48 @@ function ActivityFeedCard({
       </View>
 
       {tripEvents.map((event, index) => {
-        const member = findMember(event.actorName);
+        // Hidden SideQuests must not reveal who added them — same rule as
+        // the title itself, so neither the actor's avatar nor their name
+        // is rendered for this row.
+        const isHiddenAdd = event.type === 'activity_added' && !!event.isHidden;
+        const member = isHiddenAdd ? undefined : findMember(event.actorName);
         return (
           <TouchableOpacity
             key={event.id}
             activeOpacity={0.84}
             onPress={() => router.push(eventRoute(event) as Href)}
             style={[styles.activityRow, index > 0 && styles.activityRowBorder]}>
-            <View style={styles.activityAvatar}>
-              <Avatar
-                uri={member?.avatarUrl}
-                name={event.actorName}
-                fallbackText={getInitials(event.actorName)}
-                forceFallback={member ? failedAvatars.has(member.id) : false}
-                onError={() => member && onAvatarError(member.id)}
-                size={36}
-              />
+            <View style={[styles.activityAvatar, isHiddenAdd && styles.activityAvatarMuted]}>
+              {isHiddenAdd ? (
+                <Ionicons name="lock-closed-outline" size={16} color="#8a909e" />
+              ) : (
+                <Avatar
+                  uri={member?.avatarUrl}
+                  name={event.actorName}
+                  fallbackText={getInitials(event.actorName)}
+                  forceFallback={member ? failedAvatars.has(member.id) : false}
+                  onError={() => member && onAvatarError(member.id)}
+                  size={36}
+                />
+              )}
             </View>
             <View style={styles.activityTextBlock}>
-              <Text style={styles.activityTitle}>
-                <Text style={styles.activityTitleBold}>{event.actorName}</Text>{' '}
-                {event.type === 'member_joined'
-                  ? t('home.activity.joined_verb')
-                  : event.type === 'activity_added'
-                  ? t('home.activity.added_verb')
-                  : t('home.activity.left_verb')}
+              <Text style={styles.activityTitle} numberOfLines={2}>
+                {isHiddenAdd ? (
+                  t('home.activity.hidden_added')
+                ) : (
+                  <>
+                    <Text style={styles.activityTitleBold}>{event.actorName}</Text>{' '}
+                    {event.type === 'member_joined'
+                      ? t('home.activity.joined_verb')
+                      : event.type === 'activity_added'
+                      ? t('home.activity.added_verb')
+                      : t('home.activity.left_verb')}
+                  </>
+                )}
               </Text>
               <Text style={styles.activityMeta}>{formatRelativeTime(event.createdAt, now)}</Text>
             </View>
-            <Ionicons name="chevron-forward" size={16} color="#bbc0c8" />
           </TouchableOpacity>
         );
       })}
@@ -1773,7 +1773,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 9,
-    gap: 12,
+    gap: 10,
   },
   activityRowBorder: {
     borderTopWidth: StyleSheet.hairlineWidth,
@@ -1792,6 +1792,7 @@ const styles = StyleSheet.create({
   },
   activityTextBlock: {
     flex: 1,
+    minWidth: 0,
   },
   activityTitle: {
     fontSize: 13,
