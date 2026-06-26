@@ -965,10 +965,11 @@ function ActivityFeedCard({
                 {isHiddenAdd ? (
                   t('home.activity.hidden_added')
                 ) : isRevealed ? (
-                  <>
-                    <Text style={styles.activityTitleBold}>{t('home.activity.revealed')}</Text>
-                    {event.activityTitle ? ` ${event.activityTitle}` : ''}
-                  </>
+                  // Deliberately not appending event.activityTitle — tapping
+                  // this row already opens the SideQuest detail screen,
+                  // where the title is right there. Showing it here too was
+                  // just noise.
+                  t('home.activity.revealed')
                 ) : (
                   <>
                     <Text style={styles.activityTitleBold}>{event.actorName}</Text>{' '}

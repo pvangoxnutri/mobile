@@ -1100,7 +1100,7 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   name: {
-    marginTop: SPACING.xxl,
+    marginTop: SPACING.xxl + 10,
     color: COLORS.textPrimary,
     fontSize: 40,
     lineHeight: 44,
