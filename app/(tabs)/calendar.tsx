@@ -10,7 +10,7 @@ import { useI18n } from '@/components/i18n-provider';
 import { apiJson } from '@/lib/api';
 import { getCategorySymbol } from '@/lib/category-symbol';
 import type { Quest, SideQuestActivity } from '@/lib/types';
-import { DEFAULT_BLUR, isSealedInLists } from '@/lib/activity-blur';
+import { DEFAULT_BLUR, extractBlur, isSealedInLists } from '@/lib/activity-blur';
 import { SPACING, TYPOGRAPHY, COLORS, RADIUS, SHADOWS } from '@/constants/design-tokens';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -205,12 +205,14 @@ export default function CalendarScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.white }}>
+      <View style={[styles.fixedHeader, { paddingTop: Math.max(insets.top, 16) + 8 }]}>
+        <TabHeader />
+      </View>
       <ScrollView
         ref={scrollRef}
-        contentContainerStyle={[styles.screen, { paddingTop: Math.max(insets.top, 16) + 8, paddingBottom: Math.max(insets.bottom, 20) + 140 }]}
+        style={{ flex: 1 }}
+        contentContainerStyle={[styles.screen, { paddingTop: 18, paddingBottom: Math.max(insets.bottom, 20) + 140 }]}
         showsVerticalScrollIndicator={false}>
-
-        <TabHeader />
 
         {/* Month switcher */}
         <View style={styles.monthSwitchRow}>
@@ -349,6 +351,7 @@ export default function CalendarScreen() {
                     const dateLabel = formatUpcomingDate(item.date, now, t, locale);
                     const timeLabel = item.time ? ` · ${item.time}` : '';
                     const tripTitle = tripsById.get(item.tripId)?.title ?? null;
+                    const blurAmount = item.hidden ? extractBlur(item.description) ?? DEFAULT_BLUR : undefined;
 
                     return (
                       <TouchableOpacity
@@ -362,7 +365,7 @@ export default function CalendarScreen() {
                               source={{ uri: item.imageUrl }}
                               style={styles.upcomingImage}
                               resizeMode="cover"
-                              blurRadius={item.hidden ? DEFAULT_BLUR : undefined}
+                              blurRadius={blurAmount}
                             />
                           ) : !item.hidden ? (
                             <ActivityImageFallback category={item.category} size="medium" style={styles.upcomingFallback} />
@@ -542,6 +545,13 @@ function getCalendarDots(items: CalendarItem[]) {
 const styles = StyleSheet.create({
   screen: {
     paddingHorizontal: SPACING.xl,
+  },
+  // Fixed sibling above the ScrollView (see Home's app/(tabs)/index.tsx for
+  // the same pattern) — keeps the header from scrolling away with the page.
+  fixedHeader: {
+    paddingHorizontal: SPACING.xl,
+    paddingBottom: 10,
+    backgroundColor: COLORS.white,
   },
 
   // Month switcher

@@ -521,18 +521,20 @@ export default function ProfileScreen() {
   }
 
   return (
-    <View style={{ flex: 1 }}>
-      <ScrollView
-        style={styles.screen}
-        contentContainerStyle={[
-          styles.content,
-          { paddingTop: Math.max(insets.top, 16) + 8, paddingBottom: Math.max(insets.bottom, 20) + 112 },
-        ]}
-        showsVerticalScrollIndicator={false}>
+    <View style={{ flex: 1, backgroundColor: COLORS.white }}>
+      <View style={[styles.fixedHeader, { paddingTop: Math.max(insets.top, 16) + 8 }]}>
         <TabHeader
           bellAnimatedStyle={bellAnimatedStyle}
           avatarAnimatedStyle={headerAvatarAnimatedStyle}
         />
+      </View>
+      <ScrollView
+        style={styles.screen}
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: 18, paddingBottom: Math.max(insets.bottom, 20) + 112 },
+        ]}
+        showsVerticalScrollIndicator={false}>
 
       <View style={styles.avatarSection}>
         <Animated.View
@@ -1042,6 +1044,13 @@ function createTimeoutSignal(timeoutMs: number) {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
+    backgroundColor: COLORS.white,
+  },
+  // Fixed sibling above the ScrollView (see Home's app/(tabs)/index.tsx for
+  // the same pattern) — keeps the header from scrolling away with the page.
+  fixedHeader: {
+    paddingHorizontal: SPACING.xl,
+    paddingBottom: 10,
     backgroundColor: COLORS.white,
   },
   content: {
