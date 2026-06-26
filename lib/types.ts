@@ -136,7 +136,8 @@ export interface TripEvent {
   tripId: string;
   tripTitle?: string | null;
   actorName: string;
-  type: 'member_joined' | 'member_left';
+  type: 'member_joined' | 'member_left' | 'activity_added';
+  activityId?: string | null;
   createdAt: string;
 }
 

@@ -1,49 +1,42 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { UserInfo } from '@/lib/types';
+import { apiJson } from '@/lib/api';
 
 const NOTIFICATION_PREFS_KEY = 'sidequest.notification-prefs';
-const NOTIFICATIONS_KEY = 'sidequest.notifications';
 const NOTIFICATIONS_LAST_SEEN_KEY = 'sidequest.notifications.lastSeenAt';
-const CHAT_KEY_PREFIX = 'sidequest.trip-chat.';
 const memoryStorage = new Map<string, string>();
 
 export type NotificationPreferences = {
   pushEnabled: boolean;
-  chatMessages: boolean;
-  chatJoins: boolean;
 };
 
+// The in-app notification center's six notification types — mirrors the
+// backend's NotificationsController allow-list (see
+// backend/Controllers/NotificationsController.cs). Title/Body are already
+// rendered server-side (localized to the user's language), so this is
+// display-ready as-is.
 export type AppNotification = {
   id: string;
-  type: 'chat_message' | 'chat_member_joined' | 'upcoming_sidequest';
+  type: 'member_joined' | 'new_activity' | 'new_hidden_sidequest' | 'sidequest_revealed' | 'chat' | 'expense';
   title: string;
   body: string;
   createdAt: string;
   tripId?: string;
-  sideQuestId?: string;
-  tripTitle?: string;
-  pushReady?: boolean;
+  route?: string;
 };
 
-export type ChatMessage = {
+type NotificationLogResponse = {
   id: string;
-  authorId: string;
-  authorName: string;
-  text: string;
+  type: string;
+  title: string;
+  body: string;
+  tripId?: string | null;
+  route?: string | null;
   createdAt: string;
-  kind: 'system' | 'user';
-};
-
-type TripChatState = {
-  messages: ChatMessage[];
-  memberIds: string[];
 };
 
 export function getDefaultNotificationPreferences(): NotificationPreferences {
   return {
     pushEnabled: true,
-    chatMessages: true,
-    chatJoins: true,
   };
 }
 
@@ -62,21 +55,21 @@ export async function saveNotificationPreferences(preferences: NotificationPrefe
   await safeSetItem(NOTIFICATION_PREFS_KEY, JSON.stringify(preferences));
 }
 
-export async function loadNotifications() {
-  const raw = await safeGetItem(NOTIFICATIONS_KEY);
-  if (!raw) return [] as AppNotification[];
-
+export async function loadNotifications(): Promise<AppNotification[]> {
   try {
-    return JSON.parse(raw) as AppNotification[];
+    const rows = await apiJson<NotificationLogResponse[]>('/api/notifications');
+    return rows.map((row) => ({
+      id: row.id,
+      type: row.type as AppNotification['type'],
+      title: row.title,
+      body: row.body,
+      createdAt: row.createdAt,
+      tripId: row.tripId ?? undefined,
+      route: row.route ?? undefined,
+    }));
   } catch {
-    return [] as AppNotification[];
+    return [];
   }
-}
-
-export async function prependNotification(notification: AppNotification) {
-  const current = await loadNotifications();
-  const next = [notification, ...current].slice(0, 50);
-  await safeSetItem(NOTIFICATIONS_KEY, JSON.stringify(next));
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -109,125 +102,6 @@ export async function loadUnreadNotificationCount(): Promise<number> {
     const t = new Date(n.createdAt).getTime();
     return Number.isFinite(t) && t > lastSeen;
   }).length;
-}
-
-export async function loadTripChat(tripId: string, tripTitle: string) {
-  const key = `${CHAT_KEY_PREFIX}${tripId}`;
-  const raw = await safeGetItem(key);
-
-  if (!raw) {
-    const initialState: TripChatState = {
-      memberIds: [],
-      messages: [
-        {
-          id: createId(),
-          authorId: 'system',
-          authorName: 'SideQuest',
-          text: `Group chat ready for ${tripTitle}.`,
-          createdAt: new Date().toISOString(),
-          kind: 'system',
-        },
-      ],
-    };
-
-    await safeSetItem(key, JSON.stringify(initialState));
-    return initialState;
-  }
-
-  try {
-    return JSON.parse(raw) as TripChatState;
-  } catch {
-    return {
-      memberIds: [],
-      messages: [],
-    } satisfies TripChatState;
-  }
-}
-
-export async function sendTripChatMessage({
-  tripId,
-  tripTitle,
-  user,
-  text,
-  preferences,
-}: {
-  tripId: string;
-  tripTitle: string;
-  user: Pick<UserInfo, 'id' | 'name'>;
-  text: string;
-  preferences: NotificationPreferences;
-}) {
-  const key = `${CHAT_KEY_PREFIX}${tripId}`;
-  const state = await loadTripChat(tripId, tripTitle);
-  const nextMessages = [...state.messages];
-  const nextMemberIds = [...state.memberIds];
-  const timestamp = new Date().toISOString();
-  const trimmed = text.trim();
-
-  if (!trimmed) {
-    return state;
-  }
-
-  if (!nextMemberIds.includes(user.id)) {
-    nextMemberIds.push(user.id);
-    const joinMessage: ChatMessage = {
-      id: createId(),
-      authorId: 'system',
-      authorName: 'SideQuest',
-      text: `${user.name} joined the group chat.`,
-      createdAt: timestamp,
-      kind: 'system',
-    };
-    nextMessages.push(joinMessage);
-
-    if (preferences.chatJoins) {
-      await prependNotification({
-        id: createId(),
-        type: 'chat_member_joined',
-        title: `${user.name} joined chat`,
-        body: `${tripTitle} group chat has a new participant.`,
-        createdAt: timestamp,
-        tripId,
-        tripTitle,
-        pushReady: preferences.pushEnabled,
-      });
-    }
-  }
-
-  const message: ChatMessage = {
-    id: createId(),
-    authorId: user.id,
-    authorName: user.name,
-    text: trimmed,
-    createdAt: timestamp,
-    kind: 'user',
-  };
-  nextMessages.push(message);
-
-  if (preferences.chatMessages) {
-    await prependNotification({
-      id: createId(),
-      type: 'chat_message',
-      title: `${user.name} sent a message`,
-      body: trimmed,
-      createdAt: timestamp,
-      tripId,
-      tripTitle,
-      pushReady: preferences.pushEnabled,
-    });
-  }
-
-  const nextState: TripChatState = {
-    memberIds: nextMemberIds,
-    messages: nextMessages.slice(-80),
-  };
-
-  await safeSetItem(key, JSON.stringify(nextState));
-  return nextState;
-}
-
-function createId() {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 async function safeGetItem(key: string) {

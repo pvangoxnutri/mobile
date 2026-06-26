@@ -1,6 +1,6 @@
 import * as Notifications from 'expo-notifications';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiFetch } from '@/lib/api';
 import { markStartup } from '@/lib/startup-timing'; // TEMPORARY — see lib/startup-timing.ts
@@ -13,14 +13,21 @@ const ASKED_KEY = 'sidequest.push.asked-permission';
 // "make sure it's still registered" calls don't hit the network every time.
 const LAST_TOKEN_KEY = 'sidequest.push.last-registered-token';
 
+// While the app is open and in the foreground, the user is already looking
+// at it — showing an OS banner/sound on top of that is redundant (and for
+// chat, arrives milliseconds after the message itself renders in the open
+// chat). Only present the OS notification when the app is backgrounded.
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
+  handleNotification: async () => {
+    const isForeground = AppState.currentState === 'active';
+    return {
+      shouldShowAlert: !isForeground,
+      shouldPlaySound: !isForeground,
+      shouldSetBadge: false,
+      shouldShowBanner: !isForeground,
+      shouldShowList: !isForeground,
+    };
+  },
 });
 
 function getProjectId(): string | undefined {
@@ -171,12 +178,21 @@ export async function getCurrentPermissionStatus(): Promise<Notifications.Permis
   return status;
 }
 
-// Mirrors the `data` dict the backend puts on each of the four notification
-// types (see backend/Services/NotificationDispatchService.cs) — `type` is
-// what lets the caller decide what (if anything) needs invalidating before
-// navigating, instead of just blindly following `route`.
+// Mirrors the `data` dict the backend puts on each notification type (see
+// backend/Services/NotificationDispatchService.cs) — `type` is what lets the
+// caller decide what (if anything) needs invalidating before navigating,
+// instead of just blindly following `route`.
 export type PushNotificationData = {
-  type?: 'teaser' | 'reveal' | 'trip_invite' | 'chat_message' | string;
+  type?:
+    | 'teaser'
+    | 'trip_invite'
+    | 'member_joined'
+    | 'new_activity'
+    | 'new_hidden_sidequest'
+    | 'sidequest_revealed'
+    | 'chat'
+    | 'expense'
+    | string;
   tripId?: string;
   activityId?: string;
   inviteId?: string;

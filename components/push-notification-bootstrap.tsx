@@ -17,15 +17,15 @@ import { markStartup } from '@/lib/startup-timing'; // TEMPORARY — see lib/sta
 // "show cache, then fetch fresh" effect finds nothing cached and fetches for
 // real, instead of briefly showing pre-push data.
 //
-// Deliberately narrow: chat is never cached (chat_message needs no action),
-// and teaser only touches the one key that could actually be stale, not the
+// Deliberately narrow: chat is never cached (chat needs no action), and
+// teaser only touches the one key that could actually be stale, not the
 // full trip helper — there's no reason for a teaser tap to invalidate
 // anything that could risk surfacing more than the teaser text.
 function invalidateForPush(data: PushNotificationData) {
   if (!data.tripId) return;
 
   switch (data.type) {
-    case 'reveal':
+    case 'sidequest_revealed':
       // The activity just flipped from hidden to revealed — make sure the
       // trip's activities list (and the trip record itself) can't show the
       // pre-reveal snapshot once the user lands.
@@ -43,7 +43,7 @@ function invalidateForPush(data: PushNotificationData) {
       invalidateCache('/api/trips/invites/me');
       invalidateTripCache(data.tripId);
       break;
-    case 'chat_message':
+    case 'chat':
     default:
       // Chat is never cached — nothing to do.
       break;

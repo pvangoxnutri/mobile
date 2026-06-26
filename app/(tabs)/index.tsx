@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { router, useLocalSearchParams } from 'expo-router';
+import type { Href } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { Image as CachedImage } from 'expo-image';
@@ -15,6 +16,7 @@ import UserProfileCard from '@/components/user-profile-card';
 import InviteCard from '@/components/invite-card';
 import ActivityImageFallback from '@/components/activity-image-fallback';
 import { getCategorySymbol } from '@/lib/category-symbol';
+import { DEFAULT_BLUR, extractBlur } from '@/lib/activity-blur';
 import { BigHeroCard, getInitials, type TripWithEvent, type TripMember } from '@/components/big-hero-card';
 import { apiFetch, apiJson } from '@/lib/api';
 import { getCached, setCached, invalidateCache, invalidateTripCache } from '@/lib/cache';
@@ -65,6 +67,8 @@ export default function HomeScreen() {
   const [tripEvents, setTripEvents] = useState<TripEvent[]>([]);
   const eventFade = useRef(new Animated.Value(1)).current;
   const carouselRef = useRef<ScrollView>(null);
+  const selectedTripIdRef = useRef<string | null>(null);
+  const prevQuestIdsKeyRef = useRef<string | null>(null);
   const floatingBottom = Math.max(insets.bottom, 14) + 78;
   // Hero card fills the viewport leaving ~24px peek of the next card on the
   // right, signalling "swipe for more". snapToInterval below locks one card
@@ -225,10 +229,30 @@ export default function HomeScreen() {
   const featuredEvent = featuredTrip?.upcomingEvents[featuredEventIndex] ?? null;
   const allowNativeDriver = Platform.OS !== 'web';
 
+  // Keep the ref pointing at whichever trip is currently shown, so the
+  // effect below can re-find it by id after a refetch instead of always
+  // snapping back to index 0.
+  if (featuredTrip) selectedTripIdRef.current = featuredTrip.quest.id;
+
+  // `quests` gets a brand-new array reference on every focus-triggered
+  // refetch (loadQuests), even when the trips themselves haven't changed —
+  // resetting selectedTripIndex on every such reference change desynced the
+  // carousel's visible card (untouched, since nothing scrolls it back) from
+  // "Up Next"/the dashes (which jumped to trip 0), making Up Next look like
+  // it randomly went blank while swiping. Only reset when the actual set of
+  // trip ids changes, and try to keep showing the same trip by id.
+  const questIdsKey = useMemo(() => quests.map((q) => q.id).sort().join(','), [quests]);
   useEffect(() => {
-    setSelectedTripIndex(0);
+    if (prevQuestIdsKeyRef.current === questIdsKey) return;
+    prevQuestIdsKeyRef.current = questIdsKey;
+    const keepIndex = selectedTripIdRef.current
+      ? sortedTrips.findIndex((entry) => entry.quest.id === selectedTripIdRef.current)
+      : -1;
+    const nextIndex = keepIndex >= 0 ? keepIndex : 0;
+    setSelectedTripIndex(nextIndex);
     setFeaturedEventIndex(0);
-  }, [quests]);
+    carouselRef.current?.scrollTo({ x: nextIndex * (upcomingCardWidth + 14), animated: false });
+  }, [questIdsKey, sortedTrips, upcomingCardWidth]);
 
   useEffect(() => {
     setFeaturedEventIndex(0);
@@ -863,7 +887,12 @@ function ActivityFeedCard({
 }) {
   if (!tripId) return null;
 
-  const tripEvents = events.filter((e) => e.tripId === tripId).slice(0, 3);
+  // This is just a preview feed — Home shows at most 3 rows total. The full
+  // list lives in the bell notification center (see TMP_Navbar.tsx), which
+  // reads from a different source (NotificationLog) and has its own
+  // independent read/unread state.
+  const MAX_ROWS = 3;
+  const allTripEvents = events.filter((e) => e.tripId === tripId);
 
   // Tomorrow's plans (synthesized row)
   const tomorrow = new Date(now);
@@ -873,13 +902,21 @@ function ActivityFeedCard({
   const sealedTomorrow = plansTomorrow.filter((a) => a.isHidden && !a.isRevealed).length;
   const firstPlanTomorrow = plansTomorrow.find((a) => !a.isHidden) ?? plansTomorrow[0];
 
-  const totalNew = tripEvents.length + (plansTomorrow.length > 0 ? 1 : 0);
+  const hasTomorrowRow = plansTomorrow.length > 0;
+  const tripEvents = allTripEvents.slice(0, hasTomorrowRow ? MAX_ROWS - 1 : MAX_ROWS);
+
+  const totalNew = allTripEvents.length + (hasTomorrowRow ? 1 : 0);
   const isEmpty = totalNew === 0;
 
   function eventLabel(e: TripEvent): string {
     if (e.type === 'member_joined') return t('home.activity.joined', { name: e.actorName });
     if (e.type === 'member_left') return t('home.activity.left', { name: e.actorName });
     return e.actorName;
+  }
+
+  function eventRoute(e: TripEvent): string {
+    if (e.type === 'activity_added' && e.activityId) return `/trip/${e.tripId}/sidequest/${e.activityId}`;
+    return `/trip/${e.tripId}`;
   }
 
   function findMember(name: string): TripMember | undefined {
@@ -893,13 +930,20 @@ function ActivityFeedCard({
           <View style={styles.activityHeaderDot} />
           <Text style={styles.activityHeaderLabel}>{t('home.activity.heading')}</Text>
         </View>
-        <Text style={styles.activityHeaderCount}>{totalNew} {t('home.activity.new_suffix')}</Text>
+        {/* Static label, not a count — this is a 3-row preview, so a number
+            here ("5 new") would imply more unread items than are actually
+            rendered. The full list lives in the bell notification center. */}
+        <Text style={styles.activityHeaderCount}>{t('home.activity.latest_label')}</Text>
       </View>
 
       {tripEvents.map((event, index) => {
         const member = findMember(event.actorName);
         return (
-          <View key={event.id} style={[styles.activityRow, index > 0 && styles.activityRowBorder]}>
+          <TouchableOpacity
+            key={event.id}
+            activeOpacity={0.84}
+            onPress={() => router.push(eventRoute(event) as Href)}
+            style={[styles.activityRow, index > 0 && styles.activityRowBorder]}>
             <View style={styles.activityAvatar}>
               <Avatar
                 uri={member?.avatarUrl}
@@ -913,11 +957,16 @@ function ActivityFeedCard({
             <View style={styles.activityTextBlock}>
               <Text style={styles.activityTitle}>
                 <Text style={styles.activityTitleBold}>{event.actorName}</Text>{' '}
-                {event.type === 'member_joined' ? t('home.activity.joined_verb') : t('home.activity.left_verb')}
+                {event.type === 'member_joined'
+                  ? t('home.activity.joined_verb')
+                  : event.type === 'activity_added'
+                  ? t('home.activity.added_verb')
+                  : t('home.activity.left_verb')}
               </Text>
               <Text style={styles.activityMeta}>{formatRelativeTime(event.createdAt, now)}</Text>
             </View>
-          </View>
+            <Ionicons name="chevron-forward" size={16} color="#bbc0c8" />
+          </TouchableOpacity>
         );
       })}
 
@@ -1055,6 +1104,12 @@ function UpNextCard({
     return `${hours}:${String(mins).padStart(2, '0')}`;
   }
   const unlockTimer = isSealed ? formatUnlockTimer(activity.revealAt) : null;
+  // expo-image's blurRadius scale doesn't match RN core Image's — using
+  // CachedImage here made sealed covers look far less blurred than the
+  // identical setting on calendar/trip timeline (both use core Image).
+  // Use core Image for the sealed case so the blur is visually identical,
+  // and honor the activity's own configured amount, not just the default.
+  const blurAmount = isSealed ? extractBlur(activity.description) ?? DEFAULT_BLUR : undefined;
 
   return (
     <TouchableOpacity
@@ -1062,7 +1117,14 @@ function UpNextCard({
       onPress={() => router.push(`/trip/${tripId}/sidequest/${activity.id}`)}
       style={[styles.upNextCard, isSealed && styles.upNextCardSealed]}>
       <View style={[styles.upNextImageBox, isSealed && styles.upNextImageBoxSealed]}>
-        {!isSealed && activity.imageUrl ? (
+        {activity.imageUrl && isSealed ? (
+          <Image
+            source={{ uri: activity.imageUrl }}
+            style={styles.upNextImage}
+            resizeMode="cover"
+            blurRadius={blurAmount}
+          />
+        ) : activity.imageUrl ? (
           <CachedImage
             source={{ uri: activity.imageUrl }}
             style={styles.upNextImage}
@@ -1073,6 +1135,7 @@ function UpNextCard({
         ) : !isSealed ? (
           <ActivityImageFallback category={activity.category} size="medium" style={styles.upNextFallback} />
         ) : null}
+        {isSealed && <View style={styles.upNextLockScrim} />}
         <View style={[styles.upNextIconBadge, isSealed && styles.upNextIconBadgeSealed]}>
           <Ionicons
             name={isSealed ? 'lock-closed' : getCategorySymbol(activity.category).icon}
@@ -1089,7 +1152,7 @@ function UpNextCard({
             : `${dateLabel}${timeLabel}`}
         </Text>
         <Text style={styles.upNextTitle} numberOfLines={1}>
-          {isSealed ? (activity.title ?? t('home.upnext.sealed_title')) : activity.title}
+          {isSealed ? t('calendar.activity.hidden') : activity.title}
         </Text>
         {isSealed && activity.teaser ? (
           <Text style={styles.upNextTeaser} numberOfLines={1}>"{activity.teaser}"</Text>
@@ -1804,6 +1867,10 @@ const styles = StyleSheet.create({
   },
   upNextImage: {
     width: '100%', height: '100%',
+  },
+  upNextLockScrim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(15, 17, 23, 0.32)',
   },
   upNextFallback: {
     width: '100%',

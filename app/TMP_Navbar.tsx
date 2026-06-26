@@ -1,86 +1,45 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import type { Href } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { apiJson } from '@/lib/api';
 import { getCached, setCached } from '@/lib/cache';
 import { loadNotifications, markNotificationsAsRead, type AppNotification } from '@/lib/social';
-import type { Quest, SideQuestActivity, TripEvent } from '@/lib/types';
 import { PRIMARY_COLOR, SECONDARY_COLOR } from '@/constants/colors';
+
+const ICON_BY_TYPE: Record<AppNotification['type'], { name: keyof typeof Ionicons.glyphMap; background: string }> = {
+  member_joined: { name: 'person-add-outline', background: SECONDARY_COLOR },
+  new_activity: { name: 'calendar-outline', background: '#d79a19' },
+  new_hidden_sidequest: { name: 'lock-closed-outline', background: '#d79a19' },
+  sidequest_revealed: { name: 'gift-outline', background: '#d79a19' },
+  chat: { name: 'chatbubble-outline', background: PRIMARY_COLOR },
+  expense: { name: 'cash-outline', background: '#2f9e6f' },
+};
+
+const NOTIFICATIONS_CACHE_KEY = '/api/notifications';
 
 export default function TmpNavbarScreen() {
   const insets = useSafeAreaInsets();
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
-  const [activityFeed, setActivityFeed] = useState<SideQuestActivity[]>([]);
-  const [tripEvents, setTripEvents] = useState<TripEvent[]>([]);
   const [error, setError] = useState('');
 
+  // loadNotifications() itself never touches read state — it's a plain
+  // fetch. The ONLY two triggers allowed to mark notifications as read are
+  // (a) this screen gaining focus (opening the bell), handled below, and
+  // (b) tapping a specific notification, handled in that row's onPress.
   const loadAlerts = useCallback(() => {
     let active = true;
 
-    // Opening the notification center clears the unread indicator. Fire
-    // and forget — the TopAlertsButton in any tab refetches its unread
-    // count next time that tab gains focus, so the dot vanishes on the
-    // way back out.
-    void markNotificationsAsRead();
+    const cached = getCached<AppNotification[]>(NOTIFICATIONS_CACHE_KEY);
+    if (cached) setNotifications(cached);
 
-    // Same cache keys as the home tab — reuse whatever it already fetched
-    // instead of refetching trips/events/activities from scratch every time
-    // this screen opens. Shows instantly (no "No activity yet" flash) while
-    // a background refresh keeps it current.
-    const cachedQuests = getCached<Quest[]>('/api/trips');
-    const cachedEvents = getCached<TripEvent[]>('/api/trips/events/me');
-    if (cachedQuests) {
-      const cachedActivities: SideQuestActivity[] = [];
-      for (const trip of cachedQuests) {
-        const acts = getCached<SideQuestActivity[]>(`/api/trips/${trip.id}/activities`);
-        if (acts) cachedActivities.push(...acts);
-      }
-      if (cachedActivities.length > 0) {
-        setActivityFeed(
-          cachedActivities
-            .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())
-            .slice(0, 20),
-        );
-      }
-    }
-    if (cachedEvents) setTripEvents(cachedEvents);
-
-    void Promise.all([
-      loadNotifications(),
-      apiJson<Quest[]>('/api/trips'),
-      apiJson<TripEvent[]>('/api/trips/events/me').catch(() => [] as TripEvent[]),
-    ])
-      .then(async ([storedNotifications, quests, events]) => {
+    void loadNotifications()
+      .then((items) => {
         if (!active) return;
-
-        const questList = Array.isArray(quests) ? quests : [];
-        setCached('/api/trips', questList);
-
-        const activityGroups = await Promise.all(
-          questList.map(async (trip) => {
-            try {
-              const acts = await apiJson<SideQuestActivity[]>(`/api/trips/${trip.id}/activities`);
-              setCached(`/api/trips/${trip.id}/activities`, acts);
-              return acts;
-            } catch {
-              return [];
-            }
-          }),
-        );
-
-        if (!active) return;
-        setNotifications(storedNotifications);
-        setTripEvents(Array.isArray(events) ? events : []);
-        setCached('/api/trips/events/me', events);
-        setActivityFeed(
-          activityGroups
-            .flat()
-            .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())
-            .slice(0, 20),
-        );
+        setNotifications(items);
+        setCached(NOTIFICATIONS_CACHE_KEY, items);
         setError('');
       })
       .catch((err: Error) => {
@@ -93,39 +52,16 @@ export default function TmpNavbarScreen() {
     };
   }, []);
 
-  useFocusEffect(loadAlerts);
-
-  const feed = useMemo(() => {
-    const derived = activityFeed.map((item) => ({
-      id: `upcoming-${item.id}`,
-      type: 'upcoming_sidequest' as const,
-      title: item.visibility === 'hidden' ? 'Hidden' : item.title ?? 'Upcoming SideQuest',
-      body: item.ownerName
-        ? `${item.ownerName} added this for ${formatDate(item.date)}${item.time ? ` at ${item.time}` : ''}`
-        : `Added for ${formatDate(item.date)}${item.time ? ` at ${item.time}` : ''}`,
-      createdAt: item.createdAt,
-      tripId: item.tripId,
-      sideQuestId: item.id,
-      pushReady: false,
-    }));
-
-    const joinedEvents = tripEvents.map((event) => ({
-      id: `event-${event.id}`,
-      type: 'chat_member_joined' as const,
-      title: event.tripTitle ?? 'Adventure',
-      body: event.type === 'member_left'
-        ? `${event.actorName} left the adventure.`
-        : `${event.actorName} joined the adventure!`,
-      createdAt: event.createdAt,
-      tripId: event.tripId,
-      sideQuestId: undefined as string | undefined,
-      pushReady: false,
-    }));
-
-    return [...joinedEvents, ...notifications, ...derived]
-      .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())
-      .slice(0, 20);
-  }, [activityFeed, notifications, tripEvents]);
+  useFocusEffect(
+    useCallback(() => {
+      // Opening the notification center clears the unread indicator. Fire
+      // and forget — the TopAlertsButton in any tab refetches its unread
+      // count next time that tab gains focus, so the dot vanishes on the
+      // way back out.
+      void markNotificationsAsRead();
+      return loadAlerts();
+    }, [loadAlerts]),
+  );
 
   return (
     <ScrollView
@@ -144,37 +80,35 @@ export default function TmpNavbarScreen() {
 
       <View style={styles.feedCard}>
         <Text style={styles.sectionTitle}>All activity</Text>
-        {feed.length > 0 ? (
-          feed.map((item) => (
-            <TouchableOpacity
-              key={item.id}
-              activeOpacity={item.tripId ? 0.84 : 1}
-              disabled={!item.tripId}
-              style={styles.feedRow}
-              onPress={() => {
-                if (!item.tripId) return;
-                if (item.sideQuestId) {
-                  router.push(`/trip/${encodeURIComponent(item.tripId)}/sidequest/${encodeURIComponent(item.sideQuestId)}`);
-                  return;
-                }
-                router.push(`/trip/${item.tripId}`);
-              }}>
-              <View style={[styles.feedIcon, { backgroundColor: item.type === 'chat_message' ? PRIMARY_COLOR : item.type === 'chat_member_joined' ? SECONDARY_COLOR : '#d79a19' }]}>
-                <Ionicons
-                  name={item.type === 'chat_message' ? 'chatbubble-outline' : item.type === 'chat_member_joined' ? 'person-add-outline' : 'calendar-outline'}
-                  size={16}
-                  color="#fff"
-                />
-              </View>
-              <View style={styles.feedCopy}>
-                <Text style={styles.feedTitle}>{item.title}</Text>
-                <Text style={styles.feedBody}>{item.body}</Text>
-                <Text style={styles.feedMeta}>{formatTimestamp(item.createdAt)}</Text>
-              </View>
-            </TouchableOpacity>
-          ))
+        {notifications.length > 0 ? (
+          notifications.map((item) => {
+            const icon = ICON_BY_TYPE[item.type];
+            return (
+              <TouchableOpacity
+                key={item.id}
+                activeOpacity={item.route ? 0.84 : 1}
+                disabled={!item.route}
+                style={styles.feedRow}
+                onPress={() => {
+                  void markNotificationsAsRead();
+                  if (item.route) router.push(item.route as Href);
+                }}>
+                <View style={[styles.feedIcon, { backgroundColor: icon?.background ?? '#9aa2ae' }]}>
+                  <Ionicons name={icon?.name ?? 'notifications-outline'} size={16} color="#fff" />
+                </View>
+                <View style={styles.feedCopy}>
+                  <Text style={styles.feedTitle}>{item.title}</Text>
+                  <Text style={styles.feedBody}>{item.body}</Text>
+                  <Text style={styles.feedMeta}>{formatTimestamp(item.createdAt)}</Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })
         ) : (
-          <Text style={styles.emptyText}>No activity yet. Add SideQuests or chat in a trip to fill this feed.</Text>
+          <View>
+            <Text style={styles.emptyText}>No notifications yet</Text>
+            <Text style={styles.emptyBody}>Updates from your adventures will appear here.</Text>
+          </View>
         )}
       </View>
 
@@ -185,10 +119,6 @@ export default function TmpNavbarScreen() {
 
 function formatTimestamp(value: string) {
   return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(value));
-}
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(new Date(`${value}T12:00:00`));
 }
 
 const styles = StyleSheet.create({
@@ -259,9 +189,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 12,
   },
-  feedIconGold: {
-    backgroundColor: '#d79a19',
-  },
   feedCopy: {
     flex: 1,
   },
@@ -283,9 +210,15 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   emptyText: {
-    color: '#7c8290',
+    color: '#171821',
     fontSize: 15,
+    fontWeight: '700',
     marginTop: 8,
+  },
+  emptyBody: {
+    color: '#7c8290',
+    fontSize: 14,
+    marginTop: 4,
   },
   errorText: {
     marginTop: 14,
