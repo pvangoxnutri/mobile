@@ -995,7 +995,14 @@ export default function TripDetailsScreen() {
                       {inviteComposerOpen ? (
                         <View style={styles.inviteInlineComposer}>
                           <View style={styles.inviteComposer}>
-                            <Animated.View style={[{ opacity: inviteEmailOpacityRef }]}>
+                            {/* flex: 1 here (not just on inviteInput) is the
+                                fix — without it this wrapper sizes to its
+                                content instead of filling the row, so the
+                                TextInput's own flex:1 had nothing to flex
+                                into: typing a longer email grew the input
+                                unbounded and pushed the Invite button off
+                                the right edge of the screen. */}
+                            <Animated.View style={[{ opacity: inviteEmailOpacityRef, flex: 1 }]}>
                               <TextInput
                                 ref={inviteEmailRef}
                                 value={inviteEmail}
@@ -2119,6 +2126,9 @@ const styles = StyleSheet.create({
     // never resizes the button — it used to visibly shift/resize every time
     // inviteSubmitting flipped, since width was purely text-driven.
     minWidth: 92,
+    // Never shrink — the email input next to it (flex: 1) is what gives up
+    // width if the row is ever tight, not this button.
+    flexShrink: 0,
     borderRadius: 18,
     backgroundColor: '#ff4f74',
     alignItems: 'center',
