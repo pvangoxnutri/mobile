@@ -1,8 +1,14 @@
 import { router } from 'expo-router';
+import { useState } from 'react';
 import { Animated, Image, StyleSheet, Text, TouchableOpacity, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useAuth } from '@/components/auth-provider';
 import BrandMark from '@/components/brand-mark';
 import TopAlertsButton from '@/components/top-alerts-button';
+// EXPERIMENTAL — Gluno AI assistant. GlunoButton renders null unless
+// ENABLE_GLUNO_ASSISTANT is true (constants/feature-flags.ts), so this
+// import is always safe even when the feature is hidden.
+import GlunoButton from '@/components/gluno/GlunoButton';
+import GlunoAssistant from '@/components/gluno/GlunoAssistant';
 import { COLORS, SPACING } from '@/constants/design-tokens';
 
 type AnimatedStyle = StyleProp<ViewStyle> | Animated.WithAnimatedValue<ViewStyle>;
@@ -26,27 +32,35 @@ export default function TabHeader({
 }: Props) {
   const { user } = useAuth();
   const handleAvatarPress = onAvatarPress ?? (() => router.push('/(tabs)/profile'));
+  // EXPERIMENTAL — see GlunoButton.tsx / constants/feature-flags.ts. This
+  // state (and the panel below) only ever does anything once a user can
+  // actually press the button, which only renders when the flag is on.
+  const [glunoOpen, setGlunoOpen] = useState(false);
 
   return (
-    <View style={styles.topRow}>
-      <BrandMark size="sm" />
-      <View style={styles.rightCluster}>
-        <Animated.View style={bellAnimatedStyle}>
-          <TopAlertsButton inviteCount={inviteCount} />
-        </Animated.View>
-        <Animated.View style={avatarAnimatedStyle}>
-          <TouchableOpacity style={styles.avatarShell} activeOpacity={0.8} onPress={handleAvatarPress}>
-            {user?.avatarUrl && user.avatarUrl.trim() ? (
-              <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
-            ) : (
-              <View style={styles.avatarCore}>
-                <Text style={styles.avatarText}>{getInitials(user?.name)}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        </Animated.View>
+    <>
+      <View style={styles.topRow}>
+        <BrandMark size="sm" />
+        <View style={styles.rightCluster}>
+          <GlunoButton onPress={() => setGlunoOpen(true)} />
+          <Animated.View style={bellAnimatedStyle}>
+            <TopAlertsButton inviteCount={inviteCount} />
+          </Animated.View>
+          <Animated.View style={avatarAnimatedStyle}>
+            <TouchableOpacity style={styles.avatarShell} activeOpacity={0.8} onPress={handleAvatarPress}>
+              {user?.avatarUrl && user.avatarUrl.trim() ? (
+                <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
+              ) : (
+                <View style={styles.avatarCore}>
+                  <Text style={styles.avatarText}>{getInitials(user?.name)}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </Animated.View>
+        </View>
       </View>
-    </View>
+      <GlunoAssistant visible={glunoOpen} onClose={() => setGlunoOpen(false)} />
+    </>
   );
 }
 
