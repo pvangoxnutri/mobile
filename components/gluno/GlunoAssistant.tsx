@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   KeyboardAvoidingView,
@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import GlunoMascot, { type GlunoMascotState } from '@/components/gluno/GlunoMascot';
 import GlunoMessageBubble, { type GlunoMessage } from '@/components/gluno/GlunoMessageBubble';
 import { GLUNO_QUICK_ACTIONS, getMockGlunoReply } from '@/components/gluno/gluno.constants';
 import { COLORS, SPACING } from '@/constants/design-tokens';
@@ -52,6 +53,32 @@ export default function GlunoAssistant({ visible, onClose }: Props) {
   const [draft, setDraft] = useState('');
   const scrollRef = useRef<ScrollView>(null);
 
+  // ── Open choreography: bounce once on arrival, settle into idle (which
+  // takes over blinking/breathing on its own loop), then reveal the
+  // greeting a beat later so it feels like Gluno "says" it rather than it
+  // just being static copy that was always there. Approximate, not a
+  // scripted animation sequence — see GlunoMascot.tsx for why states are
+  // independent loops rather than a choreographed timeline. ──────────────
+  const [mascotState, setMascotState] = useState<GlunoMascotState>('happy');
+  const introOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!visible) return;
+
+    setMascotState('happy');
+    introOpacity.setValue(0);
+
+    const settleTimer = setTimeout(() => setMascotState('idle'), 700);
+    const introTimer = setTimeout(() => {
+      Animated.timing(introOpacity, { toValue: 1, duration: 260, useNativeDriver: true }).start();
+    }, 400);
+
+    return () => {
+      clearTimeout(settleTimer);
+      clearTimeout(introTimer);
+    };
+  }, [visible, introOpacity]);
+
   function sendMessage(rawText: string) {
     const text = rawText.trim();
     if (!text) return;
@@ -80,11 +107,7 @@ export default function GlunoAssistant({ visible, onClose }: Props) {
 
             <View style={styles.header}>
               <View style={styles.headerLeft}>
-                {/* TODO: replace placeholder circle/icon with the final
-                    Gluno mascot asset once it exists. */}
-                <View style={styles.avatar}>
-                  <Ionicons name="sparkles" size={20} color={COLORS.white} />
-                </View>
+                <GlunoMascot size={56} state={mascotState} loop={mascotState === 'idle'} />
                 <View>
                   <Text style={styles.title}>Gluno</Text>
                   <Text style={styles.subtitle}>Your SideQuest assistant</Text>
@@ -100,12 +123,12 @@ export default function GlunoAssistant({ visible, onClose }: Props) {
               </TouchableOpacity>
             </View>
 
-            <View style={styles.introCard}>
+            <Animated.View style={[styles.introCard, { opacity: introOpacity }]}>
               <Text style={styles.introTitle}>Hi, I’m Gluno.</Text>
               <Text style={styles.introBody}>
                 I can help you plan trips, suggest SideQuests, and explain features.
               </Text>
-            </View>
+            </Animated.View>
 
             <ScrollView
               ref={scrollRef}
@@ -193,14 +216,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-  },
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: COLORS.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   title: {
     fontSize: 17,
