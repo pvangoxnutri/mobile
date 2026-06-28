@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Image, Pressable, StyleSheet, View, type ImageSourcePropType } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, {
   Easing,
@@ -28,19 +28,27 @@ import { COLORS } from '@/constants/design-tokens';
 //                a RiveAnimation here using GLUNO_ANIMATION_SOURCES[state].rive.
 //   2. Lottie  — not installed. TODO(gluno-assets): once available, render
 //                a LottieView here using GLUNO_ANIMATION_SOURCES[state].lottie.
-//   3. THIS — a Reanimated-driven placeholder shape (today's fallback).
-// Do not add react-native-reanimated, lottie-react-native or
-// rive-react-native as new dependencies casually — reanimated is already a
-// project dependency (used here); the other two are deliberately NOT
-// installed until real Gluno animation files exist to justify them.
-// When they land, only the render branch below needs to change.
+//   3. THIS — a transparent PNG (per state) + Reanimated motion (today's
+//             fallback). Falls back further to an Ionicons glyph if the
+//             image itself fails to load (see imageFailed below).
+// Do not add lottie-react-native or rive-react-native as new dependencies
+// casually — neither is installed, and they should only be added once real
+// Gluno animation files exist to justify them. reanimated is already a
+// project dependency. When Rive/Lottie files land, only the render branch
+// below needs to change — call sites do not.
+//
+// TODO(gluno-assets): the PNGs in mobile/assets/gluno/ right now are
+// programmatically-generated placeholders (simple flat shapes), NOT
+// exported from the real reference artwork — replace them with real
+// transparent PNG exports at the exact same filenames/sizes to upgrade the
+// visual with zero code changes.
 // ──────────────────────────────────────────────────────────────────────────
 
 export type GlunoMascotState = 'idle' | 'thinking' | 'happy' | 'secret' | 'pointing';
 
 type GlunoMascotProps = {
-  // Diameter in px. Header button uses ~34-38, the assistant panel uses
-  // something larger (e.g. 64).
+  // Diameter in px. Header button uses ~36-42, the assistant panel uses
+  // something larger (e.g. 72-96).
   size?: number;
   state?: GlunoMascotState;
   // Whether the state's own animation (breathing, wiggle, ...) repeats
@@ -59,7 +67,8 @@ type GlunoMascotProps = {
 //           gluno_secret.riv, gluno_pointing.riv
 //   Lottie: gluno_idle.json, gluno_thinking.json, gluno_happy.json,
 //           gluno_secret.json, gluno_pointing.json
-// Suggested home once they exist: mobile/assets/gluno/.
+// Suggested home once they exist: mobile/assets/gluno/ (same folder the
+// placeholder PNGs below already live in).
 export const GLUNO_ANIMATION_SOURCES: Record<GlunoMascotState, { rive: string; lottie: string }> = {
   idle: { rive: 'gluno_idle.riv', lottie: 'gluno_idle.json' },
   thinking: { rive: 'gluno_thinking.riv', lottie: 'gluno_thinking.json' },
@@ -68,9 +77,20 @@ export const GLUNO_ANIMATION_SOURCES: Record<GlunoMascotState, { rive: string; l
   pointing: { rive: 'gluno_pointing.riv', lottie: 'gluno_pointing.json' },
 };
 
-// Placeholder "face" per state — TODO: replace entirely with the final
-// Gluno SVG/animation asset. This is just enough visual variety so the
-// states read as different while there's no real character art yet.
+// TODO(gluno-assets): replace these 5 files with real transparent PNG
+// exports cropped from the reference artwork — same filenames, same
+// mobile/assets/gluno/ folder. Today's files are flat placeholder shapes
+// (generated, not extracted — see note above this file's header comment).
+const GLUNO_IMAGE_SOURCES: Record<GlunoMascotState, ImageSourcePropType> = {
+  idle: require('../../assets/gluno/gluno_idle.png'),
+  thinking: require('../../assets/gluno/gluno_thinking.png'),
+  happy: require('../../assets/gluno/gluno_happy.png'),
+  secret: require('../../assets/gluno/gluno_secret.png'),
+  pointing: require('../../assets/gluno/gluno_pointing.png'),
+};
+
+// Last-resort fallback if an image source ever fails to actually load
+// (corrupt file, future remote-URI swap going offline, etc).
 const FACE_ICON_BY_STATE: Record<GlunoMascotState, keyof typeof Ionicons.glyphMap> = {
   idle: 'happy-outline',
   thinking: 'ellipsis-horizontal',
@@ -93,15 +113,24 @@ export default function GlunoMascot({
   accessibilityHint,
 }: GlunoMascotProps) {
   const reduceMotion = useReducedMotion();
+  const [imageFailed, setImageFailed] = useState(false);
+
+  // A fresh state gets a fresh chance to load — most relevant once a
+  // future remote/Lottie/Rive source could fail independently per state.
+  useEffect(() => {
+    setImageFailed(false);
+  }, [state]);
 
   // Each gesture/loop gets its own shared value so they can run (and be
   // cancelled) independently — e.g. a tap reaction must never interrupt or
   // get interrupted by the idle breathing loop.
   const breathe = useSharedValue(1);
   const bounceY = useSharedValue(0);
+  const float = useSharedValue(0);
   const wiggle = useSharedValue(0);
   const blink = useSharedValue(1);
   const tapScale = useSharedValue(1);
+  const glowOpacity = useSharedValue(0);
 
   const blinkTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bounceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -128,22 +157,41 @@ export default function GlunoMascot({
     return () => cancelAnimation(breathe);
   }, [state, loop, reduceMotion, breathe]);
 
-  // ── Thinking wiggle — a gentle back-and-forth rotation while "thinking". ──
+  // ── Continuous slight floating (translateY) + a tiny perpetual tilt —
+  //    on top of any per-state bounce/wiggle below. This is what's meant to
+  //    make Gluno read as a living 3D character at rest, not just a static
+  //    image that occasionally twitches. ───────────────────────────────────
   useEffect(() => {
-    if (reduceMotion || state !== 'thinking') {
+    if (reduceMotion) {
+      float.value = 0;
+      return;
+    }
+    float.value = withRepeat(withTiming(-4, { duration: 1900, easing: Easing.inOut(Easing.sin) }), -1, true);
+    return () => cancelAnimation(float);
+  }, [reduceMotion, float]);
+
+  // ── Thinking wiggle — a clearer back-and-forth rotation while
+  //    "thinking"; every other state gets a much smaller perpetual sway so
+  //    Gluno never looks rigid, even at rest. ──────────────────────────────
+  useEffect(() => {
+    if (reduceMotion) {
       wiggle.value = withTiming(0, { duration: 150 });
       return;
     }
 
-    wiggle.value = withRepeat(
-      withSequence(
-        withTiming(-6, { duration: 220, easing: Easing.inOut(Easing.quad) }),
-        withTiming(6, { duration: 220, easing: Easing.inOut(Easing.quad) }),
-        withTiming(0, { duration: 160, easing: Easing.inOut(Easing.quad) }),
-      ),
-      loop ? -1 : 1,
-      false,
-    );
+    if (state === 'thinking') {
+      wiggle.value = withRepeat(
+        withSequence(
+          withTiming(-6, { duration: 220, easing: Easing.inOut(Easing.quad) }),
+          withTiming(6, { duration: 220, easing: Easing.inOut(Easing.quad) }),
+          withTiming(0, { duration: 160, easing: Easing.inOut(Easing.quad) }),
+        ),
+        loop ? -1 : 1,
+        false,
+      );
+    } else {
+      wiggle.value = withRepeat(withTiming(2, { duration: 2400, easing: Easing.inOut(Easing.sin) }), -1, true);
+    }
 
     return () => cancelAnimation(wiggle);
   }, [state, loop, reduceMotion, wiggle]);
@@ -224,13 +272,38 @@ export default function GlunoMascot({
     };
   }, [state, reduceMotion, blink]);
 
-  const animatedStyle = useAnimatedStyle(() => ({
+  // ── Premium "glow" — a soft pulsing halo behind Gluno whenever he's
+  //    doing something other than idling (thinking/happy/secret/pointing),
+  //    so the panel/header read as "Gluno is active right now". ───────────
+  useEffect(() => {
+    if (reduceMotion || state === 'idle') {
+      glowOpacity.value = withTiming(0, { duration: 250 });
+      return;
+    }
+
+    glowOpacity.value = withRepeat(
+      withSequence(
+        withTiming(0.55, { duration: 700, easing: Easing.inOut(Easing.sin) }),
+        withTiming(0.22, { duration: 700, easing: Easing.inOut(Easing.sin) }),
+      ),
+      -1,
+      true,
+    );
+
+    return () => cancelAnimation(glowOpacity);
+  }, [state, reduceMotion, glowOpacity]);
+
+  const mascotAnimatedStyle = useAnimatedStyle(() => ({
     transform: [
-      { translateY: bounceY.value },
+      { translateY: bounceY.value + float.value },
       { scale: breathe.value * tapScale.value },
       { scaleY: blink.value },
       { rotate: `${wiggle.value}deg` },
     ],
+  }));
+
+  const glowAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: glowOpacity.value,
   }));
 
   function handlePress() {
@@ -245,6 +318,12 @@ export default function GlunoMascot({
   }
 
   const dimension = { width: size, height: size, borderRadius: size / 2 };
+  // Glow extends beyond the mascot's own box but must NOT change
+  // GlunoMascot's layout footprint (size x size) — header rows/avatar
+  // clusters size against `size`, not against however big the glow halo
+  // is. Centered via a negative inset instead of growing the wrapper.
+  const glowSize = size * 1.6;
+  const glowInset = -(glowSize - size) / 2;
 
   return (
     <Pressable
@@ -253,16 +332,43 @@ export default function GlunoMascot({
       accessibilityRole={onPress ? 'button' : undefined}
       accessibilityLabel={onPress ? accessibilityLabel ?? 'Gluno' : undefined}
       accessibilityHint={onPress ? accessibilityHint : undefined}>
-      <Animated.View style={[styles.shadowWrap, dimension, animatedStyle]}>
-        <View style={[styles.face, dimension]}>
-          <Ionicons name={FACE_ICON_BY_STATE[state]} size={size * 0.5} color={COLORS.white} />
-        </View>
-      </Animated.View>
+      <View style={[styles.wrap, dimension]}>
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.glow,
+            { width: glowSize, height: glowSize, borderRadius: glowSize / 2, top: glowInset, left: glowInset },
+            glowAnimatedStyle,
+          ]}
+        />
+        <Animated.View style={[styles.shadowWrap, dimension, mascotAnimatedStyle]}>
+          {imageFailed ? (
+            <View style={[styles.fallbackFace, dimension]}>
+              <Ionicons name={FACE_ICON_BY_STATE[state]} size={size * 0.5} color={COLORS.white} />
+            </View>
+          ) : (
+            <Image
+              source={GLUNO_IMAGE_SOURCES[state]}
+              style={dimension}
+              resizeMode="contain"
+              onError={() => setImageFailed(true)}
+            />
+          )}
+        </Animated.View>
+      </View>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
+  wrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  glow: {
+    position: 'absolute',
+    backgroundColor: COLORS.primary,
+  },
   shadowWrap: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
@@ -270,7 +376,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 5,
   },
-  face: {
+  fallbackFace: {
     backgroundColor: COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',

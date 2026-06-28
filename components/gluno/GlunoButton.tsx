@@ -15,7 +15,7 @@ export default function GlunoButton({ onPress }: { onPress: () => void }) {
 
   return (
     <GlunoMascot
-      size={36}
+      size={38}
       state="idle"
       onPress={onPress}
       accessibilityLabel="Open Gluno assistant"

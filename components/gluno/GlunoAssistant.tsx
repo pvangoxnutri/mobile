@@ -107,7 +107,7 @@ export default function GlunoAssistant({ visible, onClose }: Props) {
 
             <View style={styles.header}>
               <View style={styles.headerLeft}>
-                <GlunoMascot size={56} state={mascotState} loop={mascotState === 'idle'} />
+                <GlunoMascot size={84} state={mascotState} loop={mascotState === 'idle'} />
                 <View>
                   <Text style={styles.title}>Gluno</Text>
                   <Text style={styles.subtitle}>Your SideQuest assistant</Text>
