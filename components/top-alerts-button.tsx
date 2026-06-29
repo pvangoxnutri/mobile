@@ -12,15 +12,24 @@ export default function TopAlertsButton({ inviteCount = 0 }: { inviteCount?: num
   // Re-fetch the unread count every time the parent tab regains focus —
   // including the round-trip "open TMP_Navbar → press back → tab gets
   // focus again" sequence. That round-trip is what clears the dot after
-  // the notification center has been opened.
+  // the notification center has been opened. On top of that, poll every
+  // 5s while this tab is actually focused, so the dot can appear live if
+  // someone else triggers a notification while the user is just sitting
+  // on the tab — the interval is torn down on blur/unmount, so it never
+  // runs for a backgrounded tab.
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      void loadUnreadNotificationCount().then((count) => {
-        if (active) setUnreadCount(count);
-      });
+      const refresh = () => {
+        void loadUnreadNotificationCount().then((count) => {
+          if (active) setUnreadCount(count);
+        });
+      };
+      refresh();
+      const interval = setInterval(refresh, 5000);
       return () => {
         active = false;
+        clearInterval(interval);
       };
     }, []),
   );
