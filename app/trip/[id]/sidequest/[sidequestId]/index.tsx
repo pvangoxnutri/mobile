@@ -286,7 +286,13 @@ export default function SideQuestDetailScreen() {
             <TouchableOpacity
               style={styles.notFoundButton}
               activeOpacity={0.85}
-              onPress={() => router.replace(`/trip/${encodeURIComponent(id)}`)}>
+              onPress={() => {
+                if (router.canGoBack()) {
+                  router.back();
+                } else {
+                  router.replace(`/trip/${encodeURIComponent(id)}`);
+                }
+              }}>
               <Text style={styles.notFoundButtonText}>{t('common.goBack')}</Text>
             </TouchableOpacity>
           </View>
