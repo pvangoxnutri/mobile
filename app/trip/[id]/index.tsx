@@ -761,9 +761,22 @@ export default function TripDetailsScreen() {
                 ))}
               </View>
             ) : null}
+
+            {/* Same top-left location pill as the Home carousel's preview
+                card (components/big-hero-card.tsx) — kept in sync by hand
+                since the two screens don't share this card as one
+                component, only the underlying HeroShell. */}
+            <View style={styles.heroTopRow}>
+              <View style={styles.heroLocPill}>
+                <Ionicons name="location" size={12} color="#fff" />
+                <Text style={styles.heroLocText} numberOfLines={1}>
+                  {trip?.destination ?? t('trip.upcomingAdventure')}
+                </Text>
+              </View>
+            </View>
+
             <View style={styles.heroBody}>
-              <Text style={styles.heroEyebrow}>{trip?.destination ?? t('trip.upcomingAdventure')}</Text>
-              <Text style={styles.heroTitle}>{trip?.title ?? t('trip.loadingAdventure')}</Text>
+              <Text style={styles.heroTitle} numberOfLines={2}>{trip?.title ?? t('trip.loadingAdventure')}</Text>
               <Text style={styles.heroDate}>{formatTripDateRange(trip?.startDate, trip?.endDate, locale, t)}</Text>
               <View style={styles.heroMetaRow}>
                 <TripMetaChip icon="people-outline" label={t('trip.travelersCount', { count: members.length || 1 })} onPress={() => setPeopleSheetOpen(true)} />
@@ -1676,7 +1689,7 @@ const styles = StyleSheet.create({
   },
   heroPatternRow: {
     position: 'absolute',
-    top: 14,
+    top: 64,
     left: 18,
     right: 18,
     flexDirection: 'row',
@@ -1688,26 +1701,52 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: 'rgba(255,255,255,0.10)',
   },
+  // Top-left location pill — matches components/big-hero-card.tsx's
+  // bigHeroTopRow/bigHeroLocPill/bigHeroLocText exactly, so the preview
+  // card looks the same here as it does on Home.
+  heroTopRow: {
+    position: 'absolute',
+    top: 18,
+    left: 18,
+    right: 18,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  heroLocPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 100,
+    backgroundColor: 'rgba(0,0,0,0.42)',
+    maxWidth: '70%',
+  },
+  heroLocText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
   heroBody: {
     padding: 22,
   },
-  heroEyebrow: {
-    color: '#ffd0c0',
-    fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: -0.2,
-  },
   heroTitle: {
-    marginTop: 4,
     color: '#fff',
-    fontSize: 34,
-    fontWeight: '900',
-    letterSpacing: -1.4,
-    lineHeight: 38,
+    fontSize: 28,
+    fontWeight: '800',
+    letterSpacing: -0.6,
+    lineHeight: 32,
+    marginBottom: 6,
+    textShadowColor: 'rgba(0,0,0,0.45)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 6,
   },
   heroDate: {
-    marginTop: 6,
-    color: '#fbe4d8',
+    color: 'rgba(255,255,255,0.92)',
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
     fontSize: 14,
     fontWeight: '600',
     letterSpacing: -0.2,
