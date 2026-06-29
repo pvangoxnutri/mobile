@@ -8,6 +8,7 @@ import SideQuestForm, { type SideQuestFormHandle, type SideQuestFormValues } fro
 import { UnsavedChangesModal, useUnsavedChanges } from '@/components/unsaved-changes';
 import { useI18n } from '@/components/i18n-provider';
 import { apiJson } from '@/lib/api';
+import { getCached, setCached } from '@/lib/cache';
 import { extractLocationQuery, extractStoredMapPlace, stripLocationMarker } from '@/lib/sidequest-location';
 import { extractFlightRoute, stripFlightMarkers } from '@/lib/flight-route';
 import { extractBlur, stripBlurMarker, DEFAULT_BLUR } from '@/lib/activity-blur';
@@ -38,24 +39,34 @@ export default function NewSideQuestScreen() {
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      setLoading(true);
 
-      const requests = [apiJson<Quest>(`/api/trips/${id}`)];
+      const tripUrl = `/api/trips/${id}`;
+      const activityUrl = editId ? `/api/trips/${encodeURIComponent(id)}/activities/${encodeURIComponent(editId)}` : null;
 
-      if (editId) {
-        requests.push(
-          apiJson<SideQuestActivity>(
-            `/api/trips/${encodeURIComponent(id)}/activities/${encodeURIComponent(editId)}`
-          )
-        );
+      // Show cached data INSTANTLY — both the trip and (when editing) the
+      // activity itself were almost certainly just fetched by the screen
+      // the user came from, so there's no reason to blank out the form
+      // behind a spinner while we silently re-confirm in the background.
+      const cachedTrip = getCached<Quest>(tripUrl);
+      const cachedActivity = activityUrl ? getCached<SideQuestActivity>(activityUrl) : null;
+      if (cachedTrip) setTrip(cachedTrip);
+      if (cachedActivity) setActivity(cachedActivity);
+      setLoading(!cachedTrip || (Boolean(activityUrl) && !cachedActivity));
+
+      const requests = [apiJson<Quest>(tripUrl)];
+
+      if (activityUrl) {
+        requests.push(apiJson<SideQuestActivity>(activityUrl));
       }
 
       void Promise.all(requests)
         .then((results) => {
           if (!active) return;
           setTrip(results[0]);
-          if (editId && results[1]) {
+          setCached(tripUrl, results[0]);
+          if (activityUrl && results[1]) {
             setActivity(results[1]);
+            setCached(activityUrl, results[1]);
           }
           setError('');
         })
