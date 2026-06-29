@@ -70,6 +70,8 @@ export default function TripSettingsScreen() {
   const destinationRef = useRef<TextInput>(null);
   const inviteEmailRef = useRef<TextInput>(null);
   const [confirmingLeave, setConfirmingLeave] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deletingTrip, setDeletingTrip] = useState(false);
 
   // Guards re-seeding the editable form fields from a background refetch —
   // without this, a refresh arriving while the user is mid-edit (e.g. right
@@ -330,6 +332,24 @@ export default function TripSettingsScreen() {
     }
   }
 
+  async function handleDeleteTrip() {
+    setDeletingTrip(true);
+    try {
+      const response = await apiFetch(`/api/trips/${id}`, { method: 'DELETE' });
+      if (!response.ok) {
+        const text = await response.text();
+        setMessage({ type: 'error', text: text || 'Unable to delete this adventure.' });
+        return;
+      }
+      invalidateTripCache(id);
+      router.replace('/(tabs)');
+    } catch {
+      setMessage({ type: 'error', text: 'Unable to delete this adventure.' });
+    } finally {
+      setDeletingTrip(false);
+    }
+  }
+
   async function handleCopyInviteCode() {
     if (!trip?.inviteCode) return;
     await Clipboard.setStringAsync(trip.inviteCode);
@@ -528,6 +548,33 @@ export default function TripSettingsScreen() {
               <TouchableOpacity activeOpacity={0.92} style={[styles.primaryButton, { backgroundColor: PRIMARY_COLOR }, saving ? styles.primaryButtonDisabled : null]} disabled={saving} onPress={() => void handleSaveAndExit()}>
                 <Text style={styles.primaryButtonText}>{saving ? 'Saving...' : 'Save trip settings'}</Text>
               </TouchableOpacity>
+
+              <View style={styles.dangerCard}>
+                <Text style={styles.dangerTitle}>Delete adventure</Text>
+                <Text style={styles.dangerCopy}>
+                  This permanently deletes the trip, its SideQuests and chat for everyone. This cannot be undone.
+                </Text>
+                {confirmingDelete ? (
+                  <View style={styles.dangerConfirmRow}>
+                    <TouchableOpacity activeOpacity={0.88} style={styles.dangerCancelButton} onPress={() => setConfirmingDelete(false)}>
+                      <Text style={styles.dangerCancelText}>Cancel</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      activeOpacity={0.88}
+                      style={[styles.dangerConfirmButton, deletingTrip ? styles.dangerButtonDisabled : null]}
+                      disabled={deletingTrip}
+                      onPress={() => void handleDeleteTrip()}>
+                      <Ionicons name="trash-outline" size={16} color="#fff" />
+                      <Text style={styles.dangerConfirmText}>{deletingTrip ? 'Deleting...' : 'Yes, delete'}</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <TouchableOpacity activeOpacity={0.88} style={styles.dangerButton} onPress={() => setConfirmingDelete(true)}>
+                    <Ionicons name="trash-outline" size={18} color="#d53d18" />
+                    <Text style={styles.dangerButtonText}>Delete adventure</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             </>
 
           ) : (
