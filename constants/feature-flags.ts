@@ -11,4 +11,4 @@
 // this flag is a UI shell with mocked responses; there is no backend AI
 // connection yet (see components/gluno/gluno.constants.ts). Must stay
 // false in any build that ships to real users until that's ready.
-export const ENABLE_GLUNO_ASSISTANT = true;
+export const ENABLE_GLUNO_ASSISTANT = false;
