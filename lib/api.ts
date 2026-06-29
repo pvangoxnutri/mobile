@@ -110,7 +110,12 @@ export async function apiJson<T>(path: string, options: RequestInit = {}) {
   const response = await apiFetch(path, options);
 
   if (!response.ok) {
-    throw new Error((await response.text()) || 'Request failed.');
+    // Attach the HTTP status so callers can distinguish "not found" (e.g. a
+    // notification pointing at since-deleted content) from other failures
+    // without parsing the message text.
+    const apiError = new Error((await response.text()) || 'Request failed.') as Error & { status?: number };
+    apiError.status = response.status;
+    throw apiError;
   }
 
   return (await response.json()) as T;

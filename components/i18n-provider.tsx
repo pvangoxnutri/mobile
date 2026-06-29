@@ -70,6 +70,7 @@ const dictionaries: Record<AppLanguage, Record<string, string>> = {
     'auth.terms_of_service': 'Terms of Service',
 
     'common.or': 'OR',
+    'common.goBack': 'Go back',
     'common.cancel': 'Cancel',
     'common.done': 'Done',
     'common.save': 'Save',
@@ -583,6 +584,8 @@ const dictionaries: Record<AppLanguage, Record<string, string>> = {
     'activity.write_comment': 'Write a comment…',
     'activity.deleteConfirmTitle': 'Delete this SideQuest?',
     'activity.deleteConfirmMessage': 'This removes it for everyone on the trip. This cannot be undone.',
+    'activity.notFoundTitle': 'This SideQuest is gone',
+    'activity.notFoundBody': 'It looks like this was already deleted. The notification or link that brought you here is now out of date.',
 
     'travel.title': 'Travel Tracker',
     'travel.subtitle': "Where you've been, where you're going",
@@ -668,6 +671,7 @@ const dictionaries: Record<AppLanguage, Record<string, string>> = {
     'auth.terms_of_service': 'Användarvillkor',
 
     'common.or': 'ELLER',
+    'common.goBack': 'Gå tillbaka',
     'common.cancel': 'Avbryt',
     'common.done': 'Klar',
     'common.save': 'Spara',
@@ -1181,6 +1185,8 @@ const dictionaries: Record<AppLanguage, Record<string, string>> = {
     'activity.write_comment': 'Skriv en kommentar…',
     'activity.deleteConfirmTitle': 'Radera detta SideQuest?',
     'activity.deleteConfirmMessage': 'Detta tar bort det för alla på resan. Detta kan inte ångras.',
+    'activity.notFoundTitle': 'Detta SideQuest finns inte längre',
+    'activity.notFoundBody': 'Det verkar som att det redan har raderats. Notisen eller länken som tog dig hit är inte längre aktuell.',
 
     'travel.title': 'Resespårning',
     'travel.subtitle': 'Där du har varit, vart du ska',

@@ -46,6 +46,7 @@ export default function SideQuestDetailScreen() {
   const { id, sidequestId } = useLocalSearchParams<{ id: string; sidequestId: string }>();
   const [activity, setActivity] = useState<SideQuestActivity | null>(null);
   const [error, setError] = useState('');
+  const [notFound, setNotFound] = useState(false);
   const [loading, setLoading] = useState(true);
   const [comments, setComments] = useState<ActivityComment[]>([]);
   const [commentText, setCommentText] = useState('');
@@ -74,6 +75,7 @@ export default function SideQuestDetailScreen() {
       // doesn't flash a loading state — then refetch in the background.
       const cachedActivity = getCached<SideQuestActivity>(activityUrl);
       const cachedComments = getCached<ActivityComment[]>(commentsUrl);
+      setNotFound(false);
       if (cachedActivity) {
         setActivity(cachedActivity);
         setComments(cachedComments ?? []);
@@ -95,8 +97,17 @@ export default function SideQuestDetailScreen() {
           setCached(activityUrl, activityData);
           setCached(commentsUrl, commentData);
         })
-        .catch((err: Error) => {
+        .catch((err: Error & { status?: number }) => {
           if (!active) return;
+          // A 404 here usually means a stale notification/link pointing at an
+          // activity that's since been deleted (by its owner, or because the
+          // trip ended) — that's an expected, recoverable state, not an
+          // error worth alarming the user with.
+          if (err.status === 404) {
+            setNotFound(true);
+            setError('');
+            return;
+          }
           if (!cachedActivity) {
             setError(err.message || 'Unable to load this SideQuest.');
           }
@@ -266,6 +277,18 @@ export default function SideQuestDetailScreen() {
         {loading ? (
           <View style={styles.centerState}>
             <ActivityIndicator color={PRIMARY_COLOR} />
+          </View>
+        ) : notFound ? (
+          <View style={styles.centerState}>
+            <Ionicons name="compass-outline" size={40} color={COLORS.textMeta} />
+            <Text style={styles.notFoundTitle}>{t('activity.notFoundTitle')}</Text>
+            <Text style={styles.notFoundBody}>{t('activity.notFoundBody')}</Text>
+            <TouchableOpacity
+              style={styles.notFoundButton}
+              activeOpacity={0.85}
+              onPress={() => router.replace(`/trip/${encodeURIComponent(id)}`)}>
+              <Text style={styles.notFoundButtonText}>{t('common.goBack')}</Text>
+            </TouchableOpacity>
           </View>
         ) : error ? (
           <View style={styles.centerState}>
@@ -551,6 +574,32 @@ const styles = StyleSheet.create({
     color: '#d53d18',
     fontSize: 15,
     textAlign: 'center',
+  },
+  notFoundTitle: {
+    marginTop: 14,
+    fontSize: 17,
+    fontWeight: '800',
+    color: COLORS.textPrimary,
+    textAlign: 'center',
+  },
+  notFoundBody: {
+    marginTop: 6,
+    fontSize: 14,
+    lineHeight: 20,
+    color: COLORS.textMeta,
+    textAlign: 'center',
+  },
+  notFoundButton: {
+    marginTop: 20,
+    paddingHorizontal: 22,
+    paddingVertical: 12,
+    borderRadius: 999,
+    backgroundColor: COLORS.primary,
+  },
+  notFoundButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.white,
   },
   heroCardSize: {
     minHeight: 360,
