@@ -74,6 +74,11 @@ export default function HomeScreen() {
   const carouselRef = useRef<ScrollView>(null);
   const selectedTripIdRef = useRef<string | null>(null);
   const prevQuestIdsKeyRef = useRef<string | null>(null);
+  // Set right when the user joins/accepts into a trip so the carousel lands
+  // on THAT trip once it shows up in `quests`, instead of the keep-current-
+  // trip logic below re-selecting whatever was already featured (it can't
+  // know about a brand-new trip id on its own).
+  const pendingFeaturedTripIdRef = useRef<string | null>(null);
   const floatingBottom = Math.max(insets.bottom, 14) + 78;
   // The header floats ON TOP of the ScrollView now (position: absolute),
   // the same way the bottom tab bar floats on top of it from below — so
@@ -258,10 +263,10 @@ export default function HomeScreen() {
   useEffect(() => {
     if (prevQuestIdsKeyRef.current === questIdsKey) return;
     prevQuestIdsKeyRef.current = questIdsKey;
-    const keepIndex = selectedTripIdRef.current
-      ? sortedTrips.findIndex((entry) => entry.quest.id === selectedTripIdRef.current)
-      : -1;
+    const wantedTripId = pendingFeaturedTripIdRef.current ?? selectedTripIdRef.current;
+    const keepIndex = wantedTripId ? sortedTrips.findIndex((entry) => entry.quest.id === wantedTripId) : -1;
     const nextIndex = keepIndex >= 0 ? keepIndex : 0;
+    pendingFeaturedTripIdRef.current = null;
     setSelectedTripIndex(nextIndex);
     setFeaturedEventIndex(0);
     carouselRef.current?.scrollTo({ x: nextIndex * (upcomingCardWidth + 14), animated: false });
@@ -316,6 +321,7 @@ export default function HomeScreen() {
       // hit the network instead of showing pre-accept state.
       invalidateCache('/api/trips/invites/me');
       invalidateTripCache(invite.tripId);
+      pendingFeaturedTripIdRef.current = invite.tripId;
       loadQuests();
       loadInvites();
     } catch (err) {
@@ -357,9 +363,11 @@ export default function HomeScreen() {
         setJoinError(text || 'Could not join adventure.');
         return;
       }
+      const joined = (await res.json()) as { tripId?: string };
       setJoinModalOpen(false);
       setJoinCode('');
       invalidateCache('/api/trips');
+      if (joined.tripId) pendingFeaturedTripIdRef.current = joined.tripId;
       loadQuests();
     } catch {
       setJoinError('Something went wrong. Try again.');
