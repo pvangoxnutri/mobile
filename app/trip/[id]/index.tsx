@@ -137,6 +137,14 @@ export default function TripDetailsScreen() {
   // drives whether an incoming message should auto-scroll into view or
   // leave them undisturbed while reading older history.
   const chatNearBottomRef = useRef(true);
+  // When sending/retrying from far up in the history, scrollToEnd has to
+  // jump over a bunch of virtualized (unmeasured) cells. The onScroll
+  // events fired while FlatList measures its way to the real bottom can
+  // read as "still far from bottom" mid-jump, which would otherwise flip
+  // chatNearBottomRef back to false and cancel the correction chain in
+  // onContentSizeChange. While now < this timestamp, handleChatScroll
+  // ignores those transient "far" readings.
+  const chatForceBottomUntilRef = useRef(0);
   const [spotifyModalOpen, setSpotifyModalOpen] = useState(false);
   const [spotifyUrlDraft, setSpotifyUrlDraft] = useState('');
   const [spotifySaving, setSpotifySaving] = useState(false);
@@ -342,7 +350,9 @@ export default function TripDetailsScreen() {
   function handleChatScroll(e: NativeSyntheticEvent<NativeScrollEvent>) {
     const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
     const distanceFromBottom = contentSize.height - contentOffset.y - layoutMeasurement.height;
-    chatNearBottomRef.current = distanceFromBottom < CHAT_NEAR_BOTTOM_THRESHOLD;
+    const nearBottom = distanceFromBottom < CHAT_NEAR_BOTTOM_THRESHOLD;
+    if (!nearBottom && Date.now() < chatForceBottomUntilRef.current) return;
+    chatNearBottomRef.current = nearBottom;
   }
 
   function showChatError(message: string) {
@@ -571,6 +581,7 @@ export default function TripDetailsScreen() {
     const localImageUri = chatPendingImage;
 
     chatNearBottomRef.current = true; // sending always means "take me to the bottom"
+    chatForceBottomUntilRef.current = Date.now() + 700;
     setChatMessages((prev) => [
       ...prev,
       {
@@ -586,6 +597,7 @@ export default function TripDetailsScreen() {
     ]);
     setChatDraft('');
     setChatPendingImage(null);
+    setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: false }), 700);
 
     await performChatSend(tempId, trimmed, localImageUri);
   }
@@ -593,7 +605,9 @@ export default function TripDetailsScreen() {
   async function handleRetryChat(message: ChatMsg) {
     if (chatSending || message.status !== 'failed') return;
     chatNearBottomRef.current = true;
+    chatForceBottomUntilRef.current = Date.now() + 700;
     setChatMessages((prev) => prev.map((m) => (m.id === message.id ? { ...m, status: 'pending' as const } : m)));
+    setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: false }), 700);
     await performChatSend(message.id, message.text, message.localImageUri ?? null);
   }
 
