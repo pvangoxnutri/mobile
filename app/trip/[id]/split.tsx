@@ -550,13 +550,18 @@ export default function CostSplitScreen() {
                         {t('trip.split.splitBetween', { count: expense.participants.length, mode: splitModeLabel(expense.splitMode, t) })}
                       </Text>
                     </View>
-                    <TouchableOpacity
-                      style={styles.deleteButton}
-                      activeOpacity={0.8}
-                      onPress={() => { setActionError(''); setDeletingExpenseId(expense.id); }}>
-                      <Ionicons name="trash-outline" size={16} color="#d95f6a" />
-                      <Text style={styles.deleteButtonText}>{t('common.remove')}</Text>
-                    </TouchableOpacity>
+                    {/* Only the person who logged the expense, or a trip
+                        owner, may remove it — mirrors the backend check in
+                        ExpensesController.DeleteExpense. */}
+                    {expense.createdByUserId === user?.id || members.find((m) => m.id === user?.id)?.isOwner ? (
+                      <TouchableOpacity
+                        style={styles.deleteButton}
+                        activeOpacity={0.8}
+                        onPress={() => { setActionError(''); setDeletingExpenseId(expense.id); }}>
+                        <Ionicons name="trash-outline" size={16} color="#d95f6a" />
+                        <Text style={styles.deleteButtonText}>{t('common.remove')}</Text>
+                      </TouchableOpacity>
+                    ) : null}
                   </View>
                 ))
               )}

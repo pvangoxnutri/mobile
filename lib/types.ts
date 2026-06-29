@@ -106,6 +106,7 @@ export interface Expense {
   currency: string;
   receiptUrl?: string | null;
   createdAt: string;
+  createdByUserId: string;
   createdByName: string;
   payers: { userId: string; userName: string; amount: number }[];
   participants: { userId: string; userName: string; amount: number }[];
