@@ -1,5 +1,6 @@
 ﻿import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -22,6 +23,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -129,6 +131,8 @@ function SideQuestFormInner({
 }: Props, ref: Ref<SideQuestFormHandle>) {
   const insets = useSafeAreaInsets();
   const { t, language } = useI18n();
+  const { width: screenWidth } = useWindowDimensions();
+  const containerWidth = screenWidth - 44; // content paddingHorizontal: 22 × 2
   const locale = language === 'sv' ? 'sv-SE' : 'en-US';
   const [title, setTitle] = useState(initialValues?.title ?? '');
   const [description, setDescription] = useState(initialValues?.description ?? '');
@@ -151,6 +155,9 @@ function SideQuestFormInner({
   const [teaser, setTeaser] = useState(initialValues?.teaser ?? '');
   const [teaserOffsetMinutes, setTeaserOffsetMinutes] = useState<number | null>(initialValues?.teaserOffsetMinutes ?? 120);
   const [imageUrl, setImageUrl] = useState<string | null>(initialValues?.imageUrl ?? initialImageUrl ?? null);
+  const [imageSize, setImageSize] = useState<{ width: number; height: number } | null>(null);
+  const [imagePanOffset, setImagePanOffset] = useState({ x: 0, y: 0 });
+  const [imageDragging, setImageDragging] = useState(false);
   const [blurAmount, setBlurAmount] = useState<number>(initialValues?.blurAmount ?? DEFAULT_BLUR);
   // SideQuest mode is a UI-level concept layered on top of the existing
   // category + visibility fields — no new backend field. An activity is
@@ -363,7 +370,18 @@ function SideQuestFormInner({
     });
 
     if (!result.canceled && result.assets[0]) {
-      setImageUrl(result.assets[0].uri);
+      const asset = result.assets[0];
+      setImageUrl(asset.uri);
+      const iw = asset.width, ih = asset.height;
+      setImageSize({ width: iw, height: ih });
+      // Compute the centred initial pan offset so submit-without-pan
+      // still crops correctly (cover-scale the image, centre in frame).
+      const coverScale = Math.max(containerWidth / iw, POSITIONER_PREVIEW_H / ih);
+      const sw = iw * coverScale, sh = ih * coverScale;
+      setImagePanOffset({
+        x: Math.min(0, containerWidth - sw) / 2,
+        y: Math.min(0, POSITIONER_PREVIEW_H - sh) / 2,
+      });
       setMessage(null);
     }
   }
@@ -469,7 +487,10 @@ function SideQuestFormInner({
     setMessage(null);
 
     try {
-      const uploadedImageUrl = await uploadImageIfNeeded(imageUrl, 'sidequest');
+      const localUri = imageUrl && !imageUrl.startsWith('http') && imageSize
+        ? await cropToPreview(imageUrl, imageSize, imagePanOffset, containerWidth)
+        : null;
+      const uploadedImageUrl = await uploadImageIfNeeded(localUri ?? imageUrl, 'sidequest');
       const revealAt = visibility === 'hidden' ? combineDateAndTime(revealDate, revealTime) : null;
 
       // Compose description: location markers first, then flight markers
@@ -652,44 +673,58 @@ function SideQuestFormInner({
       style={styles.scroll}
       contentContainerStyle={[styles.content, { paddingBottom: bottomPadding }]}
       showsVerticalScrollIndicator={false}
-      scrollEnabled={!slideToActivateDragging}
+      scrollEnabled={!slideToActivateDragging && !imageDragging}
       {...scrollViewProps}>
-      <TouchableOpacity activeOpacity={0.9} style={styles.coverCard} onPress={() => void handlePickImage()}>
-        {imageUrl ? <Image source={{ uri: imageUrl }} style={styles.coverImage} /> : null}
-        {!imageUrl ? <View style={styles.coverPlaceholderLayer} /> : null}
-        {sideQuestMode && visibility === 'public' ? (
-          // Subtle identity marker for a visible SideQuest — same compass
-          // glyph getCategorySymbol('sidequest') already renders everywhere
-          // else, not a new badge design.
-          <View style={styles.sideQuestCoverBadge}>
-            <Ionicons name="compass" size={13} color="#fff" />
-            <Text style={styles.coverBadgeText}>SideQuest</Text>
-          </View>
-        ) : null}
-        {!imageUrl ? (
-          <View style={styles.coverContent}>
-            <View style={styles.coverIconCircle}>
-              <Ionicons name="image-outline" size={30} color="#fff" />
+      {imageUrl && imageSize ? (
+        // Local image: show pan-to-position preview so the user can frame
+        // exactly what part will be visible in the card before uploading.
+        <ImagePositioner
+          uri={imageUrl}
+          imageSize={imageSize}
+          containerWidth={containerWidth}
+          initialOffset={imagePanOffset}
+          onOffsetChange={setImagePanOffset}
+          onDragStateChange={setImageDragging}
+          onPress={() => void handlePickImage()}
+          onRemove={() => { setImageUrl(null); setImageSize(null); }}
+          sideQuestBadge={sideQuestMode && visibility === 'public'}
+          t={t}
+        />
+      ) : (
+        <TouchableOpacity activeOpacity={0.9} style={styles.coverCard} onPress={() => void handlePickImage()}>
+          {imageUrl ? <Image source={{ uri: imageUrl }} style={styles.coverImage} /> : null}
+          {!imageUrl ? <View style={styles.coverPlaceholderLayer} /> : null}
+          {sideQuestMode && visibility === 'public' ? (
+            <View style={styles.sideQuestCoverBadge}>
+              <Ionicons name="compass" size={13} color="#fff" />
+              <Text style={styles.coverBadgeText}>SideQuest</Text>
             </View>
-            <Text style={styles.coverTitle}>{t('sidequest.form.addCoverTitle')}</Text>
-            <Text style={styles.coverCopy}>{t('sidequest.form.addCoverCopy')}</Text>
-          </View>
-        ) : (
-          <View style={styles.coverBadgeRow}>
-            <View style={styles.coverBadge}>
-              <Ionicons name="camera-outline" size={14} color="#fff" />
-              <Text style={styles.coverBadgeText}>{t('sidequest.form.changeImage')}</Text>
+          ) : null}
+          {!imageUrl ? (
+            <View style={styles.coverContent}>
+              <View style={styles.coverIconCircle}>
+                <Ionicons name="image-outline" size={30} color="#fff" />
+              </View>
+              <Text style={styles.coverTitle}>{t('sidequest.form.addCoverTitle')}</Text>
+              <Text style={styles.coverCopy}>{t('sidequest.form.addCoverCopy')}</Text>
             </View>
-            <TouchableOpacity
-              activeOpacity={0.88}
-              style={[styles.coverBadge, styles.coverBadgeGhost]}
-              onPress={() => setImageUrl(null)}>
-              <Ionicons name="trash-outline" size={14} color="#fff" />
-              <Text style={styles.coverBadgeText}>{t('common.remove')}</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-      </TouchableOpacity>
+          ) : (
+            <View style={styles.coverBadgeRow}>
+              <View style={styles.coverBadge}>
+                <Ionicons name="camera-outline" size={14} color="#fff" />
+                <Text style={styles.coverBadgeText}>{t('sidequest.form.changeImage')}</Text>
+              </View>
+              <TouchableOpacity
+                activeOpacity={0.88}
+                style={[styles.coverBadge, styles.coverBadgeGhost]}
+                onPress={() => setImageUrl(null)}>
+                <Ionicons name="trash-outline" size={14} color="#fff" />
+                <Text style={styles.coverBadgeText}>{t('common.remove')}</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </TouchableOpacity>
+      )}
 
       <View style={styles.block}>
         <Text style={styles.label}>{t('sidequest.form.titleLabel')} <Text style={styles.labelRequired}>*</Text></Text>
@@ -1756,6 +1791,186 @@ function buildPlaceDisplay(place: StoredMapPlace) {
 
 const SideQuestForm = forwardRef<SideQuestFormHandle, Props>(SideQuestFormInner);
 export default SideQuestForm;
+
+// ── Image pan/crop UI ─────────────────────────────────────────────────────
+// Height of the preview frame (matches coverCard height).
+const POSITIONER_PREVIEW_H = 240;
+const POSITIONER_PREVIEW_RADIUS = 32;
+// Max vertical context strips shown above/below the preview frame.
+const POSITIONER_EXTRA_MAX = 48;
+
+async function cropToPreview(
+  uri: string,
+  imgSize: { width: number; height: number },
+  offset: { x: number; y: number },
+  containerWidth: number,
+): Promise<string> {
+  const coverScale = Math.max(containerWidth / imgSize.width, POSITIONER_PREVIEW_H / imgSize.height);
+  const result = await ImageManipulator.manipulateAsync(
+    uri,
+    [{
+      crop: {
+        originX: Math.round(-offset.x / coverScale),
+        originY: Math.round(-offset.y / coverScale),
+        width: Math.round(containerWidth / coverScale),
+        height: Math.round(POSITIONER_PREVIEW_H / coverScale),
+      },
+    }],
+    { compress: 0.92, format: ImageManipulator.SaveFormat.JPEG },
+  );
+  return result.uri;
+}
+
+function ImagePositioner({
+  uri,
+  imageSize,
+  containerWidth,
+  initialOffset,
+  onOffsetChange,
+  onDragStateChange,
+  onPress,
+  onRemove,
+  sideQuestBadge,
+  t,
+}: {
+  uri: string;
+  imageSize: { width: number; height: number };
+  containerWidth: number;
+  initialOffset: { x: number; y: number };
+  onOffsetChange: (offset: { x: number; y: number }) => void;
+  onDragStateChange: (dragging: boolean) => void;
+  onPress: () => void;
+  onRemove: () => void;
+  sideQuestBadge?: boolean;
+  t: (key: string) => string;
+}) {
+  const coverScale = Math.max(containerWidth / imageSize.width, POSITIONER_PREVIEW_H / imageSize.height);
+  const scaledW = imageSize.width * coverScale;
+  const scaledH = imageSize.height * coverScale;
+
+  const minX = Math.min(0, containerWidth - scaledW);
+  const minY = Math.min(0, POSITIONER_PREVIEW_H - scaledH);
+
+  function clamp(v: number, lo: number, hi: number) { return Math.max(lo, Math.min(hi, v)); }
+
+  const offsetRef = useRef(initialOffset);
+  const [offset, setOffset] = useState(initialOffset);
+  const baseRef = useRef(initialOffset);
+
+  // How much visual context to show above/below the preview frame.
+  const extra = Math.min(POSITIONER_EXTRA_MAX, Math.max(0, (scaledH - POSITIONER_PREVIEW_H) / 2));
+  const containerH = POSITIONER_PREVIEW_H + extra * 2;
+  const frameTop = extra;
+
+  const responder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderGrant: () => {
+        baseRef.current = { ...offsetRef.current };
+        onDragStateChange(true);
+      },
+      onPanResponderMove: (_e, g) => {
+        const next = {
+          x: clamp(baseRef.current.x + g.dx, minX, 0),
+          y: clamp(baseRef.current.y + g.dy, minY, 0),
+        };
+        offsetRef.current = next;
+        setOffset(next);
+      },
+      onPanResponderRelease: () => { onDragStateChange(false); onOffsetChange(offsetRef.current); },
+      onPanResponderTerminate: () => { onDragStateChange(false); onOffsetChange(offsetRef.current); },
+    }),
+  ).current;
+
+  // Image position inside the CONTAINER (accounts for the extra strip above the frame).
+  const imgTop = offset.y + frameTop;
+  const imgLeft = offset.x;
+
+  return (
+    <View style={[posStyles.container, { height: containerH }]}>
+      {/* Dim copy: full image at low opacity showing context outside the frame */}
+      <Image
+        source={{ uri }}
+        style={{ position: 'absolute', top: imgTop, left: imgLeft, width: scaledW, height: scaledH, opacity: 0.38 }}
+        resizeMode="stretch"
+      />
+      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.22)' }]} />
+
+      {/* Preview frame: clips to the card shape at full opacity */}
+      <View style={[posStyles.frame, { top: frameTop }]}>
+        <Image
+          source={{ uri }}
+          style={{ position: 'absolute', top: offset.y, left: offset.x, width: scaledW, height: scaledH }}
+          resizeMode="stretch"
+        />
+        <View style={posStyles.previewLabel}>
+          <Text style={posStyles.previewLabelText}>PREVIEW</Text>
+        </View>
+        {sideQuestBadge ? (
+          <View style={styles.sideQuestCoverBadge}>
+            <Ionicons name="compass" size={13} color="#fff" />
+            <Text style={styles.coverBadgeText}>SideQuest</Text>
+          </View>
+        ) : null}
+      </View>
+
+      {/* Change / Remove badges */}
+      <View style={[styles.coverBadgeRow, posStyles.badges, { bottom: frameTop + 12 }]}>
+        <TouchableOpacity activeOpacity={0.88} style={styles.coverBadge} onPress={onPress}>
+          <Ionicons name="camera-outline" size={14} color="#fff" />
+          <Text style={styles.coverBadgeText}>{t('sidequest.form.changeImage')}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity activeOpacity={0.88} style={[styles.coverBadge, styles.coverBadgeGhost]} onPress={onRemove}>
+          <Ionicons name="trash-outline" size={14} color="#fff" />
+          <Text style={styles.coverBadgeText}>{t('common.remove')}</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Full-area gesture capture on top */}
+      <View style={StyleSheet.absoluteFillObject} {...responder.panHandlers} />
+    </View>
+  );
+}
+
+const posStyles = StyleSheet.create({
+  container: {
+    borderRadius: POSITIONER_PREVIEW_RADIUS,
+    overflow: 'hidden',
+    backgroundColor: '#0a0c14',
+  },
+  frame: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: POSITIONER_PREVIEW_H,
+    borderRadius: POSITIONER_PREVIEW_RADIUS,
+    overflow: 'hidden',
+  },
+  previewLabel: {
+    position: 'absolute',
+    top: 12,
+    left: 14,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.32)',
+  },
+  previewLabelText: {
+    color: '#fff',
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 1.4,
+  },
+  badges: {
+    position: 'absolute',
+    left: 12,
+    right: 12,
+  },
+});
 
 const styles = StyleSheet.create({
   scroll: {
