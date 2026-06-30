@@ -58,6 +58,7 @@ export function ImagePositionerModal({
   onConfirm,
   onCancel,
   confirmLabel = 'Confirm',
+  hintLabel = 'Drag to position · Pinch to zoom',
 }: {
   visible: boolean;
   uri: string;
@@ -69,6 +70,7 @@ export function ImagePositionerModal({
   onConfirm: (offset: { x: number; y: number }, scale: number) => void;
   onCancel: () => void;
   confirmLabel?: string;
+  hintLabel?: string;
 }) {
   const frameW = screenWidth;
   const frameH = Math.round(screenWidth / cardAspectRatio);
@@ -171,7 +173,7 @@ export function ImagePositionerModal({
 
         <View style={[s.hintRow, { top: frameTop - 38 }]}>
           <Ionicons name="move-outline" size={14} color="rgba(255,255,255,0.7)" />
-          <Text style={s.hintText}>Drag to position · Pinch to zoom</Text>
+          <Text style={s.hintText}>{hintLabel}</Text>
         </View>
 
         <View style={[s.frame, { top: frameTop, height: frameH }]}>

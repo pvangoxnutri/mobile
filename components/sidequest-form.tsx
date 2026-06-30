@@ -1195,6 +1195,7 @@ function SideQuestFormInner({
         onConfirm={(offset, scale) => { setImagePanOffset(offset); setImagePanScale(scale); setPositioningImage(false); }}
         onCancel={() => { setImageUrl(null); setImageSize(null); setPositioningImage(false); }}
         confirmLabel={t('common.confirm') || 'Confirm'}
+        hintLabel={t('common.dragToPinch') || 'Drag to position · Pinch to zoom'}
       />
     ) : null}
 

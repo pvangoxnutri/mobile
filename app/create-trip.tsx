@@ -371,6 +371,7 @@ export default function CreateTripScreen() {
           insetTop={insets.top}
           insetBottom={insets.bottom}
           confirmLabel={t('common.confirm') || 'Confirm'}
+          hintLabel={t('common.dragToPinch') || 'Drag to position · Pinch to zoom'}
           onConfirm={(offset, scale) => {
             setCoverPanOffset(offset);
             setCoverPanScale(scale);
