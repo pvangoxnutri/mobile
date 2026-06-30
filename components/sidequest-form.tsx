@@ -157,6 +157,7 @@ function SideQuestFormInner({
   const [imageUrl, setImageUrl] = useState<string | null>(initialValues?.imageUrl ?? initialImageUrl ?? null);
   const [imageSize, setImageSize] = useState<{ width: number; height: number } | null>(null);
   const [imagePanOffset, setImagePanOffset] = useState({ x: 0, y: 0 });
+  const [imagePanScale, setImagePanScale] = useState(1);
   const [positioningImage, setPositioningImage] = useState(false);
   const [blurAmount, setBlurAmount] = useState<number>(initialValues?.blurAmount ?? DEFAULT_BLUR);
   // SideQuest mode is a UI-level concept layered on top of the existing
@@ -493,7 +494,7 @@ function SideQuestFormInner({
       const frameW = screenWidth;
       const frameH = Math.round(screenWidth * POSITIONER_PREVIEW_H / (screenWidth - POSITIONER_FORM_W_PADDING));
       const localUri = imageUrl && !imageUrl.startsWith('http') && imageSize
-        ? await cropToPreview(imageUrl, imageSize, imagePanOffset, frameW, frameH)
+        ? await cropToPreview(imageUrl, imageSize, imagePanOffset, imagePanScale, frameW, frameH)
         : null;
       const uploadedImageUrl = await uploadImageIfNeeded(localUri ?? imageUrl, 'sidequest');
       const revealAt = visibility === 'hidden' ? combineDateAndTime(revealDate, revealTime) : null;
@@ -1190,7 +1191,7 @@ function SideQuestFormInner({
         screenWidth={screenWidth}
         insetTop={insets.top}
         insetBottom={insets.bottom}
-        onConfirm={(offset) => { setImagePanOffset(offset); setPositioningImage(false); }}
+        onConfirm={(offset, scale) => { setImagePanOffset(offset); setImagePanScale(scale); setPositioningImage(false); }}
         onCancel={() => { setImageUrl(null); setImageSize(null); setPositioningImage(false); }}
         t={t}
       />
@@ -1796,18 +1797,18 @@ const SideQuestForm = forwardRef<SideQuestFormHandle, Props>(SideQuestFormInner)
 export default SideQuestForm;
 
 // ── Image pan/crop fullscreen modal ──────────────────────────────────────
-// Card aspect ratio used for both the preview frame and the final crop.
 const POSITIONER_PREVIEW_H = 240;
-const POSITIONER_FORM_W_PADDING = 44; // content paddingHorizontal 22 × 2
+const POSITIONER_FORM_W_PADDING = 44;
 
 async function cropToPreview(
   uri: string,
   imgSize: { width: number; height: number },
   offset: { x: number; y: number },
+  scale: number,
   frameW: number,
   frameH: number,
 ): Promise<string> {
-  const coverScale = Math.max(frameW / imgSize.width, frameH / imgSize.height);
+  const coverScale = Math.max(frameW / imgSize.width, frameH / imgSize.height) * scale;
   const result = await ImageManipulator.manipulateAsync(
     uri,
     [{
@@ -1840,35 +1841,45 @@ function ImagePositionerModal({
   screenWidth: number;
   insetTop: number;
   insetBottom: number;
-  onConfirm: (offset: { x: number; y: number }) => void;
+  onConfirm: (offset: { x: number; y: number }, scale: number) => void;
   onCancel: () => void;
   t: (key: string) => string;
 }) {
-  // Preview frame fills full screen width, preserving the card's aspect ratio.
   const frameW = screenWidth;
   const frameH = Math.round(screenWidth * POSITIONER_PREVIEW_H / (screenWidth - POSITIONER_FORM_W_PADDING));
-  const frameRadius = 0; // edge-to-edge in fullscreen feels better without radius
 
-  const coverScale = Math.max(frameW / imageSize.width, frameH / imageSize.height);
-  const scaledW = imageSize.width * coverScale;
-  const scaledH = imageSize.height * coverScale;
-  const minX = Math.min(0, frameW - scaledW);
-  const minY = Math.min(0, frameH - scaledH);
+  const baseCoverScale = Math.max(frameW / imageSize.width, frameH / imageSize.height);
 
   function clamp(v: number, lo: number, hi: number) { return Math.max(lo, Math.min(hi, v)); }
 
-  const init = { x: minX / 2, y: minY / 2 };
+  function getBounds(s: number) {
+    const dw = imageSize.width * baseCoverScale * s;
+    const dh = imageSize.height * baseCoverScale * s;
+    return { minX: Math.min(0, frameW - dw), minY: Math.min(0, frameH - dh) };
+  }
+
+  const scaleRef = useRef(1);
+  const [scale, setScale] = useState(1);
+  const { minX: initMinX, minY: initMinY } = getBounds(1);
+  const init = { x: initMinX / 2, y: initMinY / 2 };
   const offsetRef = useRef(init);
   const [offset, setOffset] = useState(init);
   const baseRef = useRef(init);
+  // Pinch tracking: distance + scale at the moment the second finger touched down
+  const pinchRef = useRef<{ dist: number; scale: number } | null>(null);
+  const prevTouchCountRef = useRef(0);
 
-  // Reset when modal reopens for a new image.
   useEffect(() => {
     if (visible) {
+      scaleRef.current = 1;
+      setScale(1);
+      const { minX, minY } = getBounds(1);
       const next = { x: minX / 2, y: minY / 2 };
       offsetRef.current = next;
       baseRef.current = next;
       setOffset(next);
+      pinchRef.current = null;
+      prevTouchCountRef.current = 0;
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
@@ -1878,51 +1889,85 @@ function ImagePositionerModal({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
       onPanResponderTerminationRequest: () => false,
-      onPanResponderGrant: () => { baseRef.current = { ...offsetRef.current }; },
-      onPanResponderMove: (_e, g) => {
-        const next = { x: clamp(baseRef.current.x + g.dx, minX, 0), y: clamp(baseRef.current.y + g.dy, minY, 0) };
-        offsetRef.current = next;
-        setOffset(next);
+      onPanResponderGrant: (evt) => {
+        baseRef.current = { ...offsetRef.current };
+        pinchRef.current = null;
+        prevTouchCountRef.current = evt.nativeEvent.touches.length;
       },
-      onPanResponderRelease: () => {},
-      onPanResponderTerminate: () => {},
+      onPanResponderMove: (evt, g) => {
+        const touches = evt.nativeEvent.touches;
+        const tc = touches.length;
+
+        // When touch count changes (finger added/removed), reset both bases
+        // so there's no jump when switching between pan and pinch.
+        if (tc !== prevTouchCountRef.current) {
+          prevTouchCountRef.current = tc;
+          baseRef.current = { ...offsetRef.current };
+          pinchRef.current = null;
+        }
+
+        if (tc >= 2) {
+          // ── Pinch zoom ──
+          const dx = touches[0].pageX - touches[1].pageX;
+          const dy = touches[0].pageY - touches[1].pageY;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (!pinchRef.current) {
+            pinchRef.current = { dist, scale: scaleRef.current };
+          }
+          const newScale = clamp(pinchRef.current.scale * dist / pinchRef.current.dist, 0.8, 5);
+          scaleRef.current = newScale;
+          setScale(newScale);
+          // Reclamp offset so the image still covers the frame after scale change
+          const { minX, minY } = getBounds(newScale);
+          const cx = clamp(offsetRef.current.x, minX, 0);
+          const cy = clamp(offsetRef.current.y, minY, 0);
+          offsetRef.current = { x: cx, y: cy };
+          setOffset({ x: cx, y: cy });
+        } else {
+          // ── Single-finger pan ──
+          const { minX, minY } = getBounds(scaleRef.current);
+          const next = {
+            x: clamp(baseRef.current.x + g.dx, minX, 0),
+            y: clamp(baseRef.current.y + g.dy, minY, 0),
+          };
+          offsetRef.current = next;
+          setOffset(next);
+        }
+      },
+      onPanResponderRelease: () => { pinchRef.current = null; },
+      onPanResponderTerminate: () => { pinchRef.current = null; },
     }),
   ).current;
 
-  // Vertical center of the frame within the screen.
-  const screenH_approx = screenWidth * 2.16; // rough 9:19.5 ratio — good enough for positioning
+  const screenH_approx = screenWidth * 2.16;
   const frameTop = Math.max(insetTop + 60, (screenH_approx - frameH) / 2 - 40);
+
+  const displayW = imageSize.width * baseCoverScale * scale;
+  const displayH = imageSize.height * baseCoverScale * scale;
 
   return (
     <Modal visible={visible} transparent={false} animationType="fade" onRequestClose={onCancel} statusBarTranslucent>
       <View style={posStyles.screen}>
-        {/* Full background: dim image fills screen */}
-        <Image
-          source={{ uri }}
-          style={[StyleSheet.absoluteFillObject, { opacity: 0.35 }]}
-          resizeMode="cover"
-        />
-        <View style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.55)' }]} />
+        {/* Dim background */}
+        <Image source={{ uri }} style={[StyleSheet.absoluteFillObject, { opacity: 0.3 }]} resizeMode="cover" />
+        <View style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.6)' }]} />
 
-        {/* Cancel / top bar */}
-        <TouchableOpacity
-          style={[posStyles.cancelBtn, { top: insetTop + 12 }]}
-          activeOpacity={0.8}
-          onPress={onCancel}>
+        {/* Cancel button — zIndex 20 so it's always tappable */}
+        <TouchableOpacity style={[posStyles.cancelBtn, { top: insetTop + 12 }]} activeOpacity={0.8} onPress={onCancel}>
           <Ionicons name="close" size={22} color="#fff" />
         </TouchableOpacity>
 
-        {/* Hint text above frame */}
+        {/* Hint */}
         <View style={[posStyles.hintRow, { top: frameTop - 38 }]}>
           <Ionicons name="move-outline" size={14} color="rgba(255,255,255,0.7)" />
-          <Text style={posStyles.hintText}>Drag to position</Text>
+          <Text style={posStyles.hintText}>Drag to position · Pinch to zoom</Text>
         </View>
 
-        {/* Preview frame */}
-        <View style={[posStyles.frame, { top: frameTop, height: frameH, borderRadius: frameRadius }]}>
+        {/* Preview frame — clips to show the positioned image */}
+        <View style={[posStyles.frame, { top: frameTop, height: frameH }]}>
           <Image
             source={{ uri }}
-            style={{ position: 'absolute', top: offset.y, left: offset.x, width: scaledW, height: scaledH }}
+            style={{ position: 'absolute', top: offset.y, left: offset.x, width: displayW, height: displayH }}
             resizeMode="stretch"
           />
           <View style={posStyles.previewLabel}>
@@ -1930,20 +1975,18 @@ function ImagePositionerModal({
           </View>
         </View>
 
-        {/* Confirm button */}
+        {/* Confirm button — zIndex 20 */}
         <TouchableOpacity
           style={[posStyles.confirmBtn, { bottom: insetBottom + 32 }]}
           activeOpacity={0.88}
-          onPress={() => onConfirm(offsetRef.current)}>
+          onPress={() => onConfirm(offsetRef.current, scaleRef.current)}>
           <Text style={posStyles.confirmBtnText}>{t('common.confirm') || 'Confirm'}</Text>
         </TouchableOpacity>
 
-        {/* Gesture capture overlay — behind confirm/cancel but above the image */}
-        <View
-          style={[StyleSheet.absoluteFillObject, { zIndex: 1 }]}
-          {...responder.panHandlers}
-          pointerEvents="box-only"
-        />
+        {/* Gesture overlay — zIndex 5: above the frame (2) so touches anywhere
+            on screen (including inside the preview frame) reach the pan responder,
+            but below cancel/confirm (20) so those buttons still work. */}
+        <View style={[StyleSheet.absoluteFillObject, posStyles.gestureOverlay]} {...responder.panHandlers} />
       </View>
     </Modal>
   );
@@ -1963,7 +2006,7 @@ const posStyles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.14)',
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 10,
+    zIndex: 20,
   },
   hintRow: {
     position: 'absolute',
@@ -1973,7 +2016,7 @@ const posStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    zIndex: 10,
+    zIndex: 20,
   },
   hintText: {
     color: 'rgba(255,255,255,0.7)',
@@ -2006,6 +2049,9 @@ const posStyles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 1.4,
   },
+  gestureOverlay: {
+    zIndex: 5,
+  },
   confirmBtn: {
     position: 'absolute',
     left: 24,
@@ -2015,7 +2061,7 @@ const posStyles = StyleSheet.create({
     backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 10,
+    zIndex: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.25,
