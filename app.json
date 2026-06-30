@@ -15,7 +15,8 @@
       "enabled": false
     },
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
+      "requiresFullScreen": true,
       "bundleIdentifier": "app.sidequesttravel.mobile",
       "buildNumber": "1",
       "associatedDomains": [
