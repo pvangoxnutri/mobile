@@ -58,6 +58,12 @@ export function getInitials(name?: string | null) {
   return parts.map((part) => part[0]?.toUpperCase()).join('') || 'SQ';
 }
 
+function formatCardDateRange(startDate?: string, endDate?: string): string | null {
+  if (!startDate || !endDate) return null;
+  const fmt = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' });
+  return `${fmt.format(new Date(`${startDate}T12:00:00`))} – ${fmt.format(new Date(`${endDate}T12:00:00`))}`;
+}
+
 // ── Component ───────────────────────────────────────────────────────────────
 
 export type BigHeroCardProps = {
@@ -157,6 +163,11 @@ export function BigHeroCard({
         <Text style={styles.bigHeroTitle} numberOfLines={2}>
           {quest.title?.trim() || t('home.defaultTripName')}
         </Text>
+        {formatCardDateRange(quest.startDate, quest.endDate) ? (
+          <Text style={styles.bigHeroDateLine} numberOfLines={1}>
+            {formatCardDateRange(quest.startDate, quest.endDate)}
+          </Text>
+        ) : null}
 
         <View style={styles.bigHeroFooter}>
           {visibleAvatars.length > 0 ? (
@@ -334,6 +345,17 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0,0,0,0.45)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 6,
+  },
+  bigHeroDateLine: {
+    color: 'rgba(255,255,255,0.88)',
+    fontSize: 14,
+    fontWeight: '600',
+    letterSpacing: -0.2,
+    marginTop: -8,
+    marginBottom: 14,
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
   bigHeroFooter: {
     flexDirection: 'row',
