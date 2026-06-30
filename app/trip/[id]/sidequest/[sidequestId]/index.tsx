@@ -24,7 +24,7 @@ import HeroShell from '@/components/hero-shell';
 import { useAuth } from '@/components/auth-provider';
 import { useI18n } from '@/components/i18n-provider';
 import { apiFetch, apiJson } from '@/lib/api';
-import { getCached, setCached, invalidateTripCache } from '@/lib/cache';
+import { getCached, setCached, invalidateCache, invalidateTripCache } from '@/lib/cache';
 import { getCategorySymbol } from '@/lib/category-symbol';
 import { buildGoogleMapsSearchUrl, extractLocationQuery, extractStoredMapPlace, stripLocationMarker } from '@/lib/sidequest-location';
 import { extractFlightRoute, formatFlightRoute, hasFlightRoute, stripFlightMarkers } from '@/lib/flight-route';
@@ -230,7 +230,12 @@ export default function SideQuestDetailScreen() {
                 if (!response.ok && response.status !== 404) {
                   throw new Error((await response.text()) || 'Could not delete this SideQuest.');
                 }
-                invalidateTripCache(id);
+                const activitiesUrl = `/api/trips/${id}/activities`;
+                const cached = getCached<SideQuestActivity[]>(activitiesUrl);
+                if (cached) {
+                  setCached(activitiesUrl, cached.filter((a) => a.id !== sidequestId));
+                }
+                invalidateCache('/api/trips/events/me');
                 router.replace(`/trip/${encodeURIComponent(id)}`);
               } catch (err) {
                 setDeleting(false);
