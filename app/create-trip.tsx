@@ -74,8 +74,6 @@ export default function CreateTripScreen() {
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [16, 10],
       quality: 0.9,
     });
 

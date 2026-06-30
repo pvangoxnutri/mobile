@@ -170,8 +170,6 @@ export default function TripSettingsScreen() {
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [16, 10],
       quality: 0.92,
     });
 
