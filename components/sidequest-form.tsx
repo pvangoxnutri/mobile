@@ -157,7 +157,7 @@ function SideQuestFormInner({
   const [imageUrl, setImageUrl] = useState<string | null>(initialValues?.imageUrl ?? initialImageUrl ?? null);
   const [imageSize, setImageSize] = useState<{ width: number; height: number } | null>(null);
   const [imagePanOffset, setImagePanOffset] = useState({ x: 0, y: 0 });
-  const [imageDragging, setImageDragging] = useState(false);
+  const [positioningImage, setPositioningImage] = useState(false);
   const [blurAmount, setBlurAmount] = useState<number>(initialValues?.blurAmount ?? DEFAULT_BLUR);
   // SideQuest mode is a UI-level concept layered on top of the existing
   // category + visibility fields — no new backend field. An activity is
@@ -376,12 +376,15 @@ function SideQuestFormInner({
       setImageSize({ width: iw, height: ih });
       // Compute the centred initial pan offset so submit-without-pan
       // still crops correctly (cover-scale the image, centre in frame).
-      const coverScale = Math.max(containerWidth / iw, POSITIONER_PREVIEW_H / ih);
+      const fW = screenWidth;
+      const fH = Math.round(screenWidth * POSITIONER_PREVIEW_H / (screenWidth - POSITIONER_FORM_W_PADDING));
+      const coverScale = Math.max(fW / iw, fH / ih);
       const sw = iw * coverScale, sh = ih * coverScale;
       setImagePanOffset({
-        x: Math.min(0, containerWidth - sw) / 2,
-        y: Math.min(0, POSITIONER_PREVIEW_H - sh) / 2,
+        x: Math.min(0, fW - sw) / 2,
+        y: Math.min(0, fH - sh) / 2,
       });
+      setPositioningImage(true);
       setMessage(null);
     }
   }
@@ -487,8 +490,10 @@ function SideQuestFormInner({
     setMessage(null);
 
     try {
+      const frameW = screenWidth;
+      const frameH = Math.round(screenWidth * POSITIONER_PREVIEW_H / (screenWidth - POSITIONER_FORM_W_PADDING));
       const localUri = imageUrl && !imageUrl.startsWith('http') && imageSize
-        ? await cropToPreview(imageUrl, imageSize, imagePanOffset, containerWidth)
+        ? await cropToPreview(imageUrl, imageSize, imagePanOffset, frameW, frameH)
         : null;
       const uploadedImageUrl = await uploadImageIfNeeded(localUri ?? imageUrl, 'sidequest');
       const revealAt = visibility === 'hidden' ? combineDateAndTime(revealDate, revealTime) : null;
@@ -673,58 +678,41 @@ function SideQuestFormInner({
       style={styles.scroll}
       contentContainerStyle={[styles.content, { paddingBottom: bottomPadding }]}
       showsVerticalScrollIndicator={false}
-      scrollEnabled={!slideToActivateDragging && !imageDragging}
+      scrollEnabled={!slideToActivateDragging}
       {...scrollViewProps}>
-      {imageUrl && imageSize ? (
-        // Local image: show pan-to-position preview so the user can frame
-        // exactly what part will be visible in the card before uploading.
-        <ImagePositioner
-          uri={imageUrl}
-          imageSize={imageSize}
-          containerWidth={containerWidth}
-          initialOffset={imagePanOffset}
-          onOffsetChange={setImagePanOffset}
-          onDragStateChange={setImageDragging}
-          onPress={() => void handlePickImage()}
-          onRemove={() => { setImageUrl(null); setImageSize(null); }}
-          sideQuestBadge={sideQuestMode && visibility === 'public'}
-          t={t}
-        />
-      ) : (
-        <TouchableOpacity activeOpacity={0.9} style={styles.coverCard} onPress={() => void handlePickImage()}>
-          {imageUrl ? <Image source={{ uri: imageUrl }} style={styles.coverImage} /> : null}
-          {!imageUrl ? <View style={styles.coverPlaceholderLayer} /> : null}
-          {sideQuestMode && visibility === 'public' ? (
-            <View style={styles.sideQuestCoverBadge}>
-              <Ionicons name="compass" size={13} color="#fff" />
-              <Text style={styles.coverBadgeText}>SideQuest</Text>
+      <TouchableOpacity activeOpacity={0.9} style={styles.coverCard} onPress={() => void handlePickImage()}>
+        {imageUrl ? <Image source={{ uri: imageUrl }} style={styles.coverImage} /> : null}
+        {!imageUrl ? <View style={styles.coverPlaceholderLayer} /> : null}
+        {sideQuestMode && visibility === 'public' ? (
+          <View style={styles.sideQuestCoverBadge}>
+            <Ionicons name="compass" size={13} color="#fff" />
+            <Text style={styles.coverBadgeText}>SideQuest</Text>
+          </View>
+        ) : null}
+        {!imageUrl ? (
+          <View style={styles.coverContent}>
+            <View style={styles.coverIconCircle}>
+              <Ionicons name="image-outline" size={30} color="#fff" />
             </View>
-          ) : null}
-          {!imageUrl ? (
-            <View style={styles.coverContent}>
-              <View style={styles.coverIconCircle}>
-                <Ionicons name="image-outline" size={30} color="#fff" />
-              </View>
-              <Text style={styles.coverTitle}>{t('sidequest.form.addCoverTitle')}</Text>
-              <Text style={styles.coverCopy}>{t('sidequest.form.addCoverCopy')}</Text>
+            <Text style={styles.coverTitle}>{t('sidequest.form.addCoverTitle')}</Text>
+            <Text style={styles.coverCopy}>{t('sidequest.form.addCoverCopy')}</Text>
+          </View>
+        ) : (
+          <View style={styles.coverBadgeRow}>
+            <View style={styles.coverBadge}>
+              <Ionicons name="camera-outline" size={14} color="#fff" />
+              <Text style={styles.coverBadgeText}>{t('sidequest.form.changeImage')}</Text>
             </View>
-          ) : (
-            <View style={styles.coverBadgeRow}>
-              <View style={styles.coverBadge}>
-                <Ionicons name="camera-outline" size={14} color="#fff" />
-                <Text style={styles.coverBadgeText}>{t('sidequest.form.changeImage')}</Text>
-              </View>
-              <TouchableOpacity
-                activeOpacity={0.88}
-                style={[styles.coverBadge, styles.coverBadgeGhost]}
-                onPress={() => setImageUrl(null)}>
-                <Ionicons name="trash-outline" size={14} color="#fff" />
-                <Text style={styles.coverBadgeText}>{t('common.remove')}</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-        </TouchableOpacity>
-      )}
+            <TouchableOpacity
+              activeOpacity={0.88}
+              style={[styles.coverBadge, styles.coverBadgeGhost]}
+              onPress={() => { setImageUrl(null); setImageSize(null); }}>
+              <Ionicons name="trash-outline" size={14} color="#fff" />
+              <Text style={styles.coverBadgeText}>{t('common.remove')}</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </TouchableOpacity>
 
       <View style={styles.block}>
         <Text style={styles.label}>{t('sidequest.form.titleLabel')} <Text style={styles.labelRequired}>*</Text></Text>
@@ -1193,6 +1181,21 @@ function SideQuestFormInner({
         </PickerSheet>
       ) : null}
     </ScrollView>
+
+    {imageUrl && imageSize ? (
+      <ImagePositionerModal
+        visible={positioningImage}
+        uri={imageUrl}
+        imageSize={imageSize}
+        screenWidth={screenWidth}
+        insetTop={insets.top}
+        insetBottom={insets.bottom}
+        onConfirm={(offset) => { setImagePanOffset(offset); setPositioningImage(false); }}
+        onCancel={() => { setImageUrl(null); setImageSize(null); setPositioningImage(false); }}
+        t={t}
+      />
+    ) : null}
+
     </KeyboardAvoidingView>
   );
 }
@@ -1792,28 +1795,27 @@ function buildPlaceDisplay(place: StoredMapPlace) {
 const SideQuestForm = forwardRef<SideQuestFormHandle, Props>(SideQuestFormInner);
 export default SideQuestForm;
 
-// ── Image pan/crop UI ─────────────────────────────────────────────────────
-// Height of the preview frame (matches coverCard height).
+// ── Image pan/crop fullscreen modal ──────────────────────────────────────
+// Card aspect ratio used for both the preview frame and the final crop.
 const POSITIONER_PREVIEW_H = 240;
-const POSITIONER_PREVIEW_RADIUS = 32;
-// Max vertical context strips shown above/below the preview frame.
-const POSITIONER_EXTRA_MAX = 48;
+const POSITIONER_FORM_W_PADDING = 44; // content paddingHorizontal 22 × 2
 
 async function cropToPreview(
   uri: string,
   imgSize: { width: number; height: number },
   offset: { x: number; y: number },
-  containerWidth: number,
+  frameW: number,
+  frameH: number,
 ): Promise<string> {
-  const coverScale = Math.max(containerWidth / imgSize.width, POSITIONER_PREVIEW_H / imgSize.height);
+  const coverScale = Math.max(frameW / imgSize.width, frameH / imgSize.height);
   const result = await ImageManipulator.manipulateAsync(
     uri,
     [{
       crop: {
-        originX: Math.round(-offset.x / coverScale),
-        originY: Math.round(-offset.y / coverScale),
-        width: Math.round(containerWidth / coverScale),
-        height: Math.round(POSITIONER_PREVIEW_H / coverScale),
+        originX: Math.max(0, Math.round(-offset.x / coverScale)),
+        originY: Math.max(0, Math.round(-offset.y / coverScale)),
+        width: Math.min(imgSize.width, Math.round(frameW / coverScale)),
+        height: Math.min(imgSize.height, Math.round(frameH / coverScale)),
       },
     }],
     { compress: 0.92, format: ImageManipulator.SaveFormat.JPEG },
@@ -1821,143 +1823,182 @@ async function cropToPreview(
   return result.uri;
 }
 
-function ImagePositioner({
+function ImagePositionerModal({
+  visible,
   uri,
   imageSize,
-  containerWidth,
-  initialOffset,
-  onOffsetChange,
-  onDragStateChange,
-  onPress,
-  onRemove,
-  sideQuestBadge,
+  screenWidth,
+  insetTop,
+  insetBottom,
+  onConfirm,
+  onCancel,
   t,
 }: {
+  visible: boolean;
   uri: string;
   imageSize: { width: number; height: number };
-  containerWidth: number;
-  initialOffset: { x: number; y: number };
-  onOffsetChange: (offset: { x: number; y: number }) => void;
-  onDragStateChange: (dragging: boolean) => void;
-  onPress: () => void;
-  onRemove: () => void;
-  sideQuestBadge?: boolean;
+  screenWidth: number;
+  insetTop: number;
+  insetBottom: number;
+  onConfirm: (offset: { x: number; y: number }) => void;
+  onCancel: () => void;
   t: (key: string) => string;
 }) {
-  const coverScale = Math.max(containerWidth / imageSize.width, POSITIONER_PREVIEW_H / imageSize.height);
+  // Preview frame fills full screen width, preserving the card's aspect ratio.
+  const frameW = screenWidth;
+  const frameH = Math.round(screenWidth * POSITIONER_PREVIEW_H / (screenWidth - POSITIONER_FORM_W_PADDING));
+  const frameRadius = 0; // edge-to-edge in fullscreen feels better without radius
+
+  const coverScale = Math.max(frameW / imageSize.width, frameH / imageSize.height);
   const scaledW = imageSize.width * coverScale;
   const scaledH = imageSize.height * coverScale;
-
-  const minX = Math.min(0, containerWidth - scaledW);
-  const minY = Math.min(0, POSITIONER_PREVIEW_H - scaledH);
+  const minX = Math.min(0, frameW - scaledW);
+  const minY = Math.min(0, frameH - scaledH);
 
   function clamp(v: number, lo: number, hi: number) { return Math.max(lo, Math.min(hi, v)); }
 
-  const offsetRef = useRef(initialOffset);
-  const [offset, setOffset] = useState(initialOffset);
-  const baseRef = useRef(initialOffset);
+  const init = { x: minX / 2, y: minY / 2 };
+  const offsetRef = useRef(init);
+  const [offset, setOffset] = useState(init);
+  const baseRef = useRef(init);
 
-  // How much visual context to show above/below the preview frame.
-  const extra = Math.min(POSITIONER_EXTRA_MAX, Math.max(0, (scaledH - POSITIONER_PREVIEW_H) / 2));
-  const containerH = POSITIONER_PREVIEW_H + extra * 2;
-  const frameTop = extra;
+  // Reset when modal reopens for a new image.
+  useEffect(() => {
+    if (visible) {
+      const next = { x: minX / 2, y: minY / 2 };
+      offsetRef.current = next;
+      baseRef.current = next;
+      setOffset(next);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
 
   const responder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
       onPanResponderTerminationRequest: () => false,
-      onPanResponderGrant: () => {
-        baseRef.current = { ...offsetRef.current };
-        onDragStateChange(true);
-      },
+      onPanResponderGrant: () => { baseRef.current = { ...offsetRef.current }; },
       onPanResponderMove: (_e, g) => {
-        const next = {
-          x: clamp(baseRef.current.x + g.dx, minX, 0),
-          y: clamp(baseRef.current.y + g.dy, minY, 0),
-        };
+        const next = { x: clamp(baseRef.current.x + g.dx, minX, 0), y: clamp(baseRef.current.y + g.dy, minY, 0) };
         offsetRef.current = next;
         setOffset(next);
       },
-      onPanResponderRelease: () => { onDragStateChange(false); onOffsetChange(offsetRef.current); },
-      onPanResponderTerminate: () => { onDragStateChange(false); onOffsetChange(offsetRef.current); },
+      onPanResponderRelease: () => {},
+      onPanResponderTerminate: () => {},
     }),
   ).current;
 
-  // Image position inside the CONTAINER (accounts for the extra strip above the frame).
-  const imgTop = offset.y + frameTop;
-  const imgLeft = offset.x;
+  // Vertical center of the frame within the screen.
+  const screenH_approx = screenWidth * 2.16; // rough 9:19.5 ratio — good enough for positioning
+  const frameTop = Math.max(insetTop + 60, (screenH_approx - frameH) / 2 - 40);
 
   return (
-    <View style={[posStyles.container, { height: containerH }]}>
-      {/* Dim copy: full image at low opacity showing context outside the frame */}
-      <Image
-        source={{ uri }}
-        style={{ position: 'absolute', top: imgTop, left: imgLeft, width: scaledW, height: scaledH, opacity: 0.38 }}
-        resizeMode="stretch"
-      />
-      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.22)' }]} />
-
-      {/* Preview frame: clips to the card shape at full opacity */}
-      <View style={[posStyles.frame, { top: frameTop }]}>
+    <Modal visible={visible} transparent={false} animationType="fade" onRequestClose={onCancel} statusBarTranslucent>
+      <View style={posStyles.screen}>
+        {/* Full background: dim image fills screen */}
         <Image
           source={{ uri }}
-          style={{ position: 'absolute', top: offset.y, left: offset.x, width: scaledW, height: scaledH }}
-          resizeMode="stretch"
+          style={[StyleSheet.absoluteFillObject, { opacity: 0.35 }]}
+          resizeMode="cover"
         />
-        <View style={posStyles.previewLabel}>
-          <Text style={posStyles.previewLabelText}>PREVIEW</Text>
+        <View style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.55)' }]} />
+
+        {/* Cancel / top bar */}
+        <TouchableOpacity
+          style={[posStyles.cancelBtn, { top: insetTop + 12 }]}
+          activeOpacity={0.8}
+          onPress={onCancel}>
+          <Ionicons name="close" size={22} color="#fff" />
+        </TouchableOpacity>
+
+        {/* Hint text above frame */}
+        <View style={[posStyles.hintRow, { top: frameTop - 38 }]}>
+          <Ionicons name="move-outline" size={14} color="rgba(255,255,255,0.7)" />
+          <Text style={posStyles.hintText}>Drag to position</Text>
         </View>
-        {sideQuestBadge ? (
-          <View style={styles.sideQuestCoverBadge}>
-            <Ionicons name="compass" size={13} color="#fff" />
-            <Text style={styles.coverBadgeText}>SideQuest</Text>
+
+        {/* Preview frame */}
+        <View style={[posStyles.frame, { top: frameTop, height: frameH, borderRadius: frameRadius }]}>
+          <Image
+            source={{ uri }}
+            style={{ position: 'absolute', top: offset.y, left: offset.x, width: scaledW, height: scaledH }}
+            resizeMode="stretch"
+          />
+          <View style={posStyles.previewLabel}>
+            <Text style={posStyles.previewLabelText}>PREVIEW</Text>
           </View>
-        ) : null}
-      </View>
+        </View>
 
-      {/* Change / Remove badges */}
-      <View style={[styles.coverBadgeRow, posStyles.badges, { bottom: frameTop + 12 }]}>
-        <TouchableOpacity activeOpacity={0.88} style={styles.coverBadge} onPress={onPress}>
-          <Ionicons name="camera-outline" size={14} color="#fff" />
-          <Text style={styles.coverBadgeText}>{t('sidequest.form.changeImage')}</Text>
+        {/* Confirm button */}
+        <TouchableOpacity
+          style={[posStyles.confirmBtn, { bottom: insetBottom + 32 }]}
+          activeOpacity={0.88}
+          onPress={() => onConfirm(offsetRef.current)}>
+          <Text style={posStyles.confirmBtnText}>{t('common.confirm') || 'Confirm'}</Text>
         </TouchableOpacity>
-        <TouchableOpacity activeOpacity={0.88} style={[styles.coverBadge, styles.coverBadgeGhost]} onPress={onRemove}>
-          <Ionicons name="trash-outline" size={14} color="#fff" />
-          <Text style={styles.coverBadgeText}>{t('common.remove')}</Text>
-        </TouchableOpacity>
-      </View>
 
-      {/* Full-area gesture capture on top */}
-      <View style={StyleSheet.absoluteFillObject} {...responder.panHandlers} />
-    </View>
+        {/* Gesture capture overlay — behind confirm/cancel but above the image */}
+        <View
+          style={[StyleSheet.absoluteFillObject, { zIndex: 1 }]}
+          {...responder.panHandlers}
+          pointerEvents="box-only"
+        />
+      </View>
+    </Modal>
   );
 }
 
 const posStyles = StyleSheet.create({
-  container: {
-    borderRadius: POSITIONER_PREVIEW_RADIUS,
-    overflow: 'hidden',
-    backgroundColor: '#0a0c14',
+  screen: {
+    flex: 1,
+    backgroundColor: '#080a12',
+  },
+  cancelBtn: {
+    position: 'absolute',
+    right: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+  hintRow: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    zIndex: 10,
+  },
+  hintText: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 13,
+    fontWeight: '600',
+    letterSpacing: 0.1,
   },
   frame: {
     position: 'absolute',
     left: 0,
     right: 0,
-    height: POSITIONER_PREVIEW_H,
-    borderRadius: POSITIONER_PREVIEW_RADIUS,
     overflow: 'hidden',
+    zIndex: 2,
   },
   previewLabel: {
     position: 'absolute',
-    top: 12,
-    left: 14,
+    top: 14,
+    left: 16,
     paddingHorizontal: 9,
     paddingVertical: 4,
     borderRadius: 20,
     backgroundColor: 'rgba(255,255,255,0.18)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.32)',
+    zIndex: 3,
   },
   previewLabelText: {
     color: '#fff',
@@ -1965,10 +2006,27 @@ const posStyles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 1.4,
   },
-  badges: {
+  confirmBtn: {
     position: 'absolute',
-    left: 12,
-    right: 12,
+    left: 24,
+    right: 24,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  confirmBtnText: {
+    color: '#0a0c14',
+    fontSize: 17,
+    fontWeight: '800',
+    letterSpacing: -0.3,
   },
 });
 
