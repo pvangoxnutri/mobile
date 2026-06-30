@@ -26,6 +26,7 @@ import { invalidateCache } from '@/lib/cache';
 import type { Quest } from '@/lib/types';
 import { SPACING, TYPOGRAPHY, COLORS, RADIUS, SHADOWS } from '@/constants/design-tokens';
 import { useKeyboardFocusScroll } from '@/hooks/useKeyboardFocusScroll';
+import { ImagePositionerModal, cropToPreview } from '@/components/image-positioner-modal';
 
 type MessageState = { type: 'success' | 'error'; text: string } | null;
 
@@ -51,6 +52,10 @@ export default function CreateTripScreen() {
   const [endDate, setEndDate] = useState(getDefaultEndDate());
   const [hasUserSelectedDates, setHasUserSelectedDates] = useState(false);
   const [coverImage, setCoverImage] = useState<string | null>(null);
+  const [coverImageSize, setCoverImageSize] = useState<{ width: number; height: number } | null>(null);
+  const [coverPanOffset, setCoverPanOffset] = useState({ x: 0, y: 0 });
+  const [coverPanScale, setCoverPanScale] = useState(1);
+  const [positioningCover, setPositioningCover] = useState(false);
   const [inviteCode] = useState(() => createInviteCode());
   const [rangePickerOpen, setRangePickerOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -78,7 +83,12 @@ export default function CreateTripScreen() {
     });
 
     if (!result.canceled && result.assets[0]) {
-      setCoverImage(result.assets[0].uri);
+      const asset = result.assets[0];
+      setCoverImage(asset.uri);
+      setCoverImageSize({ width: asset.width, height: asset.height });
+      setCoverPanOffset({ x: 0, y: 0 });
+      setCoverPanScale(1);
+      setPositioningCover(true);
     }
   }
 
@@ -108,7 +118,13 @@ export default function CreateTripScreen() {
       let uploadedImageUrl: string | null = null;
 
       if (coverImage) {
-        uploadedImageUrl = await uploadImageIfNeeded(coverImage);
+        let uriToUpload = coverImage;
+        if (coverImageSize && !coverImage.startsWith('http')) {
+          const frameW = screenWidth;
+          const frameH = Math.round(screenWidth / ((screenWidth - 44) / previewCardHeight));
+          uriToUpload = await cropToPreview(coverImage, coverImageSize, coverPanOffset, coverPanScale, frameW, frameH);
+        }
+        uploadedImageUrl = await uploadImageIfNeeded(uriToUpload);
       }
 
       const trip = await apiJson<Quest>('/api/trips', {
@@ -344,6 +360,29 @@ export default function CreateTripScreen() {
         onDiscard={unsaved.handleDiscard}
         onCancel={unsaved.handleCancel}
       />
+
+      {coverImage && coverImageSize ? (
+        <ImagePositionerModal
+          visible={positioningCover}
+          uri={coverImage}
+          imageSize={coverImageSize}
+          cardAspectRatio={(screenWidth - 44) / previewCardHeight}
+          screenWidth={screenWidth}
+          insetTop={insets.top}
+          insetBottom={insets.bottom}
+          confirmLabel={t('common.confirm') || 'Confirm'}
+          onConfirm={(offset, scale) => {
+            setCoverPanOffset(offset);
+            setCoverPanScale(scale);
+            setPositioningCover(false);
+          }}
+          onCancel={() => {
+            setCoverImage(null);
+            setCoverImageSize(null);
+            setPositioningCover(false);
+          }}
+        />
+      ) : null}
     </KeyboardAvoidingView>
   );
 }
