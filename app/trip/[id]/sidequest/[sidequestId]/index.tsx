@@ -65,6 +65,7 @@ export default function SideQuestDetailScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      scrollRef.current?.scrollTo({ x: 0, y: 0, animated: false });
       let active = true;
       hasTriggeredReveal.current = false;
 

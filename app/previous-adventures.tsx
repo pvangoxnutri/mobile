@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Image, Pressable, StyleSheet, Text, TouchableOpacity, View, Share as RNShare } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
 import { getCompletedTrips, revokeTripShare, shareTrip } from '@/lib/api';
 import { useAuth } from '@/components/auth-provider';
@@ -14,6 +15,11 @@ export default function PreviousAdventuresScreen() {
   const [loading, setLoading] = useState(true);
   const [sharingId, setSharingId] = useState<string | null>(null);
   const [revokingId, setRevokingId] = useState<string | null>(null);
+  const listRef = useRef<FlatList<Quest> | null>(null);
+
+  useFocusEffect(useCallback(() => {
+    listRef.current?.scrollToOffset({ offset: 0, animated: false });
+  }, []));
 
   useEffect(() => {
     loadCompletedTrips();
@@ -117,6 +123,7 @@ export default function PreviousAdventuresScreen() {
           </View>
         ) : (
           <FlatList
+            ref={listRef}
             data={trips}
             renderItem={({ item }) => (
               <View style={styles.card}>

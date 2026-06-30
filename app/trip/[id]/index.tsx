@@ -161,6 +161,7 @@ export default function TripDetailsScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      scrollRef.current?.scrollTo({ x: 0, y: 0, animated: false });
       let active = true;
 
       async function run() {
