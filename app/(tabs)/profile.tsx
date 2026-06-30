@@ -899,7 +899,6 @@ export default function ProfileScreen() {
       </Modal>
 
       <View style={styles.brandBlock}>
-        <Text style={styles.brandWord}>{t('profile.brandTagline.beyond')}</Text>
         <Text style={styles.brandTagline}>{t('profile.brandTagline.tagline')}</Text>
       </View>
 
