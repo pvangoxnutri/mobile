@@ -683,7 +683,7 @@ export default function ProfileScreen() {
             icon: 'people-outline',
             label: t('profile.support.communityGuidelines'),
             accent: COLORS.secondary,
-            onPress: () => void WebBrowser.openBrowserAsync('https://sidequesttravel.app/community-guidelines'),
+            onPress: () => void WebBrowser.openBrowserAsync(`https://sidequesttravel.app/community-guidelines?lang=${language}`),
           },
           {
             icon: 'mail-outline',
@@ -693,15 +693,15 @@ export default function ProfileScreen() {
           },
           {
             icon: 'shield-checkmark-outline',
-            label: 'Privacy Policy',
+            label: t('profile.support.privacyPolicy'),
             accent: COLORS.secondary,
-            onPress: () => void WebBrowser.openBrowserAsync('https://sidequesttravel.app/privacy'),
+            onPress: () => void WebBrowser.openBrowserAsync(`https://sidequesttravel.app/privacy?lang=${language}`),
           },
           {
             icon: 'document-text-outline',
-            label: 'Terms of Service',
+            label: t('profile.support.termsOfService'),
             accent: COLORS.secondary,
-            onPress: () => void WebBrowser.openBrowserAsync('https://sidequesttravel.app/terms'),
+            onPress: () => void WebBrowser.openBrowserAsync(`https://sidequesttravel.app/terms?lang=${language}`),
           },
         ]}
       />

@@ -628,22 +628,47 @@ export default function TripDetailsScreen() {
   }
 
   function showReportMenu(contentType: 'chat_message' | 'user' | 'activity', contentId: string, targetUserId?: string, targetName?: string) {
+    const isBlocked = targetUserId ? blockedUserIds.has(targetUserId) : false;
+    const canBlockOrUnblock = targetUserId && targetUserId !== user?.id;
+
+    // Top-level: Report / Block (or Unblock) / Cancel
+    // Tapping "Report" opens the reason sub-menu.
+    const reportLabel = contentType === 'chat_message'
+      ? t('report.reportMessage')
+      : contentType === 'activity'
+        ? t('report.reportActivity')
+        : t('report.reportUser');
+
+    Alert.alert(
+      targetName ?? t('report.title'),
+      undefined,
+      [
+        {
+          text: reportLabel,
+          onPress: () => showReportReasonMenu(contentType, contentId),
+        },
+        ...(canBlockOrUnblock
+          ? [{
+              text: isBlocked ? t('report.unblockUser') : t('report.blockUser'),
+              style: 'destructive' as const,
+              onPress: () => void handleToggleBlock(targetUserId!, targetName ?? ''),
+            }]
+          : []),
+        { text: t('common.cancel'), style: 'cancel' as const },
+      ],
+    );
+  }
+
+  function showReportReasonMenu(contentType: 'chat_message' | 'user' | 'activity', contentId: string) {
     const reasonKeys = ['spam', 'harassment', 'offensive', 'explicit', 'other'] as const;
     Alert.alert(
-      t('report.title'),
+      t('report.reasonTitle'),
       undefined,
       [
         ...reasonKeys.map((reason) => ({
           text: t(`report.reason.${reason}`),
           onPress: () => void submitReport(contentType, contentId, reason),
         })),
-        ...(targetUserId && targetUserId !== user?.id
-          ? [{
-              text: blockedUserIds.has(targetUserId) ? t('report.unblockUser') : t('report.blockUser'),
-              style: 'destructive' as const,
-              onPress: () => void handleToggleBlock(targetUserId, targetName ?? ''),
-            }]
-          : []),
         { text: t('common.cancel'), style: 'cancel' as const },
       ],
     );
@@ -666,7 +691,7 @@ export default function TripDetailsScreen() {
     const isBlocked = blockedUserIds.has(targetUserId);
     if (!isBlocked) {
       Alert.alert(
-        t('report.blockConfirmTitle'),
+        t('report.blockConfirmTitle', { name: targetName }),
         t('report.blockConfirmBody'),
         [
           { text: t('common.cancel'), style: 'cancel' },
@@ -679,13 +704,17 @@ export default function TripDetailsScreen() {
       );
     } else {
       await doUnblock(targetUserId);
-      Alert.alert(t('report.unblockSuccess'));
+      Alert.alert(t('report.unblockSuccess', { name: targetName }));
     }
   }
 
   async function doBlock(targetUserId: string) {
     try {
-      await apiFetch(`/api/users/${targetUserId}/block`, { method: 'POST' });
+      await apiFetch(`/api/users/${targetUserId}/block`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tripId: id }),
+      });
       setBlockedUserIds((prev) => new Set([...prev, targetUserId]));
       Alert.alert(t('report.blockSuccess'));
     } catch {
