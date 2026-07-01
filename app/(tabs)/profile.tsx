@@ -3,7 +3,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Easing, Image, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
@@ -48,12 +47,8 @@ export default function ProfileScreen() {
   const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferences>(getDefaultNotificationPreferences());
   const [osPermissionDenied, setOsPermissionDenied] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [busy, setBusy] = useState<'name' | 'bio' | 'password' | 'avatar' | 'language' | 'delete' | 'support' | 'pushTest' | null>(null);
+  const [busy, setBusy] = useState<'name' | 'bio' | 'password' | 'avatar' | 'language' | 'delete' | 'pushTest' | null>(null);
   const [pushTestResult, setPushTestResult] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [supportModal, setSupportModal] = useState<'bug' | 'feedback' | null>(null);
-  const [supportText, setSupportText] = useState('');
-  const [supportError, setSupportError] = useState<string | null>(null);
-  const [thanksModal, setThanksModal] = useState<'bug' | 'feedback' | null>(null);
 
   useEffect(() => {
     setName(user?.name ?? '');
@@ -484,47 +479,6 @@ export default function ProfileScreen() {
     }
   }
 
-  function openSupportModal(type: 'bug' | 'feedback') {
-    setSupportText('');
-    setSupportError(null);
-    setMessage(null);
-    setSupportModal(type);
-  }
-
-  function closeSupportModal() {
-    setSupportModal(null);
-    setSupportText('');
-    setSupportError(null);
-  }
-
-  async function handleSupportSubmit() {
-    if (!supportModal) return;
-    const trimmed = supportText.trim();
-    if (!trimmed) {
-      setSupportError(t('profile.support.emptyError'));
-      return;
-    }
-    try {
-      setBusy('support');
-      setSupportError(null);
-      const submittedType = supportModal;
-      const res = await apiFetch('/api/feedback', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: submittedType, message: trimmed }),
-      });
-      if (!res.ok) {
-        const errText = await res.text().catch(() => '');
-        throw new Error(errText || t('profile.support.failed'));
-      }
-      closeSupportModal();
-      setThanksModal(submittedType);
-    } catch (err) {
-      setSupportError(err instanceof Error && err.message ? err.message : t('profile.support.failed'));
-    } finally {
-      setBusy(null);
-    }
-  }
 
   return (
     <View style={{ flex: 1, backgroundColor: COLORS.white }}>
@@ -725,8 +679,6 @@ export default function ProfileScreen() {
       <SectionCard
         title={t('profile.sections.supportLegal')}
         items={[
-          { icon: 'alert-circle-outline', label: t('profile.support.reportIssue'), accent: COLORS.secondary, onPress: () => openSupportModal('bug') },
-          { icon: 'chatbox-outline', label: t('profile.support.feedback'), accent: COLORS.secondary, onPress: () => openSupportModal('feedback') },
           {
             icon: 'people-outline',
             label: t('profile.support.communityGuidelines'),
@@ -754,42 +706,6 @@ export default function ProfileScreen() {
         ]}
       />
       <Text style={styles.moderationNotice}>{t('profile.support.moderation')}</Text>
-
-      <Modal visible={supportModal !== null} transparent animationType="fade" onRequestClose={closeSupportModal}>
-        <KeyboardAvoidingView style={styles.confirmBackdrop} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-          <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={closeSupportModal} />
-          <View style={styles.confirmCard}>
-            <Text style={styles.confirmTitle}>
-              {supportModal === 'bug' ? t('profile.support.reportTitle') : t('profile.support.feedbackTitle')}
-            </Text>
-            <TextInput
-              value={supportText}
-              onChangeText={(text) => { setSupportText(text); if (supportError) setSupportError(null); }}
-              placeholder={supportModal === 'bug' ? t('profile.support.reportPlaceholder') : t('profile.support.feedbackPlaceholder')}
-              placeholderTextColor={COLORS.placeholderText}
-              style={[styles.bioInput, { marginTop: 16 }]}
-              multiline
-              numberOfLines={5}
-              textAlignVertical="top"
-              autoFocus
-            />
-            {supportError ? (
-              <Text style={[styles.helperText, { color: COLORS.error, marginTop: 8 }]}>{supportError}</Text>
-            ) : null}
-            <View style={styles.confirmActions}>
-              <TouchableOpacity style={styles.confirmCancel} activeOpacity={0.88} onPress={closeSupportModal}>
-                <Text style={styles.confirmCancelText}>{t('common.cancel')}</Text>
-              </TouchableOpacity>
-              <Pressable
-                style={[styles.confirmDelete, { backgroundColor: COLORS.secondary }]}
-                onPress={() => void handleSupportSubmit()}
-                disabled={busy === 'support'}>
-                {busy === 'support' ? <ActivityIndicator color="#fff" /> : <Text style={styles.confirmDeleteText}>{t('profile.support.submit')}</Text>}
-              </Pressable>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
 
       <SectionCard
         title={t('profile.sections.account')}
@@ -937,31 +853,6 @@ export default function ProfileScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
-      <Modal visible={thanksModal !== null} transparent animationType="fade" onRequestClose={() => setThanksModal(null)}>
-        <KeyboardAvoidingView style={styles.confirmBackdrop} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-          <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setThanksModal(null)} />
-          <View style={styles.thanksCard}>
-            <View style={[styles.thanksIconCircle, { backgroundColor: thanksModal === 'bug' ? COLORS.avatarLight : '#e6f7fa' }]}>
-              <Ionicons
-                name={thanksModal === 'bug' ? 'bug-outline' : 'heart'}
-                size={32}
-                color={thanksModal === 'bug' ? COLORS.primary : COLORS.secondary}
-              />
-            </View>
-            <Text style={styles.thanksTitle}>
-              {thanksModal === 'bug' ? t('profile.support.thanksBugTitle') : t('profile.support.thanksFeedbackTitle')}
-            </Text>
-            <Text style={styles.thanksBody}>
-              {thanksModal === 'bug' ? t('profile.support.thanksBugBody') : t('profile.support.thanksFeedbackBody')}
-            </Text>
-            <Pressable
-              style={[styles.thanksButton, { backgroundColor: thanksModal === 'bug' ? COLORS.primary : COLORS.secondary }]}
-              onPress={() => setThanksModal(null)}>
-              <Text style={styles.thanksButtonText}>{t('profile.support.thanksClose')}</Text>
-            </Pressable>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
     </ScrollView>
 
     <View
