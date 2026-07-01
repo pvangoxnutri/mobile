@@ -728,6 +728,18 @@ export default function ProfileScreen() {
           { icon: 'alert-circle-outline', label: t('profile.support.reportIssue'), accent: COLORS.secondary, onPress: () => openSupportModal('bug') },
           { icon: 'chatbox-outline', label: t('profile.support.feedback'), accent: COLORS.secondary, onPress: () => openSupportModal('feedback') },
           {
+            icon: 'people-outline',
+            label: t('profile.support.communityGuidelines'),
+            accent: COLORS.secondary,
+            onPress: () => void WebBrowser.openBrowserAsync('https://sidequesttravel.app/community-guidelines'),
+          },
+          {
+            icon: 'mail-outline',
+            label: t('profile.support.contactSupport'),
+            accent: COLORS.secondary,
+            onPress: () => void WebBrowser.openBrowserAsync('mailto:support@sidequesttravel.app'),
+          },
+          {
             icon: 'shield-checkmark-outline',
             label: 'Privacy Policy',
             accent: COLORS.secondary,
@@ -741,6 +753,7 @@ export default function ProfileScreen() {
           },
         ]}
       />
+      <Text style={styles.moderationNotice}>{t('profile.support.moderation')}</Text>
 
       <Modal visible={supportModal !== null} transparent animationType="fade" onRequestClose={closeSupportModal}>
         <KeyboardAvoidingView style={styles.confirmBackdrop} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
@@ -1383,6 +1396,15 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     fontSize: 13,
     lineHeight: 18,
+  },
+  moderationNotice: {
+    marginHorizontal: 20,
+    marginTop: 8,
+    marginBottom: 12,
+    fontSize: 12,
+    lineHeight: 17,
+    color: COLORS.textMeta,
+    textAlign: 'center',
   },
   saveButton: {
     marginTop: 12,

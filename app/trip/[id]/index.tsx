@@ -153,6 +153,7 @@ export default function TripDetailsScreen() {
   const [profileCardUserId, setProfileCardUserId] = useState<string | null>(null);
   const [selectedCategoryKey, setSelectedCategoryKey] = useState<string | null>(null);
   const [failedAvatars, setFailedAvatars] = useState<Set<string>>(new Set());
+  const [blockedUserIds, setBlockedUserIds] = useState<Set<string>>(new Set());
   const chatInputOpacityRef = useRef(new Animated.Value(0.5)).current;
   const inviteEmailOpacityRef = useRef(new Animated.Value(0.5)).current;
   const spotifyUrlOpacityRef = useRef(new Animated.Value(0.5)).current;
@@ -207,6 +208,13 @@ export default function TripDetailsScreen() {
             if (latestMsgs.length > 0) setChatUnread(true);
           } catch {
             if (!active) return;
+          }
+          try {
+            const blockedIds = await apiJson<string[]>('/api/users/blocked-ids');
+            if (!active) return;
+            setBlockedUserIds(new Set(blockedIds));
+          } catch {
+            // non-fatal — proceed without block list
           }
           setError('');
         } catch (err) {
@@ -612,6 +620,81 @@ export default function TripDetailsScreen() {
     await performChatSend(message.id, message.text, message.localImageUri ?? null);
   }
 
+  function showReportMenu(contentType: 'chat_message' | 'user' | 'activity', contentId: string, targetUserId?: string, targetName?: string) {
+    const reasonKeys = ['spam', 'harassment', 'offensive', 'explicit', 'other'] as const;
+    Alert.alert(
+      t('report.title'),
+      undefined,
+      [
+        ...reasonKeys.map((reason) => ({
+          text: t(`report.reason.${reason}`),
+          onPress: () => void submitReport(contentType, contentId, reason),
+        })),
+        ...(targetUserId && targetUserId !== user?.id
+          ? [{
+              text: blockedUserIds.has(targetUserId) ? t('report.unblockUser') : t('report.blockUser'),
+              style: 'destructive' as const,
+              onPress: () => void handleToggleBlock(targetUserId, targetName ?? ''),
+            }]
+          : []),
+        { text: t('common.cancel'), style: 'cancel' as const },
+      ],
+    );
+  }
+
+  async function submitReport(contentType: string, contentId: string, reason: string) {
+    try {
+      await apiFetch('/api/reports', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contentType, contentId, reason }),
+      });
+      Alert.alert(t('report.success'));
+    } catch {
+      Alert.alert(t('report.failed'));
+    }
+  }
+
+  async function handleToggleBlock(targetUserId: string, targetName: string) {
+    const isBlocked = blockedUserIds.has(targetUserId);
+    if (!isBlocked) {
+      Alert.alert(
+        t('report.blockConfirmTitle'),
+        t('report.blockConfirmBody'),
+        [
+          { text: t('common.cancel'), style: 'cancel' },
+          {
+            text: t('report.blockUser'),
+            style: 'destructive',
+            onPress: () => void doBlock(targetUserId),
+          },
+        ],
+      );
+    } else {
+      await doUnblock(targetUserId);
+      Alert.alert(t('report.unblockSuccess'));
+    }
+  }
+
+  async function doBlock(targetUserId: string) {
+    try {
+      await apiFetch(`/api/users/${targetUserId}/block`, { method: 'POST' });
+      setBlockedUserIds((prev) => new Set([...prev, targetUserId]));
+      Alert.alert(t('report.blockSuccess'));
+    } catch {
+      Alert.alert(t('report.blockFailed'));
+    }
+  }
+
+  async function doUnblock(targetUserId: string) {
+    try {
+      await apiFetch(`/api/users/${targetUserId}/block`, { method: 'DELETE' });
+      setBlockedUserIds((prev) => { const next = new Set(prev); next.delete(targetUserId); return next; });
+    } catch {
+      Alert.alert(t('report.blockFailed'));
+    }
+  }
+
   function renderChatMessageItem(message: ChatMsg, index: number) {
     const ownMessage = message.userId === user?.id;
     const systemMessage = message.isSystem;
@@ -681,10 +764,14 @@ export default function TripDetailsScreen() {
                   <Image source={{ uri: imageSource }} style={styles.chatMessageImage} />
                 </Pressable>
               ) : null}
-              <View style={styles.chatBubbleCard}>
-                {message.text ? <ChatMessageText text={message.text} isOwn={false} /> : null}
-                {message.linkPreview ? <LinkPreviewCardInline preview={message.linkPreview} isOwn={false} /> : null}
-              </View>
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onLongPress={() => message.id && message.userId && showReportMenu('chat_message', message.id, message.userId, message.userName)}>
+                <View style={styles.chatBubbleCard}>
+                  {message.text ? <ChatMessageText text={message.text} isOwn={false} /> : null}
+                  {message.linkPreview ? <LinkPreviewCardInline preview={message.linkPreview} isOwn={false} /> : null}
+                </View>
+              </TouchableOpacity>
             </View>
           </View>
         )}
@@ -982,6 +1069,11 @@ export default function TripDetailsScreen() {
                       onPress={() => {
                         setPeopleSheetOpen(false);
                         setTimeout(() => setProfileCardUserId(member.id), 280);
+                      }}
+                      onLongPress={() => {
+                        if (member.id !== user?.id) {
+                          showReportMenu('user', member.id, member.id, member.name);
+                        }
                       }}>
                       <View style={styles.personAvatar}>
                         <Avatar
@@ -1201,7 +1293,7 @@ export default function TripDetailsScreen() {
               ) : (
                 <FlatList
                   ref={chatScrollRef}
-                  data={chatMessages}
+                  data={chatMessages.filter((m) => !m.userId || !blockedUserIds.has(m.userId))}
                   keyExtractor={(message) => message.id}
                   style={styles.chatListScroll}
                   contentContainerStyle={styles.chatList}

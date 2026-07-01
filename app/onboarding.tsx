@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import * as WebBrowser from 'expo-web-browser';
 import { router, Stack } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -28,7 +29,10 @@ import { useKeyboardFocusScroll } from '@/hooks/useKeyboardFocusScroll';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const TOTAL_STEPS = 2;
+// Step 1 = Terms (required, no skip)
+// Step 2 = Discovery
+// Step 3 = Profile
+const TOTAL_STEPS = 3;
 
 // Values are stored on the backend so they stay in English; only the display
 // label is run through i18n.
@@ -68,12 +72,16 @@ export default function OnboardingScreen() {
   const [step, setStep] = useState(1);
   const [busy, setBusy] = useState(false);
 
-  // Step 1 state
+  // Step 1 (Terms) state
+  const [termsAgreed, setTermsAgreed] = useState(false);
+  const [termsError, setTermsError] = useState(false);
+
+  // Step 2 state
   const [foundVia, setFoundVia] = useState<string | null>(null);
   const [purpose, setPurpose] = useState<string | null>(null);
   const [purposeOther, setPurposeOther] = useState('');
 
-  // Step 2 state
+  // Step 3 state
   const [bio, setBio] = useState(user?.bio ?? '');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(user?.avatarUrl ?? null);
   const [uploadBusy, setUploadBusy] = useState(false);
@@ -137,8 +145,8 @@ export default function OnboardingScreen() {
       if (purpose) payload.purpose = purpose;
       if (purpose === 'other' && purposeOther.trim()) payload.purposeOtherText = purposeOther.trim();
 
-      // Only save step 2 data if we actually reached step 2 (or finished it)
-      if (!skip || step === 2) {
+      // Only save step 3 (profile) data if we actually reached it (or finished it)
+      if (!skip || step === 3) {
         if (bio.trim()) payload.bio = bio.trim();
         if (avatarUrl) payload.avatarUrl = avatarUrl;
       }
@@ -161,7 +169,7 @@ export default function OnboardingScreen() {
 
   const progressWidth = progressAnim.interpolate({
     inputRange: [1, TOTAL_STEPS],
-    outputRange: ['33.3%', '100%'],
+    outputRange: ['20%', '100%'],
   });
 
   return (
@@ -175,12 +183,16 @@ export default function OnboardingScreen() {
               {t('onboarding.stepOf', { current: step, total: TOTAL_STEPS })}
             </Text>
           </View>
-          <TouchableOpacity
-            onPress={() => void finish(true)}
-            disabled={busy}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-            <Text style={styles.skipText}>{t('onboarding.skip')}</Text>
-          </TouchableOpacity>
+          {step > 1 ? (
+            <TouchableOpacity
+              onPress={() => void finish(true)}
+              disabled={busy}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+              <Text style={styles.skipText}>{t('onboarding.skip')}</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={{ width: 40 }} />
+          )}
         </View>
 
         {/* ── Language ────────────────────────────────────── */}
@@ -205,6 +217,14 @@ export default function OnboardingScreen() {
             showsVerticalScrollIndicator={false}
             {...scrollViewProps}>
             {step === 1 && (
+              <StepTerms
+                agreed={termsAgreed}
+                showError={termsError}
+                onAgree={() => { setTermsAgreed(true); setTermsError(false); }}
+                t={t}
+              />
+            )}
+            {step === 2 && (
               <StepDiscovery
                 foundVia={foundVia}
                 setFoundVia={setFoundVia}
@@ -216,7 +236,7 @@ export default function OnboardingScreen() {
                 t={t}
               />
             )}
-            {step === 2 && (
+            {step === 3 && (
               <StepProfile
                 bio={bio}
                 setBio={setBio}
@@ -233,15 +253,28 @@ export default function OnboardingScreen() {
 
         {/* ── Footer button ───────────────────────────────── */}
         <View style={styles.footer}>
+          {termsError ? (
+            <Text style={styles.termsErrorText}>{t('terms.mustAgree')}</Text>
+          ) : null}
           <Pressable
             style={({ pressed }) => [styles.nextButton, { backgroundColor: PRIMARY_COLOR, shadowColor: PRIMARY_COLOR }, pressed && styles.nextButtonPressed]}
             disabled={busy}
-            onPress={() => (step < TOTAL_STEPS ? changeStep(step + 1) : void finish(false))}>
+            onPress={() => {
+              if (step === 1 && !termsAgreed) {
+                setTermsError(true);
+                return;
+              }
+              if (step < TOTAL_STEPS) {
+                changeStep(step + 1);
+              } else {
+                void finish(false);
+              }
+            }}>
             {busy ? (
               <ActivityIndicator color="#fff" />
             ) : (
               <Text style={styles.nextButtonText}>
-                {step < TOTAL_STEPS ? `${t('onboarding.next')}  →` : `${t('onboarding.finish')}  ✓`}
+                {step === 1 ? t('terms.agreeButton') : step < TOTAL_STEPS ? `${t('onboarding.next')}  →` : `${t('onboarding.finish')}  ✓`}
               </Text>
             )}
           </Pressable>
@@ -251,7 +284,65 @@ export default function OnboardingScreen() {
   );
 }
 
-// ─── Step 1: Discovery ────────────────────────────────────────────────────────
+// ─── Step 1: Terms & Community Rules ─────────────────────────────────────────
+
+const COMMUNITY_RULES = [
+  'terms.rule1',
+  'terms.rule2',
+  'terms.rule3',
+  'terms.rule4',
+] as const;
+
+function StepTerms({
+  agreed,
+  showError,
+  onAgree,
+  t,
+}: {
+  agreed: boolean;
+  showError: boolean;
+  onAgree: () => void;
+  t: (key: string) => string;
+}) {
+  return (
+    <View>
+      <Text style={styles.stepHeading}>{t('terms.heading')}</Text>
+      <Text style={styles.stepSubtitle}>{t('terms.subtitle')}</Text>
+
+      <View style={styles.rulesCard}>
+        {COMMUNITY_RULES.map((key) => (
+          <View key={key} style={styles.ruleRow}>
+            <View style={styles.ruleIcon}>
+              <Text style={styles.ruleCheck}>✓</Text>
+            </View>
+            <Text style={styles.ruleText}>{t(key)}</Text>
+          </View>
+        ))}
+      </View>
+
+      <TouchableOpacity
+        style={[styles.agreeRow, agreed && styles.agreeRowChecked]}
+        activeOpacity={0.8}
+        onPress={onAgree}>
+        <View style={[styles.checkbox, agreed && { backgroundColor: PRIMARY_COLOR, borderColor: PRIMARY_COLOR }]}>
+          {agreed ? <Text style={styles.checkMark}>✓</Text> : null}
+        </View>
+        <Text style={[styles.agreeLabel, agreed && { color: PRIMARY_COLOR }]}>
+          {t('terms.agreeButton')}
+        </Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.termsLink}
+        activeOpacity={0.7}
+        onPress={() => void WebBrowser.openBrowserAsync('https://sidequesttravel.app/terms')}>
+        <Text style={styles.termsLinkText}>{t('terms.viewFull')}</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+// ─── Step 2: Discovery ────────────────────────────────────────────────────────
 
 function StepDiscovery({
   foundVia,
@@ -765,5 +856,100 @@ const styles = StyleSheet.create({
     marginTop: 8,
     color: '#a6acb8',
     fontSize: 12,
+  },
+
+  // ─ Terms step
+  rulesCard: {
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: '#e2e5ee',
+    backgroundColor: '#fafbfc',
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    gap: 14,
+    marginBottom: 24,
+  },
+  ruleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  ruleIcon: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: PRIMARY_COLOR,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+    flexShrink: 0,
+  },
+  ruleCheck: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  ruleText: {
+    flex: 1,
+    color: '#2a2f3e',
+    fontSize: 14,
+    lineHeight: 21,
+    fontWeight: '500',
+  },
+  agreeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderColor: '#e2e5ee',
+    backgroundColor: '#fafbfc',
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+    marginBottom: 14,
+  },
+  agreeRowChecked: {
+    borderColor: PRIMARY_COLOR,
+    backgroundColor: PRIMARY_08,
+  },
+  checkbox: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#c8cdd8',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+    flexShrink: 0,
+  },
+  checkMark: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  agreeLabel: {
+    flex: 1,
+    color: '#4b515e',
+    fontSize: 14,
+    fontWeight: '700',
+    lineHeight: 20,
+  },
+  termsLink: {
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  termsLinkText: {
+    color: '#9499a5',
+    fontSize: 13,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
+  },
+  termsErrorText: {
+    color: '#d53d18',
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 8,
   },
 });

@@ -276,7 +276,32 @@ export default function SideQuestDetailScreen() {
               )}
             </TouchableOpacity>
           ) : (
-            <View style={styles.headerSpacer} />
+            <TouchableOpacity
+              style={styles.deleteButton}
+              activeOpacity={0.88}
+              onPress={() => {
+                if (!sidequestId) return;
+                const reasonKeys = ['spam', 'harassment', 'offensive', 'explicit', 'other'] as const;
+                Alert.alert(
+                  t('report.title'),
+                  undefined,
+                  [
+                    ...reasonKeys.map((reason) => ({
+                      text: t(`report.reason.${reason}`),
+                      onPress: () => {
+                        void apiFetch('/api/reports', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ contentType: 'activity', contentId: sidequestId, reason }),
+                        }).then(() => Alert.alert(t('report.success'))).catch(() => Alert.alert(t('report.failed')));
+                      },
+                    })),
+                    { text: t('common.cancel'), style: 'cancel' as const },
+                  ],
+                );
+              }}>
+              <Ionicons name="flag-outline" size={20} color={COLORS.textMeta} />
+            </TouchableOpacity>
           )}
         </View>
 
