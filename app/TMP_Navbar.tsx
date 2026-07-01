@@ -23,6 +23,7 @@ const ICON_BY_TYPE: Record<AppNotification['type'], { name: keyof typeof Ionicon
   sidequest_revealed: { name: 'gift-outline', background: '#d79a19', color: '#fff' },
   chat: { name: 'chatbubble-outline', background: PRIMARY_COLOR, color: '#fff' },
   expense: { name: 'cash-outline', background: '#2f9e6f', color: '#fff' },
+  support_reply: { name: 'mail-outline', background: SECONDARY_COLOR, color: '#fff' },
 };
 
 const NOTIFICATIONS_CACHE_KEY = '/api/notifications';

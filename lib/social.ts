@@ -16,7 +16,7 @@ export type NotificationPreferences = {
 // display-ready as-is.
 export type AppNotification = {
   id: string;
-  type: 'member_joined' | 'new_activity' | 'new_hidden_sidequest' | 'sidequest_revealed' | 'chat' | 'expense';
+  type: 'member_joined' | 'new_activity' | 'new_hidden_sidequest' | 'sidequest_revealed' | 'chat' | 'expense' | 'support_reply';
   title: string;
   body: string;
   createdAt: string;
