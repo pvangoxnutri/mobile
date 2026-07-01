@@ -133,6 +133,7 @@ export default function TripDetailsScreen() {
   const lastChatTimestampRef = useRef<string | null>(null);
   const lastReadAtRef = useRef<string>(new Date(Date.now() - 24 * 3600 * 1000).toISOString());
   const chatScrollRef = useRef<FlatList<ChatMsg> | null>(null);
+  const chatInputRef = useRef<TextInput | null>(null);
   // Whether the user is currently scrolled near the bottom of the chat —
   // drives whether an incoming message should auto-scroll into view or
   // leave them undisturbed while reading older history.
@@ -334,12 +335,17 @@ export default function TripDetailsScreen() {
     const heartbeatId = setInterval(() => void sendChatHeartbeat(), 15000);
     const presencePollId = setInterval(() => void loadChatPresence(), 5000);
 
+    const keyboardSub = Keyboard.addListener('keyboardDidShow', () => {
+      if (chatNearBottomRef.current) chatScrollRef.current?.scrollToEnd({ animated: false });
+    });
+
     return () => {
       active = false;
       if (msgPollId) clearInterval(msgPollId);
       clearInterval(heartbeatId);
       clearInterval(presencePollId);
       if (chatErrorTimeoutRef.current) clearTimeout(chatErrorTimeoutRef.current);
+      keyboardSub.remove();
       void apiFetch(`/api/trips/${id}/chat/presence`, { method: 'DELETE' }).catch(() => {});
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -605,6 +611,7 @@ export default function TripDetailsScreen() {
       },
     ]);
     setChatDraft('');
+    chatInputRef.current?.clear();
     setChatPendingImage(null);
     setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: false }), 700);
 
@@ -1345,6 +1352,7 @@ export default function TripDetailsScreen() {
                 </TouchableOpacity>
                 <Animated.View style={{ flex: 1, opacity: chatInputOpacityRef }}>
                   <TextInput
+                    ref={chatInputRef}
                     value={chatDraft}
                     onChangeText={setChatDraft}
                     onFocus={() => {
@@ -1353,7 +1361,6 @@ export default function TripDetailsScreen() {
                         duration: 300,
                         useNativeDriver: false,
                       }).start();
-                      setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: true }), 250);
                     }}
                     onBlur={() => {
                       Animated.timing(chatInputOpacityRef, {
@@ -2636,7 +2643,7 @@ const styles = StyleSheet.create({
   chatList: {
     paddingTop: 18,
     paddingBottom: 10,
-    gap: 6,
+    gap: 2,
   },
   chatTimeLabel: {
     textAlign: 'center',
@@ -2648,7 +2655,7 @@ const styles = StyleSheet.create({
   },
   chatMessageWrapOwn: {
     alignItems: 'flex-end',
-    marginVertical: 3,
+    marginVertical: 1,
   },
   chatSystemLabel: {
     textAlign: 'center',
@@ -2660,7 +2667,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: 8,
-    marginVertical: 3,
+    marginVertical: 1,
   },
   chatAvatar: {
     width: 28,
