@@ -103,12 +103,16 @@ export default function SupportConversationScreen() {
           attachmentUrls: uploadedUrls.filter(Boolean),
         }),
       });
-      if (!res.ok) throw new Error();
+      if (!res.ok) {
+        const body = await res.text().catch(() => '');
+        throw new Error(`${res.status}: ${body}`);
+      }
       setReply('');
       setReplyAttachments([]);
       await loadTicket();
       setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 150);
-    } catch {
+    } catch (err) {
+      if (__DEV__) console.error('[Support] send failed:', err);
       setSendError(t('support.sendFailed'));
     } finally {
       setSending(false);

@@ -131,14 +131,18 @@ export default function SupportScreen() {
           attachmentUrls: uploadedUrls.filter(Boolean),
         }),
       });
-      if (!response.ok) throw new Error();
+      if (!response.ok) {
+        const body = await response.text().catch(() => '');
+        throw new Error(`${response.status}: ${body}`);
+      }
       await loadTickets();
       setSubject('');
       setDescription('');
       setAttachments([]);
       setCategory('bug');
       playSuccess();
-    } catch {
+    } catch (err) {
+      if (__DEV__) console.error('[Support] submit failed:', err);
       setError(t('support.errorFailed'));
     } finally {
       setSubmitting(false);
