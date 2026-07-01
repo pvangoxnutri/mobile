@@ -737,7 +737,7 @@ export default function ProfileScreen() {
             icon: 'mail-outline',
             label: t('profile.support.contactSupport'),
             accent: COLORS.secondary,
-            onPress: () => void WebBrowser.openBrowserAsync('mailto:support@sidequesttravel.app'),
+            onPress: () => router.push('/support' as never),
           },
           {
             icon: 'shield-checkmark-outline',

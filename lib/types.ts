@@ -162,3 +162,37 @@ export interface LinkPreview {
   description?: string | null;
   imageUrl?: string | null;
 }
+
+export interface SupportAttachment {
+  id: string;
+  fileUrl: string;
+  fileType: string;
+}
+
+export interface SupportMessage {
+  id: string;
+  senderType: 'user' | 'admin';
+  body: string;
+  createdAt: string;
+  attachments: SupportAttachment[];
+}
+
+export interface SupportTicketSummary {
+  id: string;
+  category: string;
+  subject: string;
+  status: 'open' | 'waiting_for_reply' | 'closed';
+  hasUnreadAdminReply: boolean;
+  createdAt: string;
+  updatedAt: string;
+  messageCount: number;
+}
+
+export interface SupportTicketDetail {
+  id: string;
+  category: string;
+  subject: string;
+  status: 'open' | 'waiting_for_reply' | 'closed';
+  createdAt: string;
+  messages: SupportMessage[];
+}
