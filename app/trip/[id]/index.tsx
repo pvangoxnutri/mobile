@@ -67,6 +67,9 @@ type ChatMsg = {
   // 'failed' — the real (remote) imageUrl only exists once the upload and
   // the POST have both succeeded.
   localImageUri?: string | null;
+  // True when the message author has blocked the current user.
+  // Set by the server — the client should show a blocked placeholder.
+  isBlockedByAuthor?: boolean;
 };
 
 // Maps a known SystemEventType to its translated rendering. Falls back to
@@ -299,7 +302,9 @@ export default function TripDetailsScreen() {
   }, [members]);
 
   const hasHiddenMessages = useMemo(
-    () => chatMessages.some((m) => m.userId != null && blockedUserIds.has(m.userId)),
+    () => chatMessages.some((m) =>
+      (m.userId != null && blockedUserIds.has(m.userId)) || !!m.isBlockedByAuthor,
+    ),
     [chatMessages, blockedUserIds],
   );
 
@@ -743,7 +748,9 @@ export default function TripDetailsScreen() {
   function renderChatMessageItem(message: ChatMsg, index: number) {
     const ownMessage = message.userId === user?.id;
     const systemMessage = message.isSystem;
-    const isBlocked = !ownMessage && !systemMessage && !!(message.userId && blockedUserIds.has(message.userId));
+    const isBlocked = !ownMessage && !systemMessage && (
+      !!(message.userId && blockedUserIds.has(message.userId)) || !!message.isBlockedByAuthor
+    );
     const prevMessage = index > 0 ? chatMessages[index - 1] : null;
     const showTime =
       !prevMessage ||
