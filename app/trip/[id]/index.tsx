@@ -698,7 +698,7 @@ export default function TripDetailsScreen() {
           {
             text: t('report.blockUser'),
             style: 'destructive',
-            onPress: () => void doBlock(targetUserId),
+            onPress: () => void doBlock(targetUserId, targetName),
           },
         ],
       );
@@ -708,7 +708,7 @@ export default function TripDetailsScreen() {
     }
   }
 
-  async function doBlock(targetUserId: string) {
+  async function doBlock(targetUserId: string, targetName: string) {
     try {
       await apiFetch(`/api/users/${targetUserId}/block`, {
         method: 'POST',
@@ -716,7 +716,7 @@ export default function TripDetailsScreen() {
         body: JSON.stringify({ tripId: id }),
       });
       setBlockedUserIds((prev) => new Set([...prev, targetUserId]));
-      Alert.alert(t('report.blockSuccess'));
+      Alert.alert(t('report.blockSuccess', { name: targetName }));
     } catch {
       Alert.alert(t('report.blockFailed'));
     }
