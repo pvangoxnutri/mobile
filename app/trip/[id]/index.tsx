@@ -933,58 +933,14 @@ export default function TripDetailsScreen() {
             </View>
           </HeroShell>
 
-          <View style={styles.spotifyRow}>
-            <View style={styles.spotifyRowIcon}>
-              <FontAwesome name="spotify" size={18} color="#fff" />
+          <TouchableOpacity style={styles.functionsCard} activeOpacity={0.86} onPress={() => router.push(`/trip/${id}/functions`)}>
+            <View style={styles.functionsCardIcon}>
+              <Ionicons name="apps-outline" size={20} color={COLORS.primary} />
             </View>
-            <View style={styles.spotifyRowBody}>
-              <Text style={styles.spotifyRowTitle}>Spotify</Text>
-              <Text style={styles.spotifyRowSubtitle}>{trip?.spotifyUrl ? t('trip.spotify.linked') : t('trip.spotify.notLinked')}</Text>
+            <View style={styles.functionsCardBody}>
+              <Text style={styles.functionsCardTitle}>{t('trip.functions.title')}</Text>
+              <Text style={styles.functionsCardSubtitle}>{t('trip.functions.subtitle')}</Text>
             </View>
-            <View style={styles.spotifyRowButtons}>
-              {trip?.spotifyUrl ? (
-                <>
-                  <TouchableOpacity
-                    activeOpacity={0.85}
-                    style={[styles.spotifyRowBtn, styles.spotifyRowBtnPrimary]}
-                    onPress={() => void openSpotifyLink(trip.spotifyUrl!)}>
-                    <Ionicons name="play" size={11} color="#1cb35b" />
-                    <Text style={styles.spotifyRowBtnPrimaryText}>{t('common.open')}</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    activeOpacity={0.85}
-                    style={[styles.spotifyRowBtn, styles.spotifyRowBtnGhost]}
-                    onPress={() => {
-                      setSpotifyUrlDraft(trip.spotifyUrl ?? '');
-                      setSpotifyMessage('');
-                      setSpotifyModalOpen(true);
-                    }}>
-                    <Ionicons name="pencil" size={11} color="#161821" />
-                    <Text style={styles.spotifyRowBtnGhostText}>{t('common.change')}</Text>
-                  </TouchableOpacity>
-                </>
-              ) : (
-                <TouchableOpacity
-                  activeOpacity={0.85}
-                  style={[styles.spotifyRowBtn, styles.spotifyRowBtnPrimary]}
-                  onPress={() => {
-                    setSpotifyUrlDraft('');
-                    setSpotifyMessage('');
-                    setSpotifyModalOpen(true);
-                  }}>
-                  <Ionicons name="add" size={13} color="#1cb35b" />
-                  <Text style={styles.spotifyRowBtnPrimaryText}>{t('common.add')}</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          </View>
-          {spotifyMessage ? <Text style={styles.spotifyMessage}>{spotifyMessage}</Text> : null}
-
-          <TouchableOpacity style={styles.costSplitRow} activeOpacity={0.86} onPress={() => router.push(`/trip/${id}/split`)}>
-            <View style={styles.costSplitRowIcon}>
-              <Ionicons name="calculator-outline" size={18} color={COLORS.primary} />
-            </View>
-            <Text style={styles.costSplitRowLabel}>{t('trip.costSplit')}</Text>
             <Ionicons name="chevron-forward" size={20} color="#b2b7c0" />
           </TouchableOpacity>
 
@@ -1957,11 +1913,11 @@ const styles = StyleSheet.create({
     borderColor: '#eaedf2',
     backgroundColor: '#ffffff',
   },
-  costSplitRow: {
+  functionsCard: {
     marginTop: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 14,
     paddingHorizontal: 14,
     paddingVertical: 16,
     borderRadius: 22,
@@ -1969,27 +1925,28 @@ const styles = StyleSheet.create({
     borderColor: '#eceef2',
     backgroundColor: '#fff',
   },
-  costSplitRowIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
+  functionsCardIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: '#fff0f4',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  costSplitRowLabel: {
+  functionsCardBody: {
     flex: 1,
+  },
+  functionsCardTitle: {
     color: '#161821',
     fontSize: 15,
     fontWeight: '800',
     letterSpacing: -0.3,
   },
-  costSplitLabel: {
-    flex: 1,
-    marginLeft: 12,
-    fontSize: 15,
+  functionsCardSubtitle: {
+    marginTop: 2,
+    color: '#8a909d',
+    fontSize: 12.5,
     fontWeight: '600',
-    color: '#1b1e28',
   },
   heroChip: {
     flexDirection: 'row',
