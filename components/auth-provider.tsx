@@ -88,7 +88,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return fallbackProfile;
       }
 
-      return (await response.json()) as UserInfo;
+      const profile = (await response.json()) as UserInfo;
+      if (profile.isBanned) {
+        await supabase.auth.signOut();
+        throw new Error('banned');
+      }
+      return profile;
     } catch (err) {
       if (controller.signal.aborted) {
         console.warn(`[AUTH] sync timed out after ${timeoutMs}ms, using fallback profile`);

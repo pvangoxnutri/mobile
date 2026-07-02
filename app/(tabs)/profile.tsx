@@ -783,6 +783,20 @@ export default function ProfileScreen() {
       />
       <Text style={styles.moderationNotice}>{t('profile.support.moderation')}</Text>
 
+      {user?.role === 'admin' ? (
+        <SectionCard
+          title="Admin"
+          items={[
+            {
+              icon: 'shield-checkmark-outline',
+              label: 'Moderation',
+              accent: '#d53d18',
+              onPress: () => router.push('/admin/moderation' as never),
+            },
+          ]}
+        />
+      ) : null}
+
       <SectionCard
         title={t('profile.sections.account')}
         items={[

@@ -3,7 +3,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
 import type { Href } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Avatar, { getInitials } from '@/components/avatar';
 import { getCached, setCached } from '@/lib/cache';
@@ -11,11 +11,6 @@ import { formatRelativeTime } from '@/lib/format-time';
 import { loadNotifications, markNotificationsAsRead, type AppNotification } from '@/lib/social';
 import { PRIMARY_COLOR, SECONDARY_COLOR } from '@/constants/colors';
 
-// Mirrors Home Activity's avatar slot (app/(tabs)/index.tsx) — a circular
-// 36px badge to the left of the row. Notifications don't always have one
-// single knowable actor (e.g. a hidden SideQuest, or "5 new chat messages"),
-// so this is a type icon rather than a person's photo, but the size,
-// placement, and muted treatment for "identity withheld" rows match exactly.
 const ICON_BY_TYPE: Record<AppNotification['type'], { name: keyof typeof Ionicons.glyphMap; background: string; color: string }> = {
   member_joined: { name: 'person-add-outline', background: SECONDARY_COLOR, color: '#fff' },
   new_activity: { name: 'calendar-outline', background: '#d79a19', color: '#fff' },
@@ -24,6 +19,7 @@ const ICON_BY_TYPE: Record<AppNotification['type'], { name: keyof typeof Ionicon
   chat: { name: 'chatbubble-outline', background: PRIMARY_COLOR, color: '#fff' },
   expense: { name: 'cash-outline', background: '#2f9e6f', color: '#fff' },
   support_reply: { name: 'mail-outline', background: SECONDARY_COLOR, color: '#fff' },
+  system_message: { name: 'warning-outline', background: '#d53d18', color: '#fff' },
 };
 
 const NOTIFICATIONS_CACHE_KEY = '/api/notifications';
@@ -33,16 +29,13 @@ export default function TmpNavbarScreen() {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [error, setError] = useState('');
   const [now, setNow] = useState(() => new Date());
+  const [systemMsg, setSystemMsg] = useState<AppNotification | null>(null);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 30000);
     return () => clearInterval(timer);
   }, []);
 
-  // loadNotifications() itself never touches read state — it's a plain
-  // fetch. The ONLY two triggers allowed to mark notifications as read are
-  // (a) this screen gaining focus (opening the bell), handled below, and
-  // (b) tapping a specific notification, handled in that row's onPress.
   const loadAlerts = useCallback(() => {
     let active = true;
 
@@ -68,72 +61,102 @@ export default function TmpNavbarScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      // Opening the notification center clears the unread indicator. Fire
-      // and forget — the TopAlertsButton in any tab refetches its unread
-      // count next time that tab gains focus, so the dot vanishes on the
-      // way back out.
       void markNotificationsAsRead();
       return loadAlerts();
     }, [loadAlerts]),
   );
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={[styles.screen, { paddingTop: Math.max(insets.top, 18) + 8, paddingBottom: Math.max(insets.bottom, 20) + 28 }]}
-      showsVerticalScrollIndicator={false}>
-      <View style={styles.topBar}>
-        <TouchableOpacity style={styles.topButton} activeOpacity={0.84} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color="#161821" />
-        </TouchableOpacity>
-        <Text style={styles.topTitle}>Notifications</Text>
-        <View style={styles.topSpacer} />
-      </View>
+    <>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={[styles.screen, { paddingTop: Math.max(insets.top, 18) + 8, paddingBottom: Math.max(insets.bottom, 20) + 28 }]}
+        showsVerticalScrollIndicator={false}>
+        <View style={styles.topBar}>
+          <TouchableOpacity style={styles.topButton} activeOpacity={0.84} onPress={() => router.back()}>
+            <Ionicons name="arrow-back" size={24} color="#161821" />
+          </TouchableOpacity>
+          <Text style={styles.topTitle}>Notifications</Text>
+          <View style={styles.topSpacer} />
+        </View>
 
-      <Text style={styles.copy}>Recent activity across your trips, SideQuests, and group chats.</Text>
+        <Text style={styles.copy}>Recent activity across your trips, SideQuests, and group chats.</Text>
 
-      <View style={styles.feedCard}>
-        <Text style={styles.sectionTitle}>All activity</Text>
-        {notifications.length > 0 ? (
-          notifications.map((item, index) => {
-            const icon = ICON_BY_TYPE[item.type];
-            return (
-              <TouchableOpacity
-                key={item.id}
-                activeOpacity={item.route ? 0.84 : 1}
-                disabled={!item.route}
-                style={[styles.feedRow, index > 0 && styles.feedRowBorder]}
-                onPress={() => {
-                  void markNotificationsAsRead();
-                  if (item.route) router.push(item.route as Href);
-                }}>
-                {item.actorName ? (
-                  <Avatar uri={item.actorAvatarUrl} name={item.actorName} fallbackText={getInitials(item.actorName)} size={36} />
-                ) : (
-                  <View style={[styles.feedIcon, { backgroundColor: icon?.background ?? '#9aa2ae' }]}>
-                    <Ionicons name={icon?.name ?? 'notifications-outline'} size={16} color={icon?.color ?? '#fff'} />
+        <View style={styles.feedCard}>
+          <Text style={styles.sectionTitle}>All activity</Text>
+          {notifications.length > 0 ? (
+            notifications.map((item, index) => {
+              const icon = ICON_BY_TYPE[item.type];
+              const isSystemMsg = item.type === 'system_message';
+              return (
+                <TouchableOpacity
+                  key={item.id}
+                  activeOpacity={0.84}
+                  style={[styles.feedRow, index > 0 && styles.feedRowBorder, isSystemMsg && styles.feedRowSystem]}
+                  onPress={() => {
+                    void markNotificationsAsRead();
+                    if (isSystemMsg) {
+                      setSystemMsg(item);
+                    } else if (item.route) {
+                      router.push(item.route as Href);
+                    }
+                  }}>
+                  {item.actorName ? (
+                    <Avatar uri={item.actorAvatarUrl} name={item.actorName} fallbackText={getInitials(item.actorName)} size={36} />
+                  ) : (
+                    <View style={[styles.feedIcon, { backgroundColor: icon?.background ?? '#9aa2ae' }]}>
+                      <Ionicons name={icon?.name ?? 'notifications-outline'} size={16} color={icon?.color ?? '#fff'} />
+                    </View>
+                  )}
+                  <View style={styles.feedCopy}>
+                    <Text style={[styles.feedTitle, isSystemMsg && styles.feedTitleSystem]} numberOfLines={isSystemMsg ? 1 : 2}>
+                      <Text style={styles.feedTitleBold}>{item.title}</Text>
+                      {!isSystemMsg && item.body ? ` ${item.body}` : ''}
+                    </Text>
+                    {isSystemMsg ? (
+                      <Text style={styles.feedSystemTap}>Tryck för att läsa meddelandet</Text>
+                    ) : null}
+                    <Text style={styles.feedMeta}>{formatRelativeTime(item.createdAt, now)}</Text>
                   </View>
-                )}
-                <View style={styles.feedCopy}>
-                  <Text style={styles.feedTitle} numberOfLines={2}>
-                    <Text style={styles.feedTitleBold}>{item.title}</Text>
-                    {item.body ? ` ${item.body}` : ''}
-                  </Text>
-                  <Text style={styles.feedMeta}>{formatRelativeTime(item.createdAt, now)}</Text>
-                </View>
-              </TouchableOpacity>
-            );
-          })
-        ) : (
-          <View>
-            <Text style={styles.emptyText}>No notifications yet</Text>
-            <Text style={styles.emptyBody}>Updates from your adventures will appear here.</Text>
-          </View>
-        )}
-      </View>
+                  {isSystemMsg ? (
+                    <Ionicons name="chevron-forward" size={16} color="#d53d18" />
+                  ) : null}
+                </TouchableOpacity>
+              );
+            })
+          ) : (
+            <View>
+              <Text style={styles.emptyText}>No notifications yet</Text>
+              <Text style={styles.emptyBody}>Updates from your adventures will appear here.</Text>
+            </View>
+          )}
+        </View>
 
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
-    </ScrollView>
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      </ScrollView>
+
+      {/* System message modal */}
+      <Modal
+        visible={systemMsg !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSystemMsg(null)}>
+        <Pressable style={styles.msgBackdrop} onPress={() => setSystemMsg(null)} />
+        <View style={[styles.msgCard, { marginBottom: Math.max(insets.bottom, 20) + 20 }]}>
+          <View style={styles.msgIconRow}>
+            <View style={styles.msgIcon}>
+              <Ionicons name="warning" size={22} color="#fff" />
+            </View>
+            <Text style={styles.msgFrom}>Meddelande från SideQuest</Text>
+          </View>
+          <Text style={styles.msgTitle}>{systemMsg?.title}</Text>
+          <Text style={styles.msgBody}>{systemMsg?.body}</Text>
+          <TouchableOpacity style={styles.msgClose} activeOpacity={0.85} onPress={() => setSystemMsg(null)}>
+            <Text style={styles.msgCloseText}>Stäng</Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
+    </>
   );
 }
 
@@ -245,5 +268,81 @@ const styles = StyleSheet.create({
     marginTop: 14,
     color: '#d53d18',
     textAlign: 'center',
+  },
+  feedRowSystem: {
+    backgroundColor: '#fff5f5',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    marginTop: 4,
+  },
+  feedTitleSystem: {
+    color: '#b91c1c',
+  },
+  feedSystemTap: {
+    fontSize: 11,
+    color: '#d53d18',
+    fontWeight: '600',
+    marginTop: 1,
+  },
+  // System message modal
+  msgBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  msgCard: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    gap: 12,
+  },
+  msgIconRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 4,
+  },
+  msgIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#d53d18',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  msgFrom: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#d53d18',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  msgTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#14161d',
+    letterSpacing: -0.5,
+  },
+  msgBody: {
+    fontSize: 15,
+    color: '#4a5060',
+    lineHeight: 22,
+  },
+  msgClose: {
+    marginTop: 8,
+    height: 50,
+    borderRadius: 16,
+    backgroundColor: '#14161d',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  msgCloseText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#fff',
   },
 });

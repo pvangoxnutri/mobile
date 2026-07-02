@@ -6,6 +6,7 @@ export interface UserInfo {
   bio?: string | null;
   hasCompletedOnboarding: boolean;
   role?: string | null;
+  isBanned?: boolean;
   language?: 'en' | 'sv';
 }
 
