@@ -73,6 +73,18 @@ export async function apiFetch(path: string, options: RequestInit = {}, timeoutM
     });
     markStartup(`[API] fetch ${method} ${path} → ${response.status} (${Date.now() - fetchStart}ms, getSession was ${sessionMs}ms)`);
 
+    if (response.status === 403) {
+      try {
+        const body = await response.clone().json() as { error?: string };
+        if (body.error === 'banned') {
+          console.warn(`[API] ${method} ${path} → 403 banned — signing out`);
+          await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+          router.replace('/(auth)/login');
+          return response;
+        }
+      } catch { /* not a banned JSON response */ }
+    }
+
     if (response.status === 401) {
       console.warn(`[API] ${method} ${path} → 401 (auth: ${auth}) — signing out`);
       await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
