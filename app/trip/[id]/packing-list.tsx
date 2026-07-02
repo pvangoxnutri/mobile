@@ -5,6 +5,11 @@ import { useFocusEffect } from '@react-navigation/native';
 import {
   ActivityIndicator,
   Alert,
+  FlatList,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -16,8 +21,11 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/components/auth-provider';
 import { useI18n } from '@/components/i18n-provider';
+import Avatar from '@/components/avatar';
 import { apiFetch, apiJson } from '@/lib/api';
 import { COLORS } from '@/constants/design-tokens';
+
+type Member = { id: string; name: string; avatarUrl?: string | null; isOwner: boolean };
 
 type PackingItem = {
   id: string;
@@ -25,15 +33,30 @@ type PackingItem = {
   isChecked: boolean;
   sortOrder: number;
   createdByUserId: string;
+  assignedToUserId?: string | null;
+  assignedToName?: string | null;
+  assignedToAvatarUrl?: string | null;
 };
 
 type PackingCategory = {
   id: string;
   name: string;
+  scope: 'shared' | 'private';
   sortOrder: number;
   createdByUserId: string;
   items: PackingItem[];
 };
+
+type PackingListData = {
+  shared: PackingCategory[];
+  private: PackingCategory[];
+};
+
+type Tab = 'shared' | 'private';
+
+type DraftRow = { key: string; text: string };
+
+const PRIVATE_COLOR = '#8b5cf6';
 
 export default function PackingListScreen() {
   const { id: tripId } = useLocalSearchParams<{ id: string }>();
@@ -41,26 +64,39 @@ export default function PackingListScreen() {
   const { t } = useI18n();
   const insets = useSafeAreaInsets();
 
-  const [categories, setCategories] = useState<PackingCategory[]>([]);
+  const [data, setData] = useState<PackingListData>({ shared: [], private: [] });
+  const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
+  const [activeTab, setActiveTab] = useState<Tab>('shared');
 
+  // Draft rows per category: notepad UX
+  const [drafts, setDrafts] = useState<Record<string, DraftRow[]>>({});
+  const [savingDraft, setSavingDraft] = useState<string | null>(null);
+
+  // Add category inline form
+  const [addCategoryOpen, setAddCategoryOpen] = useState(false);
   const [addCategoryDraft, setAddCategoryDraft] = useState('');
   const [addingCategory, setAddingCategory] = useState(false);
-  const [addCategoryOpen, setAddCategoryOpen] = useState(false);
-
-  const [addItemDrafts, setAddItemDrafts] = useState<Record<string, string>>({});
-  const [addingItemFor, setAddingItemFor] = useState<string | null>(null);
-
   const categoryInputRef = useRef<TextInput>(null);
+
+  // Assign member picker
+  const [assignPickerOpen, setAssignPickerOpen] = useState(false);
+  const [assignTarget, setAssignTarget] = useState<{ categoryId: string; item: PackingItem } | null>(null);
+
+  const draftRefs = useRef<Record<string, TextInput | null>>({});
 
   const load = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true); else setLoading(true);
     setError('');
     try {
-      const data = await apiJson<PackingCategory[]>(`/api/trips/${tripId}/packing-list`);
-      setCategories(data);
+      const [listData, membersData] = await Promise.all([
+        apiJson<PackingListData>(`/api/trips/${tripId}/packing-list`),
+        apiJson<Member[]>(`/api/trips/${tripId}/members`),
+      ]);
+      setData(listData);
+      setMembers(membersData);
     } catch {
       setError(t('trip.packingList.loadError'));
     } finally {
@@ -71,6 +107,70 @@ export default function PackingListScreen() {
 
   useFocusEffect(useCallback(() => { void load(); }, [load]));
 
+  const categories = activeTab === 'shared' ? data.shared : data.private;
+
+  const totalItems = categories.reduce((n, c) => n + c.items.length, 0);
+  const checkedItems = categories.reduce((n, c) => n + c.items.filter((i) => i.isChecked).length, 0);
+
+  // --- Draft helpers ---
+
+  function makeDraftKey() {
+    return `d_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  }
+
+  function ensureDraft(categoryId: string) {
+    setDrafts((prev) => {
+      const existing = prev[categoryId] ?? [];
+      if (existing.some((d) => d.text === '')) return prev;
+      return { ...prev, [categoryId]: [...existing, { key: makeDraftKey(), text: '' }] };
+    });
+  }
+
+  function updateDraft(categoryId: string, key: string, text: string) {
+    setDrafts((prev) => ({
+      ...prev,
+      [categoryId]: (prev[categoryId] ?? []).map((d) => d.key === key ? { ...d, text } : d),
+    }));
+  }
+
+  function removeDraft(categoryId: string, key: string) {
+    setDrafts((prev) => ({
+      ...prev,
+      [categoryId]: (prev[categoryId] ?? []).filter((d) => d.key !== key),
+    }));
+  }
+
+  async function commitDraft(categoryId: string, draftKey: string, text: string) {
+    const trimmed = text.trim();
+    if (!trimmed || savingDraft === draftKey) return;
+    setSavingDraft(draftKey);
+    try {
+      const created = await apiJson<PackingItem>(
+        `/api/trips/${tripId}/packing-list/categories/${categoryId}/items`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: trimmed }) },
+      );
+      setData((prev) => ({
+        ...prev,
+        [activeTab]: prev[activeTab].map((c) =>
+          c.id === categoryId ? { ...c, items: [...c.items, created] } : c,
+        ),
+      }));
+      removeDraft(categoryId, draftKey);
+      const newKey = makeDraftKey();
+      setDrafts((prev) => ({
+        ...prev,
+        [categoryId]: [...(prev[categoryId] ?? []).filter((d) => d.key !== draftKey), { key: newKey, text: '' }],
+      }));
+      setTimeout(() => draftRefs.current[newKey]?.focus(), 60);
+    } catch {
+      Alert.alert(t('trip.packingList.addItemError'));
+    } finally {
+      setSavingDraft(null);
+    }
+  }
+
+  // --- Category handlers ---
+
   async function handleAddCategory() {
     const name = addCategoryDraft.trim();
     if (!name) return;
@@ -79,9 +179,12 @@ export default function PackingListScreen() {
       const created = await apiJson<PackingCategory>(`/api/trips/${tripId}/packing-list/categories`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({ name, scope: activeTab }),
       });
-      setCategories((prev) => [...prev, { ...created, items: [] }]);
+      setData((prev) => ({
+        ...prev,
+        [activeTab]: [...prev[activeTab], { ...created, items: [] }],
+      }));
       setAddCategoryDraft('');
       setAddCategoryOpen(false);
     } catch {
@@ -98,12 +201,11 @@ export default function PackingListScreen() {
       [
         { text: t('common.cancel'), style: 'cancel' },
         {
-          text: t('common.delete'),
-          style: 'destructive',
+          text: t('common.delete'), style: 'destructive',
           onPress: async () => {
             try {
               await apiFetch(`/api/trips/${tripId}/packing-list/categories/${categoryId}`, { method: 'DELETE' });
-              setCategories((prev) => prev.filter((c) => c.id !== categoryId));
+              setData((prev) => ({ ...prev, [activeTab]: prev[activeTab].filter((c) => c.id !== categoryId) }));
             } catch {
               Alert.alert(t('trip.packingList.deleteCategoryError'));
             }
@@ -113,41 +215,18 @@ export default function PackingListScreen() {
     );
   }
 
-  async function handleAddItem(categoryId: string) {
-    const text = (addItemDrafts[categoryId] ?? '').trim();
-    if (!text) return;
-    setAddingItemFor(categoryId);
-    try {
-      const created = await apiJson<PackingItem>(
-        `/api/trips/${tripId}/packing-list/categories/${categoryId}/items`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text }),
-        },
-      );
-      setCategories((prev) =>
-        prev.map((c) =>
-          c.id === categoryId ? { ...c, items: [...c.items, created] } : c,
-        ),
-      );
-      setAddItemDrafts((prev) => ({ ...prev, [categoryId]: '' }));
-    } catch {
-      Alert.alert(t('trip.packingList.addItemError'));
-    } finally {
-      setAddingItemFor(null);
-    }
-  }
+  // --- Item handlers ---
 
   async function handleToggleItem(categoryId: string, item: PackingItem) {
     const newChecked = !item.isChecked;
-    setCategories((prev) =>
-      prev.map((c) =>
+    setData((prev) => ({
+      ...prev,
+      [activeTab]: prev[activeTab].map((c) =>
         c.id === categoryId
-          ? { ...c, items: c.items.map((i) => (i.id === item.id ? { ...i, isChecked: newChecked } : i)) }
+          ? { ...c, items: c.items.map((i) => i.id === item.id ? { ...i, isChecked: newChecked } : i) }
           : c,
       ),
-    );
+    }));
     try {
       await apiFetch(`/api/trips/${tripId}/packing-list/items/${item.id}`, {
         method: 'PATCH',
@@ -155,32 +234,73 @@ export default function PackingListScreen() {
         body: JSON.stringify({ isChecked: newChecked }),
       });
     } catch {
-      // Revert on failure
-      setCategories((prev) =>
-        prev.map((c) =>
+      // Revert
+      setData((prev) => ({
+        ...prev,
+        [activeTab]: prev[activeTab].map((c) =>
           c.id === categoryId
-            ? { ...c, items: c.items.map((i) => (i.id === item.id ? { ...i, isChecked: item.isChecked } : i)) }
+            ? { ...c, items: c.items.map((i) => i.id === item.id ? { ...i, isChecked: item.isChecked } : i) }
             : c,
         ),
-      );
+      }));
     }
   }
 
   async function handleDeleteItem(categoryId: string, itemId: string) {
     try {
       await apiFetch(`/api/trips/${tripId}/packing-list/items/${itemId}`, { method: 'DELETE' });
-      setCategories((prev) =>
-        prev.map((c) =>
+      setData((prev) => ({
+        ...prev,
+        [activeTab]: prev[activeTab].map((c) =>
           c.id === categoryId ? { ...c, items: c.items.filter((i) => i.id !== itemId) } : c,
         ),
-      );
+      }));
     } catch {
       Alert.alert(t('trip.packingList.deleteItemError'));
     }
   }
 
-  const totalItems = categories.reduce((n, c) => n + c.items.length, 0);
-  const checkedItems = categories.reduce((n, c) => n + c.items.filter((i) => i.isChecked).length, 0);
+  // --- Assignment ---
+
+  async function handleAssign(memberId: string | null) {
+    if (!assignTarget) return;
+    const { categoryId, item } = assignTarget;
+    setAssignPickerOpen(false);
+
+    const assignedMember = memberId ? members.find((m) => m.id === memberId) : null;
+    setData((prev) => ({
+      ...prev,
+      [activeTab]: prev[activeTab].map((c) =>
+        c.id === categoryId
+          ? {
+              ...c,
+              items: c.items.map((i) =>
+                i.id === item.id
+                  ? { ...i, assignedToUserId: memberId, assignedToName: assignedMember?.name ?? null, assignedToAvatarUrl: assignedMember?.avatarUrl ?? null }
+                  : i,
+              ),
+            }
+          : c,
+      ),
+    }));
+
+    try {
+      const body = memberId
+        ? JSON.stringify({ assignedToUserId: memberId })
+        : JSON.stringify({ clearAssignment: true });
+      await apiFetch(`/api/trips/${tripId}/packing-list/items/${item.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+      });
+    } catch {
+      Alert.alert(t('trip.packingList.assignError'));
+      void load();
+    }
+    setAssignTarget(null);
+  }
+
+  const isPrivate = activeTab === 'private';
 
   return (
     <View style={styles.screen}>
@@ -191,19 +311,50 @@ export default function PackingListScreen() {
         </TouchableOpacity>
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle}>{t('trip.packingList.title')}</Text>
-          {totalItems > 0 ? (
-            <Text style={styles.headerSub}>{checkedItems}/{totalItems}</Text>
-          ) : null}
+          {totalItems > 0
+            ? <Text style={styles.headerSub}>{checkedItems}/{totalItems}</Text>
+            : null}
         </View>
         <TouchableOpacity
           style={styles.headerAddButton}
           activeOpacity={0.88}
-          onPress={() => {
-            setAddCategoryOpen(true);
-            setTimeout(() => categoryInputRef.current?.focus(), 120);
-          }}>
-          <Ionicons name="add" size={22} color={COLORS.primary} />
+          onPress={() => { setAddCategoryOpen(true); setTimeout(() => categoryInputRef.current?.focus(), 120); }}>
+          <Ionicons name="add" size={22} color={isPrivate ? PRIVATE_COLOR : COLORS.primary} />
         </TouchableOpacity>
+      </View>
+
+      {/* Tab bar */}
+      <View style={styles.tabBar}>
+        <TouchableOpacity
+          style={[styles.tab, !isPrivate && styles.tabActiveShared]}
+          activeOpacity={0.85}
+          onPress={() => setActiveTab('shared')}>
+          <Ionicons name="people-outline" size={14} color={!isPrivate ? COLORS.primary : '#8a909d'} />
+          <Text style={[styles.tabLabel, !isPrivate && styles.tabLabelActiveShared]}>
+            {t('trip.packingList.sharedTab')}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, isPrivate && styles.tabActivePrivate]}
+          activeOpacity={0.85}
+          onPress={() => setActiveTab('private')}>
+          <Ionicons name="lock-closed-outline" size={14} color={isPrivate ? PRIVATE_COLOR : '#8a909d'} />
+          <Text style={[styles.tabLabel, isPrivate && styles.tabLabelActivePrivate]}>
+            {t('trip.packingList.privateTab')}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Scope hint */}
+      <View style={[styles.scopeHint, isPrivate && styles.scopeHintPrivate]}>
+        <Ionicons
+          name={isPrivate ? 'lock-closed-outline' : 'people-outline'}
+          size={13}
+          color={isPrivate ? PRIVATE_COLOR : COLORS.primary}
+        />
+        <Text style={[styles.scopeHintText, isPrivate && styles.scopeHintTextPrivate]}>
+          {isPrivate ? t('trip.packingList.privateHint') : t('trip.packingList.sharedHint')}
+        </Text>
       </View>
 
       {loading ? (
@@ -219,176 +370,277 @@ export default function PackingListScreen() {
           </TouchableOpacity>
         </View>
       ) : (
-        <ScrollView
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom, 20) + 24 }]}
-          showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} tintColor={COLORS.primary} />}>
+        <KeyboardAvoidingView
+          style={styles.flex}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <ScrollView
+            contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom, 20) + 32 }]}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} tintColor={COLORS.primary} />
+            }>
 
-          {/* Add category input */}
-          {addCategoryOpen ? (
-            <View style={styles.addCategoryCard}>
-              <TextInput
-                ref={categoryInputRef}
-                value={addCategoryDraft}
-                onChangeText={setAddCategoryDraft}
-                placeholder={t('trip.packingList.categoryPlaceholder')}
-                placeholderTextColor="#a3a9b4"
-                style={styles.addCategoryInput}
-                returnKeyType="done"
-                onSubmitEditing={() => void handleAddCategory()}
-                autoFocus
-              />
-              <View style={styles.addCategoryRow}>
-                <TouchableOpacity
-                  style={styles.addCategoryCancel}
-                  onPress={() => { setAddCategoryOpen(false); setAddCategoryDraft(''); }}>
-                  <Text style={styles.addCategoryCancelText}>{t('common.cancel')}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.addCategoryConfirm, (!addCategoryDraft.trim() || addingCategory) && styles.addCategoryConfirmDisabled]}
-                  disabled={!addCategoryDraft.trim() || addingCategory}
-                  onPress={() => void handleAddCategory()}>
-                  {addingCategory
-                    ? <ActivityIndicator size="small" color="#fff" />
-                    : <Text style={styles.addCategoryConfirmText}>{t('trip.packingList.addCategory')}</Text>
-                  }
-                </TouchableOpacity>
-              </View>
-            </View>
-          ) : null}
-
-          {/* Empty state */}
-          {categories.length === 0 && !addCategoryOpen ? (
-            <View style={styles.emptyState}>
-              <Ionicons name="bag-outline" size={48} color="#c8cdd6" />
-              <Text style={styles.emptyTitle}>{t('trip.packingList.emptyTitle')}</Text>
-              <Text style={styles.emptySubtitle}>{t('trip.packingList.emptySubtitle')}</Text>
-              <TouchableOpacity
-                style={styles.emptyAddButton}
-                activeOpacity={0.88}
-                onPress={() => {
-                  setAddCategoryOpen(true);
-                  setTimeout(() => categoryInputRef.current?.focus(), 120);
-                }}>
-                <Ionicons name="add" size={16} color="#fff" />
-                <Text style={styles.emptyAddButtonText}>{t('trip.packingList.addFirstCategory')}</Text>
-              </TouchableOpacity>
-            </View>
-          ) : null}
-
-          {/* Categories */}
-          {categories.map((category) => (
-            <View key={category.id} style={styles.categoryCard}>
-              {/* Category header */}
-              <View style={styles.categoryHeader}>
-                <Text style={styles.categoryName}>{category.name}</Text>
-                <Text style={styles.categoryCount}>
-                  {category.items.filter((i) => i.isChecked).length}/{category.items.length}
-                </Text>
-                {(category.createdByUserId === user?.id) ? (
-                  <TouchableOpacity
-                    hitSlop={8}
-                    onPress={() => void handleDeleteCategory(category.id)}>
-                    <Ionicons name="trash-outline" size={16} color="#c2c8d2" />
-                  </TouchableOpacity>
-                ) : null}
-              </View>
-
-              {/* Items */}
-              {category.items.map((item) => (
-                <View key={item.id} style={styles.itemRow}>
-                  <TouchableOpacity
-                    style={[styles.checkbox, item.isChecked && styles.checkboxChecked]}
-                    activeOpacity={0.75}
-                    onPress={() => void handleToggleItem(category.id, item)}>
-                    {item.isChecked ? <Ionicons name="checkmark" size={13} color="#fff" /> : null}
-                  </TouchableOpacity>
-                  <Text
-                    style={[styles.itemText, item.isChecked && styles.itemTextChecked]}
-                    numberOfLines={2}>
-                    {item.text}
-                  </Text>
-                  {(item.createdByUserId === user?.id) ? (
-                    <TouchableOpacity
-                      hitSlop={8}
-                      onPress={() => void handleDeleteItem(category.id, item.id)}>
-                      <Ionicons name="close" size={16} color="#c2c8d2" />
-                    </TouchableOpacity>
-                  ) : null}
-                </View>
-              ))}
-
-              {/* Add item */}
-              <View style={styles.addItemRow}>
+            {/* Add category form */}
+            {addCategoryOpen ? (
+              <View style={[styles.addCategoryCard, isPrivate && styles.addCategoryCardPrivate]}>
                 <TextInput
-                  value={addItemDrafts[category.id] ?? ''}
-                  onChangeText={(v) => setAddItemDrafts((prev) => ({ ...prev, [category.id]: v }))}
-                  placeholder={t('trip.packingList.addItemPlaceholder')}
-                  placeholderTextColor="#b8bec8"
-                  style={styles.addItemInput}
+                  ref={categoryInputRef}
+                  value={addCategoryDraft}
+                  onChangeText={setAddCategoryDraft}
+                  placeholder={t('trip.packingList.categoryPlaceholder')}
+                  placeholderTextColor="#a3a9b4"
+                  style={styles.addCategoryInput}
                   returnKeyType="done"
-                  onSubmitEditing={() => void handleAddItem(category.id)}
+                  onSubmitEditing={() => void handleAddCategory()}
+                  autoFocus
                 />
+                <View style={styles.addCategoryRow}>
+                  <TouchableOpacity
+                    style={styles.addCategoryCancel}
+                    onPress={() => { setAddCategoryOpen(false); setAddCategoryDraft(''); }}>
+                    <Text style={styles.addCategoryCancelText}>{t('common.cancel')}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.addCategoryConfirm,
+                      isPrivate && styles.addCategoryConfirmPrivate,
+                      (!addCategoryDraft.trim() || addingCategory) && styles.addCategoryConfirmDisabled,
+                    ]}
+                    disabled={!addCategoryDraft.trim() || addingCategory}
+                    onPress={() => void handleAddCategory()}>
+                    {addingCategory
+                      ? <ActivityIndicator size="small" color="#fff" />
+                      : <Text style={styles.addCategoryConfirmText}>{t('trip.packingList.addCategory')}</Text>
+                    }
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : null}
+
+            {/* Empty state */}
+            {categories.length === 0 && !addCategoryOpen ? (
+              <View style={styles.emptyState}>
+                <Ionicons name={isPrivate ? 'lock-closed-outline' : 'bag-outline'} size={48} color="#c8cdd6" />
+                <Text style={styles.emptyTitle}>
+                  {isPrivate ? t('trip.packingList.privateEmptyTitle') : t('trip.packingList.sharedEmptyTitle')}
+                </Text>
+                <Text style={styles.emptySubtitle}>
+                  {isPrivate ? t('trip.packingList.privateEmptySubtitle') : t('trip.packingList.sharedEmptySubtitle')}
+                </Text>
                 <TouchableOpacity
-                  style={[
-                    styles.addItemButton,
-                    (!(addItemDrafts[category.id] ?? '').trim() || addingItemFor === category.id) && styles.addItemButtonDisabled,
-                  ]}
-                  disabled={!(addItemDrafts[category.id] ?? '').trim() || addingItemFor === category.id}
-                  onPress={() => void handleAddItem(category.id)}>
-                  {addingItemFor === category.id
-                    ? <ActivityIndicator size="small" color={COLORS.primary} />
-                    : <Ionicons name="add" size={18} color={COLORS.primary} />
-                  }
+                  style={[styles.emptyAddButton, isPrivate && styles.emptyAddButtonPrivate]}
+                  activeOpacity={0.88}
+                  onPress={() => { setAddCategoryOpen(true); setTimeout(() => categoryInputRef.current?.focus(), 120); }}>
+                  <Ionicons name="add" size={16} color="#fff" />
+                  <Text style={styles.emptyAddButtonText}>{t('trip.packingList.addFirstCategory')}</Text>
                 </TouchableOpacity>
               </View>
-            </View>
-          ))}
+            ) : null}
 
-          {/* Add category button (when list not empty) */}
-          {categories.length > 0 && !addCategoryOpen ? (
-            <TouchableOpacity
-              style={styles.addMoreCategoryButton}
-              activeOpacity={0.85}
-              onPress={() => {
-                setAddCategoryOpen(true);
-                setTimeout(() => categoryInputRef.current?.focus(), 120);
-              }}>
-              <Ionicons name="add-circle-outline" size={18} color={COLORS.primary} />
-              <Text style={styles.addMoreCategoryText}>{t('trip.packingList.addCategory')}</Text>
+            {/* Category list */}
+            {categories.map((category) => {
+              const categoryDrafts = drafts[category.id] ?? [];
+              const checkedCount = category.items.filter((i) => i.isChecked).length;
+              const canDelete = category.createdByUserId === user?.id;
+
+              return (
+                <View key={category.id} style={[styles.categoryCard, isPrivate && styles.categoryCardPrivate]}>
+                  <View style={styles.categoryHeader}>
+                    <Text style={styles.categoryName}>{category.name}</Text>
+                    <Text style={styles.categoryCount}>{checkedCount}/{category.items.length}</Text>
+                    {canDelete ? (
+                      <TouchableOpacity hitSlop={8} onPress={() => void handleDeleteCategory(category.id)}>
+                        <Ionicons name="trash-outline" size={15} color="#c2c8d2" />
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
+
+                  {/* Saved items */}
+                  {category.items.map((item) => (
+                    <View key={item.id} style={styles.itemRow}>
+                      <TouchableOpacity
+                        style={[
+                          styles.checkbox,
+                          item.isChecked && (isPrivate ? styles.checkboxCheckedPrivate : styles.checkboxChecked),
+                        ]}
+                        activeOpacity={0.75}
+                        onPress={() => void handleToggleItem(category.id, item)}>
+                        {item.isChecked ? <Ionicons name="checkmark" size={13} color="#fff" /> : null}
+                      </TouchableOpacity>
+
+                      <Text style={[styles.itemText, item.isChecked && styles.itemTextChecked]} numberOfLines={2}>
+                        {item.text}
+                      </Text>
+
+                      {/* Assignment (shared only) */}
+                      {!isPrivate ? (
+                        <TouchableOpacity
+                          style={styles.assignButton}
+                          hitSlop={6}
+                          onPress={() => { setAssignTarget({ categoryId: category.id, item }); setAssignPickerOpen(true); }}>
+                          {item.assignedToUserId ? (
+                            <View style={styles.assignedBadge}>
+                              <Avatar name={item.assignedToName ?? '?'} uri={item.assignedToAvatarUrl} size={22} />
+                            </View>
+                          ) : (
+                            <View style={styles.assignEmpty}>
+                              <Ionicons name="person-add-outline" size={13} color="#b0b6c1" />
+                            </View>
+                          )}
+                        </TouchableOpacity>
+                      ) : null}
+
+                      {item.createdByUserId === user?.id ? (
+                        <TouchableOpacity hitSlop={8} onPress={() => void handleDeleteItem(category.id, item.id)}>
+                          <Ionicons name="close" size={15} color="#c2c8d2" />
+                        </TouchableOpacity>
+                      ) : null}
+                    </View>
+                  ))}
+
+                  {/* Draft rows — notepad UX */}
+                  {categoryDrafts.map((draft) => (
+                    <View key={draft.key} style={styles.itemRow}>
+                      <View style={[styles.checkbox, styles.checkboxDraft]}>
+                        {savingDraft === draft.key
+                          ? <ActivityIndicator size="small" color={COLORS.primary} />
+                          : null}
+                      </View>
+                      <TextInput
+                        ref={(r) => { draftRefs.current[draft.key] = r; }}
+                        value={draft.text}
+                        onChangeText={(v) => updateDraft(category.id, draft.key, v)}
+                        placeholder={t('trip.packingList.addItemPlaceholder')}
+                        placeholderTextColor="#b8bec8"
+                        style={styles.draftInput}
+                        returnKeyType="done"
+                        blurOnSubmit={false}
+                        onSubmitEditing={() => void commitDraft(category.id, draft.key, draft.text)}
+                        onBlur={() => { if (!draft.text.trim()) removeDraft(category.id, draft.key); }}
+                      />
+                    </View>
+                  ))}
+
+                  {/* Tap to start a new draft row */}
+                  <TouchableOpacity style={styles.addItemTap} activeOpacity={0.7} onPress={() => ensureDraft(category.id)}>
+                    <Ionicons name="add" size={15} color={isPrivate ? PRIVATE_COLOR : COLORS.primary} />
+                    <Text style={[styles.addItemTapText, isPrivate && styles.addItemTapTextPrivate]}>
+                      {t('trip.packingList.addItemPlaceholder')}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            })}
+
+            {/* Add more category button */}
+            {categories.length > 0 && !addCategoryOpen ? (
+              <TouchableOpacity
+                style={styles.addMoreCategoryButton}
+                activeOpacity={0.85}
+                onPress={() => { setAddCategoryOpen(true); setTimeout(() => categoryInputRef.current?.focus(), 120); }}>
+                <Ionicons name="add-circle-outline" size={18} color={isPrivate ? PRIVATE_COLOR : COLORS.primary} />
+                <Text style={[styles.addMoreCategoryText, isPrivate && styles.addMoreCategoryTextPrivate]}>
+                  {t('trip.packingList.addCategory')}
+                </Text>
+              </TouchableOpacity>
+            ) : null}
+
+          </ScrollView>
+        </KeyboardAvoidingView>
+      )}
+
+      {/* Assign member picker */}
+      <Modal
+        visible={assignPickerOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => { setAssignPickerOpen(false); setAssignTarget(null); }}>
+        <Pressable
+          style={styles.assignBackdrop}
+          onPress={() => { setAssignPickerOpen(false); setAssignTarget(null); }} />
+        <View style={[styles.assignSheet, { paddingBottom: Math.max(insets.bottom, 16) + 8 }]}>
+          <View style={styles.sheetHandle} />
+          <Text style={styles.assignSheetTitle}>{t('trip.packingList.assignPickerTitle')}</Text>
+
+          {assignTarget?.item.assignedToUserId ? (
+            <TouchableOpacity style={styles.unassignButton} onPress={() => void handleAssign(null)}>
+              <Ionicons name="close-circle-outline" size={18} color="#d53d18" />
+              <Text style={styles.unassignButtonText}>{t('trip.packingList.unassign')}</Text>
             </TouchableOpacity>
           ) : null}
 
-        </ScrollView>
-      )}
+          <FlatList
+            data={members}
+            keyExtractor={(m) => m.id}
+            scrollEnabled={false}
+            renderItem={({ item: member }) => {
+              const isAssigned = assignTarget?.item.assignedToUserId === member.id;
+              return (
+                <TouchableOpacity
+                  style={[styles.memberPickerRow, isAssigned && styles.memberPickerRowActive]}
+                  activeOpacity={0.8}
+                  onPress={() => void handleAssign(member.id)}>
+                  <Avatar name={member.name} uri={member.avatarUrl} size={36} />
+                  <Text style={styles.memberPickerName}>{member.name}</Text>
+                  {isAssigned ? <Ionicons name="checkmark-circle" size={20} color={COLORS.primary} /> : null}
+                </TouchableOpacity>
+              );
+            }}
+          />
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#f7f8fa' },
+  flex: { flex: 1 },
+
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingBottom: 12,
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 16, paddingBottom: 12,
     backgroundColor: '#f7f8fa',
-    borderBottomWidth: 1,
-    borderBottomColor: '#eceef2',
+    borderBottomWidth: 1, borderBottomColor: '#eceef2',
   },
   backButton: {
     width: 40, height: 40, alignItems: 'center', justifyContent: 'center',
     borderRadius: 12, backgroundColor: '#fff', borderWidth: 1, borderColor: '#eceef2',
   },
   headerCenter: { flex: 1, alignItems: 'center' },
-  headerTitle: {
-    fontSize: 17, fontWeight: '800', color: '#11131a', letterSpacing: -0.4,
-  },
+  headerTitle: { fontSize: 17, fontWeight: '800', color: '#11131a', letterSpacing: -0.4 },
   headerSub: { fontSize: 11, color: '#8a909d', fontWeight: '600', marginTop: 1 },
   headerAddButton: {
     width: 40, height: 40, alignItems: 'center', justifyContent: 'center',
     borderRadius: 12, backgroundColor: '#fff', borderWidth: 1, borderColor: '#eceef2',
   },
+
+  tabBar: {
+    flexDirection: 'row', backgroundColor: '#fff',
+    borderBottomWidth: 1, borderBottomColor: '#eceef2',
+    paddingHorizontal: 16,
+  },
+  tab: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 6, paddingVertical: 12,
+    borderBottomWidth: 2.5, borderBottomColor: 'transparent',
+  },
+  tabActiveShared: { borderBottomColor: COLORS.primary },
+  tabActivePrivate: { borderBottomColor: PRIVATE_COLOR },
+  tabLabel: { fontSize: 13, fontWeight: '700', color: '#8a909d' },
+  tabLabelActiveShared: { color: COLORS.primary },
+  tabLabelActivePrivate: { color: PRIVATE_COLOR },
+
+  scopeHint: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 16, paddingVertical: 8,
+    backgroundColor: '#eef4ff',
+  },
+  scopeHintPrivate: { backgroundColor: '#f5f0ff' },
+  scopeHintText: { fontSize: 12, color: COLORS.primary, fontWeight: '600', flex: 1 },
+  scopeHintTextPrivate: { color: PRIVATE_COLOR },
+
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
   errorText: { fontSize: 14, color: '#5c6370', textAlign: 'center' },
   retryButton: {
@@ -396,11 +648,14 @@ const styles = StyleSheet.create({
     borderRadius: 14, backgroundColor: COLORS.primary,
   },
   retryButtonText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+
   scrollContent: { padding: 16, gap: 12 },
+
   addCategoryCard: {
-    backgroundColor: '#fff', borderRadius: 22, borderWidth: 1,
-    borderColor: COLORS.primary, padding: 16, gap: 12,
+    backgroundColor: '#fff', borderRadius: 22,
+    borderWidth: 1.5, borderColor: COLORS.primary, padding: 16, gap: 12,
   },
+  addCategoryCardPrivate: { borderColor: PRIVATE_COLOR },
   addCategoryInput: {
     height: 48, borderRadius: 14, borderWidth: 1, borderColor: '#eceef2',
     backgroundColor: '#f7f8fa', paddingHorizontal: 14, fontSize: 15, color: '#14161d',
@@ -415,41 +670,43 @@ const styles = StyleSheet.create({
     flex: 2, height: 44, borderRadius: 14,
     backgroundColor: COLORS.primary, alignItems: 'center', justifyContent: 'center',
   },
+  addCategoryConfirmPrivate: { backgroundColor: PRIVATE_COLOR },
   addCategoryConfirmDisabled: { opacity: 0.5 },
   addCategoryConfirmText: { fontSize: 14, fontWeight: '800', color: '#fff' },
-  emptyState: {
-    alignItems: 'center', justifyContent: 'center',
-    paddingVertical: 60, gap: 10,
+
+  emptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60, gap: 10 },
+  emptyTitle: { fontSize: 17, fontWeight: '800', color: '#14161d', letterSpacing: -0.4, marginTop: 8 },
+  emptySubtitle: {
+    fontSize: 14, color: '#8a909d', textAlign: 'center',
+    lineHeight: 20, paddingHorizontal: 24,
   },
-  emptyTitle: {
-    fontSize: 17, fontWeight: '800', color: '#14161d',
-    letterSpacing: -0.4, marginTop: 8,
-  },
-  emptySubtitle: { fontSize: 14, color: '#8a909d', textAlign: 'center', lineHeight: 20 },
   emptyAddButton: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     marginTop: 8, paddingHorizontal: 20, paddingVertical: 12,
     borderRadius: 16, backgroundColor: COLORS.primary,
   },
+  emptyAddButtonPrivate: { backgroundColor: PRIVATE_COLOR },
   emptyAddButtonText: { fontSize: 14, fontWeight: '800', color: '#fff' },
+
   categoryCard: {
     backgroundColor: '#fff', borderRadius: 22,
     borderWidth: 1, borderColor: '#eceef2', overflow: 'hidden',
   },
+  categoryCardPrivate: { borderColor: '#e4d9ff' },
   categoryHeader: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
-    paddingHorizontal: 16, paddingVertical: 14,
+    paddingHorizontal: 16, paddingVertical: 13,
     borderBottomWidth: 1, borderBottomColor: '#f1f3f6',
   },
   categoryName: {
-    flex: 1, fontSize: 14, fontWeight: '800',
-    color: '#14161d', letterSpacing: -0.2,
-    textTransform: 'uppercase',
+    flex: 1, fontSize: 12, fontWeight: '800', color: '#14161d',
+    letterSpacing: 0.4, textTransform: 'uppercase',
   },
-  categoryCount: { fontSize: 12, color: '#a3a9b4', fontWeight: '600' },
+  categoryCount: { fontSize: 11, color: '#a3a9b4', fontWeight: '600' },
+
   itemRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    paddingHorizontal: 16, paddingVertical: 11,
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingHorizontal: 14, paddingVertical: 10,
     borderBottomWidth: 1, borderBottomColor: '#f5f6f8',
   },
   checkbox: {
@@ -458,25 +715,63 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   },
   checkboxChecked: { borderColor: COLORS.primary, backgroundColor: COLORS.primary },
+  checkboxCheckedPrivate: { borderColor: PRIVATE_COLOR, backgroundColor: PRIVATE_COLOR },
+  checkboxDraft: { borderColor: '#e8eaf0', borderStyle: 'dashed' },
   itemText: { flex: 1, fontSize: 14, color: '#14161d', fontWeight: '500' },
   itemTextChecked: { color: '#a3a9b4', textDecorationLine: 'line-through' },
-  addItemRow: {
+
+  draftInput: { flex: 1, fontSize: 14, color: '#14161d', paddingVertical: 0, minHeight: 22 },
+
+  assignButton: { marginLeft: 2 },
+  assignedBadge: {
+    width: 26, height: 26, borderRadius: 13,
+    overflow: 'hidden', alignItems: 'center', justifyContent: 'center',
+  },
+  assignEmpty: {
+    width: 26, height: 26, borderRadius: 13,
+    borderWidth: 1.5, borderColor: '#dde1e8', borderStyle: 'dashed',
+    alignItems: 'center', justifyContent: 'center',
+  },
+
+  addItemTap: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
-    paddingHorizontal: 12, paddingVertical: 10,
+    paddingHorizontal: 14, paddingVertical: 10,
   },
-  addItemInput: {
-    flex: 1, height: 40, borderRadius: 12, borderWidth: 1,
-    borderColor: '#eceef2', backgroundColor: '#f7f8fa',
-    paddingHorizontal: 12, fontSize: 14, color: '#14161d',
-  },
-  addItemButton: {
-    width: 40, height: 40, borderRadius: 12,
-    backgroundColor: '#eef4ff', alignItems: 'center', justifyContent: 'center',
-  },
-  addItemButtonDisabled: { opacity: 0.4 },
+  addItemTapText: { fontSize: 13, color: COLORS.primary, fontWeight: '600' },
+  addItemTapTextPrivate: { color: PRIVATE_COLOR },
+
   addMoreCategoryButton: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     paddingVertical: 14, justifyContent: 'center',
   },
   addMoreCategoryText: { fontSize: 14, fontWeight: '700', color: COLORS.primary },
+  addMoreCategoryTextPrivate: { color: PRIVATE_COLOR },
+
+  assignBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.38)' },
+  assignSheet: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    paddingHorizontal: 20, paddingTop: 12,
+    maxHeight: '70%',
+  },
+  sheetHandle: {
+    width: 40, height: 4, borderRadius: 2,
+    backgroundColor: '#dde1e8', alignSelf: 'center', marginBottom: 16,
+  },
+  assignSheetTitle: {
+    fontSize: 17, fontWeight: '800', color: '#14161d',
+    letterSpacing: -0.4, marginBottom: 12,
+  },
+  unassignButton: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingVertical: 12, marginBottom: 4,
+    borderBottomWidth: 1, borderBottomColor: '#f1f3f6',
+  },
+  unassignButtonText: { fontSize: 14, fontWeight: '700', color: '#d53d18' },
+  memberPickerRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f5f6f8',
+  },
+  memberPickerRowActive: { backgroundColor: '#f8f9ff' },
+  memberPickerName: { flex: 1, fontSize: 15, fontWeight: '600', color: '#14161d' },
 });
