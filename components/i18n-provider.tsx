@@ -68,6 +68,8 @@ const dictionaries: Record<AppLanguage, Record<string, string>> = {
     'auth.legal_consent_and': 'and',
     'auth.privacy_policy': 'Privacy Policy',
     'auth.terms_of_service': 'Terms of Service',
+    'auth.community_guidelines': 'Community Guidelines',
+    'auth.terms_agree_prefix': 'I agree to the',
 
     'common.or': 'OR',
     'common.goBack': 'Go back',
@@ -747,6 +749,8 @@ const dictionaries: Record<AppLanguage, Record<string, string>> = {
     'auth.legal_consent_and': 'och',
     'auth.privacy_policy': 'Sekretesspolicy',
     'auth.terms_of_service': 'Användarvillkor',
+    'auth.community_guidelines': 'Gemenskapsriktlinjer',
+    'auth.terms_agree_prefix': 'Jag godkänner',
 
     'common.or': 'ELLER',
     'common.goBack': 'Gå tillbaka',

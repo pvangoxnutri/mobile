@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import * as WebBrowser from 'expo-web-browser';
@@ -36,6 +37,7 @@ export default function LoginScreen() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
   const [selectedLanguage, setSelectedLanguage] = useState<AppLanguage>(language);
   // Tracks whether the user explicitly changed the language on the login
@@ -244,16 +246,42 @@ export default function LoginScreen() {
           <Text style={styles.cooldownText}>{t('auth.cooldown', { seconds: cooldownSeconds })}</Text>
         ) : null}
 
+        {mode === 'signup' ? (
+          <View style={styles.checkboxRow}>
+            <Pressable
+              style={[styles.checkbox, termsAccepted && styles.checkboxChecked]}
+              onPress={() => setTermsAccepted((v) => !v)}
+              hitSlop={8}>
+              {termsAccepted ? <Ionicons name="checkmark" size={13} color="#fff" /> : null}
+            </Pressable>
+            <Text style={styles.checkboxLabel}>
+              {t('auth.terms_agree_prefix')}{' '}
+              <Text style={styles.legalLink} onPress={() => void WebBrowser.openBrowserAsync(`https://sidequesttravel.app/terms?lang=${selectedLanguage}`)}>
+                {t('auth.terms_of_service')}
+              </Text>
+              {', '}
+              <Text style={styles.legalLink} onPress={() => void WebBrowser.openBrowserAsync(`https://sidequesttravel.app/privacy?lang=${selectedLanguage}`)}>
+                {t('auth.privacy_policy')}
+              </Text>
+              {' '}{t('auth.legal_consent_and')}{' '}
+              <Text style={styles.legalLink} onPress={() => void WebBrowser.openBrowserAsync(`https://sidequesttravel.app/community-guidelines?lang=${selectedLanguage}`)}>
+                {t('auth.community_guidelines')}
+              </Text>
+              {'.'}
+            </Text>
+          </View>
+        ) : null}
+
         <Pressable
           style={[
             styles.primaryButton,
             { backgroundColor: PRIMARY_COLOR },
-            busy || (mode === 'signup' && (cooldownSeconds > 0 || password === '' || confirmPassword === '' || password !== confirmPassword))
+            busy || (mode === 'signup' && (cooldownSeconds > 0 || password === '' || confirmPassword === '' || password !== confirmPassword || !termsAccepted))
               ? styles.primaryButtonDisabled
               : null,
           ]}
           onPress={() => void handleSubmit()}
-          disabled={busy || (mode === 'signup' && (cooldownSeconds > 0 || password === '' || confirmPassword === '' || password !== confirmPassword))}>
+          disabled={busy || (mode === 'signup' && (cooldownSeconds > 0 || password === '' || confirmPassword === '' || password !== confirmPassword || !termsAccepted))}>
           {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>{mode === 'signin' ? t('auth.btn_signin') : t('auth.btn_signup')}</Text>}
         </Pressable>
 
@@ -263,29 +291,27 @@ export default function LoginScreen() {
           </Pressable>
         ) : null}
 
-        <Pressable style={styles.secondaryButton} onPress={() => setMode((current) => (current === 'signin' ? 'signup' : 'signin'))}>
+        <Pressable style={styles.secondaryButton} onPress={() => { setMode((current) => (current === 'signin' ? 'signup' : 'signin')); setTermsAccepted(false); }}>
           <Text style={styles.secondaryButtonText}>
             {mode === 'signin' ? t('auth.need_account') : t('auth.have_account')}
           </Text>
         </Pressable>
 
-        <View style={styles.legalConsent}>
-          <Text style={styles.legalConsentText}>
-            {t('auth.legal_consent_prefix')}{' '}
-            <Text
-              style={styles.legalLink}
-              onPress={() => void WebBrowser.openBrowserAsync('https://sidequesttravel.app/privacy')}>
-              {t('auth.privacy_policy')}
+        {mode === 'signin' ? (
+          <View style={styles.legalConsent}>
+            <Text style={styles.legalConsentText}>
+              {t('auth.legal_consent_prefix')}{' '}
+              <Text style={styles.legalLink} onPress={() => void WebBrowser.openBrowserAsync(`https://sidequesttravel.app/privacy?lang=${selectedLanguage}`)}>
+                {t('auth.privacy_policy')}
+              </Text>
+              {' '}{t('auth.legal_consent_and')}{' '}
+              <Text style={styles.legalLink} onPress={() => void WebBrowser.openBrowserAsync(`https://sidequesttravel.app/terms?lang=${selectedLanguage}`)}>
+                {t('auth.terms_of_service')}
+              </Text>
+              {'.'}
             </Text>
-            {' '}{t('auth.legal_consent_and')}{' '}
-            <Text
-              style={styles.legalLink}
-              onPress={() => void WebBrowser.openBrowserAsync('https://sidequesttravel.app/terms')}>
-              {t('auth.terms_of_service')}
-            </Text>
-            .
-          </Text>
-        </View>
+          </View>
+        ) : null}
       </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -432,6 +458,34 @@ const styles = StyleSheet.create({
     color: '#ff4f74',
     fontSize: 14,
     fontWeight: '700',
+  },
+  checkboxRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    marginBottom: 14,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#d0d4dd',
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+    flexShrink: 0,
+  },
+  checkboxChecked: {
+    borderColor: PRIMARY_COLOR,
+    backgroundColor: PRIMARY_COLOR,
+  },
+  checkboxLabel: {
+    flex: 1,
+    color: '#4b515d',
+    fontSize: 13,
+    lineHeight: 20,
   },
   legalConsent: {
     marginTop: 18,
