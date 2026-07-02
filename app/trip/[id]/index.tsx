@@ -781,6 +781,7 @@ export default function TripDetailsScreen() {
             <TouchableOpacity
               style={styles.chatAvatar}
               activeOpacity={0.7}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               onPress={() => message.userId && setProfileCardUserId(message.userId)}>
               <Avatar
                 uri={avatarUrl}

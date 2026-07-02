@@ -70,7 +70,7 @@ export default function UserProfileCard({
         <View style={styles.card}>
           {onReport && profile ? (
             <Pressable style={styles.reportButton} onPress={() => onReport(profile.name)} hitSlop={10}>
-              <Ionicons name="flag-outline" size={20} color="#8e95a2" />
+              <Ionicons name="flag" size={20} color="#ff4f74" />
             </Pressable>
           ) : null}
           <Pressable style={styles.closeButton} onPress={onClose} hitSlop={10}>
