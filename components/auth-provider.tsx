@@ -100,6 +100,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return fallbackProfile;
       }
       const message = err instanceof Error ? err.message : String(err);
+      if (message === 'banned') {
+        throw err;
+      }
       const errType = err instanceof Error ? err.constructor.name : typeof err;
       console.warn(`[AUTH] syncProfileWithBackend failed (${errType}), using fallback profile:`, message);
       return fallbackProfile;
