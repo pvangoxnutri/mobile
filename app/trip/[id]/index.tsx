@@ -155,6 +155,8 @@ export default function TripDetailsScreen() {
   const [selectedCategoryKey, setSelectedCategoryKey] = useState<string | null>(null);
   const [failedAvatars, setFailedAvatars] = useState<Set<string>>(new Set());
   const [blockedUserIds, setBlockedUserIds] = useState<Set<string>>(new Set());
+  const [blockChatNotice, setBlockChatNotice] = useState<string | null>(null);
+  const blockNoticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const chatInputOpacityRef = useRef(new Animated.Value(0.5)).current;
   const inviteEmailOpacityRef = useRef(new Animated.Value(0.5)).current;
   const spotifyUrlOpacityRef = useRef(new Animated.Value(0.5)).current;
@@ -295,6 +297,11 @@ export default function TripDetailsScreen() {
     for (const m of members) map.set(m.id, m.avatarUrl ?? null);
     return map;
   }, [members]);
+
+  const hasHiddenMessages = useMemo(
+    () => chatMessages.some((m) => m.userId != null && blockedUserIds.has(m.userId)),
+    [chatMessages, blockedUserIds],
+  );
 
   // Deep link from a chat-message push notification: ?openChat=1 opens the
   // chat modal automatically once this screen mounts.
@@ -716,7 +723,9 @@ export default function TripDetailsScreen() {
         body: JSON.stringify({ tripId: id }),
       });
       setBlockedUserIds((prev) => new Set([...prev, targetUserId]));
-      Alert.alert(t('report.blockSuccess', { name: targetName }));
+      if (blockNoticeTimerRef.current) clearTimeout(blockNoticeTimerRef.current);
+      setBlockChatNotice(targetName);
+      blockNoticeTimerRef.current = setTimeout(() => setBlockChatNotice(null), 4000);
     } catch {
       Alert.alert(t('report.blockFailed'));
     }
@@ -1385,6 +1394,19 @@ export default function TripDetailsScreen() {
                   ) : null}
                 </View>
               ) : null}
+              {blockChatNotice ? (
+                <View style={styles.chatBlockNotice}>
+                  <Ionicons name="eye-off-outline" size={14} color="#5c6370" />
+                  <Text style={styles.chatBlockNoticeText}>
+                    {t('trip.chat.blockedNotice', { name: blockChatNotice })}
+                  </Text>
+                </View>
+              ) : hasHiddenMessages ? (
+                <View style={styles.chatHiddenNotice}>
+                  <Text style={styles.chatHiddenNoticeText}>{t('trip.chat.hiddenMessagesNotice')}</Text>
+                </View>
+              ) : null}
+
               <View style={styles.chatComposer}>
                 <TouchableOpacity
                   activeOpacity={0.85}
@@ -2875,6 +2897,32 @@ const styles = StyleSheet.create({
     color: '#9aa2ae',
     fontSize: 11,
     fontWeight: '700',
+  },
+  chatBlockNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    backgroundColor: '#f0f2f5',
+    borderRadius: 10,
+    marginBottom: 6,
+  },
+  chatBlockNoticeText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#5c6370',
+    fontWeight: '500',
+  },
+  chatHiddenNotice: {
+    paddingHorizontal: 14,
+    paddingVertical: 5,
+    alignItems: 'center',
+  },
+  chatHiddenNoticeText: {
+    fontSize: 11,
+    color: '#a3a9b4',
+    fontWeight: '500',
   },
   chatComposer: {
     flexDirection: 'row',
