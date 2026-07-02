@@ -119,7 +119,9 @@ export default function LoginScreen() {
       setMode('signin');
     } catch (err) {
       const message = err instanceof Error ? err.message : t('auth.generic_error');
-      if (mode === 'signup' && isRateLimitError(message)) {
+      if (message === 'banned') {
+        setError(t('auth.account_suspended'));
+      } else if (mode === 'signup' && isRateLimitError(message)) {
         setCooldownUntil(Date.now() + 60_000);
         setError(t('auth.rate_limit'));
       } else {
