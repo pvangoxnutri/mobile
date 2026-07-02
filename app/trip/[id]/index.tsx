@@ -743,6 +743,7 @@ export default function TripDetailsScreen() {
   function renderChatMessageItem(message: ChatMsg, index: number) {
     const ownMessage = message.userId === user?.id;
     const systemMessage = message.isSystem;
+    const isBlocked = !ownMessage && !systemMessage && !!(message.userId && blockedUserIds.has(message.userId));
     const prevMessage = index > 0 ? chatMessages[index - 1] : null;
     const showTime =
       !prevMessage ||
@@ -784,6 +785,28 @@ export default function TripDetailsScreen() {
                 <Text style={styles.chatStatusFailed}>{t('trip.chat.sendFailedRetry')}</Text>
               </TouchableOpacity>
             ) : null}
+          </View>
+        ) : isBlocked ? (
+          <View style={styles.chatMessageRow}>
+            <View style={styles.chatAvatar}>
+              <Avatar
+                uri={avatarUrl}
+                name={message.userName}
+                fallbackText={getInitials(message.userName)}
+                forceFallback={failedAvatars.has(message.userId || '')}
+                onError={() => message.userId && setFailedAvatars((prev) => new Set([...prev, message.userId!]))}
+                size={28}
+                fallbackBackgroundColor="#c2c8d2"
+                fallbackTextColor="#fff"
+              />
+            </View>
+            <View style={styles.chatMessageContent}>
+              <Text style={styles.chatAuthorBlocked}>{message.userName}</Text>
+              <View style={styles.chatBubbleBlocked}>
+                <Ionicons name="ban" size={12} color="#a3a9b4" />
+                <Text style={styles.chatBubbleBlockedText}>{t('trip.chat.blockedMessage')}</Text>
+              </View>
+            </View>
           </View>
         ) : (
           <View style={styles.chatMessageRow}>
@@ -1308,7 +1331,7 @@ export default function TripDetailsScreen() {
               ) : (
                 <FlatList
                   ref={chatScrollRef}
-                  data={chatMessages.filter((m) => !m.userId || !blockedUserIds.has(m.userId))}
+                  data={chatMessages}
                   keyExtractor={(message) => message.id}
                   style={styles.chatListScroll}
                   contentContainerStyle={styles.chatList}
@@ -1324,6 +1347,14 @@ export default function TripDetailsScreen() {
                     if (chatNearBottomRef.current) chatScrollRef.current?.scrollToEnd({ animated: false });
                   }}
                   renderItem={({ item, index }) => renderChatMessageItem(item, index)}
+                  ListHeaderComponent={
+                    hasHiddenMessages ? (
+                      <View style={styles.chatBlockedBanner}>
+                        <Ionicons name="ban-outline" size={13} color="#b45309" />
+                        <Text style={styles.chatBlockedBannerText}>{t('trip.chat.blockedUsersBanner')}</Text>
+                      </View>
+                    ) : null
+                  }
                   ListEmptyComponent={
                     <EmptyState
                       icon="chatbubbles-outline"
@@ -1352,14 +1383,10 @@ export default function TripDetailsScreen() {
               ) : null}
               {blockChatNotice ? (
                 <View style={styles.chatBlockNotice}>
-                  <Ionicons name="eye-off-outline" size={14} color="#5c6370" />
+                  <Ionicons name="ban-outline" size={14} color="#5c6370" />
                   <Text style={styles.chatBlockNoticeText}>
                     {t('trip.chat.blockedNotice', { name: blockChatNotice })}
                   </Text>
-                </View>
-              ) : hasHiddenMessages ? (
-                <View style={styles.chatHiddenNotice}>
-                  <Text style={styles.chatHiddenNoticeText}>{t('trip.chat.hiddenMessagesNotice')}</Text>
                 </View>
               ) : null}
 
@@ -2880,6 +2907,48 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#a3a9b4',
     fontWeight: '500',
+  },
+  chatBlockedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginHorizontal: 12,
+    marginTop: 8,
+    marginBottom: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#fef3c7',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#fcd34d',
+  },
+  chatBlockedBannerText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#92400e',
+    fontWeight: '600',
+  },
+  chatAuthorBlocked: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#b0b6c1',
+    marginBottom: 3,
+  },
+  chatBubbleBlocked: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    backgroundColor: '#f0f2f5',
+    borderRadius: 14,
+    borderTopLeftRadius: 4,
+    alignSelf: 'flex-start',
+  },
+  chatBubbleBlockedText: {
+    fontSize: 13,
+    color: '#a3a9b4',
+    fontStyle: 'italic',
   },
   chatComposer: {
     flexDirection: 'row',
