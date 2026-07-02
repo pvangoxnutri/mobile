@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Easing, Image, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ActivityImageFallback from '@/components/activity-image-fallback';
+import Avatar from '@/components/avatar';
 import { useAuth } from '@/components/auth-provider';
 import { useI18n, type AppLanguage } from '@/components/i18n-provider';
 import LanguagePicker from '@/components/language-picker';
@@ -49,6 +50,10 @@ export default function ProfileScreen() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [busy, setBusy] = useState<'name' | 'bio' | 'password' | 'avatar' | 'language' | 'delete' | 'pushTest' | null>(null);
   const [pushTestResult, setPushTestResult] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [blockedUsersOpen, setBlockedUsersOpen] = useState(false);
+  const [blockedUsers, setBlockedUsers] = useState<{ id: string; name: string; avatarUrl: string | null }[]>([]);
+  const [blockedUsersLoading, setBlockedUsersLoading] = useState(false);
+  const [unblockingId, setUnblockingId] = useState<string | null>(null);
 
   useEffect(() => {
     setName(user?.name ?? '');
@@ -465,6 +470,30 @@ export default function ProfileScreen() {
     setDeleteConfirmOpen(true);
   }
 
+  async function loadBlockedUsers() {
+    setBlockedUsersLoading(true);
+    try {
+      const data = await apiJson<{ id: string; name: string; avatarUrl: string | null }[]>('/api/users/blocked');
+      setBlockedUsers(data);
+    } catch {
+      setBlockedUsers([]);
+    } finally {
+      setBlockedUsersLoading(false);
+    }
+  }
+
+  async function handleUnblock(targetId: string) {
+    setUnblockingId(targetId);
+    try {
+      await apiFetch(`/api/users/${targetId}/block`, { method: 'DELETE' });
+      setBlockedUsers((prev) => prev.filter((u) => u.id !== targetId));
+    } catch {
+      // silent — list stays unchanged
+    } finally {
+      setUnblockingId(null);
+    }
+  }
+
   async function handleDeleteAccountConfirmed() {
     try {
       setBusy('delete');
@@ -621,6 +650,7 @@ export default function ProfileScreen() {
           { icon: 'notifications-outline', label: t('profile.notifications.title'), accent: COLORS.primary, onPress: () => { setPushTestResult(null); setEditingNotifications(true); } },
           { icon: 'lock-closed-outline', label: t('profile.accountSettings.changePassword'), accent: COLORS.secondary, onPress: () => setEditingPassword(true) },
           { icon: 'language-outline', label: t('profile.accountSettings.changeLanguage'), accent: COLORS.secondary, onPress: () => setEditingLanguage(true) },
+          { icon: 'ban-outline', label: t('profile.blockedUsers.title'), accent: COLORS.secondary, onPress: () => { void loadBlockedUsers(); setBlockedUsersOpen(true); } },
         ]}
       />
 
@@ -675,6 +705,52 @@ export default function ProfileScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
+
+      <Modal visible={blockedUsersOpen} transparent animationType="slide" onRequestClose={() => setBlockedUsersOpen(false)}>
+        <View style={styles.blockedUsersBackdrop}>
+          <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setBlockedUsersOpen(false)} />
+          <View style={styles.blockedUsersSheet}>
+            <View style={styles.blockedUsersHandle} />
+            <View style={styles.blockedUsersHeader}>
+              <Text style={styles.blockedUsersTitle}>{t('profile.blockedUsers.title')}</Text>
+              <TouchableOpacity onPress={() => setBlockedUsersOpen(false)} hitSlop={10}>
+                <Ionicons name="close" size={22} color="#14161d" />
+              </TouchableOpacity>
+            </View>
+            {blockedUsersLoading ? (
+              <ActivityIndicator style={{ marginTop: 40 }} color={COLORS.primary} />
+            ) : blockedUsers.length === 0 ? (
+              <Text style={styles.blockedUsersEmpty}>{t('profile.blockedUsers.empty')}</Text>
+            ) : (
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 20) + 12 }}>
+                {blockedUsers.map((u) => (
+                  <View key={u.id} style={styles.blockedUserRow}>
+                    <Avatar
+                      uri={u.avatarUrl}
+                      name={u.name}
+                      fallbackText={u.name.slice(0, 2).toUpperCase()}
+                      size={42}
+                      fallbackBackgroundColor="#1d212a"
+                      fallbackTextColor="#fff"
+                    />
+                    <Text style={styles.blockedUserName} numberOfLines={1}>{u.name}</Text>
+                    <TouchableOpacity
+                      style={styles.unblockButton}
+                      activeOpacity={0.8}
+                      disabled={unblockingId === u.id}
+                      onPress={() => void handleUnblock(u.id)}>
+                      {unblockingId === u.id
+                        ? <ActivityIndicator size="small" color={COLORS.primary} />
+                        : <Text style={styles.unblockButtonText}>{t('profile.blockedUsers.unblock')}</Text>
+                      }
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
 
       <SectionCard
         title={t('profile.sections.supportLegal')}
@@ -1549,5 +1625,73 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '800',
     letterSpacing: -0.2,
+  },
+  blockedUsersBackdrop: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(12,16,26,0.45)',
+  },
+  blockedUsersSheet: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    maxHeight: '75%',
+  },
+  blockedUsersHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#dde1e8',
+    alignSelf: 'center',
+    marginBottom: 18,
+  },
+  blockedUsersHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  blockedUsersTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#14161d',
+    letterSpacing: -0.5,
+  },
+  blockedUsersEmpty: {
+    textAlign: 'center',
+    color: '#8e95a2',
+    fontSize: 14,
+    marginTop: 32,
+    marginBottom: 40,
+  },
+  blockedUserRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f3f6',
+    gap: 12,
+  },
+  blockedUserName: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#161821',
+  },
+  unblockButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: COLORS.primary,
+    minWidth: 80,
+    alignItems: 'center',
+  },
+  unblockButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.primary,
   },
 });
