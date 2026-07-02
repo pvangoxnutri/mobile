@@ -1105,13 +1105,14 @@ export default function TripDetailsScreen() {
                       onPress={() => {
                         setPeopleSheetOpen(false);
                         setTimeout(() => setProfileCardUserId(member.id), 280);
-                      }}
-                      onLongPress={() => {
-                        if (member.id !== user?.id) {
-                          showReportMenu('user', member.id, member.id, member.name);
-                        }
                       }}>
-                      <View style={styles.personAvatar}>
+                      <TouchableOpacity
+                        style={styles.personAvatar}
+                        activeOpacity={0.7}
+                        onPress={() => {
+                          setPeopleSheetOpen(false);
+                          setTimeout(() => setProfileCardUserId(member.id), 280);
+                        }}>
                         <Avatar
                           uri={member.avatarUrl}
                           name={member.name}
@@ -1122,11 +1123,23 @@ export default function TripDetailsScreen() {
                           fallbackBackgroundColor="#1d212a"
                           fallbackTextColor="#fff"
                         />
-                      </View>
+                      </TouchableOpacity>
                       <View style={styles.personCopy}>
                         <Text style={styles.personName}>{member.name}</Text>
                         <Text style={styles.personMeta}>{member.isOwner ? t('common.owner') : t('common.member')}</Text>
                       </View>
+                      {member.id !== user?.id ? (
+                        <TouchableOpacity
+                          style={styles.personMenuButton}
+                          activeOpacity={0.6}
+                          hitSlop={8}
+                          onPress={() => {
+                            setPeopleSheetOpen(false);
+                            setTimeout(() => setProfileCardUserId(member.id), 280);
+                          }}>
+                          <Ionicons name="ellipsis-vertical" size={18} color="#8e95a2" />
+                        </TouchableOpacity>
+                      ) : null}
                     </Pressable>
                   ))}
                   {canManageTrip ? (
@@ -1587,7 +1600,16 @@ export default function TripDetailsScreen() {
           </View>
         </Modal>
 
-        <UserProfileCard userId={profileCardUserId} onClose={() => setProfileCardUserId(null)} />
+        <UserProfileCard
+          userId={profileCardUserId}
+          onClose={() => setProfileCardUserId(null)}
+          onReport={profileCardUserId && profileCardUserId !== user?.id
+            ? (name) => {
+                setProfileCardUserId(null);
+                setTimeout(() => showReportMenu('user', profileCardUserId, profileCardUserId, name), 320);
+              }
+            : undefined}
+        />
       </View>
     </>
   );
@@ -2398,6 +2420,10 @@ const styles = StyleSheet.create({
   },
   personCopy: {
     flex: 1,
+  },
+  personMenuButton: {
+    padding: 6,
+    marginLeft: 4,
   },
   personName: {
     color: '#161821',

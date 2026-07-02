@@ -6,7 +6,15 @@ import { useI18n } from '@/components/i18n-provider';
 import { getCachedUserProfile, loadUserProfile } from '@/lib/user-cache';
 import type { UserProfile } from '@/lib/types';
 
-export default function UserProfileCard({ userId, onClose }: { userId: string | null; onClose: () => void }) {
+export default function UserProfileCard({
+  userId,
+  onClose,
+  onReport,
+}: {
+  userId: string | null;
+  onClose: () => void;
+  onReport?: (name: string) => void;
+}) {
   const { t } = useI18n();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(false);
@@ -60,6 +68,11 @@ export default function UserProfileCard({ userId, onClose }: { userId: string | 
       <View style={styles.backdrop}>
         <Pressable style={StyleSheet.absoluteFillObject} onPress={onClose} />
         <View style={styles.card}>
+          {onReport && profile ? (
+            <Pressable style={styles.reportButton} onPress={() => onReport(profile.name)} hitSlop={10}>
+              <Ionicons name="flag-outline" size={20} color="#8e95a2" />
+            </Pressable>
+          ) : null}
           <Pressable style={styles.closeButton} onPress={onClose} hitSlop={10}>
             <Ionicons name="close" size={22} color="#14161d" />
           </Pressable>
@@ -139,6 +152,18 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.16,
     shadowRadius: 32,
     elevation: 12,
+  },
+  reportButton: {
+    position: 'absolute',
+    top: 14,
+    left: 14,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f4f6fa',
+    zIndex: 2,
   },
   closeButton: {
     position: 'absolute',
