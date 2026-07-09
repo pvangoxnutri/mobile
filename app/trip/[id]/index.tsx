@@ -45,6 +45,12 @@ import { isSealedInLists } from '@/lib/activity-blur';
 import type { Quest, SideQuestActivity, TripInvite, LinkPreview } from '@/lib/types';
 import { COLORS, SHADOWS, SPACING, RADIUS, TYPOGRAPHY } from '@/constants/design-tokens';
 
+type ChatReaction = {
+  emoji: string;
+  count: number;
+  reactedByMe: boolean;
+};
+
 type ChatMsg = {
   id: string;
   userId?: string | null;
@@ -70,7 +76,14 @@ type ChatMsg = {
   // True when the message author has blocked the current user.
   // Set by the server — the client should show a blocked placeholder.
   isBlockedByAuthor?: boolean;
+  // Per-emoji reaction summary from the server. Absent on optimistic
+  // (pending/failed) entries, which have no server id to react to yet.
+  reactions?: ChatReaction[];
 };
+
+// The reaction picker's fixed set — mirrors the backend whitelist in
+// TripChatController.AllowedReactionEmojis.
+const REACTION_EMOJIS = ['❤️', '😂', '😮', '😢', '👍', '👎'];
 
 // Maps a known SystemEventType to its translated rendering. Falls back to
 // the message's own (English, backend-authored) text for unknown/missing
@@ -117,6 +130,8 @@ export default function TripDetailsScreen() {
   const [inviteDeletingId, setInviteDeletingId] = useState<string | null>(null);
   const [peopleSheetOpen, setPeopleSheetOpen] = useState(false);
   const [toolsSheetOpen, setToolsSheetOpen] = useState(false);
+  // Message whose reaction picker is open (long-press on a bubble).
+  const [reactionPickerMsg, setReactionPickerMsg] = useState<ChatMsg | null>(null);
   const [inviteComposerOpen, setInviteComposerOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
@@ -746,6 +761,63 @@ export default function TripDetailsScreen() {
     }
   }
 
+  async function handleToggleReaction(messageId: string, emoji: string) {
+    setReactionPickerMsg(null);
+
+    // Optimistic flip — reconciled with the server's summary below.
+    setChatMessages((prev) => prev.map((m) => {
+      if (m.id !== messageId) return m;
+      const current = m.reactions ?? [];
+      const hit = current.find((r) => r.emoji === emoji);
+      let next: ChatReaction[];
+      if (hit?.reactedByMe) {
+        next = current
+          .map((r) => (r.emoji === emoji ? { ...r, count: r.count - 1, reactedByMe: false } : r))
+          .filter((r) => r.count > 0);
+      } else if (hit) {
+        next = current.map((r) => (r.emoji === emoji ? { ...r, count: r.count + 1, reactedByMe: true } : r));
+      } else {
+        next = [...current, { emoji, count: 1, reactedByMe: true }];
+      }
+      return { ...m, reactions: next };
+    }));
+
+    try {
+      const response = await apiFetch(`/api/trips/${id}/chat/${messageId}/reactions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emoji }),
+      });
+      if (!response.ok) throw new Error(await response.text());
+      const summary = (await response.json()) as ChatReaction[];
+      setChatMessages((prev) => prev.map((m) => (m.id === messageId ? { ...m, reactions: summary } : m)));
+    } catch {
+      // Optimistic state may now be wrong — a full reload restores server truth.
+      void loadChatMessages(true);
+    }
+  }
+
+  // Reaction chips under a bubble. Tapping a chip toggles the current
+  // user's reaction for that emoji; a highlighted chip = you reacted.
+  function renderReactionChips(message: ChatMsg, ownMessage: boolean) {
+    if (!message.reactions || message.reactions.length === 0 || message.status) return null;
+    return (
+      <View style={[styles.reactionChipsRow, ownMessage && styles.reactionChipsRowOwn]}>
+        {message.reactions.map((reaction) => (
+          <TouchableOpacity
+            key={reaction.emoji}
+            activeOpacity={0.75}
+            style={[styles.reactionChip, reaction.reactedByMe && styles.reactionChipMine]}
+            onPress={() => void handleToggleReaction(message.id, reaction.emoji)}>
+            <Text style={styles.reactionChipText}>
+              {reaction.emoji} {reaction.count}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    );
+  }
+
   function renderChatMessageItem(message: ChatMsg, index: number) {
     const ownMessage = message.userId === user?.id;
     const systemMessage = message.isSystem;
@@ -775,17 +847,23 @@ export default function TripDetailsScreen() {
                 <Image source={{ uri: imageSource }} style={[styles.chatMessageImage, isPending && styles.chatMessagePending]} />
               </Pressable>
             ) : null}
-            <View
-              style={[
-                styles.chatBubbleCard,
-                styles.chatBubbleCardOwn,
-                { backgroundColor: COLORS.primary },
-                isPending && styles.chatMessagePending,
-                isFailed && styles.chatBubbleCardFailed,
-              ]}>
-              {message.text ? <ChatMessageText text={message.text} isOwn={true} /> : null}
-              {message.linkPreview ? <LinkPreviewCardInline preview={message.linkPreview} isOwn={true} /> : null}
-            </View>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              disabled={isPending || isFailed}
+              onLongPress={() => setReactionPickerMsg(message)}>
+              <View
+                style={[
+                  styles.chatBubbleCard,
+                  styles.chatBubbleCardOwn,
+                  { backgroundColor: COLORS.primary },
+                  isPending && styles.chatMessagePending,
+                  isFailed && styles.chatBubbleCardFailed,
+                ]}>
+                {message.text ? <ChatMessageText text={message.text} isOwn={true} /> : null}
+                {message.linkPreview ? <LinkPreviewCardInline preview={message.linkPreview} isOwn={true} /> : null}
+              </View>
+            </TouchableOpacity>
+            {renderReactionChips(message, true)}
             {isPending ? (
               <Text style={styles.chatStatusPending}>{t('trip.chat.sending')}</Text>
             ) : isFailed ? (
@@ -843,12 +921,16 @@ export default function TripDetailsScreen() {
               ) : null}
               <TouchableOpacity
                 activeOpacity={0.85}
-                onLongPress={() => message.id && message.userId && showReportMenu('chat_message', message.id, message.userId, message.userName)}>
+                // Long press opens the reaction picker; reporting moved
+                // into a row inside the same picker (entry moved, not
+                // removed).
+                onLongPress={() => setReactionPickerMsg(message)}>
                 <View style={styles.chatBubbleCard}>
                   {message.text ? <ChatMessageText text={message.text} isOwn={false} /> : null}
                   {message.linkPreview ? <LinkPreviewCardInline preview={message.linkPreview} isOwn={false} /> : null}
                 </View>
               </TouchableOpacity>
+              {renderReactionChips(message, false)}
             </View>
           </View>
         )}
@@ -1566,6 +1648,70 @@ export default function TripDetailsScreen() {
                 </TouchableOpacity>
               </Pressable>
             </Modal>
+
+            {/* Reaction picker — nested for the same iOS reason as the
+                image viewer above. Reporting lives here now too, since the
+                bubble long-press that used to open the report menu opens
+                this picker instead. */}
+            <Modal
+              visible={reactionPickerMsg !== null}
+              transparent
+              animationType="fade"
+              onRequestClose={() => setReactionPickerMsg(null)}>
+              <Pressable style={styles.reactionBackdrop} onPress={() => setReactionPickerMsg(null)}>
+                <Pressable style={styles.reactionPickerCard} onPress={() => {}}>
+                  <View style={styles.reactionEmojiRow}>
+                    {REACTION_EMOJIS.map((emoji) => {
+                      const mine = reactionPickerMsg?.reactions?.some(
+                        (r) => r.emoji === emoji && r.reactedByMe,
+                      );
+                      return (
+                        <TouchableOpacity
+                          key={emoji}
+                          activeOpacity={0.7}
+                          style={[styles.reactionEmojiButton, mine && styles.reactionEmojiButtonMine]}
+                          onPress={() =>
+                            reactionPickerMsg && void handleToggleReaction(reactionPickerMsg.id, emoji)
+                          }>
+                          <Text style={styles.reactionEmojiText}>{emoji}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                  {reactionPickerMsg && reactionPickerMsg.userId && reactionPickerMsg.userId !== user?.id ? (
+                    <TouchableOpacity
+                      activeOpacity={0.8}
+                      style={styles.reactionReportRow}
+                      onPress={() => {
+                        const msg = reactionPickerMsg;
+                        setReactionPickerMsg(null);
+                        if (msg?.id && msg.userId) {
+                          showReportMenu('chat_message', msg.id, msg.userId, msg.userName);
+                        }
+                      }}>
+                      <Ionicons name="flag-outline" size={15} color="#b4234b" />
+                      <Text style={styles.reactionReportText}>{t('report.reportMessage')}</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </Pressable>
+              </Pressable>
+            </Modal>
+
+            {/* Same iOS nested-Modal workaround as the image viewer above:
+                the top-level UserProfileCard instance can't present while
+                the chat Modal is open, which made tapping a chat avatar do
+                nothing. This nested instance owns the card while chat is
+                open; the outer one is gated to !chatOpen. */}
+            <UserProfileCard
+              userId={chatOpen ? profileCardUserId : null}
+              onClose={() => setProfileCardUserId(null)}
+              onReport={profileCardUserId && profileCardUserId !== user?.id
+                ? (name) => {
+                    setProfileCardUserId(null);
+                    setTimeout(() => showReportMenu('user', profileCardUserId, profileCardUserId, name), 320);
+                  }
+                : undefined}
+            />
           </View>
         </Modal>
 
@@ -1719,8 +1865,11 @@ export default function TripDetailsScreen() {
           </View>
         </Modal>
 
+        {/* Gated to !chatOpen — while chat is open the nested instance
+            inside the chat Modal presents instead (iOS can't stack a
+            second top-level Modal over an open one). */}
         <UserProfileCard
-          userId={profileCardUserId}
+          userId={chatOpen ? null : profileCardUserId}
           onClose={() => setProfileCardUserId(null)}
           onReport={profileCardUserId && profileCardUserId !== user?.id
             ? (name) => {
@@ -2692,6 +2841,86 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 22,
   },
+  /* Chat reactions */
+  reactionChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+    marginTop: 4,
+  },
+  reactionChipsRowOwn: {
+    justifyContent: 'flex-end',
+  },
+  reactionChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    backgroundColor: '#f1f3f7',
+    borderWidth: 1,
+    borderColor: '#e4e7ee',
+  },
+  reactionChipMine: {
+    backgroundColor: '#ffe9ef',
+    borderColor: '#ff4f74',
+  },
+  reactionChipText: {
+    fontSize: 12,
+    color: '#3c4250',
+    fontWeight: '600',
+  },
+  reactionBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(10,12,18,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  reactionPickerCard: {
+    backgroundColor: '#fff',
+    borderRadius: 24,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.18,
+    shadowRadius: 32,
+    elevation: 10,
+  },
+  reactionEmojiRow: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  reactionEmojiButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reactionEmojiButtonMine: {
+    backgroundColor: '#ffe9ef',
+  },
+  reactionEmojiText: {
+    fontSize: 24,
+  },
+  reactionReportRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#eceef2',
+  },
+  reactionReportText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#b4234b',
+  },
+
   chatBubbleWrap: {
     position: 'absolute',
     left: 22,
