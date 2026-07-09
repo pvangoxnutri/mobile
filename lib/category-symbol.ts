@@ -15,7 +15,26 @@
 import type { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
 
-export type ActivityCategoryValue = 'flight' | 'food' | 'sight' | 'sidequest' | 'other';
+export type ActivityCategoryValue =
+  | 'flight'
+  | 'boat'
+  | 'sea'
+  | 'taxi'
+  | 'train'
+  | 'bus'
+  | 'car'
+  | 'food'
+  | 'drinks'
+  | 'beach'
+  | 'museum'
+  | 'shopping'
+  | 'hiking'
+  | 'hotel'
+  | 'party'
+  | 'spa'
+  | 'sight'
+  | 'sidequest'
+  | 'other';
 
 export interface CategorySymbol {
   /** Ionicons glyph name. */
@@ -59,6 +78,90 @@ const CATEGORY_SYMBOLS: Record<ActivityCategoryValue, CategorySymbol> = {
     backgroundColor: '#fce7f3',
     labelKey: 'activity.category_other',
   },
+  boat: {
+    icon: 'boat',
+    iconColor: '#0e7490',
+    backgroundColor: '#cffafe',
+    labelKey: 'activity.category_boat',
+  },
+  sea: {
+    icon: 'water',
+    iconColor: '#0891b2',
+    backgroundColor: '#ecfeff',
+    labelKey: 'activity.category_sea',
+  },
+  taxi: {
+    icon: 'car-sport',
+    iconColor: '#ca8a04',
+    backgroundColor: '#fef9c3',
+    labelKey: 'activity.category_taxi',
+  },
+  train: {
+    icon: 'train',
+    iconColor: '#4f46e5',
+    backgroundColor: '#e0e7ff',
+    labelKey: 'activity.category_train',
+  },
+  bus: {
+    icon: 'bus',
+    iconColor: '#16a34a',
+    backgroundColor: '#dcfce7',
+    labelKey: 'activity.category_bus',
+  },
+  car: {
+    icon: 'car',
+    iconColor: '#475569',
+    backgroundColor: '#f1f5f9',
+    labelKey: 'activity.category_car',
+  },
+  drinks: {
+    icon: 'wine',
+    iconColor: '#be185d',
+    backgroundColor: '#fdf2f8',
+    labelKey: 'activity.category_drinks',
+  },
+  beach: {
+    icon: 'umbrella',
+    iconColor: '#ea580c',
+    backgroundColor: '#ffedd5',
+    labelKey: 'activity.category_beach',
+  },
+  museum: {
+    icon: 'library',
+    iconColor: '#9333ea',
+    backgroundColor: '#f3e8ff',
+    labelKey: 'activity.category_museum',
+  },
+  shopping: {
+    icon: 'bag-handle',
+    iconColor: '#e11d48',
+    backgroundColor: '#ffe4e6',
+    labelKey: 'activity.category_shopping',
+  },
+  hiking: {
+    icon: 'trail-sign',
+    iconColor: '#15803d',
+    backgroundColor: '#f0fdf4',
+    labelKey: 'activity.category_hiking',
+  },
+  hotel: {
+    icon: 'bed',
+    iconColor: '#b45309',
+    backgroundColor: '#fffbeb',
+    labelKey: 'activity.category_hotel',
+  },
+  party: {
+    icon: 'musical-notes',
+    iconColor: '#c026d3',
+    backgroundColor: '#fae8ff',
+    labelKey: 'activity.category_party',
+  },
+  spa: {
+    icon: 'flower',
+    iconColor: '#0d9488',
+    backgroundColor: '#ccfbf1',
+    labelKey: 'activity.category_spa',
+  },
 };
 
 const DEFAULT_SYMBOL: CategorySymbol = {
@@ -68,12 +171,27 @@ const DEFAULT_SYMBOL: CategorySymbol = {
   labelKey: 'activity.category_other',
 };
 
-/** Ordered list for selectors (Create/Edit chips). */
+/** Ordered list for selectors (Create/Edit chips): the original five first
+ * (familiar order), then transport, then places/activities, 'other' last. */
 export const CATEGORY_VALUES: ActivityCategoryValue[] = [
   'flight',
   'sidequest',
   'food',
   'sight',
+  'car',
+  'taxi',
+  'bus',
+  'train',
+  'boat',
+  'sea',
+  'beach',
+  'hiking',
+  'museum',
+  'shopping',
+  'hotel',
+  'spa',
+  'drinks',
+  'party',
   'other',
 ];
 

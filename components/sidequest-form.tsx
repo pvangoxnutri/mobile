@@ -78,6 +78,13 @@ export type SideQuestFormValues = {
 // choose by hand.
 const NON_SIDEQUEST_CATEGORY_VALUES = CATEGORY_VALUES.filter((value) => value !== 'sidequest');
 
+// What the activity-time spinner shows when no time is chosen yet. The same
+// value MUST be committed to form state when the picker opens: the native
+// picker only fires onChange when the wheel MOVES, so a user accepting the
+// displayed default as-is would otherwise save an empty time (the "18:00
+// doesn't stick unless you change away and back" bug).
+const DEFAULT_ACTIVITY_TIME = '18:00';
+
 /**
  * Strips a leading emoji + optional space from i18n strings like "✈️ Flight"
  * so we can render the Ionicons icon next to a clean text label.
@@ -669,8 +676,16 @@ function SideQuestFormInner({
     // makes the spinner drift by the timezone offset (e.g. picking 23:00
     // snaps back to 01:00 in CEST). Avoiding revealDate here also keeps the
     // value clear of any out-of-range date edge cases.
+    //
+    // The ACTIVITY time spinner shows the activity's own time (not
+    // revealTime, which it displayed by mistake before) — the open handler
+    // guarantees `time` is set to DEFAULT_ACTIVITY_TIME before the picker
+    // opens, so state always matches what the wheel shows.
+    if (pickerTarget === 'time') {
+      return localDateTime(getDefaultDate(), time || DEFAULT_ACTIVITY_TIME);
+    }
     return localDateTime(getDefaultDate(), revealTime);
-  }, [date, pickerTarget, revealDate, revealRange.min, revealRange.max, revealTime, tripStartDate, tripEndDate]);
+  }, [date, pickerTarget, revealDate, revealRange.min, revealRange.max, revealTime, time, tripStartDate, tripEndDate]);
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -923,7 +938,14 @@ function SideQuestFormInner({
             <TouchableOpacity
               activeOpacity={0.92}
               style={[styles.selectionCard, styles.revealCard, pickerTarget === 'time' ? styles.selectionCardActive : null]}
-              onPress={() => setPickerTarget('time')}>
+              onPress={() => {
+                // Commit the spinner's default into state on open, so
+                // accepting the displayed 18:00 untouched actually saves
+                // 18:00 (onChange never fires for an unmoved wheel). Time
+                // stays optional — the clear button below resets it.
+                if (!time) setTime(DEFAULT_ACTIVITY_TIME);
+                setPickerTarget('time');
+              }}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.selectionEyebrow}>{t('sidequest.form.activityTimeEyebrow')} <Text style={styles.labelOptional}>{t('common.optionalSuffix')}</Text></Text>
                 <Text style={styles.selectionValue} numberOfLines={1}>{time ? formatTime(time) : t('sidequest.form.activityTimeEmpty')}</Text>

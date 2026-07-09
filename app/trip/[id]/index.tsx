@@ -116,6 +116,7 @@ export default function TripDetailsScreen() {
   const [inviteSubmitting, setInviteSubmitting] = useState(false);
   const [inviteDeletingId, setInviteDeletingId] = useState<string | null>(null);
   const [peopleSheetOpen, setPeopleSheetOpen] = useState(false);
+  const [toolsSheetOpen, setToolsSheetOpen] = useState(false);
   const [inviteComposerOpen, setInviteComposerOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
@@ -963,17 +964,9 @@ export default function TripDetailsScreen() {
             </View>
           </HeroShell>
 
-          <TouchableOpacity style={styles.functionsCard} activeOpacity={0.86} onPress={() => router.push(`/trip/${id}/functions`)}>
-            <View style={styles.functionsCardIcon}>
-              <Ionicons name="apps-outline" size={20} color={COLORS.primary} />
-            </View>
-            <View style={styles.functionsCardBody}>
-              <Text style={styles.functionsCardTitle}>{t('trip.functions.title')}</Text>
-              <Text style={styles.functionsCardSubtitle}>{t('trip.functions.subtitle')}</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#b2b7c0" />
-          </TouchableOpacity>
-
+          {/* Trip tools moved out of the feed — the floating launcher next
+              to the chat bubble opens them in a bottom sheet instead, so the
+              feed stays focused on trip activity. */}
 
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionEyebrow}>{t('trip.feedEyebrow')}</Text>
@@ -1067,12 +1060,125 @@ export default function TripDetailsScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* Trip tools launcher — compact sibling of the chat bubble. Opens
+            the tools sheet that replaced the in-feed Functions card. */}
+        <View pointerEvents="box-none" style={[styles.toolsBubbleWrap, { bottom: Math.max(insets.bottom, 16) + 6 }]}>
+          <TouchableOpacity
+            activeOpacity={0.92}
+            style={styles.toolsBubble}
+            accessibilityRole="button"
+            accessibilityLabel={t('trip.tools.openLabel')}
+            onPress={() => setToolsSheetOpen(true)}>
+            <Ionicons name="grid-outline" size={20} color={COLORS.primary} />
+          </TouchableOpacity>
+        </View>
+
         <View pointerEvents="box-none" style={[styles.floatingWrap, { bottom: Math.max(insets.bottom, 16) + 6 }]}>
           <TouchableOpacity activeOpacity={0.92} style={[styles.floatingButton, { backgroundColor: COLORS.primary, shadowColor: COLORS.primary }]} onPress={() => router.push(`/trip/${id}/sidequest/new`)}>
             <Ionicons name="add" size={20} color="#fff" />
             <Text style={styles.floatingButtonText}>{t('trip.addActivity')}</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Trip tools sheet — every utility entry point in one place, off
+            the feed. Navigation targets are unchanged; only the entry moved. */}
+        <ModalSheet visible={toolsSheetOpen} onClose={() => setToolsSheetOpen(false)}>
+          <View style={styles.sheetHandle} />
+          <View style={styles.sheetHeader}>
+            <View>
+              <Text style={styles.sheetEyebrow}>{t('trip.functions.subtitle')}</Text>
+              <Text style={styles.sheetTitle}>{t('trip.tools.title')}</Text>
+            </View>
+            <TouchableOpacity style={styles.sheetCloseButton} activeOpacity={0.88} onPress={() => setToolsSheetOpen(false)}>
+              <Ionicons name="close" size={20} color="#161821" />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.toolsList}>
+            <TouchableOpacity
+              style={styles.toolRow}
+              activeOpacity={0.86}
+              onPress={() => {
+                setToolsSheetOpen(false);
+                router.push(`/trip/${id}/split`);
+              }}>
+              <View style={[styles.toolRowIcon, { backgroundColor: '#fff0f4' }]}>
+                <Ionicons name="calculator-outline" size={20} color={COLORS.primary} />
+              </View>
+              <Text style={styles.toolRowLabel}>{t('trip.costSplit')}</Text>
+              <Ionicons name="chevron-forward" size={18} color="#b2b7c0" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.toolRow}
+              activeOpacity={0.86}
+              onPress={() => {
+                setToolsSheetOpen(false);
+                setSpotifyModalOpen(true);
+              }}>
+              <View style={[styles.toolRowIcon, { backgroundColor: '#e7f8ef' }]}>
+                <FontAwesome name="spotify" size={20} color="#1cb35b" />
+              </View>
+              <Text style={styles.toolRowLabel}>{t('trip.tools.spotify')}</Text>
+              <Ionicons name="chevron-forward" size={18} color="#b2b7c0" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.toolRow}
+              activeOpacity={0.86}
+              onPress={() => {
+                setToolsSheetOpen(false);
+                router.push(`/trip/${id}/packing-list`);
+              }}>
+              <View style={[styles.toolRowIcon, { backgroundColor: '#eef4ff' }]}>
+                <Ionicons name="checkmark-done-outline" size={20} color="#3b82f6" />
+              </View>
+              <Text style={styles.toolRowLabel}>{t('trip.packingList.title')}</Text>
+              <Ionicons name="chevron-forward" size={18} color="#b2b7c0" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.toolRow}
+              activeOpacity={0.86}
+              onPress={() => {
+                setToolsSheetOpen(false);
+                router.push('/travel-tracker');
+              }}>
+              <View style={[styles.toolRowIcon, { backgroundColor: '#e6f7f4' }]}>
+                <Ionicons name="earth-outline" size={20} color={COLORS.secondary} />
+              </View>
+              <Text style={styles.toolRowLabel}>{t('profile.explore.travelTracker')}</Text>
+              <Ionicons name="chevron-forward" size={18} color="#b2b7c0" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.toolRow}
+              activeOpacity={0.86}
+              onPress={() => {
+                setToolsSheetOpen(false);
+                setPeopleSheetOpen(true);
+              }}>
+              <View style={[styles.toolRowIcon, { backgroundColor: '#f3e8ff' }]}>
+                <Ionicons name="person-add-outline" size={20} color="#9333ea" />
+              </View>
+              <Text style={styles.toolRowLabel}>{t('trip.tools.inviteFriends')}</Text>
+              <Ionicons name="chevron-forward" size={18} color="#b2b7c0" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.toolRow}
+              activeOpacity={0.86}
+              onPress={() => {
+                setToolsSheetOpen(false);
+                router.push(`/trip/${id}/settings`);
+              }}>
+              <View style={[styles.toolRowIcon, { backgroundColor: '#f1f5f9' }]}>
+                <Ionicons name="settings-outline" size={20} color="#475569" />
+              </View>
+              <Text style={styles.toolRowLabel}>{t('settings.title')}</Text>
+              <Ionicons name="chevron-forward" size={18} color="#b2b7c0" />
+            </TouchableOpacity>
+          </View>
+        </ModalSheet>
 
         <ModalSheet visible={peopleSheetOpen} onClose={() => setPeopleSheetOpen(false)}>
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
@@ -2589,6 +2695,51 @@ const styles = StyleSheet.create({
   chatBubbleWrap: {
     position: 'absolute',
     left: 22,
+  },
+  // Sits right of the chat bubble (22 + 58 + 12).
+  toolsBubbleWrap: {
+    position: 'absolute',
+    left: 92,
+  },
+  toolsBubble: {
+    width: 58,
+    height: 58,
+    borderRadius: RADIUS.circle,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#eceef2',
+    shadowColor: '#11131a',
+    shadowOffset: { width: 0, height: 14 },
+    shadowOpacity: 0.12,
+    shadowRadius: 24,
+    elevation: 8,
+  },
+  toolsList: { gap: 8, paddingBottom: 8 },
+  toolRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 12,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#eceef2',
+    backgroundColor: '#fff',
+  },
+  toolRowIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  toolRowLabel: {
+    flex: 1,
+    color: '#161821',
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: -0.3,
   },
   chatBubble: {
     width: 58,
