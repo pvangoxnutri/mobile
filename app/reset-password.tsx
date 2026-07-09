@@ -70,6 +70,7 @@ export default function ResetPasswordScreen() {
         const code = authParams.get('code');
         const accessToken = authParams.get('access_token');
         const refreshToken = authParams.get('refresh_token');
+        const tokenHash = authParams.get('token_hash');
         const authError = authParams.get('error_description') ?? authParams.get('error');
 
         if (authError) {
@@ -89,6 +90,18 @@ export default function ResetPasswordScreen() {
           const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
           if (exchangeError) {
             throw exchangeError;
+          }
+        } else if (tokenHash) {
+          // Direct token_hash link (no Supabase verify hop) — the token is
+          // consumed HERE, in the app, which makes the emailed link immune
+          // to email-scanner prefetch. Supported in addition to the
+          // verify-redirect flows above.
+          const { error: verifyError } = await supabase.auth.verifyOtp({
+            type: 'recovery',
+            token_hash: tokenHash,
+          });
+          if (verifyError) {
+            throw verifyError;
           }
         } else {
           if (!cancelled) {
