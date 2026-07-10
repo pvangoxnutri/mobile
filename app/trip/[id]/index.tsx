@@ -150,6 +150,11 @@ export default function TripDetailsScreen() {
   const reactionScaleAnim = useRef(new Animated.Value(1)).current;
   // Whether the in-app emoji grid (opened via "+") is showing.
   const [emojiGridOpen, setEmojiGridOpen] = useState(false);
+  // Measured on-screen rect of the long-pressed bubble, so the reaction
+  // overlay can keep the message in its EXACT position (lifted forward +
+  // enlarged) with the reaction bar anchored just above it.
+  const bubbleRefs = useRef<Map<string, View>>(new Map());
+  const [reactionRect, setReactionRect] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const [inviteComposerOpen, setInviteComposerOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
@@ -779,24 +784,39 @@ export default function TripDetailsScreen() {
     }
   }
 
-  // Long-press entry: vibrate, then open the overlay with the message lifted
-  // forward. The preview springs up from 0.9 → 1 as the blur fades in.
+  // Long-press entry: vibrate, measure the bubble's on-screen position, then
+  // open the overlay. The message copy is rendered at that exact rect and
+  // springs from its real size (1) to slightly enlarged (1.05) — it stays
+  // put, just grows a little and lifts above the blur.
   function openReactionPicker(message: ChatMsg) {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setEmojiGridOpen(false);
-    setReactionPickerMsg(message);
-    reactionScaleAnim.setValue(0.9);
-    Animated.spring(reactionScaleAnim, {
-      toValue: 1,
-      damping: 13,
-      mass: 1,
-      stiffness: 180,
-      useNativeDriver: true,
-    }).start();
+    const show = () => {
+      setReactionPickerMsg(message);
+      reactionScaleAnim.setValue(1);
+      Animated.spring(reactionScaleAnim, {
+        toValue: 1.05,
+        damping: 15,
+        mass: 1,
+        stiffness: 220,
+        useNativeDriver: true,
+      }).start();
+    };
+    const node = bubbleRefs.current.get(message.id);
+    if (node && typeof node.measureInWindow === 'function') {
+      node.measureInWindow((x, y, width, height) => {
+        setReactionRect({ x, y, width, height });
+        show();
+      });
+    } else {
+      setReactionRect(null);
+      show();
+    }
   }
 
   function closeReactionPicker() {
     setReactionPickerMsg(null);
+    setReactionRect(null);
     setEmojiGridOpen(false);
   }
 
@@ -888,22 +908,29 @@ export default function TripDetailsScreen() {
                 <Image source={{ uri: imageSource }} style={[styles.chatMessageImage, isPending && styles.chatMessagePending]} />
               </Pressable>
             ) : null}
-            <TouchableOpacity
-              activeOpacity={0.85}
-              disabled={isPending || isFailed}
-              onLongPress={() => openReactionPicker(message)}>
-              <View
-                style={[
-                  styles.chatBubbleCard,
-                  styles.chatBubbleCardOwn,
-                  { backgroundColor: COLORS.primary },
-                  isPending && styles.chatMessagePending,
-                  isFailed && styles.chatBubbleCardFailed,
-                ]}>
-                {message.text ? <ChatMessageText text={message.text} isOwn={true} /> : null}
-                {message.linkPreview ? <LinkPreviewCardInline preview={message.linkPreview} isOwn={true} /> : null}
-              </View>
-            </TouchableOpacity>
+            <View
+              collapsable={false}
+              ref={(n) => {
+                if (n) bubbleRefs.current.set(message.id, n);
+                else bubbleRefs.current.delete(message.id);
+              }}>
+              <TouchableOpacity
+                activeOpacity={0.85}
+                disabled={isPending || isFailed}
+                onLongPress={() => openReactionPicker(message)}>
+                <View
+                  style={[
+                    styles.chatBubbleCard,
+                    styles.chatBubbleCardOwn,
+                    { backgroundColor: COLORS.primary },
+                    isPending && styles.chatMessagePending,
+                    isFailed && styles.chatBubbleCardFailed,
+                  ]}>
+                  {message.text ? <ChatMessageText text={message.text} isOwn={true} /> : null}
+                  {message.linkPreview ? <LinkPreviewCardInline preview={message.linkPreview} isOwn={true} /> : null}
+                </View>
+              </TouchableOpacity>
+            </View>
             {renderReactionChips(message, true)}
             {isPending ? (
               <Text style={styles.chatStatusPending}>{t('trip.chat.sending')}</Text>
@@ -960,14 +987,21 @@ export default function TripDetailsScreen() {
                   <Image source={{ uri: imageSource }} style={styles.chatMessageImage} />
                 </Pressable>
               ) : null}
-              <TouchableOpacity
-                activeOpacity={0.85}
-                onLongPress={() => openReactionPicker(message)}>
-                <View style={styles.chatBubbleCard}>
-                  {message.text ? <ChatMessageText text={message.text} isOwn={false} /> : null}
-                  {message.linkPreview ? <LinkPreviewCardInline preview={message.linkPreview} isOwn={false} /> : null}
-                </View>
-              </TouchableOpacity>
+              <View
+                collapsable={false}
+                ref={(n) => {
+                  if (n) bubbleRefs.current.set(message.id, n);
+                  else bubbleRefs.current.delete(message.id);
+                }}>
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  onLongPress={() => openReactionPicker(message)}>
+                  <View style={styles.chatBubbleCard}>
+                    {message.text ? <ChatMessageText text={message.text} isOwn={false} /> : null}
+                    {message.linkPreview ? <LinkPreviewCardInline preview={message.linkPreview} isOwn={false} /> : null}
+                  </View>
+                </TouchableOpacity>
+              </View>
               {renderReactionChips(message, false)}
             </View>
           </View>
@@ -1683,89 +1717,98 @@ export default function TripDetailsScreen() {
               animationType="fade"
               onRequestClose={closeReactionPicker}>
               <Pressable style={styles.reactionOverlay} onPress={closeReactionPicker}>
-                {/* Blurred, dimmed chat behind — the message comes forward. */}
+                {/* Blurred, dimmed chat behind — the message stays in place
+                    and comes forward. */}
                 <BlurView intensity={38} tint="dark" style={StyleSheet.absoluteFill} />
-                {reactionPickerMsg ? (
+                {reactionPickerMsg && reactionRect ? (
                   (() => {
                     const own = reactionPickerMsg.userId === user?.id;
-                    const previewImage = reactionPickerMsg.localImageUri ?? reactionPickerMsg.imageUrl;
+                    const BAR_H = 62; // approx picker card height incl. padding
+                    const barTop = Math.max(insets.top + 8, reactionRect.y - BAR_H);
                     return (
-                      // Absorbs taps so interacting with the picker/message
-                      // doesn't dismiss; taps outside (on the overlay) close.
-                      <Pressable style={styles.reactionCenter} onPress={() => {}}>
-                        {/* Reaction row ABOVE the message. */}
-                        <View style={styles.reactionPickerCard}>
-                          <View style={styles.reactionEmojiRow}>
-                            {REACTION_EMOJIS.map((emoji) => {
-                              const mine = reactionPickerMsg.reactions?.some(
-                                (r) => r.emoji === emoji && r.reactedByMe,
-                              );
-                              return (
-                                <TouchableOpacity
-                                  key={emoji}
-                                  activeOpacity={0.7}
-                                  style={[styles.reactionEmojiButton, mine && styles.reactionEmojiButtonMine]}
-                                  onPress={() => void handleToggleReaction(reactionPickerMsg.id, emoji)}>
-                                  <Text style={styles.reactionEmojiText}>{emoji}</Text>
-                                </TouchableOpacity>
-                              );
-                            })}
-                            {/* "+" opens the in-app emoji grid below. */}
-                            <TouchableOpacity
-                              activeOpacity={0.7}
-                              style={[styles.reactionAddButton, emojiGridOpen && styles.reactionAddButtonActive]}
-                              accessibilityLabel={t('trip.chat.reactionPickMore')}
-                              onPress={() => setEmojiGridOpen((v) => !v)}>
-                              <Ionicons name="add" size={22} color={emojiGridOpen ? COLORS.primary : '#5c6370'} />
-                            </TouchableOpacity>
-                          </View>
+                      <>
+                        {/* Reaction bar anchored just ABOVE the message. */}
+                        <View style={[styles.reactionBarAnchor, { top: barTop }]} pointerEvents="box-none">
+                          <Pressable style={styles.reactionPickerCard} onPress={() => {}}>
+                            <View style={styles.reactionEmojiRow}>
+                              {REACTION_EMOJIS.map((emoji) => {
+                                const mine = reactionPickerMsg.reactions?.some(
+                                  (r) => r.emoji === emoji && r.reactedByMe,
+                                );
+                                return (
+                                  <TouchableOpacity
+                                    key={emoji}
+                                    activeOpacity={0.7}
+                                    style={[styles.reactionEmojiButton, mine && styles.reactionEmojiButtonMine]}
+                                    onPress={() => void handleToggleReaction(reactionPickerMsg.id, emoji)}>
+                                    <Text style={styles.reactionEmojiText}>{emoji}</Text>
+                                  </TouchableOpacity>
+                                );
+                              })}
+                              {/* "+" opens the in-app emoji grid (bottom card). */}
+                              <TouchableOpacity
+                                activeOpacity={0.7}
+                                style={[styles.reactionAddButton, emojiGridOpen && styles.reactionAddButtonActive]}
+                                accessibilityLabel={t('trip.chat.reactionPickMore')}
+                                onPress={() => setEmojiGridOpen((v) => !v)}>
+                                <Ionicons name="add" size={22} color={emojiGridOpen ? COLORS.primary : '#5c6370'} />
+                              </TouchableOpacity>
+                            </View>
+                          </Pressable>
                         </View>
 
-                        {/* The reacted message, lifted forward + highlighted. */}
+                        {/* The reacted message at its EXACT position, lifted
+                            forward and enlarged a little. pointerEvents none so
+                            tapping it falls through to the backdrop = close. */}
                         <Animated.View
-                          style={[
-                            styles.reactionPreviewWrap,
-                            own ? { alignItems: 'flex-end' } : { alignItems: 'flex-start' },
-                            { transform: [{ scale: reactionScaleAnim }] },
-                          ]}>
-                          {!own ? (
-                            <Text style={styles.reactionPreviewAuthor}>{reactionPickerMsg.userName}</Text>
-                          ) : null}
-                          {previewImage ? (
-                            <Image source={{ uri: previewImage }} style={styles.reactionPreviewImage} />
-                          ) : null}
-                          {reactionPickerMsg.text ? (
-                            <View
-                              style={[
-                                styles.chatBubbleCard,
-                                styles.reactionPreviewBubble,
-                                own && [styles.chatBubbleCardOwn, { backgroundColor: COLORS.primary }],
-                              ]}>
+                          pointerEvents="none"
+                          style={{
+                            position: 'absolute',
+                            top: reactionRect.y,
+                            left: reactionRect.x,
+                            width: reactionRect.width,
+                            transform: [{ scale: reactionScaleAnim }],
+                          }}>
+                          <View
+                            style={[
+                              styles.chatBubbleCard,
+                              styles.reactionPreviewBubble,
+                              own && [styles.chatBubbleCardOwn, { backgroundColor: COLORS.primary }],
+                              // Fill the measured rect exactly so the copy matches
+                              // the real bubble (overrides the own-bubble maxWidth).
+                              { width: '100%', maxWidth: '100%', alignSelf: 'stretch' },
+                            ]}>
+                            {reactionPickerMsg.text ? (
                               <ChatMessageText text={reactionPickerMsg.text} isOwn={own} />
-                            </View>
-                          ) : null}
+                            ) : null}
+                            {reactionPickerMsg.linkPreview ? (
+                              <LinkPreviewCardInline preview={reactionPickerMsg.linkPreview} isOwn={own} />
+                            ) : null}
+                          </View>
                         </Animated.View>
 
-                        {/* In-app emoji grid (opened via "+"). */}
+                        {/* In-app emoji grid (opened via "+") — bottom card. */}
                         {emojiGridOpen ? (
-                          <View style={styles.emojiGridCard}>
-                            <ScrollView
-                              style={{ maxHeight: 200 }}
-                              contentContainerStyle={styles.emojiGridWrap}
-                              showsVerticalScrollIndicator={false}>
-                              {EMOJI_GRID.map((emoji) => (
-                                <TouchableOpacity
-                                  key={emoji}
-                                  activeOpacity={0.7}
-                                  style={styles.emojiGridCell}
-                                  onPress={() => void handleToggleReaction(reactionPickerMsg.id, emoji)}>
-                                  <Text style={styles.emojiGridText}>{emoji}</Text>
-                                </TouchableOpacity>
-                              ))}
-                            </ScrollView>
+                          <View style={[styles.emojiGridBottom, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]}>
+                            <Pressable style={styles.emojiGridCard} onPress={() => {}}>
+                              <ScrollView
+                                style={{ maxHeight: 220 }}
+                                contentContainerStyle={styles.emojiGridWrap}
+                                showsVerticalScrollIndicator={false}>
+                                {EMOJI_GRID.map((emoji) => (
+                                  <TouchableOpacity
+                                    key={emoji}
+                                    activeOpacity={0.7}
+                                    style={styles.emojiGridCell}
+                                    onPress={() => void handleToggleReaction(reactionPickerMsg.id, emoji)}>
+                                    <Text style={styles.emojiGridText}>{emoji}</Text>
+                                  </TouchableOpacity>
+                                ))}
+                              </ScrollView>
+                            </Pressable>
                           </View>
                         ) : null}
-                      </Pressable>
+                      </>
                     );
                   })()
                 ) : null}
@@ -2947,12 +2990,13 @@ const styles = StyleSheet.create({
   },
   reactionOverlay: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
   },
-  reactionCenter: {
-    width: '100%',
+  // Full-width strip anchored (via inline `top`) just above the message;
+  // the picker card centers horizontally within it.
+  reactionBarAnchor: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
     alignItems: 'center',
   },
   reactionPickerCard: {
@@ -2994,36 +3038,26 @@ const styles = StyleSheet.create({
   reactionAddButtonActive: {
     backgroundColor: '#ffe9ef',
   },
-  // The reacted message lifted forward under the picker.
-  reactionPreviewWrap: {
-    width: '100%',
-    marginTop: 14,
-  },
-  reactionPreviewAuthor: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.85)',
-    marginBottom: 4,
-    marginLeft: 4,
-  },
+  // The reacted message copy, rendered at its exact rect and lifted forward
+  // with a soft shadow so it reads above the blur.
   reactionPreviewBubble: {
-    maxWidth: '82%',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 10,
+    shadowOpacity: 0.35,
+    shadowRadius: 22,
+    elevation: 12,
   },
-  reactionPreviewImage: {
-    width: 180,
-    height: 180,
-    borderRadius: 18,
-    marginBottom: 6,
+  emojiGridBottom: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    paddingHorizontal: 16,
   },
   emojiGridCard: {
-    marginTop: 14,
     width: '100%',
-    maxWidth: 340,
+    maxWidth: 360,
     backgroundColor: '#fff',
     borderRadius: 22,
     paddingHorizontal: 12,
