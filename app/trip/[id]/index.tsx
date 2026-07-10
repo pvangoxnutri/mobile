@@ -1,6 +1,7 @@
 import { FontAwesome, Ionicons } from '@expo/vector-icons';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
+import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import * as Linking from 'expo-linking';
 import { useFocusEffect } from '@react-navigation/native';
@@ -132,6 +133,13 @@ export default function TripDetailsScreen() {
   const [toolsSheetOpen, setToolsSheetOpen] = useState(false);
   // Message whose reaction picker is open (long-press on a bubble).
   const [reactionPickerMsg, setReactionPickerMsg] = useState<ChatMsg | null>(null);
+  // Scale for the bubble being long-pressed — pops up ~6% while its picker
+  // is open (iMessage-style lift), springs back on close.
+  const reactionScaleAnim = useRef(new Animated.Value(1)).current;
+  // Hidden input that surfaces the OS keyboard when "+" is tapped, so the
+  // user can react with ANY emoji beyond the six quick ones.
+  const emojiInputRef = useRef<TextInput>(null);
+  const [emojiInputValue, setEmojiInputValue] = useState('');
   const [inviteComposerOpen, setInviteComposerOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
@@ -761,8 +769,60 @@ export default function TripDetailsScreen() {
     }
   }
 
-  async function handleToggleReaction(messageId: string, emoji: string) {
+  // Long-press entry: vibrate and lift the bubble, then open the picker.
+  function openReactionPicker(message: ChatMsg) {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setReactionPickerMsg(message);
+    reactionScaleAnim.setValue(1);
+    Animated.spring(reactionScaleAnim, {
+      toValue: 1.06,
+      damping: 12,
+      mass: 1,
+      stiffness: 180,
+      useNativeDriver: true,
+    }).start();
+  }
+
+  function closeReactionPicker() {
+    Animated.spring(reactionScaleAnim, {
+      toValue: 1,
+      damping: 14,
+      mass: 1,
+      stiffness: 200,
+      useNativeDriver: true,
+    }).start();
     setReactionPickerMsg(null);
+    setEmojiInputValue('');
+  }
+
+  // Pull the first emoji grapheme out of keyboard input. Uses Intl.Segmenter
+  // when present (correctly handles ZWJ/skin-tone sequences), else falls
+  // back to the first extended-pictographic run.
+  function extractFirstEmoji(text: string): string | null {
+    const trimmed = text.trim();
+    if (!trimmed) return null;
+    const Segmenter = (Intl as unknown as { Segmenter?: typeof Intl.Segmenter }).Segmenter;
+    if (Segmenter) {
+      const seg = new Segmenter(undefined, { granularity: 'grapheme' });
+      for (const { segment } of seg.segment(trimmed)) {
+        if (/\p{Extended_Pictographic}/u.test(segment)) return segment;
+      }
+      return null;
+    }
+    const match = trimmed.match(/\p{Extended_Pictographic}(‍\p{Extended_Pictographic}|[️\u{1F3FB}-\u{1F3FF}])*/u);
+    return match ? match[0] : null;
+  }
+
+  function handleEmojiInputChange(text: string) {
+    const emoji = extractFirstEmoji(text);
+    setEmojiInputValue('');
+    emojiInputRef.current?.blur();
+    if (!emoji || !reactionPickerMsg) return;
+    void handleToggleReaction(reactionPickerMsg.id, emoji);
+  }
+
+  async function handleToggleReaction(messageId: string, emoji: string) {
+    closeReactionPicker();
 
     // Optimistic flip — reconciled with the server's summary below.
     setChatMessages((prev) => prev.map((m) => {
@@ -830,6 +890,8 @@ export default function TripDetailsScreen() {
       new Date(message.createdAt).getTime() - new Date(prevMessage.createdAt).getTime() >= 5 * 60 * 1000;
     const avatarUrl = message.userId ? (memberAvatarMap.get(message.userId) ?? null) : null;
     const imageSource = message.localImageUri ?? message.imageUrl;
+    const isReacting = reactionPickerMsg?.id === message.id;
+    const reactingScaleStyle = isReacting ? { transform: [{ scale: reactionScaleAnim }] } : undefined;
     const isPending = message.status === 'pending';
     const isFailed = message.status === 'failed';
 
@@ -847,22 +909,24 @@ export default function TripDetailsScreen() {
                 <Image source={{ uri: imageSource }} style={[styles.chatMessageImage, isPending && styles.chatMessagePending]} />
               </Pressable>
             ) : null}
-            <TouchableOpacity
-              activeOpacity={0.85}
-              disabled={isPending || isFailed}
-              onLongPress={() => setReactionPickerMsg(message)}>
-              <View
-                style={[
-                  styles.chatBubbleCard,
-                  styles.chatBubbleCardOwn,
-                  { backgroundColor: COLORS.primary },
-                  isPending && styles.chatMessagePending,
-                  isFailed && styles.chatBubbleCardFailed,
-                ]}>
-                {message.text ? <ChatMessageText text={message.text} isOwn={true} /> : null}
-                {message.linkPreview ? <LinkPreviewCardInline preview={message.linkPreview} isOwn={true} /> : null}
-              </View>
-            </TouchableOpacity>
+            <Animated.View style={reactingScaleStyle}>
+              <TouchableOpacity
+                activeOpacity={0.85}
+                disabled={isPending || isFailed}
+                onLongPress={() => openReactionPicker(message)}>
+                <View
+                  style={[
+                    styles.chatBubbleCard,
+                    styles.chatBubbleCardOwn,
+                    { backgroundColor: COLORS.primary },
+                    isPending && styles.chatMessagePending,
+                    isFailed && styles.chatBubbleCardFailed,
+                  ]}>
+                  {message.text ? <ChatMessageText text={message.text} isOwn={true} /> : null}
+                  {message.linkPreview ? <LinkPreviewCardInline preview={message.linkPreview} isOwn={true} /> : null}
+                </View>
+              </TouchableOpacity>
+            </Animated.View>
             {renderReactionChips(message, true)}
             {isPending ? (
               <Text style={styles.chatStatusPending}>{t('trip.chat.sending')}</Text>
@@ -919,17 +983,16 @@ export default function TripDetailsScreen() {
                   <Image source={{ uri: imageSource }} style={styles.chatMessageImage} />
                 </Pressable>
               ) : null}
-              <TouchableOpacity
-                activeOpacity={0.85}
-                // Long press opens the reaction picker; reporting moved
-                // into a row inside the same picker (entry moved, not
-                // removed).
-                onLongPress={() => setReactionPickerMsg(message)}>
-                <View style={styles.chatBubbleCard}>
-                  {message.text ? <ChatMessageText text={message.text} isOwn={false} /> : null}
-                  {message.linkPreview ? <LinkPreviewCardInline preview={message.linkPreview} isOwn={false} /> : null}
-                </View>
-              </TouchableOpacity>
+              <Animated.View style={reactingScaleStyle}>
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  onLongPress={() => openReactionPicker(message)}>
+                  <View style={styles.chatBubbleCard}>
+                    {message.text ? <ChatMessageText text={message.text} isOwn={false} /> : null}
+                    {message.linkPreview ? <LinkPreviewCardInline preview={message.linkPreview} isOwn={false} /> : null}
+                  </View>
+                </TouchableOpacity>
+              </Animated.View>
               {renderReactionChips(message, false)}
             </View>
           </View>
@@ -1642,8 +1705,8 @@ export default function TripDetailsScreen() {
               visible={reactionPickerMsg !== null}
               transparent
               animationType="fade"
-              onRequestClose={() => setReactionPickerMsg(null)}>
-              <Pressable style={styles.reactionBackdrop} onPress={() => setReactionPickerMsg(null)}>
+              onRequestClose={closeReactionPicker}>
+              <Pressable style={styles.reactionBackdrop} onPress={closeReactionPicker}>
                 <Pressable style={styles.reactionPickerCard} onPress={() => {}}>
                   <View style={styles.reactionEmojiRow}>
                     {REACTION_EMOJIS.map((emoji) => {
@@ -1662,24 +1725,27 @@ export default function TripDetailsScreen() {
                         </TouchableOpacity>
                       );
                     })}
-                  </View>
-                  {reactionPickerMsg && reactionPickerMsg.userId && reactionPickerMsg.userId !== user?.id ? (
+                    {/* "+" opens the OS keyboard to react with any emoji. */}
                     <TouchableOpacity
-                      activeOpacity={0.8}
-                      style={styles.reactionReportRow}
-                      onPress={() => {
-                        const msg = reactionPickerMsg;
-                        setReactionPickerMsg(null);
-                        if (msg?.id && msg.userId) {
-                          showReportMenu('chat_message', msg.id, msg.userId, msg.userName);
-                        }
-                      }}>
-                      <Ionicons name="flag-outline" size={15} color="#b4234b" />
-                      <Text style={styles.reactionReportText}>{t('report.reportMessage')}</Text>
+                      activeOpacity={0.7}
+                      style={styles.reactionAddButton}
+                      accessibilityLabel={t('trip.chat.reactionPickMore')}
+                      onPress={() => emojiInputRef.current?.focus()}>
+                      <Ionicons name="add" size={22} color="#5c6370" />
                     </TouchableOpacity>
-                  ) : null}
+                  </View>
                 </Pressable>
               </Pressable>
+              {/* Off-screen host for the emoji keyboard — focusing it opens
+                  the keyboard; the first emoji typed becomes the reaction. */}
+              <TextInput
+                ref={emojiInputRef}
+                value={emojiInputValue}
+                onChangeText={handleEmojiInputChange}
+                style={styles.emojiHiddenInput}
+                autoCorrect={false}
+                caretHidden
+              />
             </Modal>
 
             {/* Same iOS nested-Modal workaround as the image viewer above:
@@ -2857,7 +2923,9 @@ const styles = StyleSheet.create({
   },
   reactionBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(10,12,18,0.45)',
+    // Light dim so the lifted (scaled-up) message stays visible behind the
+    // picker — the iMessage-style "message gets a bit bigger" effect.
+    backgroundColor: 'rgba(10,12,18,0.18)',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
@@ -2890,20 +2958,20 @@ const styles = StyleSheet.create({
   reactionEmojiText: {
     fontSize: 24,
   },
-  reactionReportRow: {
-    flexDirection: 'row',
+  reactionAddButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    marginTop: 10,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#eceef2',
+    backgroundColor: '#f1f3f7',
   },
-  reactionReportText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#b4234b',
+  emojiHiddenInput: {
+    position: 'absolute',
+    width: 1,
+    height: 1,
+    opacity: 0,
+    top: -100,
   },
 
   chatBubbleWrap: {
