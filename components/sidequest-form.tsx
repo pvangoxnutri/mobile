@@ -79,6 +79,10 @@ export type SideQuestFormValues = {
 // choose by hand.
 const NON_SIDEQUEST_CATEGORY_VALUES = CATEGORY_VALUES.filter((value) => value !== 'sidequest');
 
+// Shown by default; the rest (transport, places, Custom) sit behind a
+// "Show more" toggle so the category row stays short and scannable.
+const COLLAPSED_CATEGORY_VALUES: ActivityCategoryValue[] = ['flight', 'food', 'sight'];
+
 // What the activity-time spinner shows when no time is chosen yet. The same
 // value MUST be committed to form state when the picker opens: the native
 // picker only fires onChange when the wheel MOVES, so a user accepting the
@@ -153,6 +157,15 @@ function SideQuestFormInner({
   const [isCustomCategory, setIsCustomCategory] = useState(
     !!(initialValues?.customCategoryLabel && initialValues.customCategoryLabel.trim()),
   );
+  // Category row starts collapsed (Flyg/Mat/Sevärdighet only). Auto-expand
+  // when the current selection lives behind the toggle — a custom category,
+  // or a built-in that isn't one of the three collapsed ones — so editing an
+  // activity always shows its active chip.
+  const [categoryExpanded, setCategoryExpanded] = useState(() => {
+    if (initialValues?.customCategoryLabel?.trim()) return true;
+    const initialCat = initialValues?.category ?? null;
+    return !!initialCat && !COLLAPSED_CATEGORY_VALUES.includes(initialCat as ActivityCategoryValue);
+  });
   const [locationQuery, setLocationQuery] = useState(initialValues?.locationQuery ?? '');
   const [locationPlace, setLocationPlace] = useState<StoredMapPlace | null>(initialValues?.locationPlace ?? null);
   const [flightFrom, setFlightFrom] = useState(initialValues?.flightFrom ?? '');
@@ -772,7 +785,7 @@ function SideQuestFormInner({
         <View style={styles.block}>
           <Text style={styles.label}>{t('sidequest.form.categoryLabel')} <Text style={styles.labelOptional}>{t('common.optionalSuffix')}</Text></Text>
           <View style={styles.categoryRow}>
-            {NON_SIDEQUEST_CATEGORY_VALUES.map((value) => {
+            {(categoryExpanded ? NON_SIDEQUEST_CATEGORY_VALUES : COLLAPSED_CATEGORY_VALUES).map((value) => {
               const symbol = getCategorySymbol(value);
               // A built-in chip is active only when it's selected AND we're
               // not in custom mode (custom mode stores a symbol key in
@@ -800,30 +813,50 @@ function SideQuestFormInner({
               );
             })}
 
-            {/* Custom / Egen chip — opens the name field + symbol picker. */}
+            {/* Custom / Egen chip — only in the expanded set. */}
+            {categoryExpanded ? (
+              <TouchableOpacity
+                activeOpacity={0.8}
+                style={[styles.categoryChip, isCustomCategory && { borderColor: PRIMARY_COLOR, backgroundColor: PRIMARY_08 }]}
+                onPress={() => {
+                  if (isCustomCategory) {
+                    setIsCustomCategory(false);
+                    setCustomLabel('');
+                    setCategory(null);
+                  } else {
+                    setIsCustomCategory(true);
+                    // Seed a symbol so the preview has one immediately.
+                    if (!category) setCategory('other');
+                  }
+                }}>
+                <Ionicons
+                  name="add-circle-outline"
+                  size={16}
+                  color={isCustomCategory ? PRIMARY_COLOR : '#5f6570'}
+                  style={{ marginRight: 6 }}
+                />
+                <Text style={[styles.categoryLabel, isCustomCategory && { color: PRIMARY_COLOR, fontWeight: '600' }]}>
+                  {t('sidequest.form.categoryCustom')}
+                </Text>
+              </TouchableOpacity>
+            ) : null}
+
+            {/* Show more / less — the clear affordance for the hidden options. */}
             <TouchableOpacity
               activeOpacity={0.8}
-              style={[styles.categoryChip, isCustomCategory && { borderColor: PRIMARY_COLOR, backgroundColor: PRIMARY_08 }]}
-              onPress={() => {
-                if (isCustomCategory) {
-                  setIsCustomCategory(false);
-                  setCustomLabel('');
-                  setCategory(null);
-                } else {
-                  setIsCustomCategory(true);
-                  // Seed a symbol so the preview has one immediately.
-                  if (!category) setCategory('other');
-                }
-              }}>
-              <Ionicons
-                name="add-circle-outline"
-                size={16}
-                color={isCustomCategory ? PRIMARY_COLOR : '#5f6570'}
-                style={{ marginRight: 6 }}
-              />
-              <Text style={[styles.categoryLabel, isCustomCategory && { color: PRIMARY_COLOR, fontWeight: '600' }]}>
-                {t('sidequest.form.categoryCustom')}
+              style={styles.categoryMoreChip}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: categoryExpanded }}
+              onPress={() => setCategoryExpanded((prev) => !prev)}>
+              <Text style={styles.categoryMoreText}>
+                {categoryExpanded ? t('sidequest.form.categoryShowLess') : t('sidequest.form.categoryShowMore')}
               </Text>
+              <Ionicons
+                name={categoryExpanded ? 'chevron-up' : 'chevron-down'}
+                size={15}
+                color={PRIMARY_COLOR}
+                style={{ marginLeft: 4 }}
+              />
             </TouchableOpacity>
           </View>
 
@@ -1984,6 +2017,22 @@ const styles = StyleSheet.create({
   },
   categoryEmoji: {
     fontSize: 16,
+  },
+  categoryMoreChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: '#ff9cb0',
+    backgroundColor: '#fff0f3',
+  },
+  categoryMoreText: {
+    fontSize: 14,
+    color: '#ff4f74',
+    fontWeight: '700',
   },
   customCategoryBlock: {
     marginTop: 14,
