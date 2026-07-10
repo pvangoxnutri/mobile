@@ -26,19 +26,23 @@ interface ModalSheetProps {
   /** Slower, weightier entry glide (MOTION_SPRING.graceful) instead of the
    *  standard spring — for sheets that should feel deliberate. */
   slowEntry?: boolean;
+  /** Size the sheet to its content instead of the fixed `height`, capped at
+   *  90% of the screen. For short sheets (e.g. a fixed list of rows) this
+   *  avoids the large empty gap a fixed height leaves below the content. */
+  autoHeight?: boolean;
 }
 
 const { height: screenHeight } = Dimensions.get('window');
 
-export default function ModalSheet({ visible, children, onClose, height = screenHeight * 0.75, slowEntry = false }: ModalSheetProps) {
+export default function ModalSheet({ visible, children, onClose, height = screenHeight * 0.75, slowEntry = false, autoHeight = false }: ModalSheetProps) {
   const { translateY, backdropOpacity, scaleValue, start, animatedSheetStyle, animatedBackdropStyle } = useModalSpring({
     autoStart: false,
     onComplete: undefined,
     triggerHaptics: true,
-    // Start fully below the sheet's own height so opening is a real
-    // slide-up from off-screen, mirroring the slide-down-to-screenHeight
-    // close animation below instead of just a small 100px pop-in.
-    initialTranslateY: height,
+    // Start fully below the sheet so opening is a real slide-up from
+    // off-screen. In autoHeight mode the content height isn't known up
+    // front, so start from the full screen height (always off-screen).
+    initialTranslateY: autoHeight ? screenHeight : height,
     entrySpring: slowEntry ? MOTION_SPRING.graceful : MOTION_SPRING.standard,
   });
 
@@ -86,7 +90,7 @@ export default function ModalSheet({ visible, children, onClose, height = screen
         style={[
           styles.sheet,
           animatedSheetStyle,
-          { height },
+          autoHeight ? { maxHeight: screenHeight * 0.9 } : { height },
         ]}
       >
         {children}

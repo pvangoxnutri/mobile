@@ -1225,8 +1225,9 @@ export default function TripDetailsScreen() {
 
         {/* Trip tools sheet — every utility entry point in one place, off
             the feed. Navigation targets are unchanged; only the entry moved.
+            autoHeight: size to the fixed row list (no empty gap below).
             slowEntry: the launcher sheet should glide up deliberately. */}
-        <ModalSheet visible={toolsSheetOpen} slowEntry onClose={() => setToolsSheetOpen(false)}>
+        <ModalSheet visible={toolsSheetOpen} autoHeight slowEntry onClose={() => setToolsSheetOpen(false)}>
           <View style={styles.sheetHandle} />
           <View style={styles.sheetHeader}>
             <View>
@@ -1237,7 +1238,7 @@ export default function TripDetailsScreen() {
               <Ionicons name="close" size={20} color="#161821" />
             </TouchableOpacity>
           </View>
-          <View style={styles.toolsList}>
+          <View style={[styles.toolsList, { paddingBottom: Math.max(insets.bottom, 16) + 8 }]}>
             <TouchableOpacity
               style={styles.toolRow}
               activeOpacity={0.86}
@@ -2998,7 +2999,9 @@ const styles = StyleSheet.create({
     shadowRadius: 24,
     elevation: 8,
   },
-  toolsList: { gap: 8, paddingBottom: 8 },
+  // marginTop adds breathing room between the "Reseverktyg" header and the
+  // first row; paddingBottom is overridden inline with the safe-area inset.
+  toolsList: { gap: 8, marginTop: 20, paddingBottom: 8 },
   toolRow: {
     flexDirection: 'row',
     alignItems: 'center',
