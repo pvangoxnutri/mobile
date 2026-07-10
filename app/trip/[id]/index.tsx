@@ -1052,8 +1052,6 @@ export default function TripDetailsScreen() {
 
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionEyebrow}>{t('trip.feedEyebrow')}</Text>
-            <Text style={styles.sectionTitle}>{t('trip.feedTitle')}</Text>
-            <Text style={styles.sectionCopy}>{t('trip.feedSubtitle')}</Text>
           </View>
 
           {activityDayGroups.length > 0 ? (
@@ -1163,8 +1161,9 @@ export default function TripDetailsScreen() {
         </View>
 
         {/* Trip tools sheet — every utility entry point in one place, off
-            the feed. Navigation targets are unchanged; only the entry moved. */}
-        <ModalSheet visible={toolsSheetOpen} onClose={() => setToolsSheetOpen(false)}>
+            the feed. Navigation targets are unchanged; only the entry moved.
+            slowEntry: the launcher sheet should glide up deliberately. */}
+        <ModalSheet visible={toolsSheetOpen} slowEntry onClose={() => setToolsSheetOpen(false)}>
           <View style={styles.sheetHandle} />
           <View style={styles.sheetHeader}>
             <View>
@@ -1215,20 +1214,6 @@ export default function TripDetailsScreen() {
                 <Ionicons name="checkmark-done-outline" size={20} color="#3b82f6" />
               </View>
               <Text style={styles.toolRowLabel}>{t('trip.packingList.title')}</Text>
-              <Ionicons name="chevron-forward" size={18} color="#b2b7c0" />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.toolRow}
-              activeOpacity={0.86}
-              onPress={() => {
-                setToolsSheetOpen(false);
-                router.push('/travel-tracker');
-              }}>
-              <View style={[styles.toolRowIcon, { backgroundColor: '#e6f7f4' }]}>
-                <Ionicons name="earth-outline" size={20} color={COLORS.secondary} />
-              </View>
-              <Text style={styles.toolRowLabel}>{t('profile.explore.travelTracker')}</Text>
               <Ionicons name="chevron-forward" size={18} color="#b2b7c0" />
             </TouchableOpacity>
 

@@ -397,10 +397,28 @@ interface ModalSpringConfig {
   /** Starting offset (px) the sheet slides up from. Defaults to a small pop-in;
    *  pass the sheet's own height for a full slide-up from off-screen. */
   initialTranslateY?: number;
+  /** Spring preset for the entry motion. Defaults to MOTION_SPRING.standard;
+   *  pass e.g. MOTION_SPRING.graceful for a slower, weightier glide.
+   *  Structural type (not `typeof MOTION_SPRING.standard`) because the
+   *  as-const presets are distinct literal types. */
+  entrySpring?: {
+    damping: number;
+    mass: number;
+    stiffness: number;
+    overshootClamping: boolean;
+    restSpeedThreshold: number;
+    restDisplacementThreshold: number;
+  };
 }
 
 export function useModalSpring(config: ModalSpringConfig = {}) {
-  const { autoStart = true, onComplete, triggerHaptics = true, initialTranslateY = 100 } = config;
+  const {
+    autoStart = true,
+    onComplete,
+    triggerHaptics = true,
+    initialTranslateY = 100,
+    entrySpring = MOTION_SPRING.standard,
+  } = config;
 
   const translateY = useRef(new Animated.Value(initialTranslateY)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
@@ -414,7 +432,7 @@ export function useModalSpring(config: ModalSpringConfig = {}) {
     Animated.parallel([
       Animated.spring(translateY, {
         toValue: 0,
-        ...MOTION_SPRING.standard,
+        ...entrySpring,
         useNativeDriver: true,
       }),
 
@@ -426,11 +444,11 @@ export function useModalSpring(config: ModalSpringConfig = {}) {
 
       Animated.spring(scaleValue, {
         toValue: 1,
-        ...MOTION_SPRING.standard,
+        ...entrySpring,
         useNativeDriver: true,
       }),
     ]).start(onComplete);
-  }, [translateY, backdropOpacity, scaleValue, onComplete, triggerHaptics]);
+  }, [translateY, backdropOpacity, scaleValue, onComplete, triggerHaptics, entrySpring]);
 
   useEffect(() => {
     if (autoStart) {

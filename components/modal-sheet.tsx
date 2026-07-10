@@ -15,6 +15,7 @@
 import { Animated, Dimensions, Pressable, StyleSheet, View } from 'react-native';
 import { ReactNode, useEffect } from 'react';
 import { useModalSpring } from '@/hooks/useMotion';
+import { MOTION_SPRING } from '@/MOTION_CONSTANTS';
 import { COLORS, SHADOWS, SPACING } from '@/constants/design-tokens';
 
 interface ModalSheetProps {
@@ -22,11 +23,14 @@ interface ModalSheetProps {
   children: ReactNode;
   onClose: () => void;
   height?: number;
+  /** Slower, weightier entry glide (MOTION_SPRING.graceful) instead of the
+   *  standard spring — for sheets that should feel deliberate. */
+  slowEntry?: boolean;
 }
 
 const { height: screenHeight } = Dimensions.get('window');
 
-export default function ModalSheet({ visible, children, onClose, height = screenHeight * 0.75 }: ModalSheetProps) {
+export default function ModalSheet({ visible, children, onClose, height = screenHeight * 0.75, slowEntry = false }: ModalSheetProps) {
   const { translateY, backdropOpacity, scaleValue, start, animatedSheetStyle, animatedBackdropStyle } = useModalSpring({
     autoStart: false,
     onComplete: undefined,
@@ -35,6 +39,7 @@ export default function ModalSheet({ visible, children, onClose, height = screen
     // slide-up from off-screen, mirroring the slide-down-to-screenHeight
     // close animation below instead of just a small 100px pop-in.
     initialTranslateY: height,
+    entrySpring: slowEntry ? MOTION_SPRING.graceful : MOTION_SPRING.standard,
   });
 
   useEffect(() => {
