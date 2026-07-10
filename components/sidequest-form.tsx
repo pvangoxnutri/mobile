@@ -30,7 +30,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiFetch, apiJson } from '@/lib/api';
 import { useKeyboardFocusScroll } from '@/hooks/useKeyboardFocusScroll';
 import { invalidateCache } from '@/lib/cache';
-import { CATEGORY_VALUES, getCategorySymbol, type ActivityCategoryValue } from '@/lib/category-symbol';
+import { CATEGORY_VALUES, CUSTOM_SYMBOL_VALUES, getCategorySymbol, type ActivityCategoryValue } from '@/lib/category-symbol';
 import { fetchPlaceSuggestions, type PlaceAutocompleteSuggestion } from '@/lib/maps-api';
 import { type StoredMapPlace, withLocationMarker } from '@/lib/sidequest-location';
 import { withFlightMarkers } from '@/lib/flight-route';
@@ -50,6 +50,7 @@ export type SideQuestFormValues = {
   title: string;
   description: string;
   category: string | null;
+  customCategoryLabel: string | null;
   locationQuery: string;
   locationPlace: StoredMapPlace | null;
   flightFrom: string;
@@ -144,6 +145,14 @@ function SideQuestFormInner({
   const [title, setTitle] = useState(initialValues?.title ?? '');
   const [description, setDescription] = useState(initialValues?.description ?? '');
   const [category, setCategory] = useState<string | null>(initialValues?.category ?? null);
+  // Custom category: a user-named category that reuses a built-in symbol.
+  // `isCustomCategory` distinguishes it from picking the same key as a
+  // built-in (both store the key in `category`); the name lives in
+  // `customLabel`. Restored from initialValues on edit.
+  const [customLabel, setCustomLabel] = useState(initialValues?.customCategoryLabel ?? '');
+  const [isCustomCategory, setIsCustomCategory] = useState(
+    !!(initialValues?.customCategoryLabel && initialValues.customCategoryLabel.trim()),
+  );
   const [locationQuery, setLocationQuery] = useState(initialValues?.locationQuery ?? '');
   const [locationPlace, setLocationPlace] = useState<StoredMapPlace | null>(initialValues?.locationPlace ?? null);
   const [flightFrom, setFlightFrom] = useState(initialValues?.flightFrom ?? '');
@@ -470,6 +479,13 @@ function SideQuestFormInner({
       return null;
     }
 
+    // A custom category needs a name (required, trimmed). Backend caps at 60;
+    // the input's maxLength already enforces it, so only "empty" is checked.
+    if (isCustomCategory && !customLabel.trim()) {
+      setMessage({ type: 'error', text: t('sidequest.form.customNameRequired') });
+      return null;
+    }
+
     const today = getDefaultDate();
     if (date < today) {
       setMessage({ type: 'error', text: t('sidequest.form.dateNotInPast') });
@@ -523,6 +539,7 @@ function SideQuestFormInner({
         title: normalizedTitle,
         description: finalDescription,
         category: category || null,
+        customCategoryLabel: isCustomCategory ? customLabel.trim() || null : null,
         date,
         // Empty string (not null) so PATCH correctly clears a previously-set
         // time when the user removes it on edit — see UpdateActivityDto.Time.
@@ -540,6 +557,7 @@ function SideQuestFormInner({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             ...payload,
+            clearCustomCategoryLabel: !isCustomCategory || !customLabel.trim(),
             clearRevealAt: visibility !== 'hidden',
             clearTeaser: visibility !== 'hidden' || !teaser.trim(),
             clearTeaserOffset: visibility !== 'hidden' || !teaser.trim(),
@@ -612,6 +630,7 @@ function SideQuestFormInner({
   const initialTitleForDirty = initialValues?.title ?? '';
   const initialDescForDirty = initialValues?.description ?? '';
   const initialCategoryForDirty = initialValues?.category ?? null;
+  const initialCustomLabelForDirty = initialValues?.customCategoryLabel ?? '';
   const initialVisibilityForDirty = initialValues?.visibility ?? 'public';
   const initialTeaserForDirty = initialValues?.teaser ?? '';
   const initialImageForDirty = initialValues?.imageUrl ?? initialImageUrl ?? null;
@@ -625,6 +644,7 @@ function SideQuestFormInner({
         title.trim() !== initialTitleForDirty.trim() ||
         description.trim() !== initialDescForDirty.trim() ||
         category !== initialCategoryForDirty ||
+        customLabel.trim() !== initialCustomLabelForDirty.trim() ||
         visibility !== initialVisibilityForDirty ||
         teaser.trim() !== initialTeaserForDirty.trim() ||
         (imageUrl ?? null) !== (initialImageForDirty ?? null) ||
@@ -638,6 +658,7 @@ function SideQuestFormInner({
         title.trim() !== '' ||
         description.trim() !== '' ||
         category !== null ||
+        customLabel.trim() !== '' ||
         teaser.trim() !== '' ||
         imageUrl !== null ||
         locationQuery.trim() !== '' ||
@@ -753,14 +774,21 @@ function SideQuestFormInner({
           <View style={styles.categoryRow}>
             {NON_SIDEQUEST_CATEGORY_VALUES.map((value) => {
               const symbol = getCategorySymbol(value);
-              const active = category === value;
+              // A built-in chip is active only when it's selected AND we're
+              // not in custom mode (custom mode stores a symbol key in
+              // `category` too, but should never light up a built-in chip).
+              const active = category === value && !isCustomCategory;
               const label = stripLeadingEmoji(t(symbol.labelKey));
               return (
                 <TouchableOpacity
                   key={value}
                   activeOpacity={0.8}
                   style={[styles.categoryChip, active && { borderColor: PRIMARY_COLOR, backgroundColor: PRIMARY_08 }]}
-                  onPress={() => setCategory(active ? null : value)}>
+                  onPress={() => {
+                    setIsCustomCategory(false);
+                    setCustomLabel('');
+                    setCategory(active ? null : value);
+                  }}>
                   <Ionicons
                     name={symbol.icon}
                     size={16}
@@ -771,7 +799,90 @@ function SideQuestFormInner({
                 </TouchableOpacity>
               );
             })}
+
+            {/* Custom / Egen chip — opens the name field + symbol picker. */}
+            <TouchableOpacity
+              activeOpacity={0.8}
+              style={[styles.categoryChip, isCustomCategory && { borderColor: PRIMARY_COLOR, backgroundColor: PRIMARY_08 }]}
+              onPress={() => {
+                if (isCustomCategory) {
+                  setIsCustomCategory(false);
+                  setCustomLabel('');
+                  setCategory(null);
+                } else {
+                  setIsCustomCategory(true);
+                  // Seed a symbol so the preview has one immediately.
+                  if (!category) setCategory('other');
+                }
+              }}>
+              <Ionicons
+                name="add-circle-outline"
+                size={16}
+                color={isCustomCategory ? PRIMARY_COLOR : '#5f6570'}
+                style={{ marginRight: 6 }}
+              />
+              <Text style={[styles.categoryLabel, isCustomCategory && { color: PRIMARY_COLOR, fontWeight: '600' }]}>
+                {t('sidequest.form.categoryCustom')}
+              </Text>
+            </TouchableOpacity>
           </View>
+
+          {isCustomCategory ? (
+            <View style={styles.customCategoryBlock}>
+              <TextInput
+                value={customLabel}
+                onChangeText={setCustomLabel}
+                placeholder={t('sidequest.form.categoryCustomNamePlaceholder')}
+                placeholderTextColor="#b7bcc7"
+                style={styles.customCategoryInput}
+                maxLength={60}
+                returnKeyType="done"
+              />
+
+              <Text style={styles.customCategorySymbolLabel}>
+                {t('sidequest.form.categoryCustomSymbolLabel')}
+              </Text>
+              <View style={styles.customSymbolGrid}>
+                {CUSTOM_SYMBOL_VALUES.map((value) => {
+                  const symbol = getCategorySymbol(value);
+                  const selected = category === value;
+                  return (
+                    <TouchableOpacity
+                      key={value}
+                      activeOpacity={0.8}
+                      accessibilityRole="button"
+                      accessibilityLabel={stripLeadingEmoji(t(symbol.labelKey))}
+                      style={[
+                        styles.customSymbolCell,
+                        { backgroundColor: symbol.backgroundColor },
+                        selected && styles.customSymbolCellSelected,
+                      ]}
+                      onPress={() => setCategory(value)}>
+                      <Ionicons name={symbol.icon} size={20} color={symbol.iconColor} />
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {/* Live preview: chosen symbol in its color + the typed name. */}
+              <View style={styles.customPreviewRow}>
+                <View
+                  style={[
+                    styles.customPreviewIcon,
+                    { backgroundColor: getCategorySymbol(category).backgroundColor },
+                  ]}>
+                  <Ionicons
+                    name={getCategorySymbol(category).icon}
+                    size={18}
+                    color={getCategorySymbol(category).iconColor}
+                  />
+                </View>
+                <Text style={styles.customPreviewText} numberOfLines={1}>
+                  {customLabel.trim() || t('sidequest.form.categoryCustomPreviewPlaceholder')}
+                </Text>
+              </View>
+            </View>
+          ) : null}
         </View>
       ) : null}
 
@@ -1873,6 +1984,67 @@ const styles = StyleSheet.create({
   },
   categoryEmoji: {
     fontSize: 16,
+  },
+  customCategoryBlock: {
+    marginTop: 14,
+    gap: 12,
+  },
+  customCategoryInput: {
+    height: 48,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#e2e5eb',
+    backgroundColor: '#fafbfc',
+    paddingHorizontal: 14,
+    fontSize: 15,
+    color: '#161821',
+  },
+  customCategorySymbolLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+    color: '#8a909d',
+    textTransform: 'uppercase',
+  },
+  customSymbolGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  customSymbolCell: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  customSymbolCellSelected: {
+    borderColor: '#ff4f74',
+  },
+  customPreviewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#eceef2',
+    backgroundColor: '#fff',
+  },
+  customPreviewIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  customPreviewText: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#161821',
   },
   categoryLabel: {
     fontSize: 14,

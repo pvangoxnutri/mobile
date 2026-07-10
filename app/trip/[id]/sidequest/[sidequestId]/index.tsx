@@ -25,7 +25,7 @@ import { useAuth } from '@/components/auth-provider';
 import { useI18n } from '@/components/i18n-provider';
 import { apiFetch, apiJson } from '@/lib/api';
 import { getCached, setCached, invalidateCache, invalidateTripCache } from '@/lib/cache';
-import { getCategorySymbol } from '@/lib/category-symbol';
+import { getCategoryLabel, getCategorySymbol } from '@/lib/category-symbol';
 import { buildGoogleMapsSearchUrl, extractLocationQuery, extractStoredMapPlace, stripLocationMarker } from '@/lib/sidequest-location';
 import { extractFlightRoute, formatFlightRoute, hasFlightRoute, stripFlightMarkers } from '@/lib/flight-route';
 import { extractBlur, stripBlurMarker, DEFAULT_BLUR } from '@/lib/activity-blur';
@@ -411,12 +411,16 @@ export default function SideQuestDetailScreen() {
               ) : null}
               {activity.category ? (() => {
                 const symbol = getCategorySymbol(activity.category);
+                // Custom categories show the user's name; built-in ones show
+                // their localized label.
+                const value = getCategoryLabel(activity.category, activity.customCategoryLabel, t)
+                  ?? stripLeadingEmoji(t(symbol.labelKey));
                 return (
                   <MetaRow
                     icon={symbol.icon}
                     iconColor={symbol.iconColor}
                     label={t('activity.category')}
-                    value={stripLeadingEmoji(t(symbol.labelKey))}
+                    value={value}
                   />
                 );
               })() : null}

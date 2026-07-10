@@ -67,6 +67,9 @@ export interface SideQuestActivity {
   time?: string | null;
   sortIndex: number;
   category?: string | null;
+  // User-entered name for a custom category (paired with the symbol key in
+  // `category`). Null for built-in categories and older activities.
+  customCategoryLabel?: string | null;
   imageUrl?: string | null;
   spotifyUrl?: string | null;
   visibility: 'public' | 'hidden';

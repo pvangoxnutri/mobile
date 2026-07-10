@@ -461,7 +461,10 @@ function buildDayItemsMap(quests: Quest[], activities: SideQuestActivity[], t: (
       date: activity.date,
       time: activity.time,
       sortIndex: activity.sortIndex,
-      meta: activity.category?.trim() || (sealed ? 'Hidden SideQuest' : 'SideQuest'),
+      // Custom categories surface their user-given name here (withheld by the
+      // backend for sealed activities, so no reveal leak); built-in behavior
+      // is unchanged.
+      meta: activity.customCategoryLabel?.trim() || activity.category?.trim() || (sealed ? 'Hidden SideQuest' : 'SideQuest'),
       hidden: sealed,
       imageUrl: activity.imageUrl,
       description: activity.description,

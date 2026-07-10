@@ -95,6 +95,7 @@ export default function NewSideQuestScreen() {
         // shows only the human-written text.
         description: stripBlurMarker(stripFlightMarkers(stripLocationMarker(activity.description))) ?? '',
         category: activity.category ?? null,
+        customCategoryLabel: activity.customCategoryLabel ?? null,
         locationQuery: extractLocationQuery(activity.description),
         locationPlace: extractStoredMapPlace(activity.description),
         flightFrom: flightRoute.from,

@@ -201,3 +201,31 @@ export function getCategorySymbol(category?: string | null): CategorySymbol {
   const key = category.toLowerCase() as ActivityCategoryValue;
   return CATEGORY_SYMBOLS[key] ?? DEFAULT_SYMBOL;
 }
+
+/** Symbols a CUSTOM category may pick from — the built-in library minus
+ * "sidequest" (a reserved marker for the hidden-until-reveal feature). The
+ * chosen key is stored in the activity's `category`; the name goes in
+ * `customCategoryLabel`. */
+export const CUSTOM_SYMBOL_VALUES: ActivityCategoryValue[] = CATEGORY_VALUES.filter(
+  (value) => value !== 'sidequest',
+);
+
+/** Strips a leading emoji from a localized category label (labels are stored
+ * as "🍽️ Food"). Shared so every render site formats identically. */
+export function stripCategoryEmoji(label: string): string {
+  return label.replace(/^\p{Extended_Pictographic}️?\s*/u, '');
+}
+
+/** The text to show for an activity's category: the trimmed custom name when
+ * present, otherwise the built-in localized label (emoji stripped). Returns
+ * null when there is no category at all. */
+export function getCategoryLabel(
+  category: string | null | undefined,
+  customCategoryLabel: string | null | undefined,
+  translate: (key: string) => string,
+): string | null {
+  const custom = customCategoryLabel?.trim();
+  if (custom) return custom;
+  if (!category) return null;
+  return stripCategoryEmoji(translate(getCategorySymbol(category).labelKey));
+}
