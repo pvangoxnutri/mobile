@@ -1129,7 +1129,7 @@ const dictionaries: Record<AppLanguage, Record<string, string>> = {
     'trip.packingList.sharedEmptySubtitle': 'Lägg till en delad kategori så hela gruppen kan packa tillsammans.',
     'trip.packingList.privateEmptyTitle': 'Inget privat ännu',
     'trip.packingList.privateEmptySubtitle': 'Lägg till personliga föremål som bara du ser.',
-    'trip.feedEyebrow': 'ADVENTURE FEED',
+    'trip.feedEyebrow': 'ÄVENTYRSFEED',
     'trip.dayNumber': 'Dag {day}',
     'trip.activityFallbackTitle': 'Aktivitet',
     'trip.hiddenQuest': 'Gömd sidequest',
