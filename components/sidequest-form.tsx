@@ -219,6 +219,7 @@ function SideQuestFormInner({
   const descriptionRef = useRef<TextInput>(null);
   const locationQueryRef = useRef<TextInput>(null);
   const teaserRef = useRef<TextInput>(null);
+  const customNameRef = useRef<TextInput>(null);
 
   // Applies the actual state change once we know it's safe to (i.e. the
   // turn-off-while-hidden confirmation, if needed, has already been accepted).
@@ -863,6 +864,7 @@ function SideQuestFormInner({
           {isCustomCategory ? (
             <View style={styles.customCategoryBlock}>
               <TextInput
+                ref={customNameRef}
                 value={customLabel}
                 onChangeText={setCustomLabel}
                 placeholder={t('sidequest.form.categoryCustomNamePlaceholder')}
@@ -870,6 +872,7 @@ function SideQuestFormInner({
                 style={styles.customCategoryInput}
                 maxLength={60}
                 returnKeyType="done"
+                onFocus={onFocusField(customNameRef)}
               />
 
               <Text style={styles.customCategorySymbolLabel}>

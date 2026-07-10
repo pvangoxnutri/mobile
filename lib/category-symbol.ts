@@ -31,6 +31,7 @@ export type ActivityCategoryValue =
   | 'hiking'
   | 'hotel'
   | 'party'
+  | 'sun'
   | 'spa'
   | 'sight'
   | 'sidequest'
@@ -156,6 +157,12 @@ const CATEGORY_SYMBOLS: Record<ActivityCategoryValue, CategorySymbol> = {
     backgroundColor: '#fae8ff',
     labelKey: 'activity.category_party',
   },
+  sun: {
+    icon: 'sunny',
+    iconColor: '#f59e0b',
+    backgroundColor: '#fef3c7',
+    labelKey: 'activity.category_sun',
+  },
   spa: {
     icon: 'flower',
     iconColor: '#0d9488',
@@ -192,6 +199,7 @@ export const CATEGORY_VALUES: ActivityCategoryValue[] = [
   'spa',
   'drinks',
   'party',
+  'sun',
   'other',
 ];
 

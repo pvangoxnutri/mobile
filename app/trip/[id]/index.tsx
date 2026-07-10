@@ -4,6 +4,7 @@ import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import * as Linking from 'expo-linking';
+import { BlurView } from 'expo-blur';
 import { useFocusEffect } from '@react-navigation/native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -82,9 +83,20 @@ type ChatMsg = {
   reactions?: ChatReaction[];
 };
 
-// The reaction picker's fixed set — mirrors the backend whitelist in
-// TripChatController.AllowedReactionEmojis.
+// The six quick reactions shown in the picker row.
 const REACTION_EMOJIS = ['❤️', '😂', '😮', '😢', '👍', '👎'];
+
+// In-app emoji grid shown when "+" is tapped. iOS can't force the OS emoji
+// keyboard, so we present a curated in-app picker instead — landing the user
+// straight in emoji selection. The backend accepts any emoji.
+const EMOJI_GRID = [
+  '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍',
+  '😂', '🤣', '😅', '😊', '😍', '😘', '😎', '🤩',
+  '😮', '😯', '😲', '🥳', '🤯', '😱', '😢', '😭',
+  '😡', '👍', '👎', '👏', '🙌', '🙏', '💪', '🔥',
+  '🎉', '✨', '⭐', '💯', '✅', '❌', '❓', '❗',
+  '🍺', '🍷', '🍕', '☀️', '🌊', '✈️', '🚗', '⛵',
+];
 
 // Maps a known SystemEventType to its translated rendering. Falls back to
 // the message's own (English, backend-authored) text for unknown/missing
@@ -136,10 +148,8 @@ export default function TripDetailsScreen() {
   // Scale for the bubble being long-pressed — pops up ~6% while its picker
   // is open (iMessage-style lift), springs back on close.
   const reactionScaleAnim = useRef(new Animated.Value(1)).current;
-  // Hidden input that surfaces the OS keyboard when "+" is tapped, so the
-  // user can react with ANY emoji beyond the six quick ones.
-  const emojiInputRef = useRef<TextInput>(null);
-  const [emojiInputValue, setEmojiInputValue] = useState('');
+  // Whether the in-app emoji grid (opened via "+") is showing.
+  const [emojiGridOpen, setEmojiGridOpen] = useState(false);
   const [inviteComposerOpen, setInviteComposerOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
@@ -769,14 +779,16 @@ export default function TripDetailsScreen() {
     }
   }
 
-  // Long-press entry: vibrate and lift the bubble, then open the picker.
+  // Long-press entry: vibrate, then open the overlay with the message lifted
+  // forward. The preview springs up from 0.9 → 1 as the blur fades in.
   function openReactionPicker(message: ChatMsg) {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setEmojiGridOpen(false);
     setReactionPickerMsg(message);
-    reactionScaleAnim.setValue(1);
+    reactionScaleAnim.setValue(0.9);
     Animated.spring(reactionScaleAnim, {
-      toValue: 1.06,
-      damping: 12,
+      toValue: 1,
+      damping: 13,
       mass: 1,
       stiffness: 180,
       useNativeDriver: true,
@@ -784,41 +796,8 @@ export default function TripDetailsScreen() {
   }
 
   function closeReactionPicker() {
-    Animated.spring(reactionScaleAnim, {
-      toValue: 1,
-      damping: 14,
-      mass: 1,
-      stiffness: 200,
-      useNativeDriver: true,
-    }).start();
     setReactionPickerMsg(null);
-    setEmojiInputValue('');
-  }
-
-  // Pull the first emoji grapheme out of keyboard input. Uses Intl.Segmenter
-  // when present (correctly handles ZWJ/skin-tone sequences), else falls
-  // back to the first extended-pictographic run.
-  function extractFirstEmoji(text: string): string | null {
-    const trimmed = text.trim();
-    if (!trimmed) return null;
-    const Segmenter = (Intl as unknown as { Segmenter?: typeof Intl.Segmenter }).Segmenter;
-    if (Segmenter) {
-      const seg = new Segmenter(undefined, { granularity: 'grapheme' });
-      for (const { segment } of seg.segment(trimmed)) {
-        if (/\p{Extended_Pictographic}/u.test(segment)) return segment;
-      }
-      return null;
-    }
-    const match = trimmed.match(/\p{Extended_Pictographic}(‍\p{Extended_Pictographic}|[️\u{1F3FB}-\u{1F3FF}])*/u);
-    return match ? match[0] : null;
-  }
-
-  function handleEmojiInputChange(text: string) {
-    const emoji = extractFirstEmoji(text);
-    setEmojiInputValue('');
-    emojiInputRef.current?.blur();
-    if (!emoji || !reactionPickerMsg) return;
-    void handleToggleReaction(reactionPickerMsg.id, emoji);
+    setEmojiGridOpen(false);
   }
 
   async function handleToggleReaction(messageId: string, emoji: string) {
@@ -890,8 +869,8 @@ export default function TripDetailsScreen() {
       new Date(message.createdAt).getTime() - new Date(prevMessage.createdAt).getTime() >= 5 * 60 * 1000;
     const avatarUrl = message.userId ? (memberAvatarMap.get(message.userId) ?? null) : null;
     const imageSource = message.localImageUri ?? message.imageUrl;
-    const isReacting = reactionPickerMsg?.id === message.id;
-    const reactingScaleStyle = isReacting ? { transform: [{ scale: reactionScaleAnim }] } : undefined;
+    // The reacted message is lifted forward in the overlay (see the reaction
+    // Modal); the in-list bubble stays put behind the blur.
     const isPending = message.status === 'pending';
     const isFailed = message.status === 'failed';
 
@@ -909,24 +888,22 @@ export default function TripDetailsScreen() {
                 <Image source={{ uri: imageSource }} style={[styles.chatMessageImage, isPending && styles.chatMessagePending]} />
               </Pressable>
             ) : null}
-            <Animated.View style={reactingScaleStyle}>
-              <TouchableOpacity
-                activeOpacity={0.85}
-                disabled={isPending || isFailed}
-                onLongPress={() => openReactionPicker(message)}>
-                <View
-                  style={[
-                    styles.chatBubbleCard,
-                    styles.chatBubbleCardOwn,
-                    { backgroundColor: COLORS.primary },
-                    isPending && styles.chatMessagePending,
-                    isFailed && styles.chatBubbleCardFailed,
-                  ]}>
-                  {message.text ? <ChatMessageText text={message.text} isOwn={true} /> : null}
-                  {message.linkPreview ? <LinkPreviewCardInline preview={message.linkPreview} isOwn={true} /> : null}
-                </View>
-              </TouchableOpacity>
-            </Animated.View>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              disabled={isPending || isFailed}
+              onLongPress={() => openReactionPicker(message)}>
+              <View
+                style={[
+                  styles.chatBubbleCard,
+                  styles.chatBubbleCardOwn,
+                  { backgroundColor: COLORS.primary },
+                  isPending && styles.chatMessagePending,
+                  isFailed && styles.chatBubbleCardFailed,
+                ]}>
+                {message.text ? <ChatMessageText text={message.text} isOwn={true} /> : null}
+                {message.linkPreview ? <LinkPreviewCardInline preview={message.linkPreview} isOwn={true} /> : null}
+              </View>
+            </TouchableOpacity>
             {renderReactionChips(message, true)}
             {isPending ? (
               <Text style={styles.chatStatusPending}>{t('trip.chat.sending')}</Text>
@@ -983,16 +960,14 @@ export default function TripDetailsScreen() {
                   <Image source={{ uri: imageSource }} style={styles.chatMessageImage} />
                 </Pressable>
               ) : null}
-              <Animated.View style={reactingScaleStyle}>
-                <TouchableOpacity
-                  activeOpacity={0.85}
-                  onLongPress={() => openReactionPicker(message)}>
-                  <View style={styles.chatBubbleCard}>
-                    {message.text ? <ChatMessageText text={message.text} isOwn={false} /> : null}
-                    {message.linkPreview ? <LinkPreviewCardInline preview={message.linkPreview} isOwn={false} /> : null}
-                  </View>
-                </TouchableOpacity>
-              </Animated.View>
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onLongPress={() => openReactionPicker(message)}>
+                <View style={styles.chatBubbleCard}>
+                  {message.text ? <ChatMessageText text={message.text} isOwn={false} /> : null}
+                  {message.linkPreview ? <LinkPreviewCardInline preview={message.linkPreview} isOwn={false} /> : null}
+                </View>
+              </TouchableOpacity>
               {renderReactionChips(message, false)}
             </View>
           </View>
@@ -1707,46 +1682,94 @@ export default function TripDetailsScreen() {
               transparent
               animationType="fade"
               onRequestClose={closeReactionPicker}>
-              <Pressable style={styles.reactionBackdrop} onPress={closeReactionPicker}>
-                <Pressable style={styles.reactionPickerCard} onPress={() => {}}>
-                  <View style={styles.reactionEmojiRow}>
-                    {REACTION_EMOJIS.map((emoji) => {
-                      const mine = reactionPickerMsg?.reactions?.some(
-                        (r) => r.emoji === emoji && r.reactedByMe,
-                      );
-                      return (
-                        <TouchableOpacity
-                          key={emoji}
-                          activeOpacity={0.7}
-                          style={[styles.reactionEmojiButton, mine && styles.reactionEmojiButtonMine]}
-                          onPress={() =>
-                            reactionPickerMsg && void handleToggleReaction(reactionPickerMsg.id, emoji)
-                          }>
-                          <Text style={styles.reactionEmojiText}>{emoji}</Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                    {/* "+" opens the OS keyboard to react with any emoji. */}
-                    <TouchableOpacity
-                      activeOpacity={0.7}
-                      style={styles.reactionAddButton}
-                      accessibilityLabel={t('trip.chat.reactionPickMore')}
-                      onPress={() => emojiInputRef.current?.focus()}>
-                      <Ionicons name="add" size={22} color="#5c6370" />
-                    </TouchableOpacity>
-                  </View>
-                </Pressable>
+              <Pressable style={styles.reactionOverlay} onPress={closeReactionPicker}>
+                {/* Blurred, dimmed chat behind — the message comes forward. */}
+                <BlurView intensity={38} tint="dark" style={StyleSheet.absoluteFill} />
+                {reactionPickerMsg ? (
+                  (() => {
+                    const own = reactionPickerMsg.userId === user?.id;
+                    const previewImage = reactionPickerMsg.localImageUri ?? reactionPickerMsg.imageUrl;
+                    return (
+                      // Absorbs taps so interacting with the picker/message
+                      // doesn't dismiss; taps outside (on the overlay) close.
+                      <Pressable style={styles.reactionCenter} onPress={() => {}}>
+                        {/* Reaction row ABOVE the message. */}
+                        <View style={styles.reactionPickerCard}>
+                          <View style={styles.reactionEmojiRow}>
+                            {REACTION_EMOJIS.map((emoji) => {
+                              const mine = reactionPickerMsg.reactions?.some(
+                                (r) => r.emoji === emoji && r.reactedByMe,
+                              );
+                              return (
+                                <TouchableOpacity
+                                  key={emoji}
+                                  activeOpacity={0.7}
+                                  style={[styles.reactionEmojiButton, mine && styles.reactionEmojiButtonMine]}
+                                  onPress={() => void handleToggleReaction(reactionPickerMsg.id, emoji)}>
+                                  <Text style={styles.reactionEmojiText}>{emoji}</Text>
+                                </TouchableOpacity>
+                              );
+                            })}
+                            {/* "+" opens the in-app emoji grid below. */}
+                            <TouchableOpacity
+                              activeOpacity={0.7}
+                              style={[styles.reactionAddButton, emojiGridOpen && styles.reactionAddButtonActive]}
+                              accessibilityLabel={t('trip.chat.reactionPickMore')}
+                              onPress={() => setEmojiGridOpen((v) => !v)}>
+                              <Ionicons name="add" size={22} color={emojiGridOpen ? COLORS.primary : '#5c6370'} />
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+
+                        {/* The reacted message, lifted forward + highlighted. */}
+                        <Animated.View
+                          style={[
+                            styles.reactionPreviewWrap,
+                            own ? { alignItems: 'flex-end' } : { alignItems: 'flex-start' },
+                            { transform: [{ scale: reactionScaleAnim }] },
+                          ]}>
+                          {!own ? (
+                            <Text style={styles.reactionPreviewAuthor}>{reactionPickerMsg.userName}</Text>
+                          ) : null}
+                          {previewImage ? (
+                            <Image source={{ uri: previewImage }} style={styles.reactionPreviewImage} />
+                          ) : null}
+                          {reactionPickerMsg.text ? (
+                            <View
+                              style={[
+                                styles.chatBubbleCard,
+                                styles.reactionPreviewBubble,
+                                own && [styles.chatBubbleCardOwn, { backgroundColor: COLORS.primary }],
+                              ]}>
+                              <ChatMessageText text={reactionPickerMsg.text} isOwn={own} />
+                            </View>
+                          ) : null}
+                        </Animated.View>
+
+                        {/* In-app emoji grid (opened via "+"). */}
+                        {emojiGridOpen ? (
+                          <View style={styles.emojiGridCard}>
+                            <ScrollView
+                              style={{ maxHeight: 200 }}
+                              contentContainerStyle={styles.emojiGridWrap}
+                              showsVerticalScrollIndicator={false}>
+                              {EMOJI_GRID.map((emoji) => (
+                                <TouchableOpacity
+                                  key={emoji}
+                                  activeOpacity={0.7}
+                                  style={styles.emojiGridCell}
+                                  onPress={() => void handleToggleReaction(reactionPickerMsg.id, emoji)}>
+                                  <Text style={styles.emojiGridText}>{emoji}</Text>
+                                </TouchableOpacity>
+                              ))}
+                            </ScrollView>
+                          </View>
+                        ) : null}
+                      </Pressable>
+                    );
+                  })()
+                ) : null}
               </Pressable>
-              {/* Off-screen host for the emoji keyboard — focusing it opens
-                  the keyboard; the first emoji typed becomes the reaction. */}
-              <TextInput
-                ref={emojiInputRef}
-                value={emojiInputValue}
-                onChangeText={handleEmojiInputChange}
-                style={styles.emojiHiddenInput}
-                autoCorrect={false}
-                caretHidden
-              />
             </Modal>
 
             {/* Same iOS nested-Modal workaround as the image viewer above:
@@ -2922,25 +2945,26 @@ const styles = StyleSheet.create({
     color: '#3c4250',
     fontWeight: '600',
   },
-  reactionBackdrop: {
+  reactionOverlay: {
     flex: 1,
-    // Light dim so the lifted (scaled-up) message stays visible behind the
-    // picker — the iMessage-style "message gets a bit bigger" effect.
-    backgroundColor: 'rgba(10,12,18,0.18)',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
   },
+  reactionCenter: {
+    width: '100%',
+    alignItems: 'center',
+  },
   reactionPickerCard: {
     backgroundColor: '#fff',
-    borderRadius: 24,
+    borderRadius: 28,
     paddingHorizontal: 14,
     paddingVertical: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: 0.18,
+    shadowOpacity: 0.25,
     shadowRadius: 32,
-    elevation: 10,
+    elevation: 12,
   },
   reactionEmojiRow: {
     flexDirection: 'row',
@@ -2967,12 +2991,64 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: '#f1f3f7',
   },
-  emojiHiddenInput: {
-    position: 'absolute',
-    width: 1,
-    height: 1,
-    opacity: 0,
-    top: -100,
+  reactionAddButtonActive: {
+    backgroundColor: '#ffe9ef',
+  },
+  // The reacted message lifted forward under the picker.
+  reactionPreviewWrap: {
+    width: '100%',
+    marginTop: 14,
+  },
+  reactionPreviewAuthor: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.85)',
+    marginBottom: 4,
+    marginLeft: 4,
+  },
+  reactionPreviewBubble: {
+    maxWidth: '82%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  reactionPreviewImage: {
+    width: 180,
+    height: 180,
+    borderRadius: 18,
+    marginBottom: 6,
+  },
+  emojiGridCard: {
+    marginTop: 14,
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: '#fff',
+    borderRadius: 22,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.25,
+    shadowRadius: 32,
+    elevation: 12,
+  },
+  emojiGridWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  emojiGridCell: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emojiGridText: {
+    fontSize: 24,
   },
 
   chatBubbleWrap: {
