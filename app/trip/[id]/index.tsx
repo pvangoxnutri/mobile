@@ -1720,11 +1720,15 @@ export default function TripDetailsScreen() {
                 {/* Blurred, dimmed chat behind — the message stays in place
                     and comes forward. */}
                 <BlurView intensity={38} tint="dark" style={StyleSheet.absoluteFill} />
+                {/* Darker scrim so the dimmed chat reads clearly behind the
+                    overlay (Instagram-style), not washed-out light. */}
+                <View pointerEvents="none" style={styles.reactionScrim} />
                 {reactionPickerMsg && reactionRect ? (
                   (() => {
                     const own = reactionPickerMsg.userId === user?.id;
-                    const BAR_H = 62; // approx picker card height incl. padding
-                    const barTop = Math.max(insets.top + 8, reactionRect.y - BAR_H);
+                    const BAR_H = 68; // picker card: 44 button + 12*2 padding
+                    const GAP = 12; // clear gap between the bar and the message
+                    const barTop = Math.max(insets.top + 8, reactionRect.y - BAR_H - GAP);
                     return (
                       <>
                         {/* Reaction bar anchored just ABOVE the message. */}
@@ -2990,6 +2994,10 @@ const styles = StyleSheet.create({
   },
   reactionOverlay: {
     flex: 1,
+  },
+  reactionScrim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.45)',
   },
   // Full-width strip anchored (via inline `top`) just above the message;
   // the picker card centers horizontally within it.
