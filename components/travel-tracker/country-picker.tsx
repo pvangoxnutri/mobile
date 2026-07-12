@@ -11,12 +11,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useMemo, useState } from 'react';
 import {
+  FlatList,
   Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
-  Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -149,27 +148,32 @@ export default function CountryPicker({ value, onChange, label = 'Countries' }: 
             ) : null}
           </View>
 
-          {/* List */}
-          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-            {sorted.map((country, index) => {
+          {/* List — virtualized so the ~200-country list mounts fast on
+              Android (a plain ScrollView.map rendered every row up front). */}
+          <FlatList
+            data={sorted}
+            keyExtractor={(country) => country.code}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            initialNumToRender={14}
+            windowSize={11}
+            ItemSeparatorComponent={() => <View style={styles.divider} />}
+            renderItem={({ item: country }) => {
               const selected = selectedSet.has(country.code);
               return (
-                <View key={country.code}>
-                  {index > 0 ? <View style={styles.divider} /> : null}
-                  <TouchableOpacity style={styles.row} activeOpacity={0.7} onPress={() => toggle(country.code)}>
-                    <Text style={styles.rowFlag}>{getCountryFlag(country)}</Text>
-                    <View style={styles.rowText}>
-                      <Text style={[styles.rowName, selected && { color: PRIMARY_COLOR, fontWeight: '700' }]}>{getLocalizedCountryName(country, language)}</Text>
-                      <Text style={styles.rowContinent}>{getLocalizedContinentName(country.continent, language)}</Text>
-                    </View>
-                    <View style={[styles.checkbox, selected && { backgroundColor: PRIMARY_COLOR, borderColor: PRIMARY_COLOR }]}>
-                      {selected ? <Ionicons name="checkmark" size={14} color="#fff" /> : null}
-                    </View>
-                  </TouchableOpacity>
-                </View>
+                <TouchableOpacity style={styles.row} activeOpacity={0.7} onPress={() => toggle(country.code)}>
+                  <Text style={styles.rowFlag}>{getCountryFlag(country)}</Text>
+                  <View style={styles.rowText}>
+                    <Text style={[styles.rowName, selected && { color: PRIMARY_COLOR, fontWeight: '700' }]}>{getLocalizedCountryName(country, language)}</Text>
+                    <Text style={styles.rowContinent}>{getLocalizedContinentName(country.continent, language)}</Text>
+                  </View>
+                  <View style={[styles.checkbox, selected && { backgroundColor: PRIMARY_COLOR, borderColor: PRIMARY_COLOR }]}>
+                    {selected ? <Ionicons name="checkmark" size={14} color="#fff" /> : null}
+                  </View>
+                </TouchableOpacity>
               );
-            })}
-          </ScrollView>
+            }}
+          />
         </KeyboardAvoidingView>
       </Modal>
     </>

@@ -59,5 +59,8 @@ const styles = StyleSheet.create({
   text: {
     color: '#111217',
     fontWeight: '900',
+    // Android adds vertical font padding by default, which made the large
+    // logo type look too tall vs iOS. Remove it so the wordmark sits tight.
+    includeFontPadding: false,
   },
 });

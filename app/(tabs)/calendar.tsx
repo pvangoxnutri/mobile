@@ -693,6 +693,9 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: COLORS.textMeta,
     letterSpacing: 1.0,
+    // Strip Android's extra font padding so the weekday/day/dots stack
+    // aligns the same as on iOS (the chips looked off on Android otherwise).
+    includeFontPadding: false,
   },
   dateChipDay: {
     marginTop: 2,
@@ -701,6 +704,8 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: COLORS.textPrimary,
     letterSpacing: -0.6,
+    includeFontPadding: false,
+    textAlign: 'center',
   },
   dateChipDots: {
     marginTop: SPACING.xs,

@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
+  InteractionManager,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -130,6 +131,19 @@ export default function TravelTrackerScreen() {
       })
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [entries, filter, continentFilter, search]);
+
+  // Android mounts every country row synchronously on open, and rendering all
+  // ~200 flag rows up front froze the screen for a beat ("tog jättelång tid att
+  // ladda in"). Render a small slice first so the screen paints instantly, then
+  // fill in the rest once the open animation/interaction settles.
+  const [showAllRows, setShowAllRows] = useState(false);
+  useEffect(() => { setShowAllRows(false); }, [filter, continentFilter, search]);
+  useEffect(() => {
+    if (showAllRows) return;
+    const task = InteractionManager.runAfterInteractions(() => setShowAllRows(true));
+    return () => task.cancel();
+  }, [showAllRows, filtered]);
+  const visibleRows = showAllRows ? filtered : filtered.slice(0, 24);
 
   function openSheet(country: Country) {
     setSheetCountry(country);
@@ -296,7 +310,7 @@ export default function TravelTrackerScreen() {
                 <Text style={styles.emptyText}>{t('travel.noCountriesMatch')}</Text>
               </View>
             ) : (
-              filtered.map((entry, index) => {
+              visibleRows.map((entry, index) => {
                 const fromTrip = !statusMap[entry.code] && !!tripDerivedMap[entry.code];
                 return (
                   <View key={entry.code}>
