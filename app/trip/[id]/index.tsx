@@ -908,29 +908,29 @@ export default function TripDetailsScreen() {
                 <Image source={{ uri: imageSource }} style={[styles.chatMessageImage, isPending && styles.chatMessagePending]} />
               </Pressable>
             ) : null}
-            <View
+            {/* The bubble is a single Pressable (measured for the reaction
+                overlay + long-press to react). It must be a DIRECT child of
+                the flex-end wrap so chatBubbleCardOwn's maxWidth:70% resolves
+                against the full row — an extra wrapper collapsed short
+                messages to zero width. */}
+            <Pressable
               collapsable={false}
               ref={(n) => {
-                if (n) bubbleRefs.current.set(message.id, n);
+                if (n) bubbleRefs.current.set(message.id, n as unknown as View);
                 else bubbleRefs.current.delete(message.id);
-              }}>
-              <TouchableOpacity
-                activeOpacity={0.85}
-                disabled={isPending || isFailed}
-                onLongPress={() => openReactionPicker(message)}>
-                <View
-                  style={[
-                    styles.chatBubbleCard,
-                    styles.chatBubbleCardOwn,
-                    { backgroundColor: COLORS.primary },
-                    isPending && styles.chatMessagePending,
-                    isFailed && styles.chatBubbleCardFailed,
-                  ]}>
-                  {message.text ? <ChatMessageText text={message.text} isOwn={true} /> : null}
-                  {message.linkPreview ? <LinkPreviewCardInline preview={message.linkPreview} isOwn={true} /> : null}
-                </View>
-              </TouchableOpacity>
-            </View>
+              }}
+              disabled={isPending || isFailed}
+              onLongPress={() => openReactionPicker(message)}
+              style={[
+                styles.chatBubbleCard,
+                styles.chatBubbleCardOwn,
+                { backgroundColor: COLORS.primary },
+                isPending && styles.chatMessagePending,
+                isFailed && styles.chatBubbleCardFailed,
+              ]}>
+              {message.text ? <ChatMessageText text={message.text} isOwn={true} /> : null}
+              {message.linkPreview ? <LinkPreviewCardInline preview={message.linkPreview} isOwn={true} /> : null}
+            </Pressable>
             {renderReactionChips(message, true)}
             {isPending ? (
               <Text style={styles.chatStatusPending}>{t('trip.chat.sending')}</Text>
@@ -987,21 +987,17 @@ export default function TripDetailsScreen() {
                   <Image source={{ uri: imageSource }} style={styles.chatMessageImage} />
                 </Pressable>
               ) : null}
-              <View
+              <Pressable
                 collapsable={false}
                 ref={(n) => {
-                  if (n) bubbleRefs.current.set(message.id, n);
+                  if (n) bubbleRefs.current.set(message.id, n as unknown as View);
                   else bubbleRefs.current.delete(message.id);
-                }}>
-                <TouchableOpacity
-                  activeOpacity={0.85}
-                  onLongPress={() => openReactionPicker(message)}>
-                  <View style={styles.chatBubbleCard}>
-                    {message.text ? <ChatMessageText text={message.text} isOwn={false} /> : null}
-                    {message.linkPreview ? <LinkPreviewCardInline preview={message.linkPreview} isOwn={false} /> : null}
-                  </View>
-                </TouchableOpacity>
-              </View>
+                }}
+                onLongPress={() => openReactionPicker(message)}
+                style={styles.chatBubbleCard}>
+                {message.text ? <ChatMessageText text={message.text} isOwn={false} /> : null}
+                {message.linkPreview ? <LinkPreviewCardInline preview={message.linkPreview} isOwn={false} /> : null}
+              </Pressable>
               {renderReactionChips(message, false)}
             </View>
           </View>
