@@ -19,6 +19,7 @@ import { getCategorySymbol } from '@/lib/category-symbol';
 import { DEFAULT_BLUR, extractBlur } from '@/lib/activity-blur';
 import { BigHeroCard, getInitials, type TripWithEvent, type TripMember } from '@/components/big-hero-card';
 import { apiFetch, apiJson } from '@/lib/api';
+import { consumePendingInviteCode } from '@/lib/pending-invite';
 import { getCached, setCached, invalidateCache, invalidateTripCache } from '@/lib/cache';
 import { prefetchAvatars } from '@/lib/avatar-prefetch';
 import { maybeRequestPushPermission } from '@/lib/push-notifications';
@@ -97,6 +98,21 @@ export default function HomeScreen() {
     const timer = setInterval(() => setNow(new Date()), 30000);
     return () => clearInterval(timer);
   }, []);
+
+  // Redeem an invite link that arrived while the user was signed out: the
+  // invite screen stashes the code before sending them to login, and once
+  // home mounts (post-login/onboarding) we send them back to complete the
+  // join — the invite survives the auth detour.
+  useEffect(() => {
+    if (!user) return;
+    void consumePendingInviteCode()
+      .then((code) => {
+        // Cast: expo-router's generated route types don't include the new
+        // invite/[code] route until the next `expo start` regenerates them.
+        if (code) router.push(`/invite/${code}` as Href);
+      })
+      .catch(() => {});
+  }, [user]);
 
   const loadQuests = useCallback(() => {
     let active = true;

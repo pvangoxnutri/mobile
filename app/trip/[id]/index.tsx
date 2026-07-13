@@ -540,10 +540,14 @@ export default function TripDetailsScreen() {
   async function handleShareInvite() {
     if (!trip?.inviteCode) return;
     const shareTitle = trip.title ?? t('home.defaultTripName');
+    // The link goes INSIDE the message: Android's share sheet ignores the
+    // separate `url` field entirely, and passing the trip cover image as
+    // `url` (like before) made recipients open a raw JPEG instead of the
+    // invite page.
+    const inviteUrl = `https://sidequesttravel.app/invite/${trip.inviteCode}`;
     await Share.share({
       title: t('trip.share.title', { title: shareTitle }),
-      message: t('trip.share.message', { title: shareTitle, code: trip.inviteCode }),
-      url: trip.imageUrl ?? undefined,
+      message: t('trip.share.message', { title: shareTitle, url: inviteUrl }),
     });
   }
 

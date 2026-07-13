@@ -356,10 +356,14 @@ export default function TripSettingsScreen() {
 
   async function handleShareInvite() {
     if (!trip?.inviteCode) return;
+    const shareTitle = trip.title ?? t('home.defaultTripName');
+    // Same shape as the trip screen's share: localized message with the
+    // HTTPS invite link inside it (Android ignores the separate `url` field,
+    // and the old cover-image `url` opened as a bare JPEG for recipients).
+    const inviteUrl = `https://sidequesttravel.app/invite/${trip.inviteCode}`;
     await Share.share({
-      title: `Join ${trip.title ?? 'my adventure'}`,
-      message: `Join ${trip.title ?? 'my SideQuest adventure'} with code ${trip.inviteCode}.`,
-      url: trip.imageUrl ?? undefined,
+      title: t('trip.share.title', { title: shareTitle }),
+      message: t('trip.share.message', { title: shareTitle, url: inviteUrl }),
     });
   }
 
