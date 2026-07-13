@@ -157,6 +157,38 @@ export default function TripDetailsScreen() {
   const [reactionRect, setReactionRect] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const [inviteComposerOpen, setInviteComposerOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  // Android only: while the keyboard is up, the chat panel's decorative
+  // margins (insets + 12) turn into dead gaps and Android keyboards are tall
+  // to begin with — the user saw a squeezed sliver of chat. Instead of
+  // trusting KeyboardAvoidingView (whose behavior depends on whether the
+  // modal window resizes, which varies by OS/edge-to-edge), measure where
+  // the keyboard top actually lands relative to the modal window and set the
+  // exact bottom margin needed: keyboard overlap + 6. If the window already
+  // resized, overlap measures ~0 and the panel just keeps a slim 6dp margin.
+  // null = keyboard closed → the normal decorative margins apply. iOS (which
+  // was fine) never attaches these listeners.
+  const chatBackdropRef = useRef<View>(null);
+  const [chatKbOverlap, setChatKbOverlap] = useState<number | null>(null);
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    const show = Keyboard.addListener('keyboardDidShow', (e) => {
+      const keyboardTop = e.endCoordinates.screenY;
+      // Give a possible window resize a beat to settle before measuring
+      // (same delay useKeyboardFocusScroll needs on Android).
+      setTimeout(() => {
+        const node = chatBackdropRef.current;
+        if (!node) return;
+        node.measureInWindow((_x, y, _width, height) => {
+          setChatKbOverlap(Math.max(0, y + height - keyboardTop));
+        });
+      }, 80);
+    });
+    const hide = Keyboard.addListener('keyboardDidHide', () => setChatKbOverlap(null));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
   const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
   const [chatDraft, setChatDraft] = useState('');
   const [chatSending, setChatSending] = useState(false);
@@ -1511,11 +1543,17 @@ export default function TripDetailsScreen() {
         </ModalSheet>
 
         <Modal visible={chatOpen} transparent animationType="fade" onRequestClose={closeChat}>
-          <View style={styles.chatModalBackdrop}>
+          <View ref={chatBackdropRef} style={styles.chatModalBackdrop}>
             <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={closeChat} />
             <KeyboardAvoidingView
-              style={[styles.chatKeyboardAvoider, { marginTop: insets.top + 12, marginBottom: insets.bottom + 12 }]}
-              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+              style={[
+                styles.chatKeyboardAvoider,
+                {
+                  marginTop: chatKbOverlap !== null ? insets.top : insets.top + 12,
+                  marginBottom: chatKbOverlap !== null ? chatKbOverlap + 6 : insets.bottom + 12,
+                },
+              ]}
+              behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
             <View style={[styles.chatPanel, { paddingTop: 18, paddingBottom: 14 }]}>
               <View style={styles.chatPanelHeader}>
                 <View style={styles.chatPanelHeaderLeft}>
