@@ -141,7 +141,11 @@ export default function PackingListScreen() {
     }));
   }
 
-  async function commitDraft(categoryId: string, draftKey: string, text: string) {
+  // focusNext: Return-flow spawns a fresh empty draft and keeps the keyboard
+  // up so several items can be added in a row. A blur-commit (tapping outside
+  // the field) must NOT do that — the user just left the field, so re-focusing
+  // would yank the keyboard right back up.
+  async function commitDraft(categoryId: string, draftKey: string, text: string, focusNext = true) {
     const trimmed = text.trim();
     if (!trimmed || savingDraft === draftKey) return;
     setSavingDraft(draftKey);
@@ -157,12 +161,14 @@ export default function PackingListScreen() {
         ),
       }));
       removeDraft(categoryId, draftKey);
-      const newKey = makeDraftKey();
-      setDrafts((prev) => ({
-        ...prev,
-        [categoryId]: [...(prev[categoryId] ?? []).filter((d) => d.key !== draftKey), { key: newKey, text: '' }],
-      }));
-      setTimeout(() => draftRefs.current[newKey]?.focus(), 60);
+      if (focusNext) {
+        const newKey = makeDraftKey();
+        setDrafts((prev) => ({
+          ...prev,
+          [categoryId]: [...(prev[categoryId] ?? []).filter((d) => d.key !== draftKey), { key: newKey, text: '' }],
+        }));
+        setTimeout(() => draftRefs.current[newKey]?.focus(), 60);
+      }
     } catch {
       Alert.alert(t('trip.packingList.addItemError'));
     } finally {
@@ -521,7 +527,16 @@ export default function PackingListScreen() {
                         returnKeyType="done"
                         blurOnSubmit={false}
                         onSubmitEditing={() => void commitDraft(category.id, draft.key, draft.text)}
-                        onBlur={() => { if (!draft.text.trim()) removeDraft(category.id, draft.key); }}
+                        // Tapping outside the field saves a non-empty item too
+                        // (Return is no longer the only way); empty drafts are
+                        // still discarded like before.
+                        onBlur={() => {
+                          if (draft.text.trim()) {
+                            void commitDraft(category.id, draft.key, draft.text, false);
+                          } else {
+                            removeDraft(category.id, draft.key);
+                          }
+                        }}
                       />
                     </View>
                   ))}
