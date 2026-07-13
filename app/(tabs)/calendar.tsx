@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { findNodeHandle, Image, Platform, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, Platform, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ActivityImageFallback from '@/components/activity-image-fallback';
 import TabHeader from '@/components/tab-header';
@@ -187,10 +187,13 @@ export default function CalendarScreen() {
     // padding under the content. Measures fresh at tap time (rather than
     // trusting an earlier onLayout) so it can't go stale.
     setTimeout(() => {
-      const scrollNode = findNodeHandle(scrollRef.current);
-      if (!scrollNode || !selectedDayHeaderRef.current) return;
+      // New-architecture measureLayout requires a ref to the native host
+      // component — a findNodeHandle number throws "must be called with a
+      // ref to a native component" and the jump silently never happened.
+      const scrollHost = scrollRef.current?.getNativeScrollRef();
+      if (!scrollHost || !selectedDayHeaderRef.current) return;
       selectedDayHeaderRef.current.measureLayout(
-        scrollNode,
+        scrollHost,
         (_left, top) => {
           scrollRef.current?.scrollTo({ y: Math.max(0, top - 12), animated: true });
         },
