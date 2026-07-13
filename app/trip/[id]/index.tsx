@@ -562,12 +562,22 @@ export default function TripDetailsScreen() {
         lastChatTimestampRef.current = msgs.length > 0 ? msgs[msgs.length - 1].createdAt : null;
         setChatLoadError(null);
       } else if (msgs.length > 0) {
+        // Deletions arrive as tombstones on the SAME id (systemEventType
+        // "message_deleted", timestamp bumped so they ride the since-cursor):
+        // drop that message locally and never render the tombstone itself.
+        // This must happen before the dedupe below — the id is already in
+        // existingIds, so the tombstone would otherwise be skipped silently.
+        const deletedIds = new Set(
+          msgs.filter((m) => m.systemEventType === 'message_deleted').map((m) => m.id),
+        );
+        const incomingMsgs = deletedIds.size > 0 ? msgs.filter((m) => !deletedIds.has(m.id)) : msgs;
         setChatMessages((prev) => {
-          const existingIds = new Set(prev.map((m) => m.id));
-          let next = prev;
+          const base = deletedIds.size > 0 ? prev.filter((m) => !deletedIds.has(m.id)) : prev;
+          const existingIds = new Set(base.map((m) => m.id));
+          let next = base;
           const trulyNew: ChatMsg[] = [];
 
-          for (const incoming of msgs) {
+          for (const incoming of incomingMsgs) {
             if (existingIds.has(incoming.id)) continue; // already have this exact server message
 
             // Does this resolve one of OUR OWN optimistic entries that's
