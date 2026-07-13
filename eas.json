@@ -44,6 +44,9 @@
         "resourceClass": "m-medium",
         "autoIncrement": true
       },
+      "android": {
+        "autoIncrement": true
+      },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://api.sidequesttravel.app",
         "EXPO_PUBLIC_WEB_URL": "https://sidequesttravel.app",
