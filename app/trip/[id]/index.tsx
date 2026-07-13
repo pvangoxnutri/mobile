@@ -851,6 +851,28 @@ export default function TripDetailsScreen() {
     }
   }
 
+  function confirmDeleteMessage(message: ChatMsg) {
+    closeReactionPicker();
+    Alert.alert(t('trip.chat.deleteConfirmTitle'), t('trip.chat.deleteConfirmBody'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      { text: t('common.delete'), style: 'destructive', onPress: () => void deleteChatMessage(message) },
+    ]);
+  }
+
+  async function deleteChatMessage(message: ChatMsg) {
+    // Optimistic removal; on failure a full reload restores the truth (a
+    // plain rollback could drop messages polled in while the request ran,
+    // since the `since` cursor has already advanced past them).
+    setChatMessages((prev) => prev.filter((m) => m.id !== message.id));
+    try {
+      const res = await apiFetch(`/api/trips/${id}/chat/${message.id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(`delete failed: ${res.status}`);
+    } catch {
+      Alert.alert(t('trip.chat.deleteFailed'));
+      void loadChatMessages(true);
+    }
+  }
+
   function closeReactionPicker() {
     setReactionPickerMsg(null);
     setReactionRect(null);
@@ -1836,6 +1858,25 @@ export default function TripDetailsScreen() {
                             ) : null}
                           </View>
                         </Animated.View>
+
+                        {/* Delete — own messages only, anchored just BELOW the
+                            message (the clone scales ×1.05 around its center,
+                            so offset by the grown half). */}
+                        {own && !reactionPickerMsg.status ? (
+                          <View
+                            style={[
+                              styles.reactionBarAnchor,
+                              { top: reactionRect.y + Math.ceil(reactionRect.height * 1.03) + GAP },
+                            ]}
+                            pointerEvents="box-none">
+                            <Pressable
+                              style={styles.deleteActionCard}
+                              onPress={() => confirmDeleteMessage(reactionPickerMsg)}>
+                              <Ionicons name="trash-outline" size={18} color="#E5484D" />
+                              <Text style={styles.deleteActionText}>{t('trip.chat.deleteMessage')}</Text>
+                            </Pressable>
+                          </View>
+                        ) : null}
 
                         {/* In-app emoji grid (opened via "+") — bottom card. */}
                         {emojiGridOpen ? (
@@ -3111,6 +3152,25 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.35,
     shadowRadius: 22,
     elevation: 12,
+  },
+  deleteActionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#fff',
+    borderRadius: 22,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 24,
+    elevation: 10,
+  },
+  deleteActionText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#E5484D',
   },
   emojiGridBottom: {
     position: 'absolute',
