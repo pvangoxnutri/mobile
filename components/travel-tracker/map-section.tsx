@@ -45,7 +45,9 @@ const CONTINENT_META: Record<Continent, ContinentMeta> = {
 function buildStats(statusMap: StatusMap): ContinentStats[] {
   return CONTINENT_ORDER.map((continent) => {
     const countries = COUNTRIES.filter((c) => inContinent(c, continent));
-    const visited = countries.filter((c) => statusMap[c.code] === 'visited').length;
+    // 'living' counts as visited so the continent tallies sum up to the
+    // hero stat's visited total (which also includes the home country).
+    const visited = countries.filter((c) => statusMap[c.code] === 'visited' || statusMap[c.code] === 'living').length;
     const planned = countries.filter((c) => statusMap[c.code] === 'planned').length;
     const living  = countries.some((c) => statusMap[c.code] === 'living');
     return { continent, total: countries.length, visited, planned, living };

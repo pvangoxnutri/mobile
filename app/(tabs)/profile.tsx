@@ -122,7 +122,9 @@ export default function ProfileScreen() {
 
   const visitedCountries = useMemo(() => {
     const merged = { ...tripDerivedVisited, ...manualStatusMap };
-    return Object.values(merged).filter((s) => s === 'visited').length;
+    // 'living' counts as visited — same rule as the travel tracker's hero
+    // stat, so the two screens always show the same number.
+    return Object.values(merged).filter((s) => s === 'visited' || s === 'living').length;
   }, [tripDerivedVisited, manualStatusMap]);
 
   const previousTrips = useMemo(() => {

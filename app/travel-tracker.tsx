@@ -102,8 +102,11 @@ export default function TravelTrackerScreen() {
   const mergedMap = useMemo<StatusMap>(() => ({ ...tripDerivedMap, ...statusMap }), [tripDerivedMap, statusMap]);
   const entries = useMemo(() => buildEntries(mergedMap), [mergedMap]);
 
+  // 'living' counts as visited: a country holds ONE status, so marking your
+  // home country as "living here" would otherwise silently drop it from the
+  // visited tally.
   const visitedCount = useMemo(
-    () => Object.values(mergedMap).filter((s) => s === 'visited').length,
+    () => Object.values(mergedMap).filter((s) => s === 'visited' || s === 'living').length,
     [mergedMap],
   );
 
