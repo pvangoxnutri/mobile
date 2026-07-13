@@ -8,7 +8,6 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -21,6 +20,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/components/auth-provider';
 import { useI18n } from '@/components/i18n-provider';
+import { useKeyboardFocusScroll } from '@/hooks/useKeyboardFocusScroll';
 import Avatar from '@/components/avatar';
 import { apiFetch, apiJson } from '@/lib/api';
 import { COLORS } from '@/constants/design-tokens';
@@ -86,6 +86,7 @@ export default function PackingListScreen() {
   const [assignTarget, setAssignTarget] = useState<{ categoryId: string; item: PackingItem } | null>(null);
 
   const draftRefs = useRef<Record<string, TextInput | null>>({});
+  const { scrollRef, onFocusField, scrollViewProps } = useKeyboardFocusScroll();
 
   const load = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true); else setLoading(true);
@@ -372,14 +373,15 @@ export default function PackingListScreen() {
       ) : (
         <KeyboardAvoidingView
           style={styles.flex}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          behavior="padding">
           <ScrollView
+            ref={scrollRef}
             contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom, 20) + 32 }]}
             showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} tintColor={COLORS.primary} />
-            }>
+            }
+            {...scrollViewProps}>
 
             {/* Add category form */}
             {addCategoryOpen ? (
@@ -388,6 +390,7 @@ export default function PackingListScreen() {
                   ref={categoryInputRef}
                   value={addCategoryDraft}
                   onChangeText={setAddCategoryDraft}
+                  onFocus={onFocusField(categoryInputRef)}
                   placeholder={t('trip.packingList.categoryPlaceholder')}
                   placeholderTextColor="#a3a9b4"
                   style={styles.addCategoryInput}
@@ -511,6 +514,7 @@ export default function PackingListScreen() {
                         ref={(r) => { draftRefs.current[draft.key] = r; }}
                         value={draft.text}
                         onChangeText={(v) => updateDraft(category.id, draft.key, v)}
+                        onFocus={() => onFocusField({ current: draftRefs.current[draft.key] })()}
                         placeholder={t('trip.packingList.addItemPlaceholder')}
                         placeholderTextColor="#b8bec8"
                         style={styles.draftInput}

@@ -6,7 +6,6 @@ import {
   ActivityIndicator,
   Keyboard,
   KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -135,7 +134,7 @@ export default function LoginScreen() {
   const resetMessage = params.reset === '1' ? t('auth.reset_done') : '';
 
   return (
-    <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={styles.screen} behavior="padding">
       <View style={styles.backgroundGlowTop} />
       <View style={styles.backgroundGlowBottom} />
       <ScrollView

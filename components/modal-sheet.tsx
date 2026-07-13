@@ -12,7 +12,7 @@
  * Important: Avoids bouncy or exaggerated motion
  */
 
-import { Animated, Dimensions, Pressable, StyleSheet, View } from 'react-native';
+import { Animated, BackHandler, Dimensions, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { ReactNode, useEffect } from 'react';
 import { useModalSpring } from '@/hooks/useMotion';
 import { MOTION_SPRING } from '@/MOTION_CONSTANTS';
@@ -68,6 +68,19 @@ export default function ModalSheet({ visible, children, onClose, height = screen
       ]).start();
     }
   }, [visible, start, translateY, backdropOpacity]);
+
+  // Unlike RN's <Modal>, this sheet is a plain View overlay, so Android's
+  // system back would pop the whole screen underneath instead of closing
+  // the sheet. Intercept back while open — real <Modal>s stacked above
+  // still win since they capture back natively before JS handlers run.
+  useEffect(() => {
+    if (!visible || Platform.OS !== 'android') return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      onClose();
+      return true;
+    });
+    return () => sub.remove();
+  }, [visible, onClose]);
 
   if (!visible) return null;
 

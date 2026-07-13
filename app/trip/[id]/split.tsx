@@ -113,6 +113,11 @@ export default function CostSplitScreen() {
   const { scrollRef: addExpenseScrollRef, onFocusField, scrollViewProps: addExpenseScrollViewProps } = useKeyboardFocusScroll();
   const descriptionRef = useRef<TextInput>(null);
   const amountRef = useRef<TextInput>(null);
+  // Per-member inline amount fields (payer amounts / custom splits) are
+  // dynamic, so they share ref maps and wire into onFocusField via a
+  // one-entry ref object at focus time.
+  const payerAmountRefs = useRef<Record<string, TextInput | null>>({});
+  const participantValueRefs = useRef<Record<string, TextInput | null>>({});
 
   const [form, setForm] = useState<AddExpenseForm>({
     description: '',
@@ -1041,10 +1046,12 @@ export default function CostSplitScreen() {
                     </Text>
                     {selected && form.selectedPayers.size > 1 && (
                       <TextInput
+                        ref={(r) => { payerAmountRefs.current[member.id] = r; }}
                         style={styles.inlineAmountInput}
                         placeholder={t('trip.split.amount')}
                         placeholderTextColor="#afb5bf"
                         keyboardType="decimal-pad"
+                        onFocus={() => onFocusField({ current: payerAmountRefs.current[member.id] })()}
                         value={form.payerAmounts[member.id] ?? ''}
                         onChangeText={(v) =>
                           setForm((prev) => ({
@@ -1134,10 +1141,12 @@ export default function CostSplitScreen() {
                     </Text>
                     {selected && form.splitMode !== 'equal' && (
                       <TextInput
+                        ref={(r) => { participantValueRefs.current[member.id] = r; }}
                         style={styles.inlineAmountInput}
                         placeholder={form.splitMode === 'percentage' ? t('trip.split.percentPlaceholder') : t('trip.split.amountPlaceholder')}
                         placeholderTextColor="#afb5bf"
                         keyboardType="decimal-pad"
+                        onFocus={() => onFocusField({ current: participantValueRefs.current[member.id] })()}
                         value={form.participantValues[member.id] ?? ''}
                         onChangeText={(v) => {
                           if (form.splitMode === 'exact') {

@@ -9,7 +9,6 @@ import {
   Image,
   KeyboardAvoidingView,
   Linking,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -124,7 +123,7 @@ export default function SupportConversationScreen() {
   return (
     <KeyboardAvoidingView
       style={styles.screen}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior="padding"
       keyboardVerticalOffset={0}>
 
       {/* Header */}

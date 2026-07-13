@@ -15,7 +15,6 @@ import {
   Keyboard,
   KeyboardAvoidingView,
   Modal,
-  Platform,
   StyleSheet,
   Text,
   TextInput,
@@ -106,7 +105,7 @@ export default function CountryPicker({ value, onChange, label = 'Countries' }: 
 
       {/* â”€â”€ Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <Modal visible={open} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setOpen(false)}>
-        <KeyboardAvoidingView style={[styles.modal, { paddingTop: Math.max(insets.top, 16) }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView style={[styles.modal, { paddingTop: Math.max(insets.top, 16) }]} behavior="padding">
           {/* Header */}
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Select countries</Text>

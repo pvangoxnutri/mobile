@@ -10,7 +10,6 @@ import {
   Image,
   Keyboard,
   KeyboardAvoidingView,
-  Platform,
   ScrollView,
   Share,
   StyleSheet,
@@ -367,7 +366,7 @@ export default function TripSettingsScreen() {
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
-      <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={styles.screen} behavior="padding">
         <ScrollView
           ref={scrollRef}
           contentContainerStyle={[styles.content, { paddingTop: Math.max(insets.top, 18) + 4, paddingBottom: Math.max(insets.bottom, 24) + 40 }]}

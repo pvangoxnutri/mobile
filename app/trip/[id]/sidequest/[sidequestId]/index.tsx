@@ -252,7 +252,7 @@ export default function SideQuestDetailScreen() {
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
-      <KeyboardAvoidingView style={styles.screenBackground} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={styles.screenBackground} behavior="padding">
       <ScrollView
         ref={scrollRef}
         contentContainerStyle={[styles.screen, { paddingTop: Math.max(insets.top, 18) + 4, paddingBottom: Math.max(insets.bottom, 24) + 34 }]}

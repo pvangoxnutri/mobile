@@ -9,7 +9,6 @@ import {
   Image,
   Keyboard,
   KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -175,7 +174,7 @@ export default function OnboardingScreen() {
   return (
     <>
       <Stack.Screen options={{ headerShown: false, gestureEnabled: false }} />
-      <KeyboardAvoidingView style={[styles.screen, { paddingTop: insets.top, paddingBottom: insets.bottom }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={[styles.screen, { paddingTop: insets.top, paddingBottom: insets.bottom }]} behavior="padding">
         {/* ── Top bar ─────────────────────────────────────── */}
         <View style={styles.topBar}>
           <View style={styles.stepPill}>

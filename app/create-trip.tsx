@@ -5,7 +5,6 @@ import { useMemo, useRef, useState } from 'react';
 import {
   Keyboard,
   KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -231,7 +230,7 @@ export default function CreateTripScreen() {
   const previewCardHeight = Math.min((screenWidth - 44) * 0.7, screenHeight * 0.25, 240);
 
   return (
-    <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={styles.screen} behavior="padding">
       <ScrollView
         ref={scrollRef}
         style={styles.scroll}

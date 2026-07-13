@@ -10,7 +10,6 @@ import {
   FlatList,
   Image,
   KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -21,6 +20,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useI18n } from '@/components/i18n-provider';
+import { useKeyboardFocusScroll } from '@/hooks/useKeyboardFocusScroll';
 import { apiFetch, apiJson } from '@/lib/api';
 import { uploadImageIfNeeded } from '@/lib/uploads';
 import type { SupportTicketSummary } from '@/lib/types';
@@ -48,6 +48,9 @@ function StatusBadge({ status, t }: { status: string; t: (k: string) => string }
 export default function SupportScreen() {
   const { t } = useI18n();
   const insets = useSafeAreaInsets();
+  const { scrollRef, onFocusField, scrollViewProps } = useKeyboardFocusScroll();
+  const subjectRef = useRef<TextInput>(null);
+  const descriptionRef = useRef<TextInput>(null);
 
   const [category, setCategory] = useState<Category>('bug');
   const [subject, setSubject] = useState('');
@@ -150,7 +153,7 @@ export default function SupportScreen() {
   }
 
   return (
-    <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={styles.screen} behavior="padding">
       {/* Header */}
       <View style={[styles.header, { paddingTop: Math.max(insets.top, 16) + 4 }]}>
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()} activeOpacity={0.8}>
@@ -161,9 +164,10 @@ export default function SupportScreen() {
       </View>
 
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={[styles.scroll, { paddingBottom: Math.max(insets.bottom, 24) + 32 }]}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}>
+        showsVerticalScrollIndicator={false}
+        {...scrollViewProps}>
 
         <Text style={styles.subtitle}>{t('support.subtitle')}</Text>
 
@@ -180,12 +184,15 @@ export default function SupportScreen() {
         <View style={styles.fieldGroup}>
           <Text style={styles.label}>{t('support.subjectLabel')}</Text>
           <TextInput
+            ref={subjectRef}
             style={styles.input}
             value={subject}
             onChangeText={setSubject}
+            onFocus={onFocusField(subjectRef)}
             placeholder={t('support.subjectPlaceholder')}
             placeholderTextColor={COLORS.placeholderText}
             returnKeyType="next"
+            onSubmitEditing={() => descriptionRef.current?.focus()}
             maxLength={200}
           />
         </View>
@@ -194,9 +201,11 @@ export default function SupportScreen() {
         <View style={styles.fieldGroup}>
           <Text style={styles.label}>{t('support.descriptionLabel')}</Text>
           <TextInput
+            ref={descriptionRef}
             style={[styles.input, styles.inputMultiline]}
             value={description}
             onChangeText={setDescription}
+            onFocus={onFocusField(descriptionRef)}
             placeholder={t('support.descriptionPlaceholder')}
             placeholderTextColor={COLORS.placeholderText}
             multiline

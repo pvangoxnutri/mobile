@@ -4,9 +4,15 @@ type BrandMarkProps = {
   size?: 'sm' | 'md' | 'lg';
 };
 
+// lineHeight is set explicitly to iOS's natural value (≈ fontSize × 1.175)
+// so iOS renders unchanged while Android — whose Roboto metrics otherwise
+// produce a taller text box with a lower bottom edge — is forced to the exact
+// same box. The pink dot anchors to the box bottom (flex-end), so a matching
+// box is what keeps the dot aligned the same on both platforms.
 const SIZE_MAP = {
   sm: {
     fontSize: 26,
+    lineHeight: 31,
     letterSpacing: -1.5,
     dot: 10,
     dotRadius: 5,
@@ -15,6 +21,7 @@ const SIZE_MAP = {
   },
   md: {
     fontSize: 46,
+    lineHeight: 54,
     letterSpacing: -2.6,
     dot: 16,
     dotRadius: 8,
@@ -23,6 +30,7 @@ const SIZE_MAP = {
   },
   lg: {
     fontSize: 54,
+    lineHeight: 63,
     letterSpacing: -3,
     dot: 18,
     dotRadius: 9,
@@ -36,7 +44,7 @@ export default function BrandMark({ size = 'md' }: BrandMarkProps) {
 
   return (
     <View style={styles.row}>
-      <Text style={[styles.text, { fontSize: config.fontSize, letterSpacing: config.letterSpacing }]}>SideQuest</Text>
+      <Text style={[styles.text, { fontSize: config.fontSize, lineHeight: config.lineHeight, letterSpacing: config.letterSpacing }]}>SideQuest</Text>
       <View
         style={{
           width: config.dot,

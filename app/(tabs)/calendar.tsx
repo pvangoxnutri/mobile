@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { findNodeHandle, Image, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { findNodeHandle, Image, Platform, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ActivityImageFallback from '@/components/activity-image-fallback';
 import TabHeader from '@/components/tab-header';
@@ -268,7 +268,7 @@ export default function CalendarScreen() {
               return (
                 <Pressable
                   key={dateKey}
-                  style={[styles.dateChip, isSelected && styles.dateChipSelected]}
+                  style={({ pressed }) => [styles.dateChip, isSelected && styles.dateChipSelected, pressed && { opacity: 0.8 }]}
                   onPress={() => jumpToSelectedDay(dateKey)}>
                   <Text style={[styles.dateChipWeekday, isSelected && { color: COLORS.primary }]}>
                     {new Intl.DateTimeFormat(locale, { weekday: 'short' }).format(date).toUpperCase()}
@@ -682,9 +682,19 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
     alignItems: 'center',
     ...SHADOWS.subtle,
+    // Android: elevation 2 paints a hard grey shadow around each cell (the
+    // iOS shadow is a near-invisible 4% wash). Swap it for a hairline border
+    // that gives the same subtle cell definition without the grey.
+    ...(Platform.OS === 'android'
+      ? { elevation: 0, borderWidth: 1, borderColor: '#EEF0F4' }
+      : null),
   },
   dateChipSelected: {
-    backgroundColor: COLORS.primaryLight12,
+    // Opaque equivalent of primaryLight12 over the white cell. On Android an
+    // elevation shadow renders *through* a translucent background as a grey
+    // rectangle in the middle of the cell — opaque kills the artifact and is
+    // pixel-identical on iOS (the cell base is white).
+    backgroundColor: '#FFEAEE',
     borderWidth: 2,
     borderColor: COLORS.primary,
   },

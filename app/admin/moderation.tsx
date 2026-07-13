@@ -7,7 +7,6 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -220,7 +219,7 @@ export default function ModerationScreen() {
         animationType="slide"
         onRequestClose={() => setWarnTarget(null)}>
         <Pressable style={styles.modalBackdrop} onPress={() => setWarnTarget(null)} />
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView behavior="padding">
           <View style={[styles.modalSheet, { paddingBottom: Math.max(insets.bottom, 16) + 12 }]}>
             <View style={styles.sheetHandle} />
             <Text style={styles.modalTitle}>Skicka varning till {warnTarget?.name}</Text>

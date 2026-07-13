@@ -7,7 +7,6 @@ import {
   InteractionManager,
   Keyboard,
   KeyboardAvoidingView,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -197,7 +196,7 @@ export default function TravelTrackerScreen() {
 
   return (
     <>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
       <ScrollView
         ref={scrollRef}
         style={[styles.screen, { backgroundColor: '#F7F3EC' }]}

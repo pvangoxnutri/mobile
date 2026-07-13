@@ -723,7 +723,7 @@ function SideQuestFormInner({
   }, [date, pickerTarget, revealDate, revealRange.min, revealRange.max, revealTime, time, tripStartDate, tripEndDate]);
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
     <ScrollView
       ref={scrollRef}
       style={styles.scroll}

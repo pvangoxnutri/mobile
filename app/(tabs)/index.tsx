@@ -3,7 +3,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { router, useLocalSearchParams } from 'expo-router';
 import type { Href } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, Animated, BackHandler, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { Image as CachedImage } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BrandMark from '@/components/brand-mark';
@@ -750,6 +750,18 @@ function FloatingFab({
     inputRange: [0, 1],
     outputRange: ['0deg', '45deg'],
   });
+
+  // The menu is a plain overlay (not an RN <Modal>), and Home is the root
+  // screen — without this, Android's system back would background the app
+  // with the menu still open instead of just closing the menu.
+  useEffect(() => {
+    if (!open || Platform.OS !== 'android') return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      onDismiss();
+      return true;
+    });
+    return () => sub.remove();
+  }, [open, onDismiss]);
 
   return (
     <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
