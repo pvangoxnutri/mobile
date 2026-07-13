@@ -1766,7 +1766,11 @@ export default function TripDetailsScreen() {
                             position: 'absolute',
                             top: reactionRect.y,
                             left: reactionRect.x,
-                            width: reactionRect.width,
+                            // +1dp: Android's pixel rounding could make the
+                            // clone's text area a hair narrower than the real
+                            // bubble, re-wrapping the last word / a trailing
+                            // space onto an extra empty-looking line.
+                            width: Math.ceil(reactionRect.width) + 1,
                             transform: [{ scale: reactionScaleAnim }],
                           }}>
                           <View
@@ -1776,7 +1780,10 @@ export default function TripDetailsScreen() {
                               own && [styles.chatBubbleCardOwn, { backgroundColor: COLORS.primary }],
                               // Fill the measured rect exactly so the copy matches
                               // the real bubble (overrides the own-bubble maxWidth).
-                              { width: '100%', maxWidth: '100%', alignSelf: 'stretch' },
+                              // Height is locked to the measured bubble and
+                              // clipped, so a phantom wrapped line can never
+                              // grow the clone taller than the original.
+                              { width: '100%', maxWidth: '100%', alignSelf: 'stretch', height: Math.ceil(reactionRect.height), overflow: 'hidden' },
                             ]}>
                             {reactionPickerMsg.text ? (
                               <ChatMessageText text={reactionPickerMsg.text} isOwn={own} />
@@ -3002,8 +3009,13 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     alignItems: 'center',
+    // Keeps the bar off the screen edges — at full size the card is ~372dp
+    // wide (7×44 buttons + gaps + padding), wider than narrow Android
+    // screens (360dp), so the buttons below shrink to fit inside this.
+    paddingHorizontal: 12,
   },
   reactionPickerCard: {
+    maxWidth: '100%',
     backgroundColor: '#fff',
     borderRadius: 28,
     paddingHorizontal: 14,
@@ -3019,7 +3031,11 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   reactionEmojiButton: {
-    width: 44,
+    // flexBasis instead of a fixed width lets all buttons compress evenly
+    // on screens too narrow for the full-size bar (≈40dp each at 360dp).
+    flexBasis: 44,
+    flexShrink: 1,
+    minWidth: 0,
     height: 44,
     borderRadius: 22,
     alignItems: 'center',
@@ -3032,7 +3048,9 @@ const styles = StyleSheet.create({
     fontSize: 24,
   },
   reactionAddButton: {
-    width: 44,
+    flexBasis: 44,
+    flexShrink: 1,
+    minWidth: 0,
     height: 44,
     borderRadius: 22,
     alignItems: 'center',
