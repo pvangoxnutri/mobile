@@ -116,44 +116,51 @@ export async function registerPushTokenIfPermitted(): Promise<void> {
   }
 }
 
+export type PushPermissionOutcome = 'granted' | 'blocked' | 'dismissed' | 'unavailable';
+
 // Call at a contextual moment (joining/creating a first adventure, creating
-// a first hidden SideQuest) — NOT on app launch. Only actually shows the OS
-// dialog the first time it's ever called across the app's lifetime.
-export async function maybeRequestPushPermission(): Promise<void> {
-  if (Platform.OS === 'web' || isExpoGo()) return;
+// a first hidden SideQuest) — NOT on app launch. Contextual calls are
+// one-shot across the app's lifetime (ASKED_KEY); explicit user actions
+// (the profile toggle) pass force to re-show the dialog when the OS still
+// allows it. Returns what happened so callers can react (e.g. "blocked"
+// → point the user to system settings).
+export async function maybeRequestPushPermission(options?: { force?: boolean }): Promise<PushPermissionOutcome> {
+  if (Platform.OS === 'web' || isExpoGo()) return 'unavailable';
   try {
-    const alreadyAsked = await AsyncStorage.getItem(ASKED_KEY);
-    if (alreadyAsked) {
-      // Permission was already decided previously — this is still an
-      // explicit, user-triggered call (e.g. opening home after creating a
-      // first trip), so go straight through the shared singleton instead of
-      // the auto-sync path (which intentionally only fires once a session).
-      await requestPushRegistration();
-      return;
-    }
+    const current = await Notifications.getPermissionsAsync();
 
-    const { status: currentStatus } = await Notifications.getPermissionsAsync();
-    if (currentStatus === 'granted') {
+    if (current.status === 'granted') {
       await AsyncStorage.setItem(ASKED_KEY, '1');
       await requestPushRegistration();
-      return;
+      return 'granted';
     }
 
-    if (currentStatus === 'denied') {
-      // Denied at the OS level before this flow ever ran — record it so we
-      // stop checking, but don't try to re-prompt (iOS won't show the
-      // dialog again; Android would just feel naggy).
+    if (!current.canAskAgain) {
+      // Locked at the OS level (dialog declined, or turned off in system
+      // settings) — only the Settings app can change it now.
       await AsyncStorage.setItem(ASKED_KEY, '1');
-      return;
+      return 'blocked';
+    }
+
+    // NOTE: Android has no "undetermined" state for POST_NOTIFICATIONS — a
+    // dialog that has never been shown ALSO reports status "denied", just
+    // with canAskAgain still true. An earlier status-based early-return here
+    // meant the permission dialog never appeared on Android at all, so
+    // canAskAgain above is the only signal that may stop us from asking.
+    if (!options?.force && (await AsyncStorage.getItem(ASKED_KEY))) {
+      return 'dismissed';
     }
 
     const { status: newStatus } = await Notifications.requestPermissionsAsync();
     await AsyncStorage.setItem(ASKED_KEY, '1');
     if (newStatus === 'granted') {
       await requestPushRegistration();
+      return 'granted';
     }
+    return 'dismissed';
   } catch (err) {
     console.warn('[PUSH] maybeRequestPushPermission failed:', err);
+    return 'dismissed';
   }
 }
 

@@ -5,7 +5,7 @@ import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as WebBrowser from 'expo-web-browser';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Easing, Image, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Animated, Easing, Image, Keyboard, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ActivityImageFallback from '@/components/activity-image-fallback';
 import Avatar from '@/components/avatar';
@@ -255,7 +255,21 @@ export default function ProfileScreen() {
     // server-side. There's no per-category filtering on the backend yet, so
     // we don't expose toggles that wouldn't actually change anything.
     if (value) {
-      await maybeRequestPushPermission();
+      // force: an explicit toggle should re-show the OS dialog whenever the
+      // system still allows it — the contextual one-shot flag must not
+      // block a deliberate user action.
+      const outcome = await maybeRequestPushPermission({ force: true });
+      if (outcome === 'blocked') {
+        // Locked at the OS level — only the system settings can enable it.
+        Alert.alert(
+          t('profile.notifications.osBlockedTitle'),
+          t('profile.notifications.osBlockedBody'),
+          [
+            { text: t('common.cancel'), style: 'cancel' },
+            { text: t('profile.notifications.openSettings'), onPress: () => void Linking.openSettings() },
+          ],
+        );
+      }
     } else {
       await disablePushNotifications();
     }
