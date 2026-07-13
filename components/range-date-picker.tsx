@@ -94,8 +94,10 @@ export default function RangeDatePicker({
     }
 
     if (day === draftStartDate) {
-      setDraftStartDate(null);
-      setDraftEndDate(null);
+      // Tapping the start day again completes a one-day adventure
+      // (start = end). Clearing lives on the Clear button, and tapping any
+      // day after a completed range starts a fresh selection anyway.
+      setDraftEndDate(day);
       return;
     }
 
@@ -396,6 +398,8 @@ export function formatDisplayDate(value: string) {
 
 export function formatRangeDisplay(startDate?: string | null, endDate?: string | null) {
   if (!startDate || !endDate) return 'Select dates';
+  // One-day adventure — a "Jul 5 -> Jul 5" arrow reads like a mistake.
+  if (startDate === endDate) return formatDisplayDate(startDate);
   return `${formatDisplayDate(startDate)} -> ${formatDisplayDate(endDate)}`;
 }
 
