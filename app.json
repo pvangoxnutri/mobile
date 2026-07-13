@@ -49,14 +49,14 @@
           "action": "VIEW",
           "autoVerify": true,
           "data": [
-            {
-              "scheme": "https",
-              "host": "sidequesttravel.app"
-            },
-            {
-              "scheme": "https",
-              "host": "www.sidequesttravel.app"
-            }
+            { "scheme": "https", "host": "sidequesttravel.app", "pathPrefix": "/invite" },
+            { "scheme": "https", "host": "sidequesttravel.app", "pathPrefix": "/share" },
+            { "scheme": "https", "host": "sidequesttravel.app", "pathPrefix": "/auth-callback" },
+            { "scheme": "https", "host": "sidequesttravel.app", "pathPrefix": "/reset-password" },
+            { "scheme": "https", "host": "www.sidequesttravel.app", "pathPrefix": "/invite" },
+            { "scheme": "https", "host": "www.sidequesttravel.app", "pathPrefix": "/share" },
+            { "scheme": "https", "host": "www.sidequesttravel.app", "pathPrefix": "/auth-callback" },
+            { "scheme": "https", "host": "www.sidequesttravel.app", "pathPrefix": "/reset-password" }
           ],
           "category": [
             "BROWSABLE",

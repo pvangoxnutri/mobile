@@ -360,10 +360,13 @@ export default function TripSettingsScreen() {
     // Same shape as the trip screen's share: localized message with the
     // HTTPS invite link inside it (Android ignores the separate `url` field,
     // and the old cover-image `url` opened as a bare JPEG for recipients).
+    // The invite code lives in the link, not the text; user.name falls back
+    // to the email address when no display name is set, so skip it then.
     const inviteUrl = `https://sidequesttravel.app/invite/${trip.inviteCode}`;
+    const inviterName = user?.name && !user.name.includes('@') ? user.name : t('trip.share.inviterFallback');
     await Share.share({
       title: t('trip.share.title', { title: shareTitle }),
-      message: t('trip.share.message', { title: shareTitle, url: inviteUrl }),
+      message: t('trip.share.message', { name: inviterName, title: shareTitle, url: inviteUrl }),
     });
   }
 
