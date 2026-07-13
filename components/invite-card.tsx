@@ -71,7 +71,7 @@ export default function InviteCard({ invite, busy, highlighted, onAccept, onDecl
             {busy ? (
               <ActivityIndicator size="small" color="#fff" />
             ) : (
-              <Text style={styles.inviteAcceptText}>{t('common.join')}</Text>
+              <Text style={styles.inviteAcceptText} numberOfLines={1}>{t('common.join')}</Text>
             )}
           </TouchableOpacity>
         </Animated.View>
@@ -133,6 +133,10 @@ const styles = StyleSheet.create({
   inviteCardActions: {
     flexDirection: 'row',
     gap: SPACING.sm,
+    // Never let the buttons get squeezed by a long title — the content
+    // column (flex: 1) absorbs the shrink instead. Android squeezed this
+    // just enough to wrap "Gå med" onto two lines.
+    flexShrink: 0,
   },
   inviteAcceptBtn: {
     paddingVertical: SPACING.sm,
