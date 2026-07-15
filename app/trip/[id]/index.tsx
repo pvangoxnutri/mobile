@@ -103,7 +103,10 @@ const EMOJI_GRID = [
 // event types — covers chat history from before this field existed.
 function renderSystemMessage(message: ChatMsg, t: (key: string, vars?: Record<string, string | number>) => string): string {
   if (message.systemEventType === 'member_joined') {
-    return t('trip.chat.systemMemberJoined', { name: message.userName });
+    // Accounts created before the signup name requirement can have an empty
+    // name — " har gått med." reads broken, so fall back to a generic word.
+    const name = message.userName?.trim() ? message.userName : t('trip.chat.someoneFallback');
+    return t('trip.chat.systemMemberJoined', { name });
   }
   return message.text;
 }

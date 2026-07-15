@@ -106,6 +106,13 @@ export default function LoginScreen() {
         return;
       }
 
+      // Name is what every social surface shows ("X gick med i resan",
+      // chat, members) — an empty one cascades into blank names everywhere.
+      if (name.trim() === '') {
+        setError(t('auth.name_required'));
+        return;
+      }
+
       if (password !== confirmPassword) {
         setError(t('auth.passwords_mismatch'));
         return;
@@ -277,12 +284,12 @@ export default function LoginScreen() {
           style={[
             styles.primaryButton,
             { backgroundColor: PRIMARY_COLOR },
-            busy || (mode === 'signup' && (cooldownSeconds > 0 || password === '' || confirmPassword === '' || password !== confirmPassword || !termsAccepted))
+            busy || (mode === 'signup' && (cooldownSeconds > 0 || name.trim() === '' || password === '' || confirmPassword === '' || password !== confirmPassword || !termsAccepted))
               ? styles.primaryButtonDisabled
               : null,
           ]}
           onPress={() => void handleSubmit()}
-          disabled={busy || (mode === 'signup' && (cooldownSeconds > 0 || password === '' || confirmPassword === '' || password !== confirmPassword || !termsAccepted))}>
+          disabled={busy || (mode === 'signup' && (cooldownSeconds > 0 || name.trim() === '' || password === '' || confirmPassword === '' || password !== confirmPassword || !termsAccepted))}>
           {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>{mode === 'signin' ? t('auth.btn_signin') : t('auth.btn_signup')}</Text>}
         </Pressable>
 
