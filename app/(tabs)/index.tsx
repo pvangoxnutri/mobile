@@ -968,8 +968,14 @@ function ActivityFeedCard({
     return `/trip/${e.tripId}`;
   }
 
-  function findMember(name: string): TripMember | undefined {
-    return members.find((m) => m.name === name);
+  function findMember(event: TripEvent): TripMember | undefined {
+    // Prefer the id (always correct); fall back to the name snapshot for
+    // cached events fetched before actorId existed in the payload.
+    if (event.actorId) {
+      const byId = members.find((m) => m.id === event.actorId);
+      if (byId) return byId;
+    }
+    return members.find((m) => m.name === event.actorName);
   }
 
   return (
@@ -992,7 +998,7 @@ function ActivityFeedCard({
         // shows the gift icon, not an avatar, regardless of who triggered it.
         const isHiddenAdd = event.type === 'activity_added' && !!event.isHidden;
         const isRevealed = event.type === 'sidequest_revealed';
-        const member = isHiddenAdd || isRevealed ? undefined : findMember(event.actorName);
+        const member = isHiddenAdd || isRevealed ? undefined : findMember(event);
         return (
           <TouchableOpacity
             key={event.id}
@@ -1006,7 +1012,10 @@ function ActivityFeedCard({
                 <Ionicons name="gift-outline" size={16} color="#fff" />
               ) : (
                 <Avatar
-                  uri={member?.avatarUrl}
+                  // The event payload carries the actor's live avatar, so the
+                  // picture shows even when the actor isn't in the (possibly
+                  // cached) member list yet — e.g. right after they joined.
+                  uri={event.actorAvatarUrl ?? member?.avatarUrl}
                   name={event.actorName}
                   fallbackText={getInitials(event.actorName)}
                   forceFallback={member ? failedAvatars.has(member.id) : false}

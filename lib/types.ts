@@ -145,7 +145,9 @@ export interface TripEvent {
   id: string;
   tripId: string;
   tripTitle?: string | null;
+  actorId?: string | null;
   actorName: string;
+  actorAvatarUrl?: string | null;
   type: 'member_joined' | 'member_left' | 'activity_added' | 'sidequest_revealed';
   activityId?: string | null;
   isHidden?: boolean;
