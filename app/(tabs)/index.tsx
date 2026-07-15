@@ -1277,8 +1277,11 @@ function JoinModal({
           placeholder={t ? t('home.code_placeholder') : 'e.g. A3F9B2'}
           placeholderTextColor="#b0b5c0"
           value={code}
-          onChangeText={(v) => onChangeCode(v.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
-          maxLength={6}
+          // No native maxLength: iOS silently rejects the ENTIRE paste when
+          // the clipboard exceeds it (a code copied from Notes often carries
+          // a trailing newline) — sanitize + slice here instead so pasting
+          // always lands the code.
+          onChangeText={(v) => onChangeCode(v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6))}
           autoCapitalize="characters"
           autoCorrect={false}
           returnKeyType="go"

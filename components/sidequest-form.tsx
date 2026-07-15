@@ -770,11 +770,12 @@ function SideQuestFormInner({
         <TextInput
           ref={titleRef}
           value={title}
-          onChangeText={setTitle}
+          // Slice instead of native maxLength — iOS rejects the entire paste
+          // when the clipboard is longer than maxLength (e.g. from Notes).
+          onChangeText={(v) => setTitle(v.slice(0, TITLE_MAX_LENGTH))}
           placeholder={t('sidequest.form.titlePlaceholder')}
           placeholderTextColor="#b7bcc7"
           style={styles.titleInput}
-          maxLength={TITLE_MAX_LENGTH}
           onFocus={onFocusField(titleRef)}
           returnKeyType="next"
           onSubmitEditing={() => (category === 'flight' ? flightFromRef.current?.focus() : descriptionRef.current?.focus())}
@@ -866,11 +867,10 @@ function SideQuestFormInner({
               <TextInput
                 ref={customNameRef}
                 value={customLabel}
-                onChangeText={setCustomLabel}
+                onChangeText={(v) => setCustomLabel(v.slice(0, 60))}
                 placeholder={t('sidequest.form.categoryCustomNamePlaceholder')}
                 placeholderTextColor="#b7bcc7"
                 style={styles.customCategoryInput}
-                maxLength={60}
                 returnKeyType="done"
                 onFocus={onFocusField(customNameRef)}
               />

@@ -187,13 +187,12 @@ export default function SupportScreen() {
             ref={subjectRef}
             style={styles.input}
             value={subject}
-            onChangeText={setSubject}
+            onChangeText={(v) => setSubject(v.slice(0, 200))}
             onFocus={onFocusField(subjectRef)}
             placeholder={t('support.subjectPlaceholder')}
             placeholderTextColor={COLORS.placeholderText}
             returnKeyType="next"
             onSubmitEditing={() => descriptionRef.current?.focus()}
-            maxLength={200}
           />
         </View>
 
@@ -204,13 +203,12 @@ export default function SupportScreen() {
             ref={descriptionRef}
             style={[styles.input, styles.inputMultiline]}
             value={description}
-            onChangeText={setDescription}
+            onChangeText={(v) => setDescription(v.slice(0, 4000))}
             onFocus={onFocusField(descriptionRef)}
             placeholder={t('support.descriptionPlaceholder')}
             placeholderTextColor={COLORS.placeholderText}
             multiline
             textAlignVertical="top"
-            maxLength={4000}
           />
         </View>
 

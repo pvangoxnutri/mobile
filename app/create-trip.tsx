@@ -278,11 +278,13 @@ export default function CreateTripScreen() {
         <TextInput
           ref={titleRef}
           value={title}
-          onChangeText={setTitle}
+          // Slice instead of native maxLength — iOS rejects the entire paste
+          // when the clipboard is longer than maxLength (e.g. from Notes);
+          // slicing keeps the first chars instead of pasting nothing.
+          onChangeText={(v) => setTitle(v.slice(0, TITLE_MAX_LENGTH))}
           placeholder={t('trip.trip_name_placeholder')}
           placeholderTextColor={COLORS.placeholderText}
           style={styles.titleInput}
-          maxLength={TITLE_MAX_LENGTH}
           onFocus={onFocusField(titleRef)}
           returnKeyType="next"
           onSubmitEditing={() => destinationRef.current?.focus()}
@@ -296,11 +298,10 @@ export default function CreateTripScreen() {
         <TextInput
           ref={destinationRef}
           value={destination}
-          onChangeText={setDestination}
+          onChangeText={(v) => setDestination(v.slice(0, DESTINATION_MAX_LENGTH))}
           placeholder={t('trip.destination_placeholder')}
           placeholderTextColor={COLORS.placeholderText}
           style={styles.destinationInput}
-          maxLength={DESTINATION_MAX_LENGTH}
           onFocus={onFocusField(destinationRef)}
           returnKeyType="done"
           onSubmitEditing={() => Keyboard.dismiss()}

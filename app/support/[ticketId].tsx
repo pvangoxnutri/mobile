@@ -198,11 +198,10 @@ export default function SupportConversationScreen() {
                 <TextInput
                   style={styles.replyInput}
                   value={reply}
-                  onChangeText={setReply}
+                  onChangeText={(v) => setReply(v.slice(0, 4000))}
                   placeholder={t('support.replyPlaceholder')}
                   placeholderTextColor={COLORS.placeholderText}
                   multiline
-                  maxLength={4000}
                 />
                 <TouchableOpacity
                   style={[styles.sendBtn, (sending || (!reply.trim() && replyAttachments.length === 0)) && styles.sendBtnDisabled]}
