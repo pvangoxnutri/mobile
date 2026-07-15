@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FontAwesome, Ionicons } from '@expo/vector-icons';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
@@ -52,6 +53,11 @@ type ChatReaction = {
   count: number;
   reactedByMe: boolean;
 };
+
+// Per-trip "last read chat" marker. Persisted so the unread dot survives
+// app restarts — the old in-memory-only ref reset to "24h ago" on every
+// mount and re-lit the dot for messages the user had already read.
+const chatLastReadKey = (tripId: string) => `chat_last_read_${tripId}`;
 
 // One row in the trip feed's flat drag list: day headers act as the drop
 // context that decides an activity's date; activities are the draggables.
@@ -289,9 +295,20 @@ export default function TripDetailsScreen() {
           setCached(`/api/trips/${id}/activities`, activityData);
           // Check for unread chat messages
           try {
+            // Persisted last-read wins over the in-memory 24h fallback —
+            // otherwise every remount re-flagged already-read messages.
+            const storedLastRead = await AsyncStorage.getItem(chatLastReadKey(id));
+            if (storedLastRead && storedLastRead > lastReadAtRef.current) {
+              lastReadAtRef.current = storedLastRead;
+            }
             const latestMsgs = await apiJson<ChatMsg[]>(`/api/trips/${id}/chat?since=${encodeURIComponent(lastReadAtRef.current)}`);
             if (!active) return;
-            if (latestMsgs.length > 0) setChatUnread(true);
+            // Only real messages from OTHERS count as unread: your own sends,
+            // system rows ("X har gått med") and deletion tombstones (which
+            // deliberately ride the since-cursor with a bumped timestamp)
+            // must never light the dot.
+            const hasUnread = latestMsgs.some((m) => !m.isSystem && m.userId !== user?.id);
+            setChatUnread(hasUnread);
           } catch {
             if (!active) return;
           }
@@ -431,6 +448,7 @@ export default function TripDetailsScreen() {
     if (!chatOpen) return;
 
     lastReadAtRef.current = new Date().toISOString();
+    void AsyncStorage.setItem(chatLastReadKey(id), lastReadAtRef.current).catch(() => {});
     setChatUnread(false);
     lastChatTimestampRef.current = null;
     chatNearBottomRef.current = true;
@@ -669,6 +687,12 @@ export default function TripDetailsScreen() {
 
   function closeChat() {
     Keyboard.dismiss();
+    // Everything that arrived while the chat was open has been on screen —
+    // closing IS reading. Stamp + persist so neither this session's focus
+    // check nor the next app start re-flags those messages.
+    lastReadAtRef.current = new Date().toISOString();
+    void AsyncStorage.setItem(chatLastReadKey(id), lastReadAtRef.current).catch(() => {});
+    setChatUnread(false);
     setChatOpen(false);
   }
 
