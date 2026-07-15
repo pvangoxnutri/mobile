@@ -53,6 +53,12 @@ type ChatReaction = {
   reactedByMe: boolean;
 };
 
+// One row in the trip feed's flat drag list: day headers act as the drop
+// context that decides an activity's date; activities are the draggables.
+type FeedRow =
+  | { kind: 'day'; date: string }
+  | { kind: 'activity'; activity: SideQuestActivity };
+
 type ChatMsg = {
   id: string;
   userId?: string | null;
@@ -368,6 +374,34 @@ export default function TripDetailsScreen() {
       }))
       .sort((a, b) => a.date.localeCompare(b.date));
   }, [sortedActivities]);
+
+  // The feed as ONE flat drag list: day-header rows interleaved with
+  // activity rows, covering EVERY day of the trip (empty days included) so
+  // an activity can be dragged onto any date — the day rows are the drop
+  // context that decides the new date. Falls back to only dates that have
+  // activities when the trip's range isn't loaded yet.
+  const feedRows = useMemo<FeedRow[]>(() => {
+    const dates = new Set<string>(activityDayGroups.map((g) => g.date));
+    const start = trip?.startDate?.slice(0, 10);
+    const end = trip?.endDate?.slice(0, 10);
+    if (start && end && start <= end) {
+      let cursor = new Date(`${start}T12:00:00`);
+      const last = new Date(`${end}T12:00:00`);
+      // Hard cap keeps a mis-dated trip (or year-long range) from exploding
+      // the feed with hundreds of empty headers.
+      for (let i = 0; cursor <= last && i < 62; i++) {
+        dates.add(cursor.toISOString().slice(0, 10));
+        cursor = new Date(cursor.getTime() + 24 * 60 * 60 * 1000);
+      }
+    }
+    const byDate = new Map(activityDayGroups.map((g) => [g.date, g.items]));
+    const rows: FeedRow[] = [];
+    for (const date of [...dates].sort()) {
+      rows.push({ kind: 'day', date });
+      for (const activity of byDate.get(date) ?? []) rows.push({ kind: 'activity', activity });
+    }
+    return rows;
+  }, [activityDayGroups, trip?.startDate, trip?.endDate]);
 
   const memberAvatarMap = useMemo(() => {
     const map = new Map<string, string | null>();
@@ -1108,6 +1142,73 @@ export default function TripDetailsScreen() {
     }
   }
 
+  // Drop handler for the flat feed list: derives which day the dragged
+  // activity landed under and whether that's a same-day reorder (existing
+  // endpoint) or a cross-day move (dedicated move endpoint that changes the
+  // activity's date and rewrites the target day's order atomically).
+  function handleFeedReorder(rows: FeedRow[], draggedId: string) {
+    let currentDate: string | null = null;
+    const dayOrders = new Map<string, SideQuestActivity[]>();
+    for (const row of rows) {
+      if (row.kind === 'day') {
+        currentDate = row.date;
+        if (!dayOrders.has(row.date)) dayOrders.set(row.date, []);
+        continue;
+      }
+      // An activity dropped above the very first header belongs to the
+      // first day (there is nothing above the trip's first date).
+      const date = currentDate ?? rows.find((r): r is Extract<FeedRow, { kind: 'day' }> => r.kind === 'day')?.date;
+      if (!date) continue;
+      if (!dayOrders.has(date)) dayOrders.set(date, []);
+      dayOrders.get(date)!.push(row.activity);
+    }
+
+    for (const [date, dayActivities] of dayOrders) {
+      const dragged = dayActivities.find((a) => a.id === draggedId);
+      if (!dragged) continue;
+      if (dragged.date.slice(0, 10) === date) {
+        void handleReorderActivities(date, dayActivities);
+      } else {
+        void handleMoveActivity(dragged, date, dayActivities);
+      }
+      return;
+    }
+  }
+
+  async function handleMoveActivity(activity: SideQuestActivity, targetDate: string, targetDayOrder: SideQuestActivity[]) {
+    const orderedIds = targetDayOrder.map((a) => a.id);
+    const indexById = new Map(orderedIds.map((activityId, i) => [activityId, i]));
+
+    // Optimistic: give the moved activity its new date and stamp the whole
+    // target day's SortIndex so the feed reflects the drop immediately.
+    setActivities((prev) =>
+      prev.map((a) => {
+        if (a.id === activity.id) return { ...a, date: targetDate, sortIndex: indexById.get(a.id) ?? 0 };
+        if (indexById.has(a.id)) return { ...a, sortIndex: indexById.get(a.id)! };
+        return a;
+      }),
+    );
+
+    try {
+      const response = await apiFetch(`/api/trips/${id}/activities/${activity.id}/move`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: targetDate, activityIds: orderedIds }),
+      });
+      if (!response.ok) throw new Error(await response.text());
+      invalidateCache(`/api/trips/${id}/activities`);
+    } catch {
+      // Resync with the server's actual state rather than leaving a
+      // possibly-wrong optimistic move in place.
+      try {
+        const fresh = await apiJson<SideQuestActivity[]>(`/api/trips/${id}/activities`);
+        setActivities(fresh);
+      } catch {
+        // best effort
+      }
+    }
+  }
+
   async function handleReorderActivities(date: string, reordered: SideQuestActivity[]) {
     const reorderedWithIndex = reordered.map((a, i) => ({ ...a, sortIndex: i }));
     const reorderedIds = new Set(reorderedWithIndex.map((a) => a.id));
@@ -1195,26 +1296,33 @@ export default function TripDetailsScreen() {
           </View>
 
           {activityDayGroups.length > 0 ? (
-            activityDayGroups.map((group) => (
-              <View key={group.date} style={styles.dayGroup}>
-                <View style={styles.dayHeader}>
-                  <Text style={styles.dayHeaderText}>{formatDayHeaderDate(group.date, locale)}</Text>
-                  <Text style={styles.dayHeaderDay}>{t('trip.dayNumber', { day: dayNumberRelative(group.date, trip?.startDate) })}</Text>
-                  <View style={styles.dayHeaderLine} />
-                </View>
-                <DraggableDayList
-                  items={group.items}
-                  keyExtractor={(activity) => activity.id}
-                  // Reordering is a trip-wide collaborative action gated by
-                  // MembersCanEdit (or trip ownership) on the backend's
-                  // reorder endpoint — NOT per-activity canEdit, which is
-                  // creator-only for editing/deleting an activity's own
-                  // content. Using canEdit here would silently disable drag
-                  // for an entire day whenever its first item happens to be
-                  // someone else's activity, even for your own items below it.
-                  enabled={canManageTrip || (trip?.membersCanEdit ?? true)}
-                  onReorder={(reordered) => void handleReorderActivities(group.date, reordered)}
-                  renderItem={(activity) => {
+            <DraggableDayList
+              items={feedRows}
+              keyExtractor={(row) => (row.kind === 'day' ? `day-${row.date}` : row.activity.id)}
+              // Reordering is a trip-wide collaborative action gated by
+              // MembersCanEdit (or trip ownership) on the backend's
+              // reorder/move endpoints — NOT per-activity canEdit, which is
+              // creator-only for editing/deleting an activity's own
+              // content. Using canEdit here would silently disable drag
+              // for an entire day whenever its first item happens to be
+              // someone else's activity, even for your own items below it.
+              enabled={canManageTrip || (trip?.membersCanEdit ?? true)}
+              // Day headers are drop context, never draggable themselves.
+              isDraggable={(row) => row.kind === 'activity'}
+              onReorder={(rows, draggedId) => handleFeedReorder(rows, draggedId)}
+              renderItem={(row) => {
+                if (row.kind === 'day') {
+                  return (
+                    <View style={styles.dayGroup}>
+                      <View style={styles.dayHeader}>
+                        <Text style={styles.dayHeaderText}>{formatDayHeaderDate(row.date, locale)}</Text>
+                        <Text style={styles.dayHeaderDay}>{t('trip.dayNumber', { day: dayNumberRelative(row.date, trip?.startDate) })}</Text>
+                        <View style={styles.dayHeaderLine} />
+                      </View>
+                    </View>
+                  );
+                }
+                const activity = row.activity;
                   const hidden = isSealedInLists(activity);
                   const timeLabel = formatActivityTimeShort(activity.time);
 
@@ -1258,10 +1366,8 @@ export default function TripDetailsScreen() {
                       {timeLabel ? <Text style={styles.timelineTime}>{timeLabel}</Text> : null}
                     </TouchableOpacity>
                   );
-                  }}
-                />
-              </View>
-            ))
+              }}
+            />
           ) : (
             <EmptyState
               icon="sparkles-outline"

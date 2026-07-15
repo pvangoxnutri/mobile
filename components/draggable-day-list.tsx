@@ -30,11 +30,17 @@ type DraggableDayListProps<T> = {
   items: T[];
   keyExtractor: (item: T) => string;
   renderItem: (item: T, isDragging: boolean) => ReactNode;
-  onReorder: (newItems: T[]) => void;
+  /** Receives the full reordered array plus which item was dragged — the
+   * caller needs the id to tell a same-day reorder from a cross-day move. */
+  onReorder: (newItems: T[], draggedId: string) => void;
   enabled: boolean;
+  /** Per-row drag opt-out (e.g. day headers in a mixed feed list). Rows
+   * returning false still participate in layout/slot math as drop context —
+   * they just can't be picked up. Defaults to all rows draggable. */
+  isDraggable?: (item: T) => boolean;
 };
 
-export default function DraggableDayList<T>({ items, keyExtractor, renderItem, onReorder, enabled }: DraggableDayListProps<T>) {
+export default function DraggableDayList<T>({ items, keyExtractor, renderItem, onReorder, enabled, isDraggable }: DraggableDayListProps<T>) {
   // Measured top offset + height of every row, relative to this list — kept
   // up to date via each row's onLayout. Drives the slot math; no separate
   // FlatList/virtualization here since a single day's activity list is short.
@@ -111,7 +117,7 @@ export default function DraggableDayList<T>({ items, keyExtractor, renderItem, o
     const unchanged = reordered.every((it, i) => keyExtractor(it) === keyExtractor(items[i]));
     if (unchanged) return;
 
-    onReorder(reordered);
+    onReorder(reordered, id);
   }
 
   return (
@@ -122,7 +128,7 @@ export default function DraggableDayList<T>({ items, keyExtractor, renderItem, o
         return (
           <DraggableRow
             key={id}
-            enabled={enabled}
+            enabled={enabled && (isDraggable?.(item) ?? true)}
             onLayoutHeight={(h) => handleLayoutHeight(id, h)}
             onDragStart={() => handleDragStart(id)}
             onDragMove={(dy) => handleDragMove(id, dy)}
