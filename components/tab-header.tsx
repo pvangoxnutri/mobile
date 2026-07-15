@@ -9,7 +9,9 @@ import TopAlertsButton from '@/components/top-alerts-button';
 // import is always safe even when the feature is hidden.
 import GlunoButton from '@/components/gluno/GlunoButton';
 import GlunoAssistant from '@/components/gluno/GlunoAssistant';
-import { COLORS, SPACING } from '@/constants/design-tokens';
+import { SPACING } from '@/constants/design-tokens';
+import { useThemedStyles } from '@/hooks/use-themed-styles';
+import type { AppTheme } from '@/constants/themes';
 
 type AnimatedStyle = StyleProp<ViewStyle> | Animated.WithAnimatedValue<ViewStyle>;
 
@@ -30,6 +32,7 @@ export default function TabHeader({
   bellAnimatedStyle,
   avatarAnimatedStyle,
 }: Props) {
+  const styles = useThemedStyles(createStyles);
   const { user } = useAuth();
   const handleAvatarPress = onAvatarPress ?? (() => router.push('/(tabs)/profile'));
   // EXPERIMENTAL — see GlunoButton.tsx / constants/feature-flags.ts. This
@@ -70,7 +73,7 @@ function getInitials(name?: string | null) {
   return parts.map((p) => p[0]?.toUpperCase()).join('') || 'SQ';
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   topRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -87,14 +90,14 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: COLORS.bgLight,
+    backgroundColor: theme.colors.bgLight,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.05,
+    shadowOpacity: theme.isDark ? 0.25 : 0.05,
     shadowRadius: 12,
-    elevation: 3,
+    elevation: theme.isDark ? 0 : 3,
     overflow: 'hidden',
   },
   avatarImage: {
@@ -105,12 +108,12 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: COLORS.avatarDark,
+    backgroundColor: theme.colors.avatarDark,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarText: {
-    color: COLORS.white,
+    color: theme.colors.white,
     fontSize: 14,
     fontWeight: '800',
     letterSpacing: -0.6,

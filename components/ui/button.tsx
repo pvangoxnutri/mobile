@@ -1,5 +1,6 @@
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { SPACING, TYPOGRAPHY, COLORS, BUTTON_SIZES, OPACITIES, SHADOWS } from '@/constants/design-tokens';
+import { SPACING, TYPOGRAPHY, BUTTON_SIZES, OPACITIES } from '@/constants/design-tokens';
+import { useTheme } from '@/components/theme-provider';
 
 interface ButtonProps {
   label: string;
@@ -26,12 +27,13 @@ export function Button({
   fullWidth = false,
   style,
 }: ButtonProps) {
+  const { theme } = useTheme();
   const sizeConfig = size === 'icon-lg' ? BUTTON_SIZES.iconLarge : BUTTON_SIZES[size as keyof typeof BUTTON_SIZES];
 
   const variantStyles: Record<string, { bg: string; border: string; text: string }> = {
-    primary: { bg: COLORS.primary, border: 'transparent', text: COLORS.white },
-    secondary: { bg: COLORS.white, border: COLORS.primary, text: COLORS.primary },
-    outline: { bg: 'transparent', border: COLORS.borderPrimary, text: COLORS.textPrimary },
+    primary: { bg: theme.colors.primary, border: 'transparent', text: theme.colors.white },
+    secondary: { bg: theme.colors.surface, border: theme.colors.primary, text: theme.colors.primary },
+    outline: { bg: 'transparent', border: theme.colors.borderPrimary, text: theme.colors.textPrimary },
   };
 
   const variantStyle = variantStyles[variant];
@@ -54,8 +56,8 @@ export function Button({
         disabled && { opacity: OPACITIES.disabled },
         fullWidth && { width: '100%' },
         style,
-        size === 'md' && SHADOWS.subtle,
-        size === 'lg' && SHADOWS.subtle,
+        size === 'md' && theme.shadows.subtle,
+        size === 'lg' && theme.shadows.subtle,
       ]}>
       {!isIconOnly && (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: SPACING.md }}>

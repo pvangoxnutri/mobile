@@ -1,5 +1,8 @@
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
-import { COLORS, RADIUS, CARD_PADDING, SHADOWS } from '@/constants/design-tokens';
+import { RADIUS, CARD_PADDING } from '@/constants/design-tokens';
+import { useTheme } from '@/components/theme-provider';
+import { useThemedStyles } from '@/hooks/use-themed-styles';
+import type { AppTheme } from '@/constants/themes';
 
 interface CardProps {
   children: React.ReactNode;
@@ -18,6 +21,8 @@ export function Card({
   onPress,
   style,
 }: CardProps) {
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const radiusMap = {
     sm: RADIUS.sm,
     md: RADIUS.md,
@@ -26,9 +31,9 @@ export function Card({
   };
 
   const shadowMap = {
-    subtle: SHADOWS.subtle,
-    medium: SHADOWS.medium,
-    strong: SHADOWS.strong,
+    subtle: theme.shadows.subtle,
+    medium: theme.shadows.medium,
+    strong: theme.shadows.strong,
   };
 
   const paddingMap = {
@@ -58,8 +63,12 @@ export function Card({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   card: {
-    backgroundColor: COLORS.white,
+    backgroundColor: theme.colors.surface,
+    // Dark elevation comes from surface contrast + a hairline border, not
+    // shadows — light mode stays borderless and pixel-identical.
+    borderWidth: theme.isDark ? StyleSheet.hairlineWidth : 0,
+    borderColor: theme.colors.borderPrimary,
   },
 });

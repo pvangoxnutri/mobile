@@ -3,6 +3,9 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Image, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useI18n } from '@/components/i18n-provider';
+import { useTheme } from '@/components/theme-provider';
+import { useThemedStyles } from '@/hooks/use-themed-styles';
+import type { AppTheme } from '@/constants/themes';
 import { getCachedUserProfile, loadUserProfile } from '@/lib/user-cache';
 import type { UserProfile } from '@/lib/types';
 
@@ -16,6 +19,8 @@ export default function UserProfileCard({
   onReport?: (name: string) => void;
 }) {
   const { t } = useI18n();
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -76,16 +81,16 @@ export default function UserProfileCard({
             </Pressable>
           ) : null}
           <Pressable style={styles.closeButton} onPress={onClose} hitSlop={10}>
-            <Ionicons name="close" size={22} color="#14161d" />
+            <Ionicons name="close" size={22} color={theme.colors.textPrimary} />
           </Pressable>
 
           {loading ? (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#ff4f74" />
+              <ActivityIndicator size="large" color={theme.colors.primary} />
             </View>
           ) : error ? (
             <View style={styles.errorContainer}>
-              <Ionicons name="alert-circle-outline" size={40} color="#d53d18" />
+              <Ionicons name="alert-circle-outline" size={40} color={theme.colors.error} />
               <Text style={styles.errorText}>{error}</Text>
             </View>
           ) : profile ? (
@@ -154,6 +159,7 @@ export default function UserProfileCard({
 }
 
 function StatCard({ value, label, accent }: { value: string; label: string; accent: string }) {
+  const styles = useThemedStyles(createStyles);
   return (
     <View style={styles.statCard}>
       <Text style={[styles.statValue, { color: accent }]}>{value}</Text>
@@ -168,25 +174,27 @@ function getInitials(name?: string | null) {
   return parts.map((part) => part[0]?.toUpperCase()).join('') || '?';
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(12,16,26,0.5)',
+    backgroundColor: theme.isDark ? theme.colors.backdropModal : 'rgba(12,16,26,0.5)',
     justifyContent: 'center',
     paddingHorizontal: 22,
   },
   card: {
     borderRadius: 28,
-    backgroundColor: '#fff',
+    backgroundColor: theme.colors.surfaceElevated,
+    borderWidth: theme.isDark ? StyleSheet.hairlineWidth : 0,
+    borderColor: theme.colors.borderPrimary,
     paddingHorizontal: 22,
     paddingTop: 36,
     paddingBottom: 24,
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 18 },
-    shadowOpacity: 0.16,
+    shadowOpacity: theme.isDark ? 0.5 : 0.16,
     shadowRadius: 32,
-    elevation: 12,
+    elevation: theme.isDark ? 0 : 12,
   },
   reportButton: {
     position: 'absolute',
@@ -197,7 +205,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#f4f6fa',
+    backgroundColor: theme.colors.bgLight,
     zIndex: 2,
   },
   closeButton: {
@@ -209,7 +217,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#f4f6fa',
+    backgroundColor: theme.colors.bgLight,
     zIndex: 2,
   },
   loadingContainer: {
@@ -227,14 +235,14 @@ const styles = StyleSheet.create({
   errorText: {
     marginTop: 10,
     fontSize: 14,
-    color: '#14161d',
+    color: theme.colors.textPrimary,
   },
   avatarRing: {
     width: 132,
     height: 132,
     borderRadius: 66,
     borderWidth: 4,
-    borderColor: '#ff4f74',
+    borderColor: theme.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -246,7 +254,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarFallback: {
-    backgroundColor: '#1d212a',
+    backgroundColor: theme.colors.avatarDark,
   },
   onlineDot: {
     position: 'absolute',
@@ -259,7 +267,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: '#22c55e',
     borderWidth: 3,
-    borderColor: '#fff',
+    borderColor: theme.colors.surfaceElevated,
   },
   avatarInitials: {
     color: '#fff',
@@ -269,7 +277,7 @@ const styles = StyleSheet.create({
   },
   name: {
     marginTop: 22,
-    color: '#151722',
+    color: theme.colors.textPrimary,
     fontSize: 26,
     fontWeight: '900',
     letterSpacing: -1.2,
@@ -277,7 +285,7 @@ const styles = StyleSheet.create({
   },
   bio: {
     marginTop: 10,
-    color: '#4e5566',
+    color: theme.colors.textSecondary,
     fontSize: 15,
     lineHeight: 22,
     textAlign: 'center',
@@ -293,8 +301,8 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: '#eceef2',
-    backgroundColor: '#fff',
+    borderColor: theme.colors.borderPrimary,
+    backgroundColor: theme.colors.surfaceElevated,
     alignItems: 'center',
     paddingVertical: 18,
     paddingHorizontal: 4,
@@ -306,7 +314,7 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     marginTop: 6,
-    color: '#a6abb5',
+    color: theme.colors.textMeta,
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 1.2,

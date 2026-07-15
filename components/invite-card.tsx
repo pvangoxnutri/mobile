@@ -4,7 +4,10 @@ import { Animated, StyleSheet, Text, TouchableOpacity, View, ActivityIndicator }
 import { useI18n } from '@/components/i18n-provider';
 import { useScalePress } from '@/hooks/useMotion';
 import type { PendingInvite } from '@/lib/types';
-import { COLORS, SPACING, TYPOGRAPHY, RADIUS } from '@/constants/design-tokens';
+import { SPACING, TYPOGRAPHY, RADIUS } from '@/constants/design-tokens';
+import { useTheme } from '@/components/theme-provider';
+import { useThemedStyles } from '@/hooks/use-themed-styles';
+import type { AppTheme } from '@/constants/themes';
 
 interface InviteCardProps {
   invite: PendingInvite;
@@ -19,6 +22,8 @@ interface InviteCardProps {
 
 export default function InviteCard({ invite, busy, highlighted, onAccept, onDecline }: InviteCardProps) {
   const { t } = useI18n();
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const { handlePressIn: acceptPressIn, handlePressOut: acceptPressOut, animatedStyle: acceptAnimatedStyle } = useScalePress({
     scale: 0.94,
     triggerHaptics: true,
@@ -33,8 +38,8 @@ export default function InviteCard({ invite, busy, highlighted, onAccept, onDecl
     <View
       style={[
         styles.inviteCard,
-        { borderColor: COLORS.primaryLight20, backgroundColor: COLORS.primaryLight12 },
-        highlighted ? { borderColor: COLORS.primary, borderWidth: 2 } : null,
+        { borderColor: theme.colors.primaryLight20, backgroundColor: theme.colors.primaryLight12 },
+        highlighted ? { borderColor: theme.colors.primary, borderWidth: 2 } : null,
       ]}>
       {invite.tripImageUrl ? (
         <Image
@@ -45,7 +50,7 @@ export default function InviteCard({ invite, busy, highlighted, onAccept, onDecl
         />
       ) : (
         <View style={[styles.inviteCardImage, styles.inviteCardImagePlaceholder]}>
-          <Ionicons name="map-outline" size={20} color={COLORS.primary} />
+          <Ionicons name="map-outline" size={20} color={theme.colors.primary} />
         </View>
       )}
       <View style={styles.inviteCardContent}>
@@ -62,7 +67,7 @@ export default function InviteCard({ invite, busy, highlighted, onAccept, onDecl
       <View style={styles.inviteCardActions}>
         <Animated.View style={acceptAnimatedStyle}>
           <TouchableOpacity
-            style={[styles.inviteAcceptBtn, { backgroundColor: COLORS.primary }]}
+            style={[styles.inviteAcceptBtn, { backgroundColor: theme.colors.primary }]}
             activeOpacity={0.82}
             onPressIn={acceptPressIn}
             onPressOut={acceptPressOut}
@@ -83,7 +88,7 @@ export default function InviteCard({ invite, busy, highlighted, onAccept, onDecl
             onPressOut={declinePressOut}
             onPress={() => onDecline(invite)}
             disabled={busy}>
-            <Ionicons name="close" size={16} color={COLORS.textMeta} />
+            <Ionicons name="close" size={16} color={theme.colors.textMeta} />
           </TouchableOpacity>
         </Animated.View>
       </View>
@@ -91,7 +96,7 @@ export default function InviteCard({ invite, busy, highlighted, onAccept, onDecl
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   inviteCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -107,7 +112,7 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.sm,
   },
   inviteCardImagePlaceholder: {
-    backgroundColor: COLORS.primaryLight20,
+    backgroundColor: theme.colors.primaryLight20,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -117,17 +122,17 @@ const styles = StyleSheet.create({
   },
   inviteCardTitle: {
     ...TYPOGRAPHY.label,
-    color: COLORS.textPrimary,
+    color: theme.colors.textPrimary,
     marginBottom: 2,
   },
   inviteCardMeta: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textSecondary,
+    color: theme.colors.textSecondary,
     marginBottom: 2,
   },
   inviteCardFrom: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: theme.colors.textMeta,
     fontSize: 11,
   },
   inviteCardActions: {
@@ -156,6 +161,6 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.sm,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.bgLight,
+    backgroundColor: theme.colors.bgLight,
   },
 });

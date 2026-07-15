@@ -4,7 +4,9 @@ import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { PRIMARY_COLOR } from '@/constants/colors';
+import { useTheme } from '@/components/theme-provider';
+import { useThemedStyles } from '@/hooks/use-themed-styles';
+import type { AppTheme } from '@/constants/themes';
 
 const TAB_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   index: 'home',
@@ -33,6 +35,11 @@ export default function TabLayout() {
 
 function PremiumTabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
+  // Exact pre-theming light value (not a token) — light must stay
+  // pixel-identical; dark uses the muted text tone.
+  const inactiveIconColor = theme.isDark ? theme.colors.textMeta : '#9fa4ae';
   const [containerWidth, setContainerWidth] = useState(0);
   const pillTranslateX = useRef(new Animated.Value(0)).current;
   const isFirstLayout = useRef(true);
@@ -82,8 +89,8 @@ function PremiumTabBar({ state, navigation }: BottomTabBarProps) {
           style={[
             styles.pill,
             {
-              backgroundColor: PRIMARY_COLOR,
-              shadowColor: PRIMARY_COLOR,
+              backgroundColor: theme.colors.primary,
+              shadowColor: theme.colors.primary,
               transform: [{ translateX: pillTranslateX }],
             },
           ]}
@@ -117,7 +124,7 @@ function PremiumTabBar({ state, navigation }: BottomTabBarProps) {
             hitSlop={14}
             pressRetentionOffset={14}
             style={styles.tabItem}>
-            <Ionicons name={iconName} size={26} color={focused ? '#fff' : '#9fa4ae'} />
+            <Ionicons name={iconName} size={26} color={focused ? theme.colors.white : inactiveIconColor} />
           </Pressable>
         );
       })}
@@ -125,7 +132,7 @@ function PremiumTabBar({ state, navigation }: BottomTabBarProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   tabBar: {
     position: 'absolute',
     left: 16,
@@ -138,12 +145,16 @@ const styles = StyleSheet.create({
     alignItems: 'center', // symmetric now — height exactly fits the icon row
     borderTopWidth: 0,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.97)',
+    // Near-opaque surface pill; dark separates from the page via a hairline
+    // ring instead of the big drop shadow.
+    backgroundColor: theme.isDark ? 'rgba(29,33,42,0.97)' : 'rgba(255,255,255,0.97)',
+    borderWidth: theme.isDark ? StyleSheet.hairlineWidth : 0,
+    borderColor: theme.colors.borderPrimary,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.07,
+    shadowOpacity: theme.isDark ? 0.35 : 0.07,
     shadowRadius: 20,
-    elevation: 10,
+    elevation: theme.isDark ? 0 : 10,
   },
   tabItem: {
     flex: 1,

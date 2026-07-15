@@ -16,7 +16,9 @@ import { Animated, BackHandler, Dimensions, Platform, Pressable, StyleSheet, Vie
 import { ReactNode, useEffect } from 'react';
 import { useModalSpring } from '@/hooks/useMotion';
 import { MOTION_SPRING } from '@/MOTION_CONSTANTS';
-import { COLORS, SHADOWS, SPACING } from '@/constants/design-tokens';
+import { SPACING } from '@/constants/design-tokens';
+import { useThemedStyles } from '@/hooks/use-themed-styles';
+import type { AppTheme } from '@/constants/themes';
 
 interface ModalSheetProps {
   visible: boolean;
@@ -35,6 +37,7 @@ interface ModalSheetProps {
 const { height: screenHeight } = Dimensions.get('window');
 
 export default function ModalSheet({ visible, children, onClose, height = screenHeight * 0.75, slowEntry = false, autoHeight = false }: ModalSheetProps) {
+  const styles = useThemedStyles(createStyles);
   const { translateY, backdropOpacity, scaleValue, start, animatedSheetStyle, animatedBackdropStyle } = useModalSpring({
     autoStart: false,
     onComplete: undefined,
@@ -112,23 +115,27 @@ export default function ModalSheet({ visible, children, onClose, height = screen
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   container: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'flex-end',
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.28)',
+    backgroundColor: theme.isDark ? 'rgba(0,0,0,0.55)' : 'rgba(0, 0, 0, 0.28)',
   },
   sheet: {
-    backgroundColor: COLORS.white,
+    // Sheets sit on top of everything → the elevated surface step in dark.
+    backgroundColor: theme.colors.surfaceElevated,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
+    borderWidth: theme.isDark ? StyleSheet.hairlineWidth : 0,
+    borderBottomWidth: 0,
+    borderColor: theme.colors.borderPrimary,
     // Inset all sheet content from the screen edges so headers, close
     // buttons and rows don't sit flush against the rounded corners (which
     // looked like they spilled off the sides).
     paddingHorizontal: SPACING.xl,
-    ...SHADOWS.floating,
+    ...theme.shadows.floating,
   },
 });

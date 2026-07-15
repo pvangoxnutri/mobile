@@ -13,7 +13,9 @@ import {
   type NativeSyntheticEvent,
   type NativeScrollEvent,
 } from 'react-native';
-import { PRIMARY_COLOR } from '@/constants/colors';
+import { useTheme } from '@/components/theme-provider';
+import { useThemedStyles } from '@/hooks/use-themed-styles';
+import type { AppTheme } from '@/constants/themes';
 
 type Props = {
   visible: boolean;
@@ -48,6 +50,8 @@ export default function RangeDatePicker({
   onChange,
   onClose,
 }: Props) {  const { width } = useWindowDimensions();
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const flatListRef = useRef<FlatList<MonthItem>>(null);
   const pageWidth = width - 40;
   const months = useMemo(() => buildMonthItems(startDate ?? minDate ?? null, maxDate ?? null), [maxDate, minDate, startDate]);
@@ -149,14 +153,14 @@ export default function RangeDatePicker({
               <Text style={styles.subtitle}>{subtitle}</Text>
             </View>
             <TouchableOpacity activeOpacity={0.9} style={styles.closeButton} onPress={onClose}>
-              <Ionicons name="close" size={20} color="#161821" />
+              <Ionicons name="close" size={20} color={theme.colors.textPrimary} />
             </TouchableOpacity>
           </View>
 
           <View style={styles.summaryRow}>
             <DateSummaryCard label="Start" value={draftStartDate} active={!draftStartDate || !draftEndDate} />
             <View style={styles.summaryArrow}>
-              <Ionicons name="arrow-forward" size={16} color="#b1b7c1" />
+              <Ionicons name="arrow-forward" size={16} color={theme.colors.textMuted} />
             </View>
             <DateSummaryCard label="End" value={draftEndDate} active={Boolean(draftStartDate && !draftEndDate)} />
           </View>
@@ -165,7 +169,7 @@ export default function RangeDatePicker({
             <Ionicons
               name={!draftStartDate ? 'calendar-outline' : !draftEndDate ? 'ellipse-outline' : 'checkmark-circle'}
               size={16}
-              color={PRIMARY_COLOR}
+              color={theme.colors.primary}
             />
             <Text style={styles.helperText}>{helperText}</Text>
           </View>
@@ -176,7 +180,7 @@ export default function RangeDatePicker({
               style={[styles.monthNavButton, visibleMonthIndex === 0 ? styles.monthNavButtonDisabled : null]}
               disabled={visibleMonthIndex === 0}
               onPress={() => goToMonth(-1)}>
-              <Ionicons name="chevron-back" size={18} color={visibleMonthIndex === 0 ? '#c9ced7' : '#161821'} />
+              <Ionicons name="chevron-back" size={18} color={visibleMonthIndex === 0 ? theme.colors.textMuted : theme.colors.textPrimary} />
             </TouchableOpacity>
             <Text style={styles.monthLabel}>{monthLabel}</Text>
             <TouchableOpacity
@@ -187,7 +191,7 @@ export default function RangeDatePicker({
               <Ionicons
                 name="chevron-forward"
                 size={18}
-                color={visibleMonthIndex === months.length - 1 ? '#c9ced7' : '#161821'}
+                color={visibleMonthIndex === months.length - 1 ? theme.colors.textMuted : theme.colors.textPrimary}
               />
             </TouchableOpacity>
           </View>
@@ -232,7 +236,7 @@ export default function RangeDatePicker({
             </TouchableOpacity>
             <TouchableOpacity
               activeOpacity={0.92}
-              style={[styles.primaryButton, { backgroundColor: PRIMARY_COLOR }, !(draftStartDate && draftEndDate) ? styles.primaryButtonDisabled : null]}
+              style={[styles.primaryButton, { backgroundColor: theme.colors.primary }, !(draftStartDate && draftEndDate) ? styles.primaryButtonDisabled : null]}
               disabled={!(draftStartDate && draftEndDate)}
               onPress={handleConfirm}>
               <Text style={styles.primaryButtonText}>{confirmLabel}</Text>
@@ -261,6 +265,8 @@ function MonthGrid({
   maxDate?: string | null;
   onDayPress: (day: string) => void;
 }) {  const days = buildMonthCells(month.year, month.month);
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
 
   return (
     <View style={[styles.monthPage, { width }]}>
@@ -288,7 +294,7 @@ function MonthGrid({
                 isEnd ? styles.dayCellRangeEnd : null,
                 single ? styles.dayCellSingle : null,
               ]}>
-              <View style={[styles.dayCircle, isStart || isEnd ? { backgroundColor: PRIMARY_COLOR, shadowColor: PRIMARY_COLOR } : null, disabled ? styles.dayCircleDisabled : null]}>
+              <View style={[styles.dayCircle, isStart || isEnd ? { backgroundColor: theme.colors.primary, shadowColor: theme.colors.primary } : null, disabled ? styles.dayCircleDisabled : null]}>
                 <Text
                   style={[
                     styles.dayText,
@@ -315,6 +321,7 @@ function DateSummaryCard({
   value: string | null;
   active?: boolean;
 }) {
+  const styles = useThemedStyles(createStyles);
   return (
     <View style={[styles.summaryCard, active ? styles.summaryCardActive : null]}>
       <Text style={styles.summaryLabel}>{label}</Text>
@@ -403,16 +410,16 @@ export function formatRangeDisplay(startDate?: string | null, endDate?: string |
   return `${formatDisplayDate(startDate)} -> ${formatDisplayDate(endDate)}`;
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(12,14,19,0.22)',
+    backgroundColor: theme.isDark ? theme.colors.backdropModal : 'rgba(12,14,19,0.22)',
     justifyContent: 'flex-end',
   },
   sheet: {
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
-    backgroundColor: '#fff',
+    backgroundColor: theme.colors.surfaceElevated,
     paddingHorizontal: 20,
     paddingTop: 10,
     paddingBottom: 24,
@@ -422,7 +429,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 5,
     borderRadius: 999,
-    backgroundColor: '#d9dde4',
+    backgroundColor: theme.isDark ? 'rgba(255,255,255,0.18)' : '#d9dde4',
   },
   header: {
     marginTop: 14,
@@ -435,14 +442,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   title: {
-    color: '#161821',
+    color: theme.colors.textPrimary,
     fontSize: 24,
     fontWeight: '900',
     letterSpacing: -0.8,
   },
   subtitle: {
     marginTop: 8,
-    color: '#7d8491',
+    color: theme.colors.textMeta,
     fontSize: 14,
     lineHeight: 21,
   },
@@ -452,7 +459,7 @@ const styles = StyleSheet.create({
     borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#f5f6f8',
+    backgroundColor: theme.isDark ? theme.colors.bgLight : '#f5f6f8',
   },
   summaryRow: {
     marginTop: 18,
@@ -465,24 +472,24 @@ const styles = StyleSheet.create({
     minHeight: 74,
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: '#eceff4',
-    backgroundColor: '#f8fafc',
+    borderColor: theme.isDark ? theme.colors.borderPrimary : '#eceff4',
+    backgroundColor: theme.isDark ? theme.colors.bgLightest : '#f8fafc',
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
   summaryCardActive: {
-    borderColor: '#ffc6d3',
-    backgroundColor: '#fff5f8',
+    borderColor: theme.isDark ? theme.colors.primaryLight20 : '#ffc6d3',
+    backgroundColor: theme.isDark ? theme.colors.primaryLight08 : '#fff5f8',
   },
   summaryLabel: {
-    color: '#8a919e',
+    color: theme.colors.textMeta,
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 1.1,
   },
   summaryValue: {
     marginTop: 8,
-    color: '#161821',
+    color: theme.colors.textPrimary,
     fontSize: 15,
     fontWeight: '800',
     letterSpacing: -0.4,
@@ -496,8 +503,8 @@ const styles = StyleSheet.create({
     marginTop: 14,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#ffd6df',
-    backgroundColor: '#fff4f7',
+    borderColor: theme.isDark ? theme.colors.primaryLight20 : '#ffd6df',
+    backgroundColor: theme.isDark ? theme.colors.primaryLight08 : '#fff4f7',
     paddingHorizontal: 14,
     paddingVertical: 10,
     flexDirection: 'row',
@@ -505,7 +512,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   helperText: {
-    color: '#c83362',
+    color: theme.isDark ? theme.colors.primary : '#c83362',
     fontSize: 14,
     fontWeight: '700',
   },
@@ -521,13 +528,13 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#f5f6f8',
+    backgroundColor: theme.isDark ? theme.colors.bgLight : '#f5f6f8',
   },
   monthNavButtonDisabled: {
-    backgroundColor: '#f7f8fa',
+    backgroundColor: theme.isDark ? theme.colors.bgLightest : '#f7f8fa',
   },
   monthLabel: {
-    color: '#161821',
+    color: theme.colors.textPrimary,
     fontSize: 18,
     fontWeight: '900',
     letterSpacing: -0.4,
@@ -541,7 +548,7 @@ const styles = StyleSheet.create({
   weekdayLabel: {
     width: `${100 / 7}%`,
     textAlign: 'center',
-    color: '#9198a4',
+    color: theme.colors.textMeta,
     fontSize: 12,
     fontWeight: '800',
     letterSpacing: 0.8,
@@ -561,15 +568,15 @@ const styles = StyleSheet.create({
     borderRadius: 18,
   },
   dayCellInRange: {
-    backgroundColor: '#ffe7ee',
+    backgroundColor: theme.isDark ? theme.colors.primaryLight12 : '#ffe7ee',
   },
   dayCellRangeStart: {
-    backgroundColor: '#ffd6e0',
+    backgroundColor: theme.isDark ? theme.colors.primaryLight20 : '#ffd6e0',
     borderTopLeftRadius: 18,
     borderBottomLeftRadius: 18,
   },
   dayCellRangeEnd: {
-    backgroundColor: '#ffd6e0',
+    backgroundColor: theme.isDark ? theme.colors.primaryLight20 : '#ffd6e0',
     borderTopRightRadius: 18,
     borderBottomRightRadius: 18,
   },
@@ -584,8 +591,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   dayCircleSelected: {
-    backgroundColor: '#ff4f74',
-    shadowColor: '#ff4f74',
+    backgroundColor: theme.colors.primary,
+    shadowColor: theme.colors.primary,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.18,
     shadowRadius: 14,
@@ -595,7 +602,7 @@ const styles = StyleSheet.create({
     opacity: 0.36,
   },
   dayText: {
-    color: '#161821',
+    color: theme.colors.textPrimary,
     fontSize: 16,
     fontWeight: '700',
   },
@@ -604,7 +611,7 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   dayTextDisabled: {
-    color: '#c2c8d1',
+    color: theme.colors.textMuted,
   },
   footer: {
     marginTop: 16,
@@ -615,8 +622,8 @@ const styles = StyleSheet.create({
     minHeight: 56,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#e7eaf0',
-    backgroundColor: '#fff',
+    borderColor: theme.isDark ? theme.colors.borderPrimary : '#e7eaf0',
+    backgroundColor: theme.colors.surfaceElevated,
     paddingHorizontal: 18,
     alignItems: 'center',
     justifyContent: 'center',
@@ -625,7 +632,7 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   secondaryButtonText: {
-    color: '#6f7683',
+    color: theme.colors.textSecondary,
     fontSize: 14,
     fontWeight: '800',
   },
@@ -633,7 +640,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 56,
     borderRadius: 18,
-    backgroundColor: '#ff4f74',
+    backgroundColor: theme.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },

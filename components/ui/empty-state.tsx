@@ -1,6 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet, Text, View } from 'react-native';
-import { SPACING, TYPOGRAPHY, COLORS, EMPTY_STATE, ICON_SIZES } from '@/constants/design-tokens';
+import { SPACING, TYPOGRAPHY, EMPTY_STATE } from '@/constants/design-tokens';
+import { useTheme } from '@/components/theme-provider';
+import { useThemedStyles } from '@/hooks/use-themed-styles';
+import type { AppTheme } from '@/constants/themes';
 import { Button } from './button';
 
 interface EmptyStateProps {
@@ -19,13 +22,15 @@ export function EmptyState({
   description,
   action,
 }: EmptyStateProps) {
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
   return (
     <View style={styles.container}>
       <View style={styles.iconContainer}>
         <Ionicons
           name={icon}
           size={EMPTY_STATE.iconSize}
-          color={COLORS.textMuted}
+          color={theme.colors.textMuted}
         />
       </View>
       <Text style={styles.title}>{title}</Text>
@@ -45,7 +50,7 @@ export function EmptyState({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   container: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -56,20 +61,20 @@ const styles = StyleSheet.create({
     width: EMPTY_STATE.iconContainerSize,
     height: EMPTY_STATE.iconContainerSize,
     borderRadius: EMPTY_STATE.iconContainerSize / 2,
-    backgroundColor: COLORS.bgLight,
+    backgroundColor: theme.colors.bgLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
   title: {
     ...TYPOGRAPHY.pageHeading,
     fontWeight: '900',
-    color: COLORS.textPrimary,
+    color: theme.colors.textPrimary,
     textAlign: 'center',
   },
   description: {
     ...TYPOGRAPHY.body,
     fontWeight: '500',
-    color: COLORS.textSecondary,
+    color: theme.colors.textSecondary,
     textAlign: 'center',
     maxWidth: 240,
   },

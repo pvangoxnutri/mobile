@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { Image } from 'expo-image';
-import { COLORS } from '@/constants/design-tokens';
+import { useThemedStyles } from '@/hooks/use-themed-styles';
+import type { AppTheme } from '@/constants/themes';
 
 // Shared person-avatar primitive. Built on expo-image (not React Native's
 // <Image>) specifically for its memory+disk cache: once a given avatar URL
@@ -57,6 +58,7 @@ export default function Avatar({
   fallbackBackgroundColor,
   fallbackTextColor,
 }: AvatarProps) {
+  const styles = useThemedStyles(createStyles);
   const [failed, setFailed] = useState(false);
 
   // A new uri (e.g. the user picked a new photo) deserves a fresh attempt —
@@ -114,20 +116,20 @@ export default function Avatar({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   circle: {
     overflow: 'hidden',
   },
   image: {
-    backgroundColor: COLORS.avatarLight,
+    backgroundColor: theme.colors.avatarLight,
   },
   fallback: {
-    backgroundColor: COLORS.avatarLight,
+    backgroundColor: theme.colors.avatarLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
   initials: {
-    color: COLORS.primary,
+    color: theme.colors.primary,
     fontWeight: '800',
     letterSpacing: -0.3,
   },
@@ -137,6 +139,8 @@ const styles = StyleSheet.create({
     bottom: -1,
     backgroundColor: '#22c55e',
     borderWidth: 2,
-    borderColor: '#fff',
+    // The ring separates the dot from whatever the avatar sits on — in light
+    // mode surfaces are white, in dark it matches the dark card surface.
+    borderColor: theme.colors.surface,
   },
 });

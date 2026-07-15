@@ -3,7 +3,9 @@ import { useNavigation, router } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-import { PRIMARY_COLOR } from '@/constants/colors';
+import { useTheme } from '@/components/theme-provider';
+import { useThemedStyles } from '@/hooks/use-themed-styles';
+import type { AppTheme } from '@/constants/themes';
 
 type UseUnsavedChangesArgs = {
   isDirty: boolean;
@@ -128,6 +130,8 @@ type ModalProps = {
 };
 
 export function UnsavedChangesModal({ visible, busy, onSave, onDiscard, onCancel, hasSave }: ModalProps) {
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
       <View style={styles.backdrop}>
@@ -141,7 +145,7 @@ export function UnsavedChangesModal({ visible, busy, onSave, onDiscard, onCancel
           <View style={styles.buttons}>
             {hasSave ? (
               <TouchableOpacity
-                style={[styles.primaryButton, { backgroundColor: PRIMARY_COLOR }, busy ? styles.buttonDisabled : null]}
+                style={[styles.primaryButton, { backgroundColor: theme.colors.primary }, busy ? styles.buttonDisabled : null]}
                 activeOpacity={0.88}
                 disabled={busy}
                 onPress={onSave}>
@@ -171,29 +175,31 @@ export function UnsavedChangesModal({ visible, busy, onSave, onDiscard, onCancel
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(12,16,26,0.5)',
+    backgroundColor: theme.isDark ? theme.colors.backdropModal : 'rgba(12,16,26,0.5)',
     justifyContent: 'center',
     paddingHorizontal: 22,
   },
   card: {
     borderRadius: 22,
-    backgroundColor: '#fff',
+    backgroundColor: theme.colors.surfaceElevated,
+    borderWidth: theme.isDark ? StyleSheet.hairlineWidth : 0,
+    borderColor: theme.colors.borderPrimary,
     paddingHorizontal: 22,
     paddingTop: 22,
     paddingBottom: 14,
   },
   title: {
-    color: '#14161d',
+    color: theme.colors.textPrimary,
     fontSize: 20,
     fontWeight: '900',
     letterSpacing: -0.5,
   },
   body: {
     marginTop: 10,
-    color: '#5b626f',
+    color: theme.colors.textSecondary,
     fontSize: 14,
     lineHeight: 21,
   },
@@ -218,11 +224,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#f0d4d8',
-    backgroundColor: '#fff',
+    borderColor: theme.isDark ? theme.colors.errorBorder : '#f0d4d8',
+    backgroundColor: theme.colors.surfaceElevated,
   },
   discardButtonText: {
-    color: '#d53d18',
+    color: theme.colors.error,
     fontSize: 15,
     fontWeight: '700',
   },
@@ -233,7 +239,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   cancelButtonText: {
-    color: '#5b626f',
+    color: theme.colors.textSecondary,
     fontSize: 15,
     fontWeight: '700',
   },

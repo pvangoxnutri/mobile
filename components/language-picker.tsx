@@ -13,7 +13,9 @@ import {
   View,
 } from 'react-native';
 import type { AppLanguage } from '@/components/i18n-provider';
-import { PRIMARY_COLOR } from '@/constants/colors';
+import { useTheme } from '@/components/theme-provider';
+import { useThemedStyles } from '@/hooks/use-themed-styles';
+import type { AppTheme } from '@/constants/themes';
 
 type LanguageOption = {
   code: AppLanguage;
@@ -36,6 +38,8 @@ export default function LanguagePicker({
   onChange: (next: AppLanguage) => void;
   label: string;
 }) {
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const [open, setOpen] = useState(false);
   const selected = LANGUAGE_OPTIONS.find((option) => option.code === value) ?? LANGUAGE_OPTIONS[0];
 
@@ -47,7 +51,7 @@ export default function LanguagePicker({
           <Image source={{ uri: selected.flagUri }} style={styles.flagImage} />
           <Text style={styles.triggerText}>{selected.displayName}</Text>
         </View>
-        <Ionicons name="chevron-down" size={18} color="#8a8f9b" />
+        <Ionicons name="chevron-down" size={18} color={theme.colors.textMeta} />
       </Pressable>
 
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
@@ -57,7 +61,7 @@ export default function LanguagePicker({
             <View style={styles.sheetHeader}>
               <Text style={styles.sheetTitle}>{label}</Text>
               <TouchableOpacity onPress={() => setOpen(false)} style={styles.closeButton}>
-                <Ionicons name="close" size={20} color="#6f7582" />
+                <Ionicons name="close" size={20} color={theme.colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
@@ -80,7 +84,7 @@ export default function LanguagePicker({
                         <Text style={styles.optionMeta}>{option.nativeName}</Text>
                       </View>
                     </View>
-                    {active ? <Ionicons name="checkmark-circle" size={20} color={PRIMARY_COLOR} /> : null}
+                    {active ? <Ionicons name="checkmark-circle" size={20} color={theme.colors.primary} /> : null}
                   </TouchableOpacity>
                 );
               })}
@@ -92,9 +96,9 @@ export default function LanguagePicker({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   fieldLabel: {
-    color: '#4b515d',
+    color: theme.colors.textSecondary,
     fontSize: 13,
     fontWeight: '800',
     letterSpacing: 0.3,
@@ -104,8 +108,8 @@ const styles = StyleSheet.create({
     height: 52,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#e4e7ee',
-    backgroundColor: '#f9fafc',
+    borderColor: theme.colors.borderInput,
+    backgroundColor: theme.colors.bgLightest,
     paddingHorizontal: 14,
     flexDirection: 'row',
     alignItems: 'center',
@@ -121,26 +125,26 @@ const styles = StyleSheet.create({
     height: 16,
     borderRadius: 2,
     borderWidth: 1,
-    borderColor: '#d9dfea',
-    backgroundColor: '#f3f5fa',
+    borderColor: theme.colors.borderPrimary,
+    backgroundColor: theme.colors.bgLight,
   },
   triggerText: {
-    color: '#20232c',
+    color: theme.colors.textPrimary,
     fontSize: 13,
     fontWeight: '700',
     letterSpacing: 0.3,
   },
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(12,16,26,0.45)',
+    backgroundColor: theme.isDark ? theme.colors.backdropModal : 'rgba(12,16,26,0.45)',
     justifyContent: 'center',
     paddingHorizontal: 20,
   },
   sheet: {
     borderRadius: 18,
-    backgroundColor: '#fff',
+    backgroundColor: theme.colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: '#e7eaf0',
+    borderColor: theme.colors.borderPrimary,
     maxHeight: 420,
     padding: 14,
   },
@@ -151,7 +155,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   sheetTitle: {
-    color: '#12141a',
+    color: theme.colors.textPrimary,
     fontSize: 18,
     fontWeight: '800',
   },
@@ -161,7 +165,7 @@ const styles = StyleSheet.create({
     borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#f2f4f8',
+    backgroundColor: theme.colors.bgLight,
   },
   list: {
     marginTop: 10,
@@ -175,7 +179,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   optionRowActive: {
-    backgroundColor: '#fff3f6',
+    backgroundColor: theme.colors.avatarLight,
   },
   optionLeft: {
     flexDirection: 'row',
@@ -183,18 +187,18 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   optionNative: {
-    color: '#131722',
+    color: theme.colors.textPrimary,
     fontSize: 14,
     fontWeight: '800',
     letterSpacing: 1,
   },
   optionMeta: {
-    color: '#7e8593',
+    color: theme.colors.textMeta,
     fontSize: 12,
     marginTop: 1,
   },
   empty: {
-    color: '#7e8593',
+    color: theme.colors.textMeta,
     fontSize: 14,
     textAlign: 'center',
     paddingVertical: 12,

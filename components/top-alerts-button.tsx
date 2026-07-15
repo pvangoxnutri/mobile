@@ -3,10 +3,14 @@ import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { PRIMARY_COLOR } from '@/constants/colors';
+import { useTheme } from '@/components/theme-provider';
+import { useThemedStyles } from '@/hooks/use-themed-styles';
+import type { AppTheme } from '@/constants/themes';
 import { loadUnreadNotificationCount } from '@/lib/social';
 
 export default function TopAlertsButton({ inviteCount = 0 }: { inviteCount?: number }) {
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const [unreadCount, setUnreadCount] = useState(0);
 
   // Re-fetch the unread count every time the parent tab regains focus —
@@ -39,25 +43,26 @@ export default function TopAlertsButton({ inviteCount = 0 }: { inviteCount?: num
 
   return (
     <TouchableOpacity activeOpacity={0.84} style={styles.button} onPress={() => router.push('/TMP_Navbar')}>
-      <Ionicons name="notifications-outline" size={22} color="#161821" />
+      <Ionicons name="notifications-outline" size={22} color={theme.colors.textPrimary} />
       {showBadge ? (
-        <View style={[styles.badge, { backgroundColor: PRIMARY_COLOR }]}>
+        <View style={[styles.badge, { backgroundColor: theme.colors.primary }]}>
           <Text style={styles.badgeText}>{inviteCount > 9 ? '9+' : String(inviteCount)}</Text>
         </View>
       ) : null}
-      {showDot ? <View style={[styles.dot, { backgroundColor: PRIMARY_COLOR }]} /> : null}
+      {showDot ? <View style={[styles.dot, { backgroundColor: theme.colors.primary }]} /> : null}
     </TouchableOpacity>
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   button: {
     width: 48,
     height: 48,
     borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#f5f6f8',
+    // Exact pre-theming light value — the dot/badge rings below must match.
+    backgroundColor: theme.isDark ? theme.colors.bgLight : '#f5f6f8',
     position: 'relative',
   },
   dot: {
@@ -67,9 +72,9 @@ const styles = StyleSheet.create({
     width: 9,
     height: 9,
     borderRadius: 999,
-    backgroundColor: '#ff4f74',
+    backgroundColor: theme.colors.primary,
     borderWidth: 2,
-    borderColor: '#f5f6f8',
+    borderColor: theme.isDark ? theme.colors.bgLight : '#f5f6f8',
   },
   badge: {
     position: 'absolute',
@@ -78,9 +83,9 @@ const styles = StyleSheet.create({
     minWidth: 18,
     height: 18,
     borderRadius: 9,
-    backgroundColor: '#ff4f74',
+    backgroundColor: theme.colors.primary,
     borderWidth: 2,
-    borderColor: '#f5f6f8',
+    borderColor: theme.isDark ? theme.colors.bgLight : '#f5f6f8',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 3,
