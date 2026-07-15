@@ -1136,6 +1136,18 @@ export default function TripDetailsScreen() {
     );
   }
 
+  // Same open logic the old Functions screen had before tools moved into
+  // the bottom sheet (canOpenURL guard, then hand off to the Spotify app or
+  // browser via the https universal link).
+  async function openSpotifyLink(url: string) {
+    try {
+      const canOpen = await Linking.canOpenURL(url);
+      if (canOpen) await Linking.openURL(url);
+    } catch {
+      // Nothing sensible to do — leave the sheet/screen as is.
+    }
+  }
+
   async function handleSaveTripSpotify(value: string | null) {
     if (!trip) return;
 
@@ -1471,6 +1483,21 @@ export default function TripDetailsScreen() {
                 <FontAwesome name="spotify" size={20} color="#1cb35b" />
               </View>
               <Text style={styles.toolRowLabel}>{t('trip.tools.spotify')}</Text>
+              {/* The old Functions screen had an "open" button for a saved
+                  link that got lost when tools moved into this sheet — a
+                  saved playlist was un-openable. Row still opens the editor;
+                  this opens the link itself. */}
+              {trip?.spotifyUrl ? (
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  style={styles.toolRowSpotifyOpen}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('common.open')}
+                  onPress={() => void openSpotifyLink(trip.spotifyUrl!)}>
+                  <Ionicons name="play" size={11} color="#1cb35b" />
+                  <Text style={styles.toolRowSpotifyOpenText}>{t('common.open')}</Text>
+                </TouchableOpacity>
+              ) : null}
               <Ionicons name="chevron-forward" size={18} color="#b2b7c0" />
             </TouchableOpacity>
 
@@ -2082,6 +2109,21 @@ export default function TripDetailsScreen() {
               </View>
 
               <View style={styles.spotifySheetBody}>
+                {/* Saved link is directly openable from here too. */}
+                {trip?.spotifyUrl ? (
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    style={styles.spotifySheetOpenRow}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('common.open')}
+                    onPress={() => void openSpotifyLink(trip.spotifyUrl!)}>
+                    <FontAwesome name="spotify" size={16} color="#1cb35b" />
+                    <Text style={styles.spotifySheetOpenText} numberOfLines={1}>
+                      {trip.spotifyUrl}
+                    </Text>
+                    <Ionicons name="open-outline" size={16} color="#1cb35b" />
+                  </TouchableOpacity>
+                ) : null}
                 <Text style={styles.spotifySheetCopy}>{t('trip.spotifyPasteHint')}</Text>
                 <Animated.View style={[{ opacity: spotifyUrlOpacityRef }]}>
                   <TextInput
@@ -3403,6 +3445,37 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     letterSpacing: -0.3,
+  },
+  toolRowSpotifyOpen: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderRadius: 14,
+    backgroundColor: '#e7f8ef',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginRight: 6,
+  },
+  toolRowSpotifyOpenText: {
+    color: '#1cb35b',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  spotifySheetOpenRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: 14,
+    backgroundColor: '#e7f8ef',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 12,
+  },
+  spotifySheetOpenText: {
+    flex: 1,
+    color: '#14803c',
+    fontSize: 13,
+    fontWeight: '600',
   },
   chatBubble: {
     width: 58,
