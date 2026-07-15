@@ -24,6 +24,7 @@ import HeroShell from '@/components/hero-shell';
 import { useAuth } from '@/components/auth-provider';
 import { useI18n } from '@/components/i18n-provider';
 import { apiFetch, apiJson } from '@/lib/api';
+import { formatNights, isStay, stayNights } from '@/lib/stay';
 import { getCached, setCached, invalidateCache, invalidateTripCache } from '@/lib/cache';
 import { getCategoryLabel, getCategorySymbol } from '@/lib/category-symbol';
 import { buildGoogleMapsSearchUrl, extractLocationQuery, extractStoredMapPlace, stripLocationMarker } from '@/lib/sidequest-location';
@@ -432,7 +433,27 @@ export default function SideQuestDetailScreen() {
                   value={formatFlightRoute(flightRoute)}
                 />
               ) : null}
-              <MetaRow icon="calendar-outline" label={t('activity.date')} value={formatLongDate(activity.date)} />
+              {isStay(activity) ? (
+                <>
+                  {/* Hotel stay: the single date row becomes an explicit
+                      reservation — check-in / check-out / length. Times are
+                      shown only when set; a stay-less hotel renders exactly
+                      like any other activity via the else-branch. */}
+                  <MetaRow
+                    icon="log-in-outline"
+                    label={t('activity.checkIn')}
+                    value={activity.time ? `${formatLongDate(activity.date)} · ${activity.time}` : formatLongDate(activity.date)}
+                  />
+                  <MetaRow
+                    icon="log-out-outline"
+                    label={t('activity.checkOut')}
+                    value={activity.endTime ? `${formatLongDate(activity.endDate!)} · ${activity.endTime}` : formatLongDate(activity.endDate!)}
+                  />
+                  <MetaRow icon="bed-outline" label={t('activity.stay.lengthLabel')} value={formatNights(stayNights(activity), t)} />
+                </>
+              ) : (
+                <MetaRow icon="calendar-outline" label={t('activity.date')} value={formatLongDate(activity.date)} />
+              )}
               {activity.visibility === 'hidden' && activity.revealAt ? (
                 <MetaRow icon="sparkles-outline" label={t('activity.reveal')} value={formatReveal(activity.revealAt)} />
               ) : null}

@@ -103,6 +103,8 @@ export default function NewSideQuestScreen() {
         blurAmount: extractBlur(activity.description) ?? DEFAULT_BLUR,
         date: activity.date,
         time: activity.time ?? '',
+        endDate: activity.endDate ?? '',
+        endTime: activity.endTime ?? '',
         visibility: activity.visibility,
         revealDate: activity.revealAt ? activity.revealAt.slice(0, 10) : activity.date,
         revealTime: activity.revealAt ? formatTimeForInput(activity.revealAt) : '18:00',

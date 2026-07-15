@@ -10,6 +10,7 @@ import { useI18n } from '@/components/i18n-provider';
 import { apiJson } from '@/lib/api';
 import { getCategorySymbol } from '@/lib/category-symbol';
 import type { Quest, SideQuestActivity } from '@/lib/types';
+import { isStay, stayNightDates, stayNights } from '@/lib/stay';
 import { DEFAULT_BLUR, extractBlur, isSealedInLists } from '@/lib/activity-blur';
 import { SPACING, TYPOGRAPHY, COLORS, RADIUS, SHADOWS } from '@/constants/design-tokens';
 import { Card } from '@/components/ui/card';
@@ -414,7 +415,7 @@ export default function CalendarScreen() {
   );
 }
 
-function buildDayItemsMap(quests: Quest[], activities: SideQuestActivity[], t: (key: string) => string) {
+function buildDayItemsMap(quests: Quest[], activities: SideQuestActivity[], t: (key: string, vars?: Record<string, string | number>) => string) {
   const map = new Map<string, CalendarItem[]>();
 
   for (const quest of quests) {
@@ -479,6 +480,38 @@ function buildDayItemsMap(quests: Quest[], activities: SideQuestActivity[], t: (
       category: activity.category,
     });
     map.set(activity.date, items);
+
+    // Hotel stays also mark every covered NIGHT after check-in (check-out
+    // day is not an occupied night). Sealed stays mark nothing extra —
+    // coverage would leak the stay's length before reveal.
+    if (!sealed && isStay(activity)) {
+      const totalNights = stayNights(activity);
+      stayNightDates(activity).forEach((nightDate, i) => {
+        if (i === 0) return; // check-in day already has the main item
+        const nightItems = map.get(nightDate) ?? [];
+        nightItems.push({
+          id: `${activity.id}-night-${i + 1}`,
+          kind: 'activity',
+          tripId: activity.tripId,
+          activityId: activity.id,
+          title: activity.title ?? t('calendar.untitledPlan'),
+          date: nightDate,
+          time: null,
+          sortIndex: activity.sortIndex,
+          meta: t('activity.stay.nightOf', { n: i + 1, total: totalNights }),
+          hidden: false,
+          imageUrl: activity.imageUrl,
+          description: activity.description,
+          teaser: activity.teaser,
+          teaserVisible: activity.teaserVisible,
+          revealAt: activity.revealAt,
+          isRevealed: activity.isRevealed,
+          ownerName: activity.ownerName,
+          category: activity.category,
+        });
+        map.set(nightDate, nightItems);
+      });
+    }
   }
 
   return map;

@@ -65,6 +65,10 @@ export interface SideQuestActivity {
   title?: string | null;
   description?: string | null;
   time?: string | null;
+  // Hotel stay: check-out date/time. Null/absent = single-day activity.
+  // Withheld by the server for sealed viewers (leaks stay length).
+  endDate?: string | null;
+  endTime?: string | null;
   sortIndex: number;
   category?: string | null;
   // User-entered name for a custom category (paired with the symbol key in

@@ -42,6 +42,7 @@ import ModalSheet from '@/components/modal-sheet';
 import { EmptyState } from '@/components/ui/empty-state';
 import { useKeyboardFocusScroll } from '@/hooks/useKeyboardFocusScroll';
 import { apiFetch, apiJson } from '@/lib/api';
+import { addDaysIso, formatNights, isStay, stayNightDates, stayNights } from '@/lib/stay';
 import { getCached, setCached, invalidateCache, invalidateTripCache } from '@/lib/cache';
 import { uploadImageIfNeeded } from '@/lib/uploads';
 import { isSealedInLists } from '@/lib/activity-blur';
@@ -61,9 +62,14 @@ const chatLastReadKey = (tripId: string) => `chat_last_read_${tripId}`;
 
 // One row in the trip feed's flat drag list: day headers act as the drop
 // context that decides an activity's date; activities are the draggables.
+// Hotel stays additionally project quiet, non-draggable rows onto the days
+// they cover: a "night X of Y" row per intermediate night and a check-out
+// row on the check-out day (Concept B).
 type FeedRow =
   | { kind: 'day'; date: string }
-  | { kind: 'activity'; activity: SideQuestActivity };
+  | { kind: 'activity'; activity: SideQuestActivity }
+  | { kind: 'stayNight'; activity: SideQuestActivity; night: number; totalNights: number }
+  | { kind: 'stayCheckout'; activity: SideQuestActivity };
 
 type ChatMsg = {
   id: string;
@@ -411,10 +417,38 @@ export default function TripDetailsScreen() {
         cursor = new Date(cursor.getTime() + 24 * 60 * 60 * 1000);
       }
     }
+
+    // Hotel stays project ambient rows onto covered days. Sealed stays
+    // project NOTHING — night rows and checkout would leak the reveal
+    // (the server also withholds endDate from non-owners while sealed).
+    const nightRowsByDate = new Map<string, Extract<FeedRow, { kind: 'stayNight' }>[]>();
+    const checkoutRowsByDate = new Map<string, Extract<FeedRow, { kind: 'stayCheckout' }>[]>();
+    for (const group of activityDayGroups) {
+      for (const activity of group.items) {
+        if (!isStay(activity) || isSealedInLists(activity)) continue;
+        const totalNights = stayNights(activity);
+        const nightDates = stayNightDates(activity);
+        nightDates.forEach((nightDate, i) => {
+          dates.add(nightDate);
+          if (i === 0) return; // check-in day carries the anchor card itself
+          if (!nightRowsByDate.has(nightDate)) nightRowsByDate.set(nightDate, []);
+          nightRowsByDate.get(nightDate)!.push({ kind: 'stayNight', activity, night: i + 1, totalNights });
+        });
+        const checkoutDate = activity.endDate!.slice(0, 10);
+        dates.add(checkoutDate);
+        if (!checkoutRowsByDate.has(checkoutDate)) checkoutRowsByDate.set(checkoutDate, []);
+        checkoutRowsByDate.get(checkoutDate)!.push({ kind: 'stayCheckout', activity });
+      }
+    }
+
     const byDate = new Map(activityDayGroups.map((g) => [g.date, g.items]));
     const rows: FeedRow[] = [];
     for (const date of [...dates].sort()) {
       rows.push({ kind: 'day', date });
+      // Quiet stay context first ("night 2 of 3" / "check-out"), then the
+      // day's own draggable activities.
+      for (const nightRow of nightRowsByDate.get(date) ?? []) rows.push(nightRow);
+      for (const checkoutRow of checkoutRowsByDate.get(date) ?? []) rows.push(checkoutRow);
       for (const activity of byDate.get(date) ?? []) rows.push({ kind: 'activity', activity });
     }
     return rows;
@@ -1191,6 +1225,8 @@ export default function TripDetailsScreen() {
         if (!dayOrders.has(row.date)) dayOrders.set(row.date, []);
         continue;
       }
+      // Ambient stay rows are drop CONTEXT, never part of a day's order.
+      if (row.kind !== 'activity') continue;
       // An activity dropped above the very first header belongs to the
       // first day (there is nothing above the trip's first date).
       const date = currentDate ?? rows.find((r): r is Extract<FeedRow, { kind: 'day' }> => r.kind === 'day')?.date;
@@ -1212,6 +1248,24 @@ export default function TripDetailsScreen() {
   }
 
   async function handleMoveActivity(activity: SideQuestActivity, targetDate: string, targetDayOrder: SideQuestActivity[]) {
+    // Hotel stays move as a whole: check-out shifts by the same number of
+    // days (stay length preserved). Block the move up front when the
+    // shifted stay would poke outside the trip — the server enforces the
+    // same rule, but failing fast keeps the feed from flashing an invalid
+    // optimistic state.
+    let shiftedEndDate: string | null = null;
+    if (isStay(activity)) {
+      const deltaDays = Math.round(
+        (new Date(`${targetDate}T12:00:00`).getTime() - new Date(`${activity.date.slice(0, 10)}T12:00:00`).getTime()) / 86_400_000,
+      );
+      shiftedEndDate = addDaysIso(activity.endDate!, deltaDays);
+      const tripEnd = trip?.endDate?.slice(0, 10);
+      if (tripEnd && shiftedEndDate > tripEnd) {
+        Alert.alert(t('activity.stay.moveOutsideTripTitle'), t('activity.stay.moveOutsideTripBody'));
+        return;
+      }
+    }
+
     const orderedIds = targetDayOrder.map((a) => a.id);
     const indexById = new Map(orderedIds.map((activityId, i) => [activityId, i]));
 
@@ -1219,7 +1273,9 @@ export default function TripDetailsScreen() {
     // target day's SortIndex so the feed reflects the drop immediately.
     setActivities((prev) =>
       prev.map((a) => {
-        if (a.id === activity.id) return { ...a, date: targetDate, sortIndex: indexById.get(a.id) ?? 0 };
+        if (a.id === activity.id) {
+          return { ...a, date: targetDate, endDate: shiftedEndDate ?? a.endDate, sortIndex: indexById.get(a.id) ?? 0 };
+        }
         if (indexById.has(a.id)) return { ...a, sortIndex: indexById.get(a.id)! };
         return a;
       }),
@@ -1334,7 +1390,12 @@ export default function TripDetailsScreen() {
           {activityDayGroups.length > 0 ? (
             <DraggableDayList
               items={feedRows}
-              keyExtractor={(row) => (row.kind === 'day' ? `day-${row.date}` : row.activity.id)}
+              keyExtractor={(row) =>
+                row.kind === 'day' ? `day-${row.date}`
+                : row.kind === 'stayNight' ? `stay-night-${row.activity.id}-${row.night}`
+                : row.kind === 'stayCheckout' ? `stay-checkout-${row.activity.id}`
+                : row.activity.id
+              }
               // Reordering is a trip-wide collaborative action gated by
               // MembersCanEdit (or trip ownership) on the backend's
               // reorder/move endpoints — NOT per-activity canEdit, which is
@@ -1356,6 +1417,33 @@ export default function TripDetailsScreen() {
                         <View style={styles.dayHeaderLine} />
                       </View>
                     </View>
+                  );
+                }
+                if (row.kind === 'stayNight' || row.kind === 'stayCheckout') {
+                  const stay = row.activity;
+                  const label =
+                    row.kind === 'stayNight'
+                      ? t('activity.stay.nightOf', { n: row.night, total: row.totalNights })
+                      : stay.endTime
+                        ? t('activity.stay.checkoutAt', { time: formatActivityTimeShort(stay.endTime) ?? stay.endTime })
+                        : t('activity.stay.checkout');
+                  return (
+                    <TouchableOpacity
+                      activeOpacity={0.75}
+                      style={styles.stayRow}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${stay.title ?? ''} ${label}`.trim()}
+                      onPress={() => router.push(`/trip/${id}/sidequest/${stay.id}`)}>
+                      <Ionicons
+                        name={row.kind === 'stayNight' ? 'bed-outline' : 'log-out-outline'}
+                        size={13}
+                        color="#b45309"
+                      />
+                      <Text style={styles.stayRowTitle} numberOfLines={1}>
+                        {stay.title?.trim() || t('trip.activityFallbackTitle')}
+                      </Text>
+                      <Text style={styles.stayRowLabel}>{label}</Text>
+                    </TouchableOpacity>
                   );
                 }
                 const activity = row.activity;
@@ -1398,6 +1486,15 @@ export default function TripDetailsScreen() {
                         <Text style={styles.timelineSubtitle} numberOfLines={1}>
                           {formatActivityAuthorSubtitle(activity)}
                         </Text>
+                        {isStay(activity) ? (
+                          <View style={styles.stayBadgeRow}>
+                            <Ionicons name="bed-outline" size={11} color="#b45309" />
+                            <Text style={styles.stayBadgeText} numberOfLines={1}>
+                              {formatNights(stayNights(activity), t)} · {t('activity.stay.checkout')}{' '}
+                              {formatActivityDate(activity.endDate!, locale)}
+                            </Text>
+                          </View>
+                        ) : null}
                       </View>
                       {timeLabel ? <Text style={styles.timelineTime}>{timeLabel}</Text> : null}
                     </TouchableOpacity>
@@ -3978,6 +4075,41 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: SPACING.md,
     paddingVertical: SPACING.md,
+  },
+  // Ambient hotel-stay rows (night X of Y / check-out) — deliberately quiet:
+  // compact, muted amber, no card surface or shadow.
+  stayRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    paddingVertical: 7,
+    paddingHorizontal: 4,
+  },
+  stayRowTitle: {
+    flexShrink: 1,
+    color: '#92600a',
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: -0.2,
+  },
+  stayRowLabel: {
+    flex: 1,
+    color: '#b45309',
+    fontSize: 12,
+    fontWeight: '600',
+    opacity: 0.85,
+  },
+  // Anchor-card badge on the check-in day ("3 nätter · Utcheckning lör 8 aug").
+  stayBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+  },
+  stayBadgeText: {
+    color: '#b45309',
+    fontSize: 12,
+    fontWeight: '700',
   },
   timelineTime: {
     ...TYPOGRAPHY.meta,

@@ -33,6 +33,7 @@ import { invalidateCache } from '@/lib/cache';
 import { CATEGORY_VALUES, CUSTOM_SYMBOL_VALUES, getCategorySymbol, type ActivityCategoryValue } from '@/lib/category-symbol';
 import { fetchPlaceSuggestions, type PlaceAutocompleteSuggestion } from '@/lib/maps-api';
 import { type StoredMapPlace, withLocationMarker } from '@/lib/sidequest-location';
+import { addDaysIso, formatNights, stayNights } from '@/lib/stay';
 import { withFlightMarkers } from '@/lib/flight-route';
 import { DEFAULT_BLUR, MAX_BLUR, MIN_BLUR, withBlurMarker } from '@/lib/activity-blur';
 import type { SideQuestActivity } from '@/lib/types';
@@ -43,7 +44,7 @@ import { PRIMARY_COLOR, PRIMARY_08, PRIMARY_20, SECONDARY_COLOR } from '@/consta
 import { MOTION_TIMING, MOTION_SPRING, MOTION_TRANSLATE, MOTION_STAGGER } from '@/MOTION_CONSTANTS';
 import { useListItemStagger } from '@/hooks/useMotion';
 
-type PickerTarget = 'date' | 'time' | 'revealDate' | 'revealTime' | null;
+type PickerTarget = 'date' | 'time' | 'endDate' | 'endTime' | 'revealDate' | 'revealTime' | null;
 type MessageState = { type: 'success' | 'error'; text: string } | null;
 
 export type SideQuestFormValues = {
@@ -57,6 +58,9 @@ export type SideQuestFormValues = {
   flightTo: string;
   date: string;
   time: string;
+  // Hotel stay (check-out). Empty strings = no stay / no time.
+  endDate: string;
+  endTime: string;
   visibility: 'public' | 'hidden';
   revealDate: string;
   revealTime: string;
@@ -89,6 +93,11 @@ const COLLAPSED_CATEGORY_VALUES: ActivityCategoryValue[] = ['flight', 'food', 's
 // displayed default as-is would otherwise save an empty time (the "18:00
 // doesn't stick unless you change away and back" bug).
 const DEFAULT_ACTIVITY_TIME = '18:00';
+// Hotel-stay time suggestions (industry-standard check-in/check-out).
+// Like DEFAULT_ACTIVITY_TIME these are only committed when the user opens
+// the time picker — never silently saved.
+const DEFAULT_CHECKIN_TIME = '15:00';
+const DEFAULT_CHECKOUT_TIME = '11:00';
 
 /**
  * Strips a leading emoji + optional space from i18n strings like "✈️ Flight"
@@ -178,6 +187,9 @@ function SideQuestFormInner({
   // (e.g. trip starts the 29th but the activity landed on today's date).
   const [date, setDate] = useState(initialValues?.date ?? defaultActivityDate(tripStartDate, tripEndDate));
   const [time, setTime] = useState(initialValues?.time ?? '');
+  // Hotel stay: check-out date/time (empty = single-day, old behavior).
+  const [endDate, setEndDate] = useState(initialValues?.endDate ?? '');
+  const [endTime, setEndTime] = useState(initialValues?.endTime ?? '');
   const [visibility, setVisibility] = useState<'public' | 'hidden'>(initialValues?.visibility ?? 'public');
   const [revealDate, setRevealDate] = useState(initialValues?.revealDate ?? getDefaultDate());
   const [revealTime, setRevealTime] = useState(initialValues?.revealTime ?? '18:00');
@@ -223,14 +235,39 @@ function SideQuestFormInner({
 
   // Applies the actual state change once we know it's safe to (i.e. the
   // turn-off-while-hidden confirmation, if needed, has already been accepted).
+  // Leaving the Hotel category with stay details set must never silently
+  // carry hidden check-out metadata onto another category — confirm first,
+  // clear on confirm, keep Hotel on cancel.
+  function confirmStayClearIfNeeded(nextIsHotel: boolean, apply: () => void) {
+    if (!endDate || nextIsHotel || category !== 'hotel' || isCustomCategory) {
+      apply();
+      return;
+    }
+    Alert.alert(t('sidequest.form.stayClearTitle'), t('sidequest.form.stayClearBody'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      {
+        text: t('common.remove'),
+        style: 'destructive',
+        onPress: () => {
+          setEndDate('');
+          setEndTime('');
+          apply();
+        },
+      },
+    ]);
+  }
+
   function applySideQuestToggle(next: boolean) {
     if (next) {
-      previousCategoryRef.current = category === 'sidequest' ? null : category;
-      setCategory('sidequest');
-    } else {
-      setCategory(previousCategoryRef.current);
-      setVisibility('public');
+      confirmStayClearIfNeeded(false, () => {
+        previousCategoryRef.current = category === 'sidequest' ? null : category;
+        setCategory('sidequest');
+        setSideQuestMode(true);
+      });
+      return;
     }
+    setCategory(previousCategoryRef.current);
+    setVisibility('public');
     setSideQuestMode(next);
   }
 
@@ -457,7 +494,28 @@ function SideQuestFormInner({
         setMessage({ type: 'error', text: t('sidequest.form.dateNotInPast') });
         return;
       }
+      // A stay follows its check-in: shift check-out by the same number of
+      // days (same rule as drag-moving the stay in the feed), clamped to
+      // the trip's end. If nothing fits, the stay is dropped — visibly,
+      // since the summary row disappears.
+      if (endDate) {
+        const nights = stayNights({ date, endDate });
+        let shifted = addDaysIso(selectedDateStr, nights);
+        if (tripEndDate && shifted > tripEndDate) shifted = tripEndDate;
+        if (shifted > selectedDateStr) {
+          setEndDate(shifted);
+        } else {
+          setEndDate('');
+          setEndTime('');
+        }
+      }
       setDate(selectedDateStr);
+      setMessage(null);
+      return;
+    }
+
+    if (pickerTarget === 'endDate') {
+      setEndDate(toDateInput(selectedDate));
       setMessage(null);
       return;
     }
@@ -513,6 +571,20 @@ function SideQuestFormInner({
       return null;
     }
 
+    // Hotel stay sanity (the pickers already enforce this on native; this
+    // guard covers the web date inputs and any state drift): check-out must
+    // land after check-in and inside the trip.
+    if (category === 'hotel' && !isCustomCategory && endDate) {
+      if (endDate <= date) {
+        setMessage({ type: 'error', text: t('sidequest.form.checkoutAfterCheckin') });
+        return null;
+      }
+      if (tripEndDate && endDate > tripEndDate) {
+        setMessage({ type: 'error', text: t('sidequest.form.withinRange', { range: tripRangeText }) });
+        return null;
+      }
+    }
+
     // A hidden activity with a reveal time in the past would be revealed
     // instantly — which defeats the purpose. Activity DATE may be in the past
     // (history), but the reveal MOMENT must be in the future.
@@ -549,6 +621,9 @@ function SideQuestFormInner({
         ? withBlurMarker(descriptionWithFlight, blurAmount)
         : descriptionWithFlight;
 
+      // Stay fields only exist for the built-in hotel category; anything
+      // else always sends "no stay" so metadata can't ride along silently.
+      const isHotelStay = category === 'hotel' && !isCustomCategory && !!endDate;
       const payload = {
         title: normalizedTitle,
         description: finalDescription,
@@ -558,6 +633,9 @@ function SideQuestFormInner({
         // Empty string (not null) so PATCH correctly clears a previously-set
         // time when the user removes it on edit — see UpdateActivityDto.Time.
         time: time.trim(),
+        endDate: isHotelStay ? endDate : null,
+        // Same empty-string-clears contract as `time`.
+        endTime: isHotelStay ? endTime.trim() : '',
         visibility,
         revealAt,
         teaser: visibility === 'hidden' ? teaser.trim() || null : null,
@@ -571,6 +649,7 @@ function SideQuestFormInner({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             ...payload,
+            clearEndDate: !isHotelStay,
             clearCustomCategoryLabel: !isCustomCategory || !customLabel.trim(),
             clearRevealAt: visibility !== 'hidden',
             clearTeaser: visibility !== 'hidden' || !teaser.trim(),
@@ -666,7 +745,9 @@ function SideQuestFormInner({
         flightFrom.trim() !== initialFlightFromForDirty.trim() ||
         flightTo.trim() !== initialFlightToForDirty.trim() ||
         (visibility === 'hidden' && !!imageUrl && blurAmount !== initialBlurForDirty) ||
-        date !== initialDateForDirty
+        date !== initialDateForDirty ||
+        endDate !== (initialValues?.endDate ?? '') ||
+        endTime !== (initialValues?.endTime ?? '')
       )
     : (
         title.trim() !== '' ||
@@ -677,7 +758,8 @@ function SideQuestFormInner({
         imageUrl !== null ||
         locationQuery.trim() !== '' ||
         flightFrom.trim() !== '' ||
-        flightTo.trim() !== ''
+        flightTo.trim() !== '' ||
+        endDate !== ''
       );
 
   useEffect(() => {
@@ -691,6 +773,16 @@ function SideQuestFormInner({
       // iOS picker.
       const v = new Date(`${date}T12:00:00`);
       const min = tripStartDate && isDateInputValid(tripStartDate) ? new Date(`${tripStartDate}T12:00:00`) : undefined;
+      const max = tripEndDate && isDateInputValid(tripEndDate) ? new Date(`${tripEndDate}T12:00:00`) : undefined;
+      return clampDate(v, min, max);
+    }
+
+    if (pickerTarget === 'endDate') {
+      // Check-out: earliest the day after check-in, latest the trip's end.
+      // Same clamp-for-crash-safety as the other date targets.
+      const minIso = addDaysIso(date, 1);
+      const v = new Date(`${(endDate && isDateInputValid(endDate) ? endDate : minIso)}T12:00:00`);
+      const min = new Date(`${minIso}T12:00:00`);
       const max = tripEndDate && isDateInputValid(tripEndDate) ? new Date(`${tripEndDate}T12:00:00`) : undefined;
       return clampDate(v, min, max);
     }
@@ -720,7 +812,7 @@ function SideQuestFormInner({
       return localDateTime(getDefaultDate(), time || DEFAULT_ACTIVITY_TIME);
     }
     return localDateTime(getDefaultDate(), revealTime);
-  }, [date, pickerTarget, revealDate, revealRange.min, revealRange.max, revealTime, time, tripStartDate, tripEndDate]);
+  }, [date, endDate, pickerTarget, revealDate, revealRange.min, revealRange.max, revealTime, time, tripStartDate, tripEndDate]);
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
@@ -800,9 +892,12 @@ function SideQuestFormInner({
                   activeOpacity={0.8}
                   style={[styles.categoryChip, active && { borderColor: PRIMARY_COLOR, backgroundColor: PRIMARY_08 }]}
                   onPress={() => {
-                    setIsCustomCategory(false);
-                    setCustomLabel('');
-                    setCategory(active ? null : value);
+                    const next = active ? null : value;
+                    confirmStayClearIfNeeded(next === 'hotel', () => {
+                      setIsCustomCategory(false);
+                      setCustomLabel('');
+                      setCategory(next);
+                    });
                   }}>
                   <Ionicons
                     name={symbol.icon}
@@ -826,9 +921,12 @@ function SideQuestFormInner({
                     setCustomLabel('');
                     setCategory(null);
                   } else {
-                    setIsCustomCategory(true);
-                    // Seed a symbol so the preview has one immediately.
-                    if (!category) setCategory('other');
+                    confirmStayClearIfNeeded(false, () => {
+                      setIsCustomCategory(true);
+                      // Seed a symbol so the preview has one immediately.
+                      if (!category) setCategory('other');
+                    });
+                    return;
                   }
                 }}>
                 <Ionicons
@@ -1090,7 +1188,7 @@ function SideQuestFormInner({
                 // accepting the displayed 18:00 untouched actually saves
                 // 18:00 (onChange never fires for an unmoved wheel). Time
                 // stays optional — the clear button below resets it.
-                if (!time) setTime(DEFAULT_ACTIVITY_TIME);
+                if (!time) setTime(category === 'hotel' ? DEFAULT_CHECKIN_TIME : DEFAULT_ACTIVITY_TIME);
                 setPickerTarget('time');
               }}>
               <View style={{ flex: 1 }}>
@@ -1114,6 +1212,99 @@ function SideQuestFormInner({
           )}
         </View>
       </View>
+
+      {/* ── Hotel reservation: check-out (Concept B). Only the built-in
+          hotel category exposes the stay fields (a custom category with the
+          hotel symbol does not); the data model is category-agnostic. ── */}
+      {category === 'hotel' && !isCustomCategory && Platform.OS !== 'web' ? (
+        <View style={styles.block}>
+          <Text style={styles.label}>
+            {t('sidequest.form.checkoutLabel')} <Text style={styles.labelOptional}>{t('common.optionalSuffix')}</Text>
+          </Text>
+          <View style={styles.revealRow}>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              style={[
+                styles.selectionCard,
+                styles.revealCard,
+                pickerTarget === 'endDate' ? styles.selectionCardActive : null,
+              ]}
+              onPress={() => {
+                Keyboard.dismiss();
+                setPickerTarget('endDate');
+              }}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.selectionEyebrow}>{t('sidequest.form.checkoutDateEyebrow')}</Text>
+                <Text style={styles.selectionValue} numberOfLines={1}>
+                  {endDate ? formatLongDate(endDate, locale) : t('sidequest.form.checkoutDateEmpty')}
+                </Text>
+              </View>
+              {endDate ? (
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    setEndDate('');
+                    setEndTime('');
+                  }}>
+                  <Ionicons name="close-circle" size={22} color="#b7bcc7" />
+                </TouchableOpacity>
+              ) : (
+                <Ionicons name="calendar-outline" size={22} color="#5f6570" />
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              activeOpacity={0.85}
+              disabled={!endDate}
+              style={[
+                styles.selectionCard,
+                styles.revealCard,
+                pickerTarget === 'endTime' ? styles.selectionCardActive : null,
+                !endDate ? { opacity: 0.45 } : null,
+              ]}
+              onPress={() => {
+                Keyboard.dismiss();
+                // Same optional-time contract as the activity time: opening
+                // the wheel pre-fills the suggestion; never saved silently.
+                if (!endTime) setEndTime(DEFAULT_CHECKOUT_TIME);
+                setPickerTarget('endTime');
+              }}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.selectionEyebrow}>
+                  {t('sidequest.form.checkoutTimeEyebrow')} <Text style={styles.labelOptional}>{t('common.optionalSuffix')}</Text>
+                </Text>
+                <Text style={styles.selectionValue} numberOfLines={1}>
+                  {endTime ? formatTime(endTime) : t('sidequest.form.activityTimeEmpty')}
+                </Text>
+              </View>
+              {endTime ? (
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    setEndTime('');
+                  }}>
+                  <Ionicons name="close-circle" size={22} color="#b7bcc7" />
+                </TouchableOpacity>
+              ) : (
+                <Ionicons name="time-outline" size={22} color="#5f6570" />
+              )}
+            </TouchableOpacity>
+          </View>
+
+          {endDate ? (
+            <View style={styles.staySummaryRow}>
+              <Ionicons name="bed-outline" size={15} color="#b45309" />
+              <Text style={styles.staySummaryText}>
+                {formatNights(stayNights({ date, endDate }), t)} · {formatLongDate(date, locale)} – {formatLongDate(endDate, locale)}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+      ) : null}
 
       <View style={styles.block}>
         {sideQuestMode ? (
@@ -1308,18 +1499,20 @@ function SideQuestFormInner({
           subtitle={
             pickerTarget === 'date' ? t('sidequest.form.allowedRange', { range: tripRangeText })
               : pickerTarget === 'time' ? t('sidequest.form.chooseActivityTime')
+              : pickerTarget === 'endDate' ? t('sidequest.form.chooseCheckoutDate')
+              : pickerTarget === 'endTime' ? t('sidequest.form.chooseCheckoutTime')
               : pickerTarget === 'revealDate' ? t('sidequest.form.chooseRevealMoment')
               : t('sidequest.form.chooseRevealTime')
           }
           onClose={() => setPickerTarget(null)}>
-          {pickerTarget === 'revealTime' || pickerTarget === 'time' ? (
+          {pickerTarget === 'revealTime' || pickerTarget === 'time' || pickerTarget === 'endTime' ? (
             // Custom on-brand time wheel. Avoids the native time picker, whose
             // spinner display hard-crashes under the New Architecture (Fabric)
             // that Expo Go force-enables, and whose 'default' display looks
             // out of place inside this sheet.
             <TimeWheel
-              value={pickerTarget === 'time' ? time : revealTime}
-              onChange={pickerTarget === 'time' ? setTime : setRevealTime}
+              value={pickerTarget === 'time' ? time : pickerTarget === 'endTime' ? endTime : revealTime}
+              onChange={pickerTarget === 'time' ? setTime : pickerTarget === 'endTime' ? setEndTime : setRevealTime}
             />
           ) : pickerTarget ? (
             <DateTimePicker
@@ -1335,10 +1528,11 @@ function SideQuestFormInner({
               minimumDate={
                 pickerTarget === 'date'
                   ? tripStartDate ? new Date(`${tripStartDate}T12:00:00`) : undefined
+                  : pickerTarget === 'endDate' ? new Date(`${addDaysIso(date, 1)}T12:00:00`)
                   : pickerTarget === 'revealDate' ? new Date(`${revealRange.min}T12:00:00`) : undefined
               }
               maximumDate={
-                pickerTarget === 'date'
+                pickerTarget === 'date' || pickerTarget === 'endDate'
                   ? tripEndDate ? new Date(`${tripEndDate}T12:00:00`) : undefined
                   : pickerTarget === 'revealDate' ? new Date(`${revealRange.max}T12:00:00`) : undefined
               }
@@ -2285,6 +2479,18 @@ const styles = StyleSheet.create({
     color: '#868d99',
     fontSize: 13,
     fontWeight: '600',
+  },
+  staySummaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    marginTop: 10,
+    paddingHorizontal: 2,
+  },
+  staySummaryText: {
+    color: '#b45309',
+    fontSize: 13,
+    fontWeight: '700',
   },
   selectionCardError: {
     borderColor: '#ffb0bd',
