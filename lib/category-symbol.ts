@@ -27,6 +27,7 @@ export type ActivityCategoryValue =
   | 'drinks'
   | 'beach'
   | 'museum'
+  | 'city'
   | 'shopping'
   | 'hiking'
   | 'hotel'
@@ -72,6 +73,12 @@ const CATEGORY_SYMBOLS: Record<ActivityCategoryValue, CategorySymbol> = {
     iconColor: '#6b7280',
     backgroundColor: '#f3f4f6',
     labelKey: 'activity.category_sight',
+  },
+  city: {
+    icon: 'business',
+    iconColor: '#4f46e5',
+    backgroundColor: '#e0e7ff',
+    labelKey: 'activity.category_city',
   },
   other: {
     icon: 'star',
@@ -194,6 +201,7 @@ export const CATEGORY_VALUES: ActivityCategoryValue[] = [
   'beach',
   'hiking',
   'museum',
+  'city',
   'shopping',
   'hotel',
   'spa',
