@@ -12,3 +12,11 @@
 // connection yet (see components/gluno/gluno.constants.ts). Must stay
 // false in any build that ships to real users until that's ready.
 export const ENABLE_GLUNO_ASSISTANT = false;
+
+// IN MIGRATION — Light/Dark appearance system (constants/themes.ts,
+// components/theme-provider.tsx). While false the app is forced to Light and
+// the Appearance setting is hidden, so production never sees a partially
+// themed screen. Flip to true locally to develop/test Dark. Must stay false
+// in shipping builds until every phase of the theme migration is complete
+// and both themes have passed the full visual audit (Phase 6).
+export const ENABLE_THEME_SWITCHING = false;

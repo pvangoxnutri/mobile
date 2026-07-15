@@ -13,6 +13,8 @@ import { useAuth } from '@/components/auth-provider';
 import { useI18n, type AppLanguage } from '@/components/i18n-provider';
 import LanguagePicker from '@/components/language-picker';
 import TabHeader from '@/components/tab-header';
+import { useTheme, type ThemePreference } from '@/components/theme-provider';
+import { ENABLE_THEME_SWITCHING } from '@/constants/feature-flags';
 import { apiFetch, apiJson } from '@/lib/api';
 import { getDefaultNotificationPreferences, loadNotificationPreferences, saveNotificationPreferences, type NotificationPreferences } from '@/lib/social';
 import { disablePushNotifications, getCurrentPermissionStatus, maybeRequestPushPermission } from '@/lib/push-notifications';
@@ -43,6 +45,8 @@ export default function ProfileScreen() {
   const [editingBio, setEditingBio] = useState(false);
   const [editingPassword, setEditingPassword] = useState(false);
   const [editingLanguage, setEditingLanguage] = useState(false);
+  const [editingAppearance, setEditingAppearance] = useState(false);
+  const { preference: themePreference, setPreference: setThemePreference } = useTheme();
   const [editingNotifications, setEditingNotifications] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferences>(getDefaultNotificationPreferences());
@@ -666,6 +670,17 @@ export default function ProfileScreen() {
           { icon: 'notifications-outline', label: t('profile.notifications.title'), accent: COLORS.primary, onPress: () => { setPushTestResult(null); setEditingNotifications(true); } },
           { icon: 'lock-closed-outline', label: t('profile.accountSettings.changePassword'), accent: COLORS.secondary, onPress: () => setEditingPassword(true) },
           { icon: 'language-outline', label: t('profile.accountSettings.changeLanguage'), accent: COLORS.secondary, onPress: () => setEditingLanguage(true) },
+          // Appearance stays hidden until the theme migration is complete —
+          // see ENABLE_THEME_SWITCHING in constants/feature-flags.ts.
+          ...(ENABLE_THEME_SWITCHING
+            ? [{
+                icon: 'contrast-outline' as const,
+                label: t('profile.appearance.title'),
+                detail: themePreference === 'dark' ? t('profile.appearance.dark') : t('profile.appearance.light'),
+                accent: COLORS.secondary,
+                onPress: () => setEditingAppearance(true),
+              }]
+            : []),
           { icon: 'ban-outline', label: t('profile.blockedUsers.title'), accent: COLORS.secondary, onPress: () => { void loadBlockedUsers(); setBlockedUsersOpen(true); } },
         ]}
       />
@@ -885,6 +900,40 @@ export default function ProfileScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
+      <Modal visible={editingAppearance} transparent animationType="fade" onRequestClose={() => setEditingAppearance(false)}>
+        <View style={styles.confirmBackdrop}>
+          <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setEditingAppearance(false)} />
+          <View style={styles.confirmCard}>
+            <Text style={styles.confirmTitle}>{t('profile.appearance.title')}</Text>
+            <View style={{ marginTop: 16 }}>
+              {([
+                { value: 'light' as ThemePreference, emoji: '☀️', label: t('profile.appearance.light') },
+                { value: 'dark' as ThemePreference, emoji: '🌙', label: t('profile.appearance.dark') },
+              ]).map((option) => {
+                const active = themePreference === option.value;
+                return (
+                  <TouchableOpacity
+                    key={option.value}
+                    style={[styles.appearanceOption, active && styles.appearanceOptionActive]}
+                    activeOpacity={0.85}
+                    // Switching is instant app-wide — no save step needed.
+                    onPress={() => setThemePreference(option.value)}>
+                    <Text style={styles.appearanceEmoji}>{option.emoji}</Text>
+                    <Text style={[styles.appearanceLabel, active && styles.appearanceLabelActive]}>{option.label}</Text>
+                    {active ? <Ionicons name="checkmark-circle" size={22} color={COLORS.primary} /> : null}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <View style={styles.confirmActions}>
+              <TouchableOpacity style={styles.confirmCancel} activeOpacity={0.88} onPress={() => setEditingAppearance(false)}>
+                <Text style={styles.confirmCancelText}>{t('common.done')}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       <Modal visible={editingNotifications} transparent animationType="fade" onRequestClose={() => setEditingNotifications(false)}>
         <KeyboardAvoidingView style={styles.confirmBackdrop} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setEditingNotifications(false)} />
@@ -1022,7 +1071,7 @@ function SectionCard({
   items,
 }: {
   title: string;
-  items: { icon: keyof typeof Ionicons.glyphMap; label: string; accent: string; onPress: () => void }[];
+  items: { icon: keyof typeof Ionicons.glyphMap; label: string; detail?: string; accent: string; onPress: () => void }[];
 }) {
   return (
     <View style={styles.sectionCard}>
@@ -1035,7 +1084,10 @@ function SectionCard({
               <Ionicons name={item.icon} size={23} color={item.accent} />
               <Text style={styles.rowLabel}>{item.label}</Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color={COLORS.textMuted} />
+            <View style={styles.rowRight}>
+              {item.detail ? <Text style={styles.rowDetail}>{item.detail}</Text> : null}
+              <Ionicons name="chevron-forward" size={20} color={COLORS.textMuted} />
+            </View>
           </TouchableOpacity>
         </View>
       ))}
@@ -1442,6 +1494,45 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     fontSize: 17,
     letterSpacing: -0.4,
+  },
+  rowRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  rowDetail: {
+    color: COLORS.textMeta,
+    fontSize: 15,
+    letterSpacing: -0.2,
+  },
+  appearanceOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: COLORS.borderPrimary,
+    marginBottom: 10,
+  },
+  appearanceOptionActive: {
+    borderColor: COLORS.primary,
+    backgroundColor: COLORS.primaryLight08,
+  },
+  appearanceEmoji: {
+    fontSize: 20,
+  },
+  appearanceLabel: {
+    flex: 1,
+    color: COLORS.textPrimary,
+    fontSize: 16,
+    fontWeight: '600',
+    letterSpacing: -0.3,
+  },
+  appearanceLabelActive: {
+    color: COLORS.primary,
+    fontWeight: '800',
   },
   notificationRow: {
     minHeight: 66,
