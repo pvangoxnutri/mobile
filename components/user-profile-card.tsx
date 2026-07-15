@@ -20,6 +20,7 @@ export default function UserProfileCard({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [avatarFailed, setAvatarFailed] = useState(false);
+  const [avatarExpanded, setAvatarExpanded] = useState(false);
 
   useEffect(() => {
     if (!userId) {
@@ -28,6 +29,7 @@ export default function UserProfileCard({
 
     let active = true;
     setAvatarFailed(false);
+    setAvatarExpanded(false);
     setError('');
 
     // Show whatever's cached immediately (no spinner) — this is what makes
@@ -90,11 +92,18 @@ export default function UserProfileCard({
             <>
               <View style={styles.avatarRing}>
                 {profile.avatarUrl && profile.avatarUrl.trim() && !avatarFailed ? (
-                  <Image
-                    source={{ uri: profile.avatarUrl }}
-                    style={styles.avatar}
-                    onError={() => setAvatarFailed(true)}
-                  />
+                  // Tap to view full-size — initials fallback stays inert
+                  // (nothing meaningful to enlarge).
+                  <Pressable
+                    onPress={() => setAvatarExpanded(true)}
+                    accessibilityRole="imagebutton"
+                    accessibilityLabel={profile.name}>
+                    <Image
+                      source={{ uri: profile.avatarUrl }}
+                      style={styles.avatar}
+                      onError={() => setAvatarFailed(true)}
+                    />
+                  </Pressable>
                 ) : (
                   <View style={[styles.avatar, styles.avatarFallback]}>
                     <Text style={styles.avatarInitials}>{getInitials(profile.name)}</Text>
@@ -114,6 +123,31 @@ export default function UserProfileCard({
           ) : null}
         </View>
       </View>
+
+      {/* Full-size avatar viewer — nested Modal like the chat's fullscreen
+          image, so Android back closes the viewer first, then the card. */}
+      <Modal
+        visible={avatarExpanded}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setAvatarExpanded(false)}>
+        <Pressable style={styles.avatarViewerBackdrop} onPress={() => setAvatarExpanded(false)}>
+          {profile?.avatarUrl ? (
+            <Image
+              source={{ uri: profile.avatarUrl }}
+              style={styles.avatarViewerImage}
+              resizeMode="contain"
+            />
+          ) : null}
+          <Pressable
+            style={[styles.avatarViewerClose, { top: 54 }]}
+            onPress={() => setAvatarExpanded(false)}
+            hitSlop={10}
+            accessibilityRole="button">
+            <Ionicons name="close" size={24} color="#fff" />
+          </Pressable>
+        </Pressable>
+      </Modal>
     </Modal>
   );
 }
@@ -263,5 +297,25 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 1.2,
     textAlign: 'center',
+  },
+  avatarViewerBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.92)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarViewerImage: {
+    width: '100%',
+    height: '80%',
+  },
+  avatarViewerClose: {
+    position: 'absolute',
+    right: 18,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
