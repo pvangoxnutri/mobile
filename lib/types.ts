@@ -18,6 +18,7 @@ export interface UserProfile {
   tripsJoined: number;
   sidequestsCreated: number;
   countriesVisited: number;
+  isOnline?: boolean;
 }
 
 export interface Quest {

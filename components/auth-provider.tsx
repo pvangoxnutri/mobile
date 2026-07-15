@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, AppState, View } from 'react-native';
 import { apiFetch, API_URL } from '@/lib/api';
 import { normalizeLanguage, useI18n, type AppLanguage } from '@/components/i18n-provider';
 import { getEmailAuthRedirectUrl } from '@/lib/auth-redirect';
@@ -184,6 +184,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       subscription.unsubscribe();
     };
   }, [refreshProfile]);
+
+  // Presence heartbeat: the backend stamps LastSeenAt on every authenticated
+  // request, but a user idling on one screen makes none — so ping a no-op
+  // endpoint every 60s while the app is foregrounded. Paired with the
+  // server's 2-minute online window, one missed beat never flickers the dot.
+  useEffect(() => {
+    if (!user) return;
+
+    let interval: ReturnType<typeof setInterval> | null = null;
+
+    const beat = () => {
+      void apiFetch('/api/users/me/heartbeat', { method: 'PUT' }).catch(() => {
+        // Presence is best-effort — never surface heartbeat failures.
+      });
+    };
+
+    const start = () => {
+      if (interval) return;
+      beat();
+      interval = setInterval(beat, 60_000);
+    };
+    const stop = () => {
+      if (interval) {
+        clearInterval(interval);
+        interval = null;
+      }
+    };
+
+    if (AppState.currentState === 'active') start();
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') start();
+      else stop();
+    });
+
+    return () => {
+      stop();
+      sub.remove();
+    };
+  }, [user]);
 
   async function signIn(email: string, password: string): Promise<UserInfo | null> {
     const { error } = await supabase.auth.signInWithPassword({ email, password });

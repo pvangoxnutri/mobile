@@ -13,6 +13,7 @@ export type TripMember = {
   name: string;
   avatarUrl?: string | null;
   isOwner: boolean;
+  isOnline?: boolean;
 };
 
 export type TripWithEvent = {
@@ -186,6 +187,7 @@ export function BigHeroCard({
                     forceFallback={failedAvatars?.has(member.id)}
                     onError={() => onAvatarError?.(member.id)}
                     size={28}
+                    online={member.isOnline}
                   />
                 </View>
               ))}
@@ -374,7 +376,8 @@ const styles = StyleSheet.create({
     borderColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
+    // No overflow:hidden — Avatar clips its own image; the online dot needs
+    // to render on the circle's edge without being cut by the ring.
   },
   bigHeroSealed: {
     flexDirection: 'row',

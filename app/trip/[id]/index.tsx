@@ -145,6 +145,7 @@ type TripMember = {
   name: string;
   avatarUrl?: string | null;
   isOwner: boolean;
+  isOnline?: boolean;
 };
 
 export default function TripDetailsScreen() {
@@ -457,6 +458,12 @@ export default function TripDetailsScreen() {
   const memberAvatarMap = useMemo(() => {
     const map = new Map<string, string | null>();
     for (const m of members) map.set(m.id, m.avatarUrl ?? null);
+    return map;
+  }, [members]);
+
+  const memberOnlineMap = useMemo(() => {
+    const map = new Map<string, boolean>();
+    for (const m of members) map.set(m.id, m.isOnline ?? false);
     return map;
   }, [members]);
 
@@ -1052,6 +1059,7 @@ export default function TripDetailsScreen() {
       !prevMessage ||
       new Date(message.createdAt).getTime() - new Date(prevMessage.createdAt).getTime() >= 5 * 60 * 1000;
     const avatarUrl = message.userId ? (memberAvatarMap.get(message.userId) ?? null) : null;
+    const senderOnline = !ownMessage && !!message.userId && (memberOnlineMap.get(message.userId) ?? false);
     const imageSource = message.localImageUri ?? message.imageUrl;
     // The reacted message is lifted forward in the overlay (see the reaction
     // Modal); the in-list bubble stays put behind the blur.
@@ -1140,6 +1148,7 @@ export default function TripDetailsScreen() {
                 forceFallback={failedAvatars.has(message.userId || '')}
                 onError={() => message.userId && setFailedAvatars((prev) => new Set([...prev, message.userId!]))}
                 size={28}
+                online={senderOnline}
                 fallbackBackgroundColor="#1d212a"
                 fallbackTextColor="#fff"
               />
@@ -1684,6 +1693,7 @@ export default function TripDetailsScreen() {
                           forceFallback={failedAvatars.has(member.id)}
                           onError={() => setFailedAvatars(prev => new Set([...prev, member.id]))}
                           size={42}
+                          online={member.isOnline}
                           fallbackBackgroundColor="#1d212a"
                           fallbackTextColor="#fff"
                         />
@@ -3729,7 +3739,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#1d212a',
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
+    // No overflow:hidden — Avatar clips its own image and the online dot
+    // must be able to sit on the circle's edge.
     flexShrink: 0,
   },
   chatMessageContent: {

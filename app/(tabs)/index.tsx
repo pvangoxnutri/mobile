@@ -690,6 +690,7 @@ export default function HomeScreen() {
                         forceFallback={failedMemberAvatars.has(member.id)}
                         onError={() => setFailedMemberAvatars(prev => new Set([...prev, member.id]))}
                         size={42}
+                        online={member.isOnline}
                         fallbackBackgroundColor="#1d212a"
                         fallbackTextColor="#fff"
                       />
@@ -1011,6 +1012,7 @@ function ActivityFeedCard({
                   forceFallback={member ? failedAvatars.has(member.id) : false}
                   onError={() => member && onAvatarError(member.id)}
                   size={36}
+                  online={member?.isOnline}
                 />
               )}
             </View>
@@ -1879,7 +1881,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff1f5',
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
+    // No overflow:hidden — Avatar clips its own image and the online dot
+    // must be able to sit on the circle's edge.
   },
   activityAvatarMuted: {
     backgroundColor: '#f4f5f7',
@@ -2316,7 +2319,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#1d212a',
-    overflow: 'hidden',
+    // No overflow:hidden — Avatar clips its own image and the online dot
+    // must be able to sit on the circle's edge.
   },
   memberCopy: {
     flex: 1,

@@ -34,6 +34,10 @@ type AvatarProps = {
   // Avatar still falls back to initials internally either way.
   onError?: () => void;
   size?: number;
+  // Shows a green presence dot in the bottom-right corner. Callers pass the
+  // server-computed isOnline flag; undefined/false renders nothing so call
+  // sites without presence data are unaffected.
+  online?: boolean;
   style?: StyleProp<ViewStyle>;
   // Fallback-circle colors — call sites with their own existing dark/light
   // convention can override these instead of taking the default pink theme.
@@ -48,6 +52,7 @@ export default function Avatar({
   forceFallback,
   onError,
   size = 36,
+  online,
   style,
   fallbackBackgroundColor,
   fallbackTextColor,
@@ -63,40 +68,54 @@ export default function Avatar({
   const dimension = { width: size, height: size, borderRadius: size / 2 };
   const showImage = Boolean(uri && uri.trim()) && !failed && !forceFallback;
 
+  // The presence dot must not be clipped by the circle, so the image/fallback
+  // clips inside its own inner view while the outer container stays unclipped.
+  const dotSize = Math.max(10, Math.round(size * 0.3));
+
   return (
-    <View style={[styles.container, dimension, style]}>
-      {showImage ? (
-        <Image
-          source={{ uri: uri! }}
-          style={[styles.image, dimension]}
-          cachePolicy="memory-disk"
-          // Short enough to not feel sluggish, long enough to avoid a hard
-          // pop when the cached bitmap is already available.
-          transition={150}
-          onError={() => {
-            setFailed(true);
-            onError?.();
-          }}
+    <View style={[dimension, style]}>
+      <View style={[styles.circle, dimension]}>
+        {showImage ? (
+          <Image
+            source={{ uri: uri! }}
+            style={[styles.image, dimension]}
+            cachePolicy="memory-disk"
+            // Short enough to not feel sluggish, long enough to avoid a hard
+            // pop when the cached bitmap is already available.
+            transition={150}
+            onError={() => {
+              setFailed(true);
+              onError?.();
+            }}
+          />
+        ) : (
+          <View style={[styles.fallback, dimension, fallbackBackgroundColor ? { backgroundColor: fallbackBackgroundColor } : null]}>
+            <Text
+              style={[
+                styles.initials,
+                { fontSize: Math.max(10, size * 0.38) },
+                fallbackTextColor ? { color: fallbackTextColor } : null,
+              ]}
+              numberOfLines={1}>
+              {fallbackText ?? getInitials(name)}
+            </Text>
+          </View>
+        )}
+      </View>
+      {online ? (
+        <View
+          style={[
+            styles.onlineDot,
+            { width: dotSize, height: dotSize, borderRadius: dotSize / 2 },
+          ]}
         />
-      ) : (
-        <View style={[styles.fallback, dimension, fallbackBackgroundColor ? { backgroundColor: fallbackBackgroundColor } : null]}>
-          <Text
-            style={[
-              styles.initials,
-              { fontSize: Math.max(10, size * 0.38) },
-              fallbackTextColor ? { color: fallbackTextColor } : null,
-            ]}
-            numberOfLines={1}>
-            {fallbackText ?? getInitials(name)}
-          </Text>
-        </View>
-      )}
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  circle: {
     overflow: 'hidden',
   },
   image: {
@@ -111,5 +130,13 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
     fontWeight: '800',
     letterSpacing: -0.3,
+  },
+  onlineDot: {
+    position: 'absolute',
+    right: -1,
+    bottom: -1,
+    backgroundColor: '#22c55e',
+    borderWidth: 2,
+    borderColor: '#fff',
   },
 });

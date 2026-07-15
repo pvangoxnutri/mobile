@@ -109,6 +109,7 @@ export default function UserProfileCard({
                     <Text style={styles.avatarInitials}>{getInitials(profile.name)}</Text>
                   </View>
                 )}
+                {profile.isOnline ? <View style={styles.onlineDot} /> : null}
               </View>
 
               <Text style={styles.name}>{profile.name}</Text>
@@ -246,6 +247,19 @@ const styles = StyleSheet.create({
   },
   avatarFallback: {
     backgroundColor: '#1d212a',
+  },
+  onlineDot: {
+    position: 'absolute',
+    // Sits on the ring's lower-right diagonal (45°) rather than the corner
+    // of the bounding box, so it visually touches the circle.
+    right: 8,
+    bottom: 8,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#22c55e',
+    borderWidth: 3,
+    borderColor: '#fff',
   },
   avatarInitials: {
     color: '#fff',

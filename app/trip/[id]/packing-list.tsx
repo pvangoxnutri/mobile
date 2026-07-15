@@ -25,7 +25,7 @@ import Avatar from '@/components/avatar';
 import { apiFetch, apiJson } from '@/lib/api';
 import { COLORS } from '@/constants/design-tokens';
 
-type Member = { id: string; name: string; avatarUrl?: string | null; isOwner: boolean };
+type Member = { id: string; name: string; avatarUrl?: string | null; isOwner: boolean; isOnline?: boolean };
 
 type PackingItem = {
   id: string;
@@ -600,7 +600,7 @@ export default function PackingListScreen() {
                   style={[styles.memberPickerRow, isAssigned && styles.memberPickerRowActive]}
                   activeOpacity={0.8}
                   onPress={() => void handleAssign(member.id)}>
-                  <Avatar name={member.name} uri={member.avatarUrl} size={36} />
+                  <Avatar name={member.name} uri={member.avatarUrl} size={36} online={member.isOnline} />
                   <Text style={styles.memberPickerName}>{member.name}</Text>
                   {isAssigned ? <Ionicons name="checkmark-circle" size={20} color={COLORS.primary} /> : null}
                 </TouchableOpacity>
