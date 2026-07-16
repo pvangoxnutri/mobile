@@ -151,6 +151,16 @@ type TripMember = {
 export default function TripDetailsScreen() {
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView | null>(null);
+  // Live scroll metrics for the drag-to-reorder auto-scroll (see
+  // DraggableDayList's autoScroll prop) — refs, not state, since they update
+  // on every scroll frame.
+  const scrollYRef = useRef(0);
+  const scrollContentHeightRef = useRef(0);
+  const scrollViewportHeightRef = useRef(0);
+  // Which trip the focus effect last loaded — scroll to top only when the
+  // screen shows a NEW trip, never when returning from a detail screen
+  // (going back must land where the user left off).
+  const lastFocusedTripIdRef = useRef<string | null>(null);
   const { id, openChat: openChatParam } = useLocalSearchParams<{ id: string; openChat?: string }>();
   const { user } = useAuth();
   const { t, language } = useI18n();
@@ -261,7 +271,10 @@ export default function TripDetailsScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      scrollRef.current?.scrollTo({ x: 0, y: 0, animated: false });
+      if (lastFocusedTripIdRef.current !== id) {
+        lastFocusedTripIdRef.current = id;
+        scrollRef.current?.scrollTo({ x: 0, y: 0, animated: false });
+      }
       let active = true;
 
       async function run() {
@@ -1345,7 +1358,17 @@ export default function TripDetailsScreen() {
         <ScrollView
           ref={scrollRef}
           contentContainerStyle={[styles.content, { paddingTop: Math.max(insets.top, 18) + 4, paddingBottom: Math.max(insets.bottom, 24) + 120 }]}
-          showsVerticalScrollIndicator={false}>
+          showsVerticalScrollIndicator={false}
+          onScroll={(e) => {
+            scrollYRef.current = e.nativeEvent.contentOffset.y;
+          }}
+          scrollEventThrottle={16}
+          onContentSizeChange={(_w, h) => {
+            scrollContentHeightRef.current = h;
+          }}
+          onLayout={(e) => {
+            scrollViewportHeightRef.current = e.nativeEvent.layout.height;
+          }}>
           <View style={styles.header}>
             <TouchableOpacity style={styles.backButton} activeOpacity={0.88} onPress={() => router.back()}>
               <Ionicons name="arrow-back" size={24} color="#11131a" />
@@ -1415,6 +1438,12 @@ export default function TripDetailsScreen() {
               enabled={canManageTrip || (trip?.membersCanEdit ?? true)}
               // Day headers are drop context, never draggable themselves.
               isDraggable={(row) => row.kind === 'activity'}
+              autoScroll={{
+                scrollRef,
+                scrollYRef,
+                contentHeightRef: scrollContentHeightRef,
+                viewportHeightRef: scrollViewportHeightRef,
+              }}
               onReorder={(rows, draggedId) => handleFeedReorder(rows, draggedId)}
               renderItem={(row) => {
                 if (row.kind === 'day') {

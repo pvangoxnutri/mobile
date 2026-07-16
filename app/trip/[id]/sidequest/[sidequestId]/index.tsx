@@ -370,13 +370,15 @@ export default function SideQuestDetailScreen() {
                   />
                 </View>
                 <Text style={styles.heroTitle}>{hiddenTitle}</Text>
-                <Text style={styles.heroSubtitle}>
-                  {activity.isHiddenForViewer
-                    ? activity.teaserVisible && activity.teaser
-                      ? activity.teaser
-                      : t('activity.hidden_title')
-                    : cleanDescription || t('activity.no_description')}
-                </Text>
+                {/* No placeholder when the description is empty — an absent
+                    subtitle reads better than "No extra description yet." */}
+                {activity.isHiddenForViewer ? (
+                  <Text style={styles.heroSubtitle}>
+                    {activity.teaserVisible && activity.teaser ? activity.teaser : t('activity.hidden_title')}
+                  </Text>
+                ) : cleanDescription ? (
+                  <Text style={styles.heroSubtitle}>{cleanDescription}</Text>
+                ) : null}
               </Animated.View>
             </HeroShell>
 
@@ -390,13 +392,13 @@ export default function SideQuestDetailScreen() {
                     />
                   </View>
                   <Text style={styles.titleNoImage}>{hiddenTitle}</Text>
-                  <Text style={styles.descriptionNoImage}>
-                    {activity.isHiddenForViewer
-                      ? activity.teaserVisible && activity.teaser
-                        ? activity.teaser
-                        : t('activity.hidden_title')
-                      : cleanDescription || t('activity.no_description')}
-                  </Text>
+                  {activity.isHiddenForViewer ? (
+                    <Text style={styles.descriptionNoImage}>
+                      {activity.teaserVisible && activity.teaser ? activity.teaser : t('activity.hidden_title')}
+                    </Text>
+                  ) : cleanDescription ? (
+                    <Text style={styles.descriptionNoImage}>{cleanDescription}</Text>
+                  ) : null}
                   {activity.canEdit ? (
                     <TouchableOpacity
                       activeOpacity={0.9}
