@@ -1312,8 +1312,10 @@ export default function TripDetailsScreen() {
       if (!response.ok) throw new Error(await response.text());
       invalidateCache(`/api/trips/${id}/activities`);
     } catch {
-      // Resync with the server's actual state rather than leaving a
-      // possibly-wrong optimistic move in place.
+      // Never fail silently — a snapped-back card with no explanation reads
+      // as a broken drag. Then resync with the server's actual state rather
+      // than leaving a possibly-wrong optimistic move in place.
+      Alert.alert(t('activity.moveFailedTitle'), t('activity.moveFailedBody'));
       try {
         const fresh = await apiJson<SideQuestActivity[]>(`/api/trips/${id}/activities`);
         setActivities(fresh);
@@ -1340,8 +1342,10 @@ export default function TripDetailsScreen() {
       if (!response.ok) throw new Error(await response.text());
       invalidateCache(`/api/trips/${id}/activities`);
     } catch {
-      // Resync with the server's actual order rather than leaving a
-      // possibly-wrong optimistic order in place.
+      // Same visible failure as a cross-day move, then resync with the
+      // server's actual order rather than leaving a possibly-wrong
+      // optimistic order in place.
+      Alert.alert(t('activity.moveFailedTitle'), t('activity.moveFailedBody'));
       try {
         const fresh = await apiJson<SideQuestActivity[]>(`/api/trips/${id}/activities`);
         setActivities(fresh);

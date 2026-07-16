@@ -23,6 +23,7 @@ import { useI18n } from '@/components/i18n-provider';
 import { useKeyboardFocusScroll } from '@/hooks/useKeyboardFocusScroll';
 import Avatar from '@/components/avatar';
 import { apiFetch, apiJson } from '@/lib/api';
+import { stripNotesChecklistMarkers } from '@/lib/text-paste';
 import { COLORS } from '@/constants/design-tokens';
 
 type Member = { id: string; name: string; avatarUrl?: string | null; isOwner: boolean; isOnline?: boolean };
@@ -519,7 +520,7 @@ export default function PackingListScreen() {
                       <TextInput
                         ref={(r) => { draftRefs.current[draft.key] = r; }}
                         value={draft.text}
-                        onChangeText={(v) => updateDraft(category.id, draft.key, v)}
+                        onChangeText={(v) => updateDraft(category.id, draft.key, stripNotesChecklistMarkers(v))}
                         onFocus={() => onFocusField({ current: draftRefs.current[draft.key] })()}
                         placeholder={t('trip.packingList.addItemPlaceholder')}
                         placeholderTextColor="#b8bec8"

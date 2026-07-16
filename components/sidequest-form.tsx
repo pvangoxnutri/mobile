@@ -36,6 +36,7 @@ import { type StoredMapPlace, withLocationMarker } from '@/lib/sidequest-locatio
 import { addDaysIso, formatNights, stayNights } from '@/lib/stay';
 import { withFlightMarkers } from '@/lib/flight-route';
 import { DEFAULT_BLUR, MAX_BLUR, MIN_BLUR, withBlurMarker } from '@/lib/activity-blur';
+import { stripNotesChecklistMarkers } from '@/lib/text-paste';
 import type { SideQuestActivity } from '@/lib/types';
 import { uploadImageIfNeeded } from '@/lib/uploads';
 import { maybeRequestPushPermission } from '@/lib/push-notifications';
@@ -864,7 +865,7 @@ function SideQuestFormInner({
           value={title}
           // Slice instead of native maxLength — iOS rejects the entire paste
           // when the clipboard is longer than maxLength (e.g. from Notes).
-          onChangeText={(v) => setTitle(v.slice(0, TITLE_MAX_LENGTH))}
+          onChangeText={(v) => setTitle(stripNotesChecklistMarkers(v).slice(0, TITLE_MAX_LENGTH))}
           placeholder={t('sidequest.form.titlePlaceholder')}
           placeholderTextColor="#b7bcc7"
           style={styles.titleInput}
@@ -1076,7 +1077,7 @@ function SideQuestFormInner({
         <TextInput
           ref={descriptionRef}
           value={description}
-          onChangeText={setDescription}
+          onChangeText={(v) => setDescription(stripNotesChecklistMarkers(v))}
           placeholder={t('sidequest.form.descriptionPlaceholder')}
           placeholderTextColor="#b7bcc7"
           multiline
