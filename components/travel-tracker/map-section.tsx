@@ -10,7 +10,9 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { COUNTRIES, CONTINENT_ORDER, inContinent, type Continent, type StatusMap } from './country-data';
 import { getLocalizedContinentShortName } from './country-i18n';
 import { useI18n } from '@/components/i18n-provider';
-import { PRIMARY_COLOR } from '@/constants/colors';
+import { useTheme } from '@/components/theme-provider';
+import { useThemedStyles } from '@/hooks/use-themed-styles';
+import type { AppTheme } from '@/constants/themes';
 
 interface ContinentStats {
   continent: Continent;
@@ -30,16 +32,22 @@ interface ContinentMeta {
   icon: keyof typeof MaterialCommunityIcons.glyphMap;
   color: string;
   lightBg: string;
+  // Dark-mode variants of the SAME hue: the continent palette is the
+  // product's data-viz identity, so dark lifts each color for readability on
+  // dark surfaces (never grays it out) and swaps the pastel tile for a tinted
+  // wash of the lifted hue.
+  darkColor: string;
+  darkBg: string;
   shortName: string;
 }
 
 const CONTINENT_META: Record<Continent, ContinentMeta> = {
-  Europe:          { icon: 'castle',             color: '#7C6FE0', lightBg: '#EFEEFB', shortName: 'Europe' },
-  Asia:            { icon: 'temple-buddhist',    color: '#E47A8B', lightBg: '#FCEEF1', shortName: 'Asia' },
-  Africa:          { icon: 'tree',               color: '#D4943C', lightBg: '#FBF1DE', shortName: 'Africa' },
-  'North America': { icon: 'image-filter-hdr',   color: '#5A6472', lightBg: '#EEF0F4', shortName: 'N. America' },
-  'South America': { icon: 'palm-tree',          color: '#A57DC8', lightBg: '#F3ECF8', shortName: 'S. America' },
-  Oceania:         { icon: 'waves',              color: '#5DA9D1', lightBg: '#E6F1F8', shortName: 'Oceania' },
+  Europe:          { icon: 'castle',             color: '#7C6FE0', lightBg: '#EFEEFB', darkColor: '#978cea', darkBg: 'rgba(151,140,234,0.16)', shortName: 'Europe' },
+  Asia:            { icon: 'temple-buddhist',    color: '#E47A8B', lightBg: '#FCEEF1', darkColor: '#ee92a1', darkBg: 'rgba(238,146,161,0.16)', shortName: 'Asia' },
+  Africa:          { icon: 'tree',               color: '#D4943C', lightBg: '#FBF1DE', darkColor: '#e0a851', darkBg: 'rgba(224,168,81,0.16)', shortName: 'Africa' },
+  'North America': { icon: 'image-filter-hdr',   color: '#5A6472', lightBg: '#EEF0F4', darkColor: '#8f99a8', darkBg: 'rgba(143,153,168,0.16)', shortName: 'N. America' },
+  'South America': { icon: 'palm-tree',          color: '#A57DC8', lightBg: '#F3ECF8', darkColor: '#b795d6', darkBg: 'rgba(183,149,214,0.16)', shortName: 'S. America' },
+  Oceania:         { icon: 'waves',              color: '#5DA9D1', lightBg: '#E6F1F8', darkColor: '#74bde2', darkBg: 'rgba(116,189,226,0.16)', shortName: 'Oceania' },
 };
 
 function buildStats(statusMap: StatusMap): ContinentStats[] {
@@ -56,6 +64,8 @@ function buildStats(statusMap: StatusMap): ContinentStats[] {
 
 export default function WorldOverview({ statusMap, onContinentPress, activeContinentFilter }: WorldOverviewProps) {
   const { width } = useWindowDimensions();
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const stats = buildStats(statusMap);
   const cardWidth = (width - 40 - 2 * 10) / 3; // 3 columns, 20px side padding, 10px gaps — ~30% smaller than the old 2-column layout
 
@@ -65,6 +75,9 @@ export default function WorldOverview({ statusMap, onContinentPress, activeConti
     <View style={styles.grid}>
       {stats.map((s) => {
         const meta = CONTINENT_META[s.continent];
+        // Same hue in both themes — dark just lifts it for readability.
+        const continentColor = theme.isDark ? meta.darkColor : meta.color;
+        const tileBg = theme.isDark ? meta.darkBg : meta.lightBg;
         const isActive = activeContinentFilter === s.continent;
         const hasVisited = s.visited > 0 || s.living;
         const progressPct = Math.round(((s.visited + s.planned) / s.total) * 100);
@@ -75,7 +88,7 @@ export default function WorldOverview({ statusMap, onContinentPress, activeConti
             style={[
               styles.card,
               { width: cardWidth },
-              isActive && { borderColor: meta.color, borderWidth: 2 },
+              isActive && { borderColor: continentColor, borderWidth: 2 },
             ]}
             activeOpacity={0.85}
             onPress={() => onContinentPress(isActive ? null : s.continent)}>
@@ -85,19 +98,19 @@ export default function WorldOverview({ statusMap, onContinentPress, activeConti
               <MaterialCommunityIcons
                 name={meta.icon}
                 size={90}
-                color={meta.color}
+                color={continentColor}
                 style={{ opacity: 0.10 }}
               />
             </View>
 
             {/* Foreground icon tile + checkmark badge */}
             <View style={styles.iconTileWrap}>
-              <View style={[styles.iconTile, { backgroundColor: meta.lightBg }]}>
-                <MaterialCommunityIcons name={meta.icon} size={18} color={meta.color} />
+              <View style={[styles.iconTile, { backgroundColor: tileBg }]}>
+                <MaterialCommunityIcons name={meta.icon} size={18} color={continentColor} />
               </View>
               {hasVisited ? (
                 <View style={styles.checkBadge}>
-                  <Ionicons name="checkmark" size={8} color="#fff" />
+                  <Ionicons name="checkmark" size={8} color={theme.colors.white} />
                 </View>
               ) : null}
             </View>
@@ -107,7 +120,7 @@ export default function WorldOverview({ statusMap, onContinentPress, activeConti
 
             {/* Stats row */}
             <View style={styles.statsRow}>
-              <Text style={[styles.statsValue, hasVisited && { color: PRIMARY_COLOR }]}>
+              <Text style={[styles.statsValue, hasVisited && { color: theme.colors.primary }]}>
                 {s.visited}
               </Text>
               <Text style={styles.statsOf}> of {s.total}</Text>
@@ -119,7 +132,7 @@ export default function WorldOverview({ statusMap, onContinentPress, activeConti
                 <View
                   style={[
                     styles.trackFill,
-                    { width: `${progressPct}%`, backgroundColor: PRIMARY_COLOR },
+                    { width: `${progressPct}%`, backgroundColor: theme.colors.primary },
                   ]}
                 />
               ) : null}
@@ -131,7 +144,7 @@ export default function WorldOverview({ statusMap, onContinentPress, activeConti
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -140,8 +153,11 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#ECE7DD',
-    backgroundColor: '#fff',
+    // Light keeps the warm parchment-tinted border of this screen; dark uses
+    // the standard hairline ring, with Android elevation zeroed (dark
+    // separates via surface contrast, not gray shadow boxes).
+    borderColor: theme.isDark ? theme.colors.borderPrimary : '#ECE7DD',
+    backgroundColor: theme.colors.surface,
     paddingHorizontal: 11,
     paddingTop: 11,
     paddingBottom: 10,
@@ -151,7 +167,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.05,
     shadowRadius: 12,
-    elevation: 3,
+    elevation: theme.isDark ? 0 : 3,
   },
   watermark: {
     position: 'absolute',
@@ -177,16 +193,17 @@ const styles = StyleSheet.create({
     width: 13,
     height: 13,
     borderRadius: 7,
-    backgroundColor: PRIMARY_COLOR,
+    backgroundColor: theme.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: '#fff',
+    // The ring cuts the badge out of the card surface it sits on.
+    borderColor: theme.isDark ? theme.colors.surface : '#fff',
   },
   cardName: {
     fontSize: 12,
     fontWeight: '800',
-    color: '#141720',
+    color: theme.isDark ? theme.colors.textPrimary : '#141720',
     letterSpacing: -0.3,
     marginBottom: 3,
   },
@@ -198,18 +215,20 @@ const styles = StyleSheet.create({
   statsValue: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#141720',
+    color: theme.isDark ? theme.colors.textPrimary : '#141720',
     letterSpacing: -0.2,
   },
   statsOf: {
     fontSize: 10,
-    color: '#8A909D',
+    color: theme.isDark ? theme.colors.textMeta : '#8A909D',
     fontWeight: '500',
   },
   track: {
     height: 2,
     borderRadius: 1,
-    backgroundColor: '#ECE7DD',
+    // Progress track: warm parchment tint in light, standard subtle fill in
+    // dark — the pink fill provides the signal in both.
+    backgroundColor: theme.isDark ? theme.colors.bgLight : '#ECE7DD',
     overflow: 'hidden',
   },
   trackFill: {

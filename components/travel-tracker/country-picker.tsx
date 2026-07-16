@@ -30,7 +30,9 @@ import {
   getLocalizedCountryName,
 } from './country-i18n';
 import { useI18n } from '@/components/i18n-provider';
-import { PRIMARY_COLOR, SECONDARY_COLOR, SECONDARY_08, SECONDARY_12, SECONDARY_20 } from '@/constants/colors';
+import { useTheme } from '@/components/theme-provider';
+import { useThemedStyles } from '@/hooks/use-themed-styles';
+import type { AppTheme } from '@/constants/themes';
 
 interface CountryPickerProps {
   value: string[];
@@ -40,6 +42,8 @@ interface CountryPickerProps {
 
 export default function CountryPicker({ value, onChange, label = 'Countries' }: CountryPickerProps) {
   const { language } = useI18n();
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const insets = useSafeAreaInsets();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -82,22 +86,24 @@ export default function CountryPicker({ value, onChange, label = 'Countries' }: 
   return (
     <>
       {/* â”€â”€ Trigger â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-      <TouchableOpacity style={[styles.trigger, { borderColor: '#E4E7EE' }]} activeOpacity={0.8} onPress={() => setOpen(true)}>
+      <TouchableOpacity style={[styles.trigger, { borderColor: theme.isDark ? theme.colors.borderInput : '#E4E7EE' }]} activeOpacity={0.8} onPress={() => setOpen(true)}>
         <View style={styles.triggerLeft}>
-          <Ionicons name="earth-outline" size={18} color={SECONDARY_COLOR} style={styles.triggerIcon} />
-          <Text style={[styles.triggerLabel, { color: SECONDARY_COLOR }]}>{label}</Text>
+          <Ionicons name="earth-outline" size={18} color={theme.colors.secondary} style={styles.triggerIcon} />
+          <Text style={[styles.triggerLabel, { color: theme.colors.secondary }]}>{label}</Text>
         </View>
-        <Ionicons name="chevron-forward" size={18} color="#B2B7C0" />
+        <Ionicons name="chevron-forward" size={18} color={theme.isDark ? theme.colors.textMuted : '#B2B7C0'} />
       </TouchableOpacity>
 
       {/* â”€â”€ Selected chips â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {selectedCountries.length > 0 ? (
         <View style={styles.chips}>
           {selectedCountries.map((c) => (
-            <TouchableOpacity key={c.code} style={[styles.chip, { backgroundColor: SECONDARY_12, borderColor: SECONDARY_20 }]} activeOpacity={0.75} onPress={() => toggle(c.code)}>
+            // Teal stays the chips' semantic hue in both themes — dark uses
+            // washes of the lifted dark secondary (#22aec7), as elsewhere.
+            <TouchableOpacity key={c.code} style={[styles.chip, { backgroundColor: theme.isDark ? 'rgba(34,174,199,0.16)' : 'rgba(13, 144, 168, 0.12)', borderColor: theme.isDark ? 'rgba(34,174,199,0.3)' : 'rgba(13, 144, 168, 0.20)' }]} activeOpacity={0.75} onPress={() => toggle(c.code)}>
               <Text style={styles.chipFlag}>{getCountryFlag(c)}</Text>
-              <Text style={[styles.chipName, { color: SECONDARY_COLOR }]} numberOfLines={1}>{getLocalizedCountryName(c, language)}</Text>
-              <Ionicons name="close" size={13} color={SECONDARY_COLOR} />
+              <Text style={[styles.chipName, { color: theme.colors.secondary }]} numberOfLines={1}>{getLocalizedCountryName(c, language)}</Text>
+              <Ionicons name="close" size={13} color={theme.colors.secondary} />
             </TouchableOpacity>
           ))}
         </View>
@@ -110,31 +116,32 @@ export default function CountryPicker({ value, onChange, label = 'Countries' }: 
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Select countries</Text>
             <TouchableOpacity onPress={() => { setOpen(false); setSearch(''); }} hitSlop={12}>
-              <Ionicons name="checkmark-circle" size={28} color={PRIMARY_COLOR} />
+              <Ionicons name="checkmark-circle" size={28} color={theme.colors.primary} />
             </TouchableOpacity>
           </View>
 
           {/* Selected count */}
           {value.length > 0 ? (
-            <View style={[styles.countBanner, { backgroundColor: SECONDARY_08 }]}>
-              <Text style={[styles.countBannerText, { color: SECONDARY_COLOR }]}>
+            <View style={[styles.countBanner, { backgroundColor: theme.isDark ? 'rgba(34,174,199,0.12)' : 'rgba(13, 144, 168, 0.08)' }]}>
+              <Text style={[styles.countBannerText, { color: theme.colors.secondary }]}>
                 {value.length} {value.length === 1 ? 'country' : 'countries'} selected
               </Text>
               <TouchableOpacity onPress={() => onChange([])} hitSlop={8}>
-                <Text style={[styles.clearAll, { color: SECONDARY_COLOR }]}>Clear all</Text>
+                <Text style={[styles.clearAll, { color: theme.colors.secondary }]}>Clear all</Text>
               </TouchableOpacity>
             </View>
           ) : null}
 
           {/* Search */}
           <View style={styles.searchWrap}>
-            <Ionicons name="search-outline" size={17} color="#9AA2AE" />
+            <Ionicons name="search-outline" size={17} color={theme.isDark ? theme.colors.textMeta : '#9AA2AE'} />
             <TextInput
               style={styles.searchInput}
               value={search}
               onChangeText={setSearch}
               placeholder="Search countries..."
-              placeholderTextColor="#B0B7C3"
+              placeholderTextColor={theme.isDark ? theme.colors.placeholderText : '#B0B7C3'}
+              keyboardAppearance={theme.keyboardAppearance}
               autoCapitalize="none"
               autoCorrect={false}
               returnKeyType="search"
@@ -142,7 +149,7 @@ export default function CountryPicker({ value, onChange, label = 'Countries' }: 
             />
             {search.length > 0 ? (
               <TouchableOpacity onPress={() => setSearch('')} hitSlop={8}>
-                <Ionicons name="close-circle" size={17} color="#B0B7C3" />
+                <Ionicons name="close-circle" size={17} color={theme.isDark ? theme.colors.textMuted : '#B0B7C3'} />
               </TouchableOpacity>
             ) : null}
           </View>
@@ -163,11 +170,11 @@ export default function CountryPicker({ value, onChange, label = 'Countries' }: 
                 <TouchableOpacity style={styles.row} activeOpacity={0.7} onPress={() => toggle(country.code)}>
                   <Text style={styles.rowFlag}>{getCountryFlag(country)}</Text>
                   <View style={styles.rowText}>
-                    <Text style={[styles.rowName, selected && { color: PRIMARY_COLOR, fontWeight: '700' }]}>{getLocalizedCountryName(country, language)}</Text>
+                    <Text style={[styles.rowName, selected && { color: theme.colors.primary, fontWeight: '700' }]}>{getLocalizedCountryName(country, language)}</Text>
                     <Text style={styles.rowContinent}>{getLocalizedContinentName(country.continent, language)}</Text>
                   </View>
-                  <View style={[styles.checkbox, selected && { backgroundColor: PRIMARY_COLOR, borderColor: PRIMARY_COLOR }]}>
-                    {selected ? <Ionicons name="checkmark" size={14} color="#fff" /> : null}
+                  <View style={[styles.checkbox, selected && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }]}>
+                    {selected ? <Ionicons name="checkmark" size={14} color={theme.colors.white} /> : null}
                   </View>
                 </TouchableOpacity>
               );
@@ -179,7 +186,7 @@ export default function CountryPicker({ value, onChange, label = 'Countries' }: 
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   trigger: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -188,7 +195,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingHorizontal: 14,
     height: 50,
-    backgroundColor: '#FAFBFC',
+    backgroundColor: theme.isDark ? theme.colors.bgLightest : '#FAFBFC',
   },
   triggerLeft: {
     flexDirection: 'row',
@@ -219,7 +226,8 @@ const styles = StyleSheet.create({
   chipName: { fontSize: 13, fontWeight: '600', maxWidth: 120 },
   modal: {
     flex: 1,
-    backgroundColor: '#fff',
+    // Sheet/modal surface — light literal equals surfaceElevated exactly.
+    backgroundColor: theme.colors.surfaceElevated,
     paddingHorizontal: 20,
   },
   modalHeader: {
@@ -231,7 +239,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 22,
     fontWeight: '900',
-    color: '#141720',
+    color: theme.isDark ? theme.colors.textPrimary : '#141720',
     letterSpacing: -0.8,
   },
   countBanner: {
@@ -251,8 +259,9 @@ const styles = StyleSheet.create({
     gap: 10,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E2E5EE',
-    backgroundColor: '#F7F8FA',
+    // Light literal equals the borderInput token exactly.
+    borderColor: theme.colors.borderInput,
+    backgroundColor: theme.isDark ? theme.colors.bgLight : '#F7F8FA',
     paddingHorizontal: 13,
     height: 46,
     marginBottom: 12,
@@ -260,11 +269,11 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 15,
-    color: '#1B1E28',
+    color: theme.isDark ? theme.colors.textPrimary : '#1B1E28',
   },
   divider: {
     height: 1,
-    backgroundColor: '#F3F5F9',
+    backgroundColor: theme.isDark ? theme.colors.borderPrimary : '#F3F5F9',
     marginLeft: 56,
   },
   row: {
@@ -275,14 +284,14 @@ const styles = StyleSheet.create({
   },
   rowFlag: { fontSize: 24, width: 32, textAlign: 'center' },
   rowText: { flex: 1 },
-  rowName: { fontSize: 16, color: '#1B1E28', fontWeight: '500' },
-  rowContinent: { fontSize: 12, color: '#9AA2AE', marginTop: 1 },
+  rowName: { fontSize: 16, color: theme.isDark ? theme.colors.textPrimary : '#1B1E28', fontWeight: '500' },
+  rowContinent: { fontSize: 12, color: theme.isDark ? theme.colors.textMeta : '#9AA2AE', marginTop: 1 },
   checkbox: {
     width: 24,
     height: 24,
     borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: '#D8DCE6',
+    borderColor: theme.isDark ? theme.colors.borderInput : '#D8DCE6',
     alignItems: 'center',
     justifyContent: 'center',
   },

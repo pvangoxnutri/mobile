@@ -1,7 +1,14 @@
 import { StyleSheet, Text, View } from 'react-native';
+import { useTheme } from '@/components/theme-provider';
 
 type BrandMarkProps = {
   size?: 'sm' | 'md' | 'lg';
+  // The wordmark is a BRAND ASSET, not themed text: ink (#111217) on light
+  // surfaces, white on dark ones — never gray, never tinted. 'adaptive' is
+  // for hosts whose surface follows the theme (the tab header pill);
+  // screens with a fixed light surface (splash, auth heroes) keep the
+  // default ink in both themes until their surfaces are themed.
+  tone?: 'ink' | 'adaptive';
 };
 
 // lineHeight is set explicitly to iOS's natural value (≈ fontSize × 1.175)
@@ -39,12 +46,14 @@ const SIZE_MAP = {
   },
 } as const;
 
-export default function BrandMark({ size = 'md' }: BrandMarkProps) {
+export default function BrandMark({ size = 'md', tone = 'ink' }: BrandMarkProps) {
   const config = SIZE_MAP[size];
+  const { theme } = useTheme();
+  const wordmarkColor = tone === 'adaptive' && theme.isDark ? '#ffffff' : '#111217';
 
   return (
     <View style={styles.row}>
-      <Text style={[styles.text, { fontSize: config.fontSize, lineHeight: config.lineHeight, letterSpacing: config.letterSpacing }]}>SideQuest</Text>
+      <Text style={[styles.text, { color: wordmarkColor, fontSize: config.fontSize, lineHeight: config.lineHeight, letterSpacing: config.letterSpacing }]}>SideQuest</Text>
       <View
         style={{
           width: config.dot,

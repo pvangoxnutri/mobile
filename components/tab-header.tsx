@@ -43,7 +43,7 @@ export default function TabHeader({
   return (
     <>
       <View style={styles.topRow}>
-        <BrandMark size="sm" />
+        <BrandMark size="sm" tone="adaptive" />
         <View style={styles.rightCluster}>
           <GlunoButton onPress={() => setGlunoOpen(true)} />
           <Animated.View style={bellAnimatedStyle}>

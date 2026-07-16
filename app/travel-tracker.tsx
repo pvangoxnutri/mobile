@@ -31,7 +31,9 @@ import {
 import { useKeyboardFocusScroll } from '@/hooks/useKeyboardFocusScroll';
 import { apiJson } from '@/lib/api';
 import type { Quest } from '@/lib/types';
-import { PRIMARY_COLOR, PRIMARY_12, SECONDARY_COLOR, SECONDARY_12 } from '@/constants/colors';
+import { useTheme } from '@/components/theme-provider';
+import { useThemedStyles } from '@/hooks/use-themed-styles';
+import type { AppTheme } from '@/constants/themes';
 
 type Filter = 'all' | 'visited' | 'planned' | 'living';
 
@@ -48,6 +50,8 @@ const FILTER_LABEL_KEY: Record<Filter, string> = {
 
 export default function TravelTrackerScreen() {
   const { t } = useI18n();
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
   const searchInputRef = useRef<TextInput>(null);
@@ -202,7 +206,7 @@ export default function TravelTrackerScreen() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
       <ScrollView
         ref={scrollRef}
-        style={[styles.screen, { backgroundColor: '#F7F3EC' }]}
+        style={styles.screen}
         contentContainerStyle={[
           styles.content,
           { paddingTop: Math.max(insets.top, 16) + 8, paddingBottom: Math.max(insets.bottom, 20) + 112 },
@@ -212,7 +216,7 @@ export default function TravelTrackerScreen() {
 
         {/* Back navigation */}
         <TouchableOpacity style={styles.backRow} activeOpacity={0.7} onPress={() => router.back()}>
-          <Ionicons name="chevron-back" size={22} color="#1B1E28" />
+          <Ionicons name="chevron-back" size={22} color={theme.isDark ? theme.colors.textPrimary : '#1B1E28'} />
           <Text style={styles.backText}>{t('profile.title')}</Text>
         </TouchableOpacity>
 
@@ -245,7 +249,7 @@ export default function TravelTrackerScreen() {
           </View>
 
           <TouchableOpacity style={styles.addButton} activeOpacity={0.85} onPress={handleAddPress}>
-            <Ionicons name="add" size={18} color="#fff" />
+            <Ionicons name="add" size={18} color={theme.colors.white} />
             <Text style={styles.addButtonText}>{t('common.add')}</Text>
           </TouchableOpacity>
         </View>
@@ -270,11 +274,11 @@ export default function TravelTrackerScreen() {
                   <TouchableOpacity
                     style={[
                       styles.filterChip,
-                      isActive && { backgroundColor: PRIMARY_COLOR, borderColor: PRIMARY_COLOR },
+                      isActive && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
                     ]}
                     activeOpacity={0.8}
                     onPress={() => pressFilter(f)}>
-                    <Text style={[styles.filterChipText, isActive && { color: '#fff' }]}>
+                    <Text style={[styles.filterChipText, isActive && { color: theme.colors.white }]}>
                       {t(FILTER_LABEL_KEY[f])}
                     </Text>
                   </TouchableOpacity>
@@ -284,14 +288,15 @@ export default function TravelTrackerScreen() {
           </View>
 
           <View style={styles.searchWrap}>
-            <Ionicons name="search-outline" size={18} color="#9AA2AE" />
+            <Ionicons name="search-outline" size={18} color={theme.isDark ? theme.colors.textMeta : '#9AA2AE'} />
             <TextInput
               ref={searchInputRef}
               style={styles.searchInput}
               value={search}
               onChangeText={setSearch}
               placeholder={t('travel.search_countries')}
-              placeholderTextColor="#B0B7C3"
+              placeholderTextColor={theme.isDark ? theme.colors.placeholderText : '#B0B7C3'}
+              keyboardAppearance={theme.keyboardAppearance}
               autoCapitalize="none"
               autoCorrect={false}
               onFocus={onFocusField(searchInputRef)}
@@ -300,7 +305,7 @@ export default function TravelTrackerScreen() {
             />
             {search.length > 0 ? (
               <TouchableOpacity onPress={() => setSearch('')} hitSlop={8}>
-                <Ionicons name="close-circle" size={18} color="#B0B7C3" />
+                <Ionicons name="close-circle" size={18} color={theme.isDark ? theme.colors.textMuted : '#B0B7C3'} />
               </TouchableOpacity>
             ) : null}
           </View>
@@ -308,7 +313,7 @@ export default function TravelTrackerScreen() {
           <View style={styles.countryList}>
             {filtered.length === 0 ? (
               <View style={styles.emptyState}>
-                <Ionicons name="globe-outline" size={40} color="#9AA2AE" style={{ marginBottom: 10 }} />
+                <Ionicons name="globe-outline" size={40} color={theme.isDark ? theme.colors.textMeta : '#9AA2AE'} style={{ marginBottom: 10 }} />
                 <Text style={styles.emptyText}>{t('travel.noCountriesMatch')}</Text>
               </View>
             ) : (
@@ -326,7 +331,7 @@ export default function TravelTrackerScreen() {
                         <Text style={styles.countryName} numberOfLines={1}>{entry.name}</Text>
                         {fromTrip ? (
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                            <Ionicons name="airplane" size={11} color="#9AA2AE" />
+                            <Ionicons name="airplane" size={11} color={theme.isDark ? theme.colors.textMeta : '#9AA2AE'} />
                             <Text style={styles.fromTripLabel}>{t('travel.fromTrip')}</Text>
                           </View>
                         ) : null}
@@ -334,7 +339,7 @@ export default function TravelTrackerScreen() {
                       {entry.status !== 'none' ? (
                         <StatusBadge status={entry.status} />
                       ) : (
-                        <Ionicons name="chevron-forward" size={18} color="#C8CDD8" />
+                        <Ionicons name="chevron-forward" size={18} color={theme.isDark ? theme.colors.textMuted : '#C8CDD8'} />
                       )}
                     </TouchableOpacity>
                   </View>
@@ -359,11 +364,23 @@ export default function TravelTrackerScreen() {
 
 function StatusBadge({ status }: { status: CountryStatus }) {
   const { t } = useI18n();
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
+  // Status hues are semantic identity — visited stays brand pink, planned
+  // stays teal, living stays amber. Dark swaps each wash/ink for a readable
+  // variant of the SAME hue (matching the teal/amber treatments used across
+  // the migrated trip screens) — never grayed out.
   const config: Record<CountryStatus, { bg: string; color: string } | null> = {
     none:    null,
-    visited: { bg: PRIMARY_12,  color: PRIMARY_COLOR },
-    planned: { bg: SECONDARY_12, color: SECONDARY_COLOR },
-    living:  { bg: '#FEF3C7', color: '#D97706' },
+    visited: { bg: theme.colors.primaryLight12, color: theme.colors.primary },
+    planned: {
+      bg: theme.isDark ? 'rgba(34,174,199,0.16)' : 'rgba(13, 144, 168, 0.12)',
+      color: theme.colors.secondary,
+    },
+    living:  {
+      bg: theme.isDark ? 'rgba(232,164,74,0.16)' : '#FEF3C7',
+      color: theme.isDark ? '#e8a44a' : '#D97706',
+    },
   };
   const labelKey: Record<CountryStatus, string> = {
     none: '',
@@ -380,8 +397,10 @@ function StatusBadge({ status }: { status: CountryStatus }) {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1 },
+const createStyles = (theme: AppTheme) => StyleSheet.create({
+  // Light keeps the screen's signature warm parchment page; dark uses the
+  // standard app page background (warm cream doesn't translate to dark).
+  screen: { flex: 1, backgroundColor: theme.isDark ? theme.colors.bgPrimary : '#F7F3EC' },
   content: {
     flexGrow: 1,
     paddingHorizontal: 20,
@@ -398,7 +417,7 @@ const styles = StyleSheet.create({
   },
   backText: {
     fontSize: 16,
-    color: '#1B1E28',
+    color: theme.isDark ? theme.colors.textPrimary : '#1B1E28',
     fontWeight: '500',
     marginLeft: 2,
   },
@@ -407,33 +426,37 @@ const styles = StyleSheet.create({
   eyebrow: {
     fontSize: 12,
     fontWeight: '800',
-    color: PRIMARY_COLOR,
+    color: theme.colors.primary,
     letterSpacing: 2.2,
     marginBottom: 8,
   },
   bigTitle: {
     fontSize: 44,
     fontWeight: '900',
-    color: '#141720',
+    color: theme.isDark ? theme.colors.textPrimary : '#141720',
     lineHeight: 50,
     letterSpacing: -1.4,
     marginBottom: 22,
   },
 
-  // Dark hero card
+  // Dark hero card. Light keeps its exact pre-theming ink surface; on dark
+  // it becomes an elevated surface with a hairline ring (Android elevation
+  // zeroed — dark separates via surface contrast, not muddy gray shadows).
   heroCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1B1E28',
+    backgroundColor: theme.isDark ? theme.colors.surfaceElevated : '#1B1E28',
     borderRadius: 24,
     paddingHorizontal: 22,
     paddingVertical: 20,
     marginBottom: 30,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.18,
+    shadowOpacity: theme.isDark ? 0.3 : 0.18,
     shadowRadius: 18,
-    elevation: 8,
+    elevation: theme.isDark ? 0 : 8,
+    borderWidth: theme.isDark ? StyleSheet.hairlineWidth : 0,
+    borderColor: theme.colors.borderPrimary,
     overflow: 'hidden',
   },
   heroStat: {
@@ -442,7 +465,9 @@ const styles = StyleSheet.create({
   heroStatLabel: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#9AA2AE',
+    // Light: exact pre-theming muted gray on the ink card. Dark: textMeta
+    // keeps the eyebrow one step dimmer than the unit text below it.
+    color: theme.isDark ? theme.colors.textMeta : '#9AA2AE',
     letterSpacing: 1.0,
     marginBottom: 6,
   },
@@ -454,25 +479,27 @@ const styles = StyleSheet.create({
   heroStatBig: {
     fontSize: 30,
     fontWeight: '900',
-    color: '#fff',
+    // White stat numbers read on the ink card (light) and on the elevated
+    // dark surface alike.
+    color: theme.colors.white,
     letterSpacing: -1.2,
   },
   heroStatSmall: {
     fontSize: 12,
-    color: '#C8CDD8',
+    color: theme.isDark ? theme.colors.textSecondary : '#C8CDD8',
     fontWeight: '500',
   },
   heroDivider: {
     width: 1,
     height: 38,
-    backgroundColor: '#2E323D',
+    backgroundColor: theme.isDark ? theme.colors.borderPrimary : '#2E323D',
     marginHorizontal: 16,
   },
   addButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: PRIMARY_COLOR,
+    backgroundColor: theme.colors.primary,
     borderRadius: 22,
     paddingHorizontal: 14,
     paddingVertical: 9,
@@ -481,7 +508,8 @@ const styles = StyleSheet.create({
   addButtonText: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#fff',
+    // White on the pink button in both themes.
+    color: theme.colors.white,
     letterSpacing: -0.2,
   },
 
@@ -489,7 +517,7 @@ const styles = StyleSheet.create({
   sectionEyebrow: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#9AA2AE',
+    color: theme.isDark ? theme.colors.textMeta : '#9AA2AE',
     letterSpacing: 2,
     marginBottom: 14,
   },
@@ -504,15 +532,16 @@ const styles = StyleSheet.create({
   filterChip: {
     borderRadius: 20,
     borderWidth: 1.5,
-    borderColor: '#E2E5EE',
-    backgroundColor: '#fff',
+    // Light literal equals the borderInput token exactly.
+    borderColor: theme.colors.borderInput,
+    backgroundColor: theme.colors.surface,
     paddingHorizontal: 16,
     paddingVertical: 8,
   },
   filterChipText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#6B7280',
+    color: theme.isDark ? theme.colors.textSecondary : '#6B7280',
   },
 
   // Search
@@ -521,8 +550,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#E2E5EE',
-    backgroundColor: '#fff',
+    // Light literal equals the borderInput token exactly.
+    borderColor: theme.colors.borderInput,
+    backgroundColor: theme.colors.surface,
     paddingHorizontal: 14,
     height: 48,
     gap: 10,
@@ -531,30 +561,31 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.03,
     shadowRadius: 8,
-    elevation: 2,
+    // Dark: the input border already defines the field — no gray elevation box.
+    elevation: theme.isDark ? 0 : 2,
   },
   searchInput: {
     flex: 1,
     fontSize: 15,
-    color: '#1B1E28',
+    color: theme.isDark ? theme.colors.textPrimary : '#1B1E28',
   },
 
   // Country list
   countryList: {
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: '#ECEEF3',
-    backgroundColor: '#fff',
+    borderColor: theme.isDark ? theme.colors.borderPrimary : '#ECEEF3',
+    backgroundColor: theme.colors.surface,
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.04,
     shadowRadius: 14,
-    elevation: 4,
+    elevation: theme.isDark ? 0 : 4,
   },
   rowDivider: {
     height: 1,
-    backgroundColor: '#F3F5F9',
+    backgroundColor: theme.isDark ? theme.colors.borderPrimary : '#F3F5F9',
     marginLeft: 58,
   },
   countryRow: {
@@ -572,13 +603,13 @@ const styles = StyleSheet.create({
   countryNameWrap: { flex: 1 },
   countryName: {
     fontSize: 16,
-    color: '#1B1E28',
+    color: theme.isDark ? theme.colors.textPrimary : '#1B1E28',
     fontWeight: '500',
     letterSpacing: -0.2,
   },
   fromTripLabel: {
     fontSize: 11,
-    color: '#9AA2AE',
+    color: theme.isDark ? theme.colors.textMeta : '#9AA2AE',
     fontWeight: '600',
     marginTop: 1,
   },
@@ -601,7 +632,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 15,
-    color: '#9AA2AE',
+    color: theme.isDark ? theme.colors.textMeta : '#9AA2AE',
     fontWeight: '500',
   },
 });
