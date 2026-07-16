@@ -3,7 +3,8 @@ import { router } from 'expo-router';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import Avatar from '@/components/avatar';
-import { PRIMARY_COLOR } from '@/constants/colors';
+import { useThemedStyles } from '@/hooks/use-themed-styles';
+import type { AppTheme } from '@/constants/themes';
 import type { Quest } from '@/lib/types';
 
 // ── Public types ────────────────────────────────────────────────────────────
@@ -97,6 +98,7 @@ export function BigHeroCard({
   onPress,
   hideEnterButton = false,
 }: BigHeroCardProps) {
+  const styles = useThemedStyles(createStyles);
   const quest = trip.quest;
   const isOngoing = trip.isOngoing;
   const dayInfo = getTripDayInfo(quest.startDate, quest.endDate, now);
@@ -214,17 +216,18 @@ export function BigHeroCard({
   );
 }
 
-const styles = StyleSheet.create({
+// Everything painted ON the photo — the black gradient stack, the rgba
+// pills, white text with scrims, the white Enter pill and the white avatar
+// ring — is INTENTIONAL image-overlay styling, identical in both themes so
+// photos stay vibrant and text stays readable regardless of appearance. Only
+// the card shadow and the semantic LIVE-dot green go through the theme.
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   bigHeroCard: {
     borderRadius: 32,
     overflow: 'hidden',
     backgroundColor: '#2a2a2a',
     position: 'relative',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 14 },
-    shadowOpacity: 0.18,
-    shadowRadius: 24,
-    elevation: 10,
+    ...theme.shadows.strong,
   },
   bigHeroImage: {
     ...StyleSheet.absoluteFillObject,
@@ -304,7 +307,7 @@ const styles = StyleSheet.create({
   bigHeroLiveDot: {
     width: 8, height: 8,
     borderRadius: 4,
-    backgroundColor: '#3ddc8c',
+    backgroundColor: theme.colors.success,
   },
   bigHeroLiveText: {
     color: '#fff',

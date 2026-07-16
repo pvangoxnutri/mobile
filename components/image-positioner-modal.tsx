@@ -202,6 +202,11 @@ export function ImagePositionerModal({
   );
 }
 
+// THEME EXEMPTION (deliberate): this is a full-screen image-editing surface —
+// like the iOS Photos crop tool it is dark in BOTH themes. Every color below
+// is an on-image overlay (dim scrim, white controls readable on any photo,
+// white confirm pill); a light-mode surface behind a dimmed photo would
+// wreck crop contrast. Do not migrate these to surface/text tokens.
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#080a12' },
   cancelBtn: {

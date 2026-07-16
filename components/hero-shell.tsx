@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
 import { Image, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { useThemedStyles } from '@/hooks/use-themed-styles';
+import type { AppTheme } from '@/constants/themes';
 
 // HeroShell — shared visual primitive for every cover/hero image in the app.
 // Responsibilities (and ONLY these):
@@ -33,6 +35,7 @@ type Props = {
 };
 
 export default function HeroShell({ imageUrl, fallback, imageBlurRadius, style, children }: Props) {
+  const styles = useThemedStyles(createStyles);
   return (
     <View style={[styles.shell, style]}>
       {imageUrl ? (
@@ -68,17 +71,18 @@ export default function HeroShell({ imageUrl, fallback, imageBlurRadius, style, 
   );
 }
 
-const styles = StyleSheet.create({
+// The shell is an image surface: the loading placeholder (#2a2a2a), the dark
+// hero fallback (#3a2c26) and the stacked black gradient layers are
+// INTENTIONAL image-world constants — identical in both themes so photos and
+// the content on them stay untouched. Only the card's drop shadow is themed
+// (dark elevates through contrast, not Android elevation).
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   shell: {
     borderRadius: 32,
     overflow: 'hidden',
     backgroundColor: '#2a2a2a',
     position: 'relative',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 14 },
-    shadowOpacity: 0.18,
-    shadowRadius: 24,
-    elevation: 10,
+    ...theme.shadows.strong,
   },
   image: {
     ...StyleSheet.absoluteFillObject,

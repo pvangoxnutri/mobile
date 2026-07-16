@@ -22,7 +22,7 @@ import { Dimensions, StyleSheet, View, type ScrollView } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring, runOnJS } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { PRIMARY_COLOR } from '@/constants/colors';
+import { useTheme } from '@/components/theme-provider';
 
 const LONG_PRESS_DURATION_MS = 350;
 
@@ -59,6 +59,7 @@ type DraggableDayListProps<T> = {
 };
 
 export default function DraggableDayList<T>({ items, keyExtractor, renderItem, onReorder, enabled, isDraggable, autoScroll }: DraggableDayListProps<T>) {
+  const { theme } = useTheme();
   // Measured top offset + height of every row, straight from onLayout's
   // layout.y/height relative to this list. Using the real measured y (not a
   // sum of heights) keeps the slot math exact even when rows have margins
@@ -219,7 +220,9 @@ export default function DraggableDayList<T>({ items, keyExtractor, renderItem, o
 
   return (
     <View style={styles.container}>
-      {dropLineY !== null ? <View pointerEvents="none" style={[styles.dropLine, { top: dropLineY - 1 }]} /> : null}
+      {dropLineY !== null ? (
+        <View pointerEvents="none" style={[styles.dropLine, { top: dropLineY - 1, backgroundColor: theme.colors.primary }]} />
+      ) : null}
       {items.map((item) => {
         const id = keyExtractor(item);
         return (
@@ -328,7 +331,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 3,
-    backgroundColor: PRIMARY_COLOR,
+    // backgroundColor set inline from theme.colors.primary.
     borderRadius: 1.5,
     zIndex: 30,
   },
