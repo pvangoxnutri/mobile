@@ -150,6 +150,21 @@ type TripMember = {
   isOnline?: boolean;
 };
 
+// Hotel-reservation surface palette — the ONLY place stay visuals get their
+// colors, so the dark-theme migration (phase 3) can swap this object for
+// semantic theme tokens in one move instead of hunting literals. Light-mode
+// values are a quiet amber family: a reservation embedded in the itinerary,
+// not a second card and never a success-green.
+const STAY_COLORS = {
+  accentBar: '#d97706',
+  anchorSurface: '#fdf6ec',
+  ambientSurface: '#fdfaf3',
+  textStrong: '#92600a',
+  textMuted: '#b45309',
+  pillBackground: '#ffffff',
+  pillBorder: 'rgba(217,119,6,0.35)',
+} as const;
+
 export default function TripDetailsScreen() {
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView | null>(null);
@@ -1527,10 +1542,11 @@ export default function TripDetailsScreen() {
                       accessibilityRole="button"
                       accessibilityLabel={`${stay.title ?? ''} ${label}`.trim()}
                       onPress={() => router.push(`/trip/${id}/sidequest/${stay.id}`)}>
+                      <View style={styles.stayAccentBarSlim} />
                       <Ionicons
                         name={row.kind === 'stayNight' ? 'bed-outline' : 'log-out-outline'}
                         size={13}
-                        color="#b45309"
+                        color={STAY_COLORS.textMuted}
                       />
                       <Text style={styles.stayRowTitle} numberOfLines={1}>
                         {stay.title?.trim() || t('trip.activityFallbackTitle')}
@@ -1559,12 +1575,14 @@ export default function TripDetailsScreen() {
                     );
                   }
 
+                  const stayCard = isStay(activity);
                   return (
                     <TouchableOpacity
                       key={activity.id}
                       activeOpacity={0.86}
-                      style={styles.timelineRow}
+                      style={[styles.timelineRow, stayCard ? styles.stayAnchorSurface : null]}
                       onPress={() => router.push(`/trip/${id}/sidequest/${activity.id}`)}>
+                      {stayCard ? <View style={styles.stayAccentBar} /> : null}
                       <View style={styles.timelineIconWrap}>
                         {activity.imageUrl ? (
                           <Image source={{ uri: activity.imageUrl }} style={styles.timelineIcon} />
@@ -1573,18 +1591,29 @@ export default function TripDetailsScreen() {
                         )}
                       </View>
                       <View style={styles.timelineBody}>
-                        <Text style={styles.timelineTitle} numberOfLines={1}>
-                          {activity.title?.trim() || t('trip.activityFallbackTitle')}
-                        </Text>
+                        {stayCard ? (
+                          <View style={styles.stayTitleRow}>
+                            <Text style={[styles.timelineTitle, styles.stayTitleShrink]} numberOfLines={1}>
+                              {activity.title?.trim() || t('trip.activityFallbackTitle')}
+                            </Text>
+                            <View style={styles.stayNightsPill}>
+                              <Text style={styles.stayNightsPillText}>{formatNights(stayNights(activity), t)}</Text>
+                            </View>
+                          </View>
+                        ) : (
+                          <Text style={styles.timelineTitle} numberOfLines={1}>
+                            {activity.title?.trim() || t('trip.activityFallbackTitle')}
+                          </Text>
+                        )}
                         <Text style={styles.timelineSubtitle} numberOfLines={1}>
                           {formatActivityAuthorSubtitle(activity)}
                         </Text>
-                        {isStay(activity) ? (
+                        {stayCard ? (
                           <View style={styles.stayBadgeRow}>
-                            <Ionicons name="bed-outline" size={11} color="#b45309" />
+                            <Ionicons name="moon-outline" size={11} color={STAY_COLORS.textMuted} />
                             <Text style={styles.stayBadgeText} numberOfLines={1}>
-                              {formatNights(stayNights(activity), t)} · {t('activity.stay.checkout')}{' '}
-                              {formatActivityDate(activity.endDate!, locale)}
+                              {t('activity.checkIn')} {formatActivityDate(activity.date, locale)} ·{' '}
+                              {t('activity.checkOut')} {formatActivityDate(activity.endDate!, locale)}
                             </Text>
                           </View>
                         ) : null}
@@ -4171,30 +4200,85 @@ const styles = StyleSheet.create({
     gap: SPACING.md,
     paddingVertical: SPACING.md,
   },
-  // Ambient hotel-stay rows (night X of Y / check-out) — deliberately quiet:
-  // compact, muted amber, no card surface or shadow.
+  // ── Hotel-reservation surface family ─────────────────────────────────────
+  // One visual identity chains the whole stay through the feed: the anchor
+  // card on the check-in day, the "night X of Y" rows, and the check-out row
+  // all share the amber wash + left accent bar (colors live in STAY_COLORS).
+  // Quiet by design — elevation through tint, never shadow.
+  stayAnchorSurface: {
+    backgroundColor: STAY_COLORS.anchorSurface,
+    borderRadius: RADIUS.sm,
+    paddingHorizontal: SPACING.md,
+    marginVertical: 2,
+  },
+  stayAccentBar: {
+    position: 'absolute',
+    left: 0,
+    top: 10,
+    bottom: 10,
+    width: 3,
+    borderRadius: 2,
+    backgroundColor: STAY_COLORS.accentBar,
+  },
+  stayTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  stayTitleShrink: {
+    flexShrink: 1,
+  },
+  stayNightsPill: {
+    backgroundColor: STAY_COLORS.pillBackground,
+    borderWidth: 1,
+    borderColor: STAY_COLORS.pillBorder,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  stayNightsPillText: {
+    color: STAY_COLORS.textMuted,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: -0.1,
+  },
+  // Ambient continuation rows (night X of Y / check-out): the same family,
+  // one shade lighter and compact — non-draggable context, not cards.
   stayRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 7,
-    paddingVertical: 7,
-    paddingHorizontal: 4,
+    paddingVertical: 8,
+    paddingLeft: 12,
+    paddingRight: 10,
+    backgroundColor: STAY_COLORS.ambientSurface,
+    borderRadius: RADIUS.xs,
+    marginVertical: 2,
+  },
+  stayAccentBarSlim: {
+    position: 'absolute',
+    left: 0,
+    top: 7,
+    bottom: 7,
+    width: 3,
+    borderRadius: 2,
+    backgroundColor: STAY_COLORS.accentBar,
   },
   stayRowTitle: {
     flexShrink: 1,
-    color: '#92600a',
+    color: STAY_COLORS.textStrong,
     fontSize: 13,
     fontWeight: '700',
     letterSpacing: -0.2,
   },
   stayRowLabel: {
     flex: 1,
-    color: '#b45309',
+    color: STAY_COLORS.textMuted,
     fontSize: 12,
     fontWeight: '600',
     opacity: 0.85,
   },
-  // Anchor-card badge on the check-in day ("3 nätter · Utcheckning lör 8 aug").
+  // Anchor-card reservation line ("Incheckning 5 aug · Utcheckning 7 aug").
   stayBadgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -4202,7 +4286,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   stayBadgeText: {
-    color: '#b45309',
+    color: STAY_COLORS.textMuted,
     fontSize: 12,
     fontWeight: '700',
   },
