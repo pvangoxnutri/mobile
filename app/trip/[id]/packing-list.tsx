@@ -554,7 +554,12 @@ export default function PackingListScreen() {
                         onChangeText={(v) => {
                           const parts = splitPastedChecklistItems(v);
                           if (parts.length > 1) {
-                            // List paste → one item per row, draft cleared.
+                            // List paste → one item per row. Clear the field
+                            // natively right away: the draft state never held
+                            // the pasted text, so a state update alone would
+                            // not re-render the leftovers away.
+                            draftRefs.current[draft.key]?.clear();
+                            updateDraft(category.id, draft.key, '');
                             void addPastedItems(category.id, draft.key, parts);
                           } else {
                             // Ordinary typing (or a single pasted row): keep

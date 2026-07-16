@@ -9,11 +9,14 @@ export function stripNotesChecklistMarkers(text: string): string {
   if (!text.includes('- [') && !text.includes('-[')) return text;
   return (
     text
+      .replace(/\r\n?/g, '\n')
       .replace(/(^|\n)\s*-\s*\[[xX]\]\s*/g, '$1✓ ')
       .replace(/(^|\n)\s*-\s*\[\s?\]\s*/g, '$1• ')
       // Mid-line markers → item separator (flattened multi-line paste).
-      .replace(/\s+-\s*\[[xX]\]\s*/g, ' · ✓ ')
-      .replace(/\s+-\s*\[\s?\]\s*/g, ' · ')
+      // No required whitespace before the dash: single-line inputs can
+      // concatenate pasted lines with nothing in between ("Test 1- [ ] ...").
+      .replace(/\s*-\s*\[[xX]\]\s*/g, ' · ✓ ')
+      .replace(/\s*-\s*\[\s?\]\s*/g, ' · ')
   );
 }
 
