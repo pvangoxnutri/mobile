@@ -155,6 +155,12 @@ type TripMember = {
 // semantic theme tokens in one move instead of hunting literals. Light-mode
 // values are a quiet amber family: a reservation embedded in the itinerary,
 // not a second card and never a success-green.
+// Reservation-line variant under comparison — flip to preview the other:
+//   'A': "5–7 aug · 2 nätter"            (date range)
+//   'B': "Utcheckning 7 aug · 2 nätter"  (check-out only)
+// Delete the loser (and this comment) once the choice is made.
+const STAY_META_VARIANT: 'A' | 'B' = 'A';
+
 const STAY_COLORS = {
   accentBar: '#d97706',
   anchorSurface: '#fdf6ec',
@@ -1612,8 +1618,9 @@ export default function TripDetailsScreen() {
                           <View style={styles.stayBadgeRow}>
                             <Ionicons name="moon-outline" size={11} color={STAY_COLORS.textMuted} />
                             <Text style={styles.stayBadgeText} numberOfLines={1}>
-                              {t('activity.checkIn')} {formatActivityDate(activity.date, locale)} ·{' '}
-                              {t('activity.checkOut')} {formatActivityDate(activity.endDate!, locale)}
+                              {STAY_META_VARIANT === 'A'
+                                ? `${formatStayDateRange(activity.date, activity.endDate!, locale)} · ${formatNights(stayNights(activity), t)}`
+                                : `${t('activity.checkOut')} ${formatStayDayMonth(activity.endDate!, locale)} · ${formatNights(stayNights(activity), t)}`}
                             </Text>
                           </View>
                         ) : null}
@@ -2617,6 +2624,30 @@ function formatTripDateRange(startDate: string | undefined, endDate: string | un
 
 function formatActivityDate(date: string, locale: string) {
   return new Intl.DateTimeFormat(locale, { weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(`${date}T12:00:00`));
+}
+
+// Compact date pieces for the hotel reservation line. Swedish Intl short
+// months carry a trailing period ("aug.") that reads noisy in a tight range,
+// so it's trimmed — matching the approved mock ("5–7 aug").
+function formatStayMonthShort(d: Date, locale: string) {
+  return new Intl.DateTimeFormat(locale, { month: 'short' }).format(d).replace(/\.$/, '');
+}
+
+function formatStayDayMonth(dateIso: string, locale: string) {
+  const d = new Date(`${dateIso.slice(0, 10)}T12:00:00`);
+  const month = formatStayMonthShort(d, locale);
+  return locale.startsWith('sv') ? `${d.getDate()} ${month}` : `${month} ${d.getDate()}`;
+}
+
+function formatStayDateRange(startIso: string, endIso: string, locale: string) {
+  const start = new Date(`${startIso.slice(0, 10)}T12:00:00`);
+  const end = new Date(`${endIso.slice(0, 10)}T12:00:00`);
+  const sameMonth = start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear();
+  if (sameMonth) {
+    // "5–7 aug" / "5–7 Aug" — day-first in both languages per the mock.
+    return `${start.getDate()}–${end.getDate()} ${formatStayMonthShort(end, locale)}`;
+  }
+  return `${formatStayDayMonth(startIso, locale)} – ${formatStayDayMonth(endIso, locale)}`;
 }
 
 function formatDayHeaderDate(dateIso: string, locale: string) {
@@ -4211,11 +4242,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     marginVertical: 2,
   },
+  // The accent is the connector: identical x-position, width, radius and
+  // vertical inset on EVERY stay row (anchor, nights, check-out), so the eye
+  // chains them into one reservation across day groups — Apple
+  // Calendar/Flighty rhythm, without a literal line through the feed.
   stayAccentBar: {
     position: 'absolute',
     left: 0,
-    top: 10,
-    bottom: 10,
+    top: 8,
+    bottom: 8,
     width: 3,
     borderRadius: 2,
     backgroundColor: STAY_COLORS.accentBar,
@@ -4249,17 +4284,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 7,
     paddingVertical: 8,
-    paddingLeft: 12,
+    // Same left inset as the anchor surface (SPACING.md) so text starts at
+    // the same x throughout the reservation family.
+    paddingLeft: SPACING.md,
     paddingRight: 10,
     backgroundColor: STAY_COLORS.ambientSurface,
-    borderRadius: RADIUS.xs,
+    borderRadius: RADIUS.sm,
     marginVertical: 2,
   },
   stayAccentBarSlim: {
     position: 'absolute',
     left: 0,
-    top: 7,
-    bottom: 7,
+    top: 8,
+    bottom: 8,
     width: 3,
     borderRadius: 2,
     backgroundColor: STAY_COLORS.accentBar,
