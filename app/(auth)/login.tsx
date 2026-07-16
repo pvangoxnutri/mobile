@@ -20,10 +20,14 @@ import { useI18n, type AppLanguage } from '@/components/i18n-provider';
 import LanguagePicker from '@/components/language-picker';
 import PasswordStrengthMeter from '@/components/password-strength-meter';
 import { supabase } from '@/lib/supabase';
-import { PRIMARY_COLOR } from '@/constants/colors';
+import { useTheme } from '@/components/theme-provider';
+import { useThemedStyles } from '@/hooks/use-themed-styles';
+import type { AppTheme } from '@/constants/themes';
 import { useKeyboardFocusScroll } from '@/hooks/useKeyboardFocusScroll';
 
 export default function LoginScreen() {
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const { signIn, signUp } = useAuth();
   const { language, setLanguage, t } = useI18n();
   const insets = useSafeAreaInsets();
@@ -153,7 +157,7 @@ export default function LoginScreen() {
         showsVerticalScrollIndicator={false}
         {...scrollViewProps}>
       <View style={styles.hero}>
-        <BrandMark size="md" />
+        <BrandMark size="md" tone="adaptive" />
         <Text style={styles.tagline}>{t('auth.tagline')}</Text>
       </View>
 
@@ -175,6 +179,7 @@ export default function LoginScreen() {
           <View style={styles.fieldBlock}>
             <Text style={styles.fieldLabel}>{t('auth.full_name')}</Text>
             <TextInput
+              keyboardAppearance={theme.keyboardAppearance}
               ref={nameRef}
               style={styles.input}
               placeholder={t('auth.full_name_placeholder')}
@@ -189,6 +194,7 @@ export default function LoginScreen() {
         <View style={styles.fieldBlock}>
           <Text style={styles.fieldLabel}>{t('auth.email')}</Text>
           <TextInput
+            keyboardAppearance={theme.keyboardAppearance}
             ref={emailRef}
             style={styles.input}
             placeholder={t('auth.email_placeholder')}
@@ -204,6 +210,7 @@ export default function LoginScreen() {
         <View style={styles.fieldBlock}>
           <Text style={styles.fieldLabel}>{t('auth.password')}</Text>
           <TextInput
+            keyboardAppearance={theme.keyboardAppearance}
             ref={passwordRef}
             style={styles.input}
             placeholder={mode === 'signin' ? t('auth.password_signin_placeholder') : t('auth.password_signup_placeholder')}
@@ -229,6 +236,7 @@ export default function LoginScreen() {
           <View style={styles.fieldBlock}>
             <Text style={styles.fieldLabel}>{t('auth.password_confirm')}</Text>
             <TextInput
+              keyboardAppearance={theme.keyboardAppearance}
               ref={confirmPasswordRef}
               style={styles.input}
               placeholder={t('auth.password_confirm_placeholder')}
@@ -283,7 +291,7 @@ export default function LoginScreen() {
         <Pressable
           style={[
             styles.primaryButton,
-            { backgroundColor: PRIMARY_COLOR },
+            { backgroundColor: theme.colors.primary },
             busy || (mode === 'signup' && (cooldownSeconds > 0 || name.trim() === '' || password === '' || confirmPassword === '' || password !== confirmPassword || !termsAccepted))
               ? styles.primaryButtonDisabled
               : null,
@@ -295,7 +303,7 @@ export default function LoginScreen() {
 
         {mode === 'signin' ? (
           <Pressable style={styles.secondaryButton} onPress={() => router.push('/forgot-password')}>
-            <Text style={[styles.forgotButtonText, { color: PRIMARY_COLOR }]}>{t('auth.forgot_password')}</Text>
+            <Text style={[styles.forgotButtonText, { color: theme.colors.primary }]}>{t('auth.forgot_password')}</Text>
           </Pressable>
         ) : null}
 
@@ -331,10 +339,10 @@ function isRateLimitError(message: string) {
   return normalized.includes('rate limit') || normalized.includes('too many requests') || normalized.includes('email rate limit');
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#fffaf8',
+    backgroundColor: theme.isDark ? theme.colors.bgPrimary : '#fffaf8',
   },
   backgroundGlowTop: {
     position: 'absolute',
@@ -343,7 +351,7 @@ const styles = StyleSheet.create({
     width: 320,
     height: 320,
     borderRadius: 160,
-    backgroundColor: 'rgba(255, 109, 123, 0.14)',
+    backgroundColor: theme.isDark ? 'rgba(255,79,116,0.12)' : 'rgba(255, 109, 123, 0.14)',
   },
   backgroundGlowBottom: {
     position: 'absolute',
@@ -352,7 +360,7 @@ const styles = StyleSheet.create({
     width: 280,
     height: 280,
     borderRadius: 140,
-    backgroundColor: 'rgba(13, 144, 168, 0.10)',
+    backgroundColor: theme.isDark ? 'rgba(34,174,199,0.10)' : 'rgba(13, 144, 168, 0.10)',
   },
   scrollContent: {
     // No flexGrow/justifyContent:center here — those stretch the content
@@ -372,15 +380,15 @@ const styles = StyleSheet.create({
   tagline: {
     marginTop: 14,
     textAlign: 'center',
-    color: '#7f8694',
+    color: theme.isDark ? theme.colors.textMeta : '#7f8694',
     fontSize: 16,
     lineHeight: 24,
   },
   card: {
     borderRadius: 28,
-    backgroundColor: 'rgba(255,255,255,0.96)',
+    backgroundColor: theme.colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: '#efe5e8',
+    borderColor: theme.isDark ? theme.colors.borderPrimary : '#efe5e8',
     padding: 22,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 12 },
@@ -391,12 +399,12 @@ const styles = StyleSheet.create({
   heading: {
     fontSize: 24,
     fontWeight: '800',
-    color: '#14161d',
+    color: theme.isDark ? theme.colors.textPrimary : '#14161d',
     letterSpacing: -0.7,
     marginBottom: 10,
   },
   formIntro: {
-    color: '#7d8491',
+    color: theme.isDark ? theme.colors.textMeta : '#7d8491',
     fontSize: 14,
     lineHeight: 21,
     marginBottom: 16,
@@ -405,7 +413,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   fieldLabel: {
-    color: '#4b515d',
+    color: theme.isDark ? theme.colors.textSecondary : '#4b515d',
     fontSize: 13,
     fontWeight: '800',
     letterSpacing: 0.3,
@@ -415,19 +423,19 @@ const styles = StyleSheet.create({
     height: 52,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#eadfe3',
-    backgroundColor: '#fffdfd',
+    borderColor: theme.isDark ? theme.colors.borderInput : '#eadfe3',
+    backgroundColor: theme.isDark ? theme.colors.bgLightest : '#fffdfd',
     paddingHorizontal: 16,
     fontSize: 16,
-    color: '#14161d',
+    color: theme.isDark ? theme.colors.textPrimary : '#14161d',
   },
   error: {
-    color: '#d53d18',
+    color: theme.colors.error,
     marginBottom: 10,
     lineHeight: 20,
   },
   success: {
-    color: '#16734d',
+    color: theme.isDark ? theme.colors.success : '#16734d',
     marginBottom: 10,
     lineHeight: 20,
   },
@@ -436,7 +444,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#ff4f74',
+    backgroundColor: theme.colors.primary,
   },
   primaryButtonDisabled: {
     opacity: 0.62,
@@ -447,7 +455,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   cooldownText: {
-    color: '#8e5563',
+    color: theme.isDark ? theme.colors.textSecondary : '#8e5563',
     marginBottom: 10,
     lineHeight: 20,
   },
@@ -458,12 +466,12 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   secondaryButtonText: {
-    color: '#6c7280',
+    color: theme.isDark ? theme.colors.textSecondary : '#6c7280',
     fontSize: 14,
     fontWeight: '600',
   },
   forgotButtonText: {
-    color: '#ff4f74',
+    color: theme.colors.primary,
     fontSize: 14,
     fontWeight: '700',
   },
@@ -478,7 +486,7 @@ const styles = StyleSheet.create({
     height: 22,
     borderRadius: 6,
     borderWidth: 2,
-    borderColor: '#d0d4dd',
+    borderColor: theme.isDark ? theme.colors.borderInput : '#d0d4dd',
     backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
@@ -486,12 +494,12 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   checkboxChecked: {
-    borderColor: PRIMARY_COLOR,
-    backgroundColor: PRIMARY_COLOR,
+    borderColor: theme.colors.primary,
+    backgroundColor: theme.colors.primary,
   },
   checkboxLabel: {
     flex: 1,
-    color: '#4b515d',
+    color: theme.isDark ? theme.colors.textSecondary : '#4b515d',
     fontSize: 13,
     lineHeight: 20,
   },
@@ -501,12 +509,12 @@ const styles = StyleSheet.create({
   },
   legalConsentText: {
     textAlign: 'center',
-    color: '#8a909b',
+    color: theme.isDark ? theme.colors.textMeta : '#8a909b',
     fontSize: 12,
     lineHeight: 18,
   },
   legalLink: {
-    color: '#20222a',
+    color: theme.isDark ? theme.colors.textPrimary : '#20222a',
     textDecorationLine: 'underline',
   },
 });

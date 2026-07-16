@@ -4,11 +4,15 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useAuth } from '@/components/auth-provider';
 import { supabase } from '@/lib/supabase';
-import { PRIMARY_COLOR } from '@/constants/colors';
+import { useTheme } from '@/components/theme-provider';
+import { useThemedStyles } from '@/hooks/use-themed-styles';
+import type { AppTheme } from '@/constants/themes';
 
 const CALLBACK_TIMEOUT_MS = 10000;
 
 export default function AuthCallbackScreen() {
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const { refreshProfile } = useAuth();
   const [timedOut, setTimedOut] = useState(false);
 
@@ -71,7 +75,7 @@ export default function AuthCallbackScreen() {
 
   return (
     <View style={styles.screen}>
-      <ActivityIndicator size="large" color={PRIMARY_COLOR} />
+      <ActivityIndicator size="large" color={theme.colors.primary} />
     </View>
   );
 }
@@ -94,15 +98,15 @@ function readAuthParams(url: string | null) {
   return params;
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   screen: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: theme.colors.bgPrimary,
   },
   timeoutText: {
-    color: '#666b76',
+    color: theme.isDark ? theme.colors.textSecondary : '#666b76',
     fontSize: 16,
     marginBottom: 20,
   },
@@ -110,7 +114,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 24,
     borderRadius: 12,
-    backgroundColor: PRIMARY_COLOR,
+    backgroundColor: theme.colors.primary,
   },
   timeoutButtonText: {
     color: '#fff',

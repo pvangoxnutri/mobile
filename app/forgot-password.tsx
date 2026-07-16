@@ -17,10 +17,14 @@ import BrandMark from '@/components/brand-mark';
 import { useI18n } from '@/components/i18n-provider';
 import { getPasswordResetRedirectUrl } from '@/lib/auth-redirect';
 import { supabase } from '@/lib/supabase';
-import { PRIMARY_COLOR } from '@/constants/colors';
+import { useTheme } from '@/components/theme-provider';
+import { useThemedStyles } from '@/hooks/use-themed-styles';
+import type { AppTheme } from '@/constants/themes';
 import { useKeyboardFocusScroll } from '@/hooks/useKeyboardFocusScroll';
 
 export default function ForgotPasswordScreen() {
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const { t } = useI18n();
   const insets = useSafeAreaInsets();
   const { scrollRef, onFocusField, scrollViewProps } = useKeyboardFocusScroll();
@@ -101,11 +105,11 @@ export default function ForgotPasswordScreen() {
         showsVerticalScrollIndicator={false}
         {...scrollViewProps}>
         <Pressable style={styles.backButton} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={22} color="#111217" />
+          <Ionicons name="arrow-back" size={22} color={theme.isDark ? theme.colors.textPrimary : '#111217'} />
         </Pressable>
 
         <View style={styles.logoWrap}>
-          <BrandMark size="md" />
+          <BrandMark size="md" tone="adaptive" />
         </View>
 
         <View style={styles.card}>
@@ -119,6 +123,7 @@ export default function ForgotPasswordScreen() {
           ) : null}
 
           <TextInput
+            keyboardAppearance={theme.keyboardAppearance}
             ref={emailRef}
             style={styles.input}
             placeholder={t('auth.forgot_password_email_placeholder')}
@@ -133,7 +138,7 @@ export default function ForgotPasswordScreen() {
           />
 
           <Pressable
-            style={[styles.primaryButton, { backgroundColor: PRIMARY_COLOR }, loading || cooldownSeconds > 0 ? styles.primaryButtonDisabled : null]}
+            style={[styles.primaryButton, { backgroundColor: theme.colors.primary }, loading || cooldownSeconds > 0 ? styles.primaryButtonDisabled : null]}
             onPress={() => void handleSubmit()}
             disabled={loading || cooldownSeconds > 0}>
             {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>{t('auth.forgot_password_send_button')}</Text>}
@@ -149,10 +154,10 @@ function isRateLimitError(message: string) {
   return normalized.includes('rate limit') || normalized.includes('too many requests') || normalized.includes('email rate limit');
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#fff7f8',
+    backgroundColor: theme.isDark ? theme.colors.bgPrimary : '#fff7f8',
   },
   content: {
     // No flexGrow — it stretches the content container to exactly fill the
@@ -166,7 +171,7 @@ const styles = StyleSheet.create({
     borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.8)',
+    backgroundColor: theme.isDark ? theme.colors.bgLight : 'rgba(255,255,255,0.8)',
   },
   logoWrap: {
     marginTop: 28,
@@ -174,9 +179,9 @@ const styles = StyleSheet.create({
   card: {
     marginTop: 26,
     borderRadius: 28,
-    backgroundColor: '#fff',
+    backgroundColor: theme.colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: '#eceef2',
+    borderColor: theme.isDark ? theme.colors.borderPrimary : '#eceef2',
     padding: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 12 },
@@ -187,22 +192,22 @@ const styles = StyleSheet.create({
   heading: {
     fontSize: 26,
     fontWeight: '800',
-    color: '#14161d',
+    color: theme.isDark ? theme.colors.textPrimary : '#14161d',
     letterSpacing: -0.8,
   },
   copy: {
     marginTop: 10,
-    color: '#8b8f9b',
+    color: theme.isDark ? theme.colors.textMeta : '#8b8f9b',
     fontSize: 15,
     lineHeight: 23,
   },
   success: {
     marginTop: 16,
     borderRadius: 18,
-    backgroundColor: '#eefaf1',
+    backgroundColor: theme.isDark ? theme.colors.successLight : '#eefaf1',
     borderWidth: 1,
-    borderColor: '#d6eedb',
-    color: '#24613d',
+    borderColor: theme.isDark ? theme.colors.successBorder : '#d6eedb',
+    color: theme.isDark ? theme.colors.success : '#24613d',
     paddingHorizontal: 14,
     paddingVertical: 12,
     overflow: 'hidden',
@@ -210,10 +215,10 @@ const styles = StyleSheet.create({
   error: {
     marginTop: 16,
     borderRadius: 18,
-    backgroundColor: '#fff4f7',
+    backgroundColor: theme.isDark ? theme.colors.errorLight : '#fff4f7',
     borderWidth: 1,
-    borderColor: '#ffd5dd',
-    color: '#b4234b',
+    borderColor: theme.isDark ? theme.colors.errorBorder : '#ffd5dd',
+    color: theme.isDark ? theme.colors.error : '#b4234b',
     paddingHorizontal: 14,
     paddingVertical: 12,
     overflow: 'hidden',
@@ -223,8 +228,8 @@ const styles = StyleSheet.create({
     height: 54,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#e4e7ee',
-    backgroundColor: '#f9fafc',
+    borderColor: theme.isDark ? theme.colors.borderInput : '#e4e7ee',
+    backgroundColor: theme.isDark ? theme.colors.bgLightest : '#f9fafc',
     paddingHorizontal: 16,
     fontSize: 16,
   },
@@ -234,7 +239,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#ff4f74',
+    backgroundColor: theme.colors.primary,
   },
   primaryButtonDisabled: {
     opacity: 0.62,

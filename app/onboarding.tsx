@@ -23,7 +23,9 @@ import { useI18n, type AppLanguage } from '@/components/i18n-provider';
 import LanguagePicker from '@/components/language-picker';
 import { apiFetch } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
-import { PRIMARY_COLOR, PRIMARY_08 } from '@/constants/colors';
+import { useTheme } from '@/components/theme-provider';
+import { useThemedStyles } from '@/hooks/use-themed-styles';
+import type { AppTheme } from '@/constants/themes';
 import { useKeyboardFocusScroll } from '@/hooks/useKeyboardFocusScroll';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -55,6 +57,8 @@ const PURPOSES: { value: string; labelKey: string; emoji: string }[] = [
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function OnboardingScreen() {
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const insets = useSafeAreaInsets();
   const { refreshProfile, user } = useAuth();
   const { language, setLanguage, t } = useI18n();
@@ -205,7 +209,7 @@ export default function OnboardingScreen() {
 
         {/* ── Progress bar ────────────────────────────────── */}
         <View style={styles.progressTrack}>
-          <Animated.View style={[styles.progressFill, { width: progressWidth, backgroundColor: PRIMARY_COLOR }]} />
+          <Animated.View style={[styles.progressFill, { width: progressWidth, backgroundColor: theme.colors.primary }]} />
         </View>
 
         {/* ── Step content ────────────────────────────────── */}
@@ -256,7 +260,7 @@ export default function OnboardingScreen() {
             <Text style={styles.termsErrorText}>{t('terms.mustAgree')}</Text>
           ) : null}
           <Pressable
-            style={({ pressed }) => [styles.nextButton, { backgroundColor: PRIMARY_COLOR, shadowColor: PRIMARY_COLOR }, pressed && styles.nextButtonPressed]}
+            style={({ pressed }) => [styles.nextButton, { backgroundColor: theme.colors.primary, shadowColor: theme.colors.primary }, pressed && styles.nextButtonPressed]}
             disabled={busy}
             onPress={() => {
               if (step === 1 && !termsAgreed) {
@@ -303,6 +307,8 @@ function StepTerms({
   onAgree: () => void;
   t: (key: string) => string;
 }) {
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
   return (
     <View>
       <Text style={styles.stepHeading}>{t('terms.heading')}</Text>
@@ -323,10 +329,10 @@ function StepTerms({
         style={[styles.agreeRow, agreed && styles.agreeRowChecked]}
         activeOpacity={0.8}
         onPress={onAgree}>
-        <View style={[styles.checkbox, agreed && { backgroundColor: PRIMARY_COLOR, borderColor: PRIMARY_COLOR }]}>
+        <View style={[styles.checkbox, agreed && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }]}>
           {agreed ? <Text style={styles.checkMark}>✓</Text> : null}
         </View>
-        <Text style={[styles.agreeLabel, agreed && { color: PRIMARY_COLOR }]}>
+        <Text style={[styles.agreeLabel, agreed && { color: theme.colors.primary }]}>
           {t('terms.agreeButton')}
         </Text>
       </TouchableOpacity>
@@ -362,6 +368,8 @@ function StepDiscovery({
   onFocusField: (ref: { current: TextInput | null }) => () => void;
   t: (key: string, vars?: Record<string, string | number>) => string;
 }) {
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const purposeOtherRef = useRef<TextInput>(null);
   return (
     <View>
@@ -372,10 +380,10 @@ function StepDiscovery({
         {FOUND_VIA.map((opt) => (
           <TouchableOpacity
             key={opt.value}
-            style={[styles.chip, foundVia === opt.value && { borderColor: PRIMARY_COLOR, backgroundColor: PRIMARY_08 }]}
+            style={[styles.chip, foundVia === opt.value && { borderColor: theme.colors.primary, backgroundColor: theme.colors.primaryLight08 }]}
             activeOpacity={0.75}
             onPress={() => setFoundVia(foundVia === opt.value ? null : opt.value)}>
-            <Text style={[styles.chipText, foundVia === opt.value && { color: PRIMARY_COLOR, fontWeight: '700' }]}>{t(opt.labelKey)}</Text>
+            <Text style={[styles.chipText, foundVia === opt.value && { color: theme.colors.primary, fontWeight: '700' }]}>{t(opt.labelKey)}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -387,11 +395,11 @@ function StepDiscovery({
         {PURPOSES.map((opt) => (
           <TouchableOpacity
             key={opt.value}
-            style={[styles.purposeCard, purpose === opt.value && { borderColor: PRIMARY_COLOR, backgroundColor: PRIMARY_08 }]}
+            style={[styles.purposeCard, purpose === opt.value && { borderColor: theme.colors.primary, backgroundColor: theme.colors.primaryLight08 }]}
             activeOpacity={0.78}
             onPress={() => setPurpose(purpose === opt.value ? null : opt.value)}>
             <Text style={styles.purposeEmoji}>{opt.emoji}</Text>
-            <Text style={[styles.purposeLabel, purpose === opt.value && { color: PRIMARY_COLOR }]}>
+            <Text style={[styles.purposeLabel, purpose === opt.value && { color: theme.colors.primary }]}>
               {t(opt.labelKey)}
             </Text>
           </TouchableOpacity>
@@ -400,10 +408,11 @@ function StepDiscovery({
 
       {purpose === 'other' ? (
         <TextInput
+          keyboardAppearance={theme.keyboardAppearance}
           ref={purposeOtherRef}
           style={styles.otherInput}
           placeholder={t('onboarding.purpose.otherPlaceholder')}
-          placeholderTextColor="#b2b7c2"
+          placeholderTextColor={theme.isDark ? theme.colors.placeholderText : '#b2b7c2'}
           value={purposeOther}
           onChangeText={setPurposeOther}
           onFocus={onFocusField(purposeOtherRef)}
@@ -436,6 +445,8 @@ function StepProfile({
   onFocusField: (ref: { current: TextInput | null }) => () => void;
   t: (key: string, vars?: Record<string, string | number>) => string;
 }) {
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const bioRef = useRef<TextInput>(null);
   return (
     <View>
@@ -444,7 +455,7 @@ function StepProfile({
 
       {/* Avatar upload */}
       <View style={styles.avatarSection}>
-        <TouchableOpacity style={[styles.avatarRing, { borderColor: PRIMARY_COLOR }]} activeOpacity={0.82} onPress={onPickAvatar}>
+        <TouchableOpacity style={[styles.avatarRing, { borderColor: theme.colors.primary }]} activeOpacity={0.82} onPress={onPickAvatar}>
           {avatarUrl ? (
             <Image source={{ uri: avatarUrl }} style={styles.avatar} />
           ) : (
@@ -452,7 +463,7 @@ function StepProfile({
               <Text style={styles.avatarInitials}>{initials}</Text>
             </View>
           )}
-          <View style={[styles.avatarCamera, { backgroundColor: PRIMARY_COLOR }]}>
+          <View style={[styles.avatarCamera, { backgroundColor: theme.colors.primary }]}>
             {uploadBusy ? (
               <ActivityIndicator size="small" color="#fff" />
             ) : (
@@ -467,10 +478,11 @@ function StepProfile({
       <View style={styles.bioBlock}>
         <Text style={styles.bioLabel}>{t('onboarding.profile.bioLabel')}</Text>
         <TextInput
+          keyboardAppearance={theme.keyboardAppearance}
           ref={bioRef}
           style={styles.bioInput}
           placeholder={t('onboarding.profile.bioPlaceholder')}
-          placeholderTextColor="#b2b7c2"
+          placeholderTextColor={theme.isDark ? theme.colors.placeholderText : '#b2b7c2'}
           value={bio}
           onChangeText={setBio}
           onFocus={onFocusField(bioRef)}
@@ -494,10 +506,10 @@ function getInitials(name?: string | null) {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: theme.colors.bgPrimary,
   },
 
   // ─ Top bar
@@ -510,19 +522,19 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
   },
   stepPill: {
-    backgroundColor: '#f3f4f8',
+    backgroundColor: theme.isDark ? theme.colors.bgLight : '#f3f4f8',
     borderRadius: 20,
     paddingHorizontal: 14,
     paddingVertical: 6,
   },
   stepPillText: {
-    color: '#5c6270',
+    color: theme.isDark ? theme.colors.textSecondary : '#5c6270',
     fontSize: 13,
     fontWeight: '700',
     letterSpacing: 0.3,
   },
   skipText: {
-    color: '#9499a5',
+    color: theme.isDark ? theme.colors.textMeta : '#9499a5',
     fontSize: 15,
     fontWeight: '700',
   },
@@ -535,14 +547,14 @@ const styles = StyleSheet.create({
   },
   progressTrack: {
     height: 3,
-    backgroundColor: '#eef0f4',
+    backgroundColor: theme.isDark ? theme.colors.bgLight : '#eef0f4',
     marginHorizontal: 22,
     borderRadius: 2,
     marginBottom: 4,
   },
   progressFill: {
     height: 3,
-    backgroundColor: PRIMARY_COLOR,
+    backgroundColor: theme.colors.primary,
     borderRadius: 2,
   },
 
@@ -566,10 +578,10 @@ const styles = StyleSheet.create({
   nextButton: {
     height: 56,
     borderRadius: 18,
-    backgroundColor: PRIMARY_COLOR,
+    backgroundColor: theme.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: PRIMARY_COLOR,
+    shadowColor: theme.colors.primary,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.28,
     shadowRadius: 16,
@@ -589,12 +601,12 @@ const styles = StyleSheet.create({
   stepHeading: {
     fontSize: 28,
     fontWeight: '900',
-    color: '#111317',
+    color: theme.isDark ? theme.colors.textPrimary : '#111317',
     letterSpacing: -1,
     marginBottom: 6,
   },
   stepSubtitle: {
-    color: '#79808c',
+    color: theme.isDark ? theme.colors.textSecondary : '#79808c',
     fontSize: 16,
     lineHeight: 23,
     marginBottom: 28,
@@ -612,29 +624,29 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 22,
     borderWidth: 1.5,
-    borderColor: '#e2e5ee',
-    backgroundColor: '#fafbfc',
+    borderColor: theme.isDark ? theme.colors.borderInput : '#e2e5ee',
+    backgroundColor: theme.isDark ? theme.colors.bgLightest : '#fafbfc',
   },
   chipSelected: {
-    borderColor: PRIMARY_COLOR,
-    backgroundColor: PRIMARY_08,
+    borderColor: theme.colors.primary,
+    backgroundColor: theme.colors.primaryLight08,
   },
   chipText: {
-    color: '#4b515e',
+    color: theme.isDark ? theme.colors.textSecondary : '#4b515e',
     fontSize: 14,
     fontWeight: '600',
   },
   chipTextSelected: {
-    color: PRIMARY_COLOR,
+    color: theme.colors.primary,
     fontWeight: '700',
   },
   sectionDivider: {
     height: 1,
-    backgroundColor: '#f0f2f6',
+    backgroundColor: theme.isDark ? theme.colors.bgLight : '#f0f2f6',
     marginVertical: 24,
   },
   sectionLabel: {
-    color: '#111317',
+    color: theme.isDark ? theme.colors.textPrimary : '#111317',
     fontSize: 18,
     fontWeight: '800',
     letterSpacing: -0.5,
@@ -651,38 +663,38 @@ const styles = StyleSheet.create({
     width: '47%',
     borderRadius: 20,
     borderWidth: 1.5,
-    borderColor: '#e2e5ee',
-    backgroundColor: '#fafbfc',
+    borderColor: theme.isDark ? theme.colors.borderInput : '#e2e5ee',
+    backgroundColor: theme.isDark ? theme.colors.bgLightest : '#fafbfc',
     paddingVertical: 18,
     paddingHorizontal: 16,
   },
   purposeCardSelected: {
-    borderColor: PRIMARY_COLOR,
-    backgroundColor: PRIMARY_08,
+    borderColor: theme.colors.primary,
+    backgroundColor: theme.colors.primaryLight08,
   },
   purposeEmoji: {
     fontSize: 28,
     marginBottom: 10,
   },
   purposeLabel: {
-    color: '#2a2f3e',
+    color: theme.isDark ? theme.colors.textPrimary : '#2a2f3e',
     fontSize: 13,
     fontWeight: '700',
     lineHeight: 18,
   },
   purposeLabelSelected: {
-    color: PRIMARY_COLOR,
+    color: theme.colors.primary,
   },
   otherInput: {
     marginTop: 16,
     height: 50,
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: '#e2e5ee',
-    backgroundColor: '#fafbfc',
+    borderColor: theme.isDark ? theme.colors.borderInput : '#e2e5ee',
+    backgroundColor: theme.isDark ? theme.colors.bgLightest : '#fafbfc',
     paddingHorizontal: 16,
     fontSize: 15,
-    color: '#1b1e28',
+    color: theme.isDark ? theme.colors.textPrimary : '#1b1e28',
   },
 
   // ─ Step 2: themes
@@ -696,13 +708,13 @@ const styles = StyleSheet.create({
   themeCard: {
     borderRadius: 22,
     borderWidth: 2,
-    borderColor: '#e2e5ee',
-    backgroundColor: '#fafbfc',
+    borderColor: theme.isDark ? theme.colors.borderInput : '#e2e5ee',
+    backgroundColor: theme.isDark ? theme.colors.bgLightest : '#fafbfc',
     overflow: 'hidden',
   },
   themeCardSelected: {
-    borderColor: PRIMARY_COLOR,
-    backgroundColor: '#fff',
+    borderColor: theme.colors.primary,
+    backgroundColor: theme.colors.bgPrimary,
   },
   themeColorStrip: {
     flexDirection: 'row',
@@ -750,13 +762,13 @@ const styles = StyleSheet.create({
     paddingLeft: 4,
   },
   themeName: {
-    color: '#111317',
+    color: theme.isDark ? theme.colors.textPrimary : '#111317',
     fontSize: 15,
     fontWeight: '800',
     letterSpacing: -0.3,
   },
   themeColorCodes: {
-    color: '#9499a6',
+    color: theme.isDark ? theme.colors.textMeta : '#9499a6',
     fontSize: 11,
     marginTop: 2,
     letterSpacing: 0.2,
@@ -765,7 +777,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: PRIMARY_COLOR,
+    backgroundColor: theme.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -774,11 +786,11 @@ const styles = StyleSheet.create({
     height: 28,
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: '#d8dbe6',
+    borderColor: theme.isDark ? theme.colors.borderInput : '#d8dbe6',
   },
   themeHint: {
     marginTop: 16,
-    color: '#a8adb8',
+    color: theme.isDark ? theme.colors.textMuted : '#a8adb8',
     fontSize: 13,
     textAlign: 'center',
   },
@@ -793,7 +805,7 @@ const styles = StyleSheet.create({
     height: 124,
     borderRadius: 62,
     borderWidth: 3,
-    borderColor: PRIMARY_COLOR,
+    borderColor: theme.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -801,7 +813,7 @@ const styles = StyleSheet.create({
     width: 112,
     height: 112,
     borderRadius: 56,
-    backgroundColor: '#d8c1a3',
+    backgroundColor: theme.isDark ? theme.colors.avatarDark : '#d8c1a3',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -818,7 +830,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: PRIMARY_COLOR,
+    backgroundColor: theme.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2.5,
@@ -826,14 +838,14 @@ const styles = StyleSheet.create({
   },
   avatarHint: {
     marginTop: 12,
-    color: '#8a909e',
+    color: theme.colors.textMeta,
     fontSize: 14,
   },
   bioBlock: {
     gap: 0,
   },
   bioLabel: {
-    color: '#111317',
+    color: theme.isDark ? theme.colors.textPrimary : '#111317',
     fontSize: 16,
     fontWeight: '800',
     letterSpacing: -0.3,
@@ -843,17 +855,17 @@ const styles = StyleSheet.create({
     minHeight: 110,
     borderRadius: 18,
     borderWidth: 1.5,
-    borderColor: '#e2e5ee',
-    backgroundColor: '#fafbfc',
+    borderColor: theme.isDark ? theme.colors.borderInput : '#e2e5ee',
+    backgroundColor: theme.isDark ? theme.colors.bgLightest : '#fafbfc',
     paddingHorizontal: 16,
     paddingVertical: 14,
     fontSize: 15,
-    color: '#1b1e28',
+    color: theme.isDark ? theme.colors.textPrimary : '#1b1e28',
     lineHeight: 23,
   },
   bioOptional: {
     marginTop: 8,
-    color: '#a6acb8',
+    color: theme.isDark ? theme.colors.textMuted : '#a6acb8',
     fontSize: 12,
   },
 
@@ -861,8 +873,8 @@ const styles = StyleSheet.create({
   rulesCard: {
     borderRadius: 20,
     borderWidth: 1.5,
-    borderColor: '#e2e5ee',
-    backgroundColor: '#fafbfc',
+    borderColor: theme.isDark ? theme.colors.borderInput : '#e2e5ee',
+    backgroundColor: theme.isDark ? theme.colors.bgLightest : '#fafbfc',
     paddingHorizontal: 18,
     paddingVertical: 14,
     gap: 14,
@@ -877,7 +889,7 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: PRIMARY_COLOR,
+    backgroundColor: theme.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 1,
@@ -890,7 +902,7 @@ const styles = StyleSheet.create({
   },
   ruleText: {
     flex: 1,
-    color: '#2a2f3e',
+    color: theme.isDark ? theme.colors.textPrimary : '#2a2f3e',
     fontSize: 14,
     lineHeight: 21,
     fontWeight: '500',
@@ -901,25 +913,25 @@ const styles = StyleSheet.create({
     gap: 12,
     borderRadius: 18,
     borderWidth: 1.5,
-    borderColor: '#e2e5ee',
-    backgroundColor: '#fafbfc',
+    borderColor: theme.isDark ? theme.colors.borderInput : '#e2e5ee',
+    backgroundColor: theme.isDark ? theme.colors.bgLightest : '#fafbfc',
     paddingHorizontal: 18,
     paddingVertical: 16,
     marginBottom: 14,
   },
   agreeRowChecked: {
-    borderColor: PRIMARY_COLOR,
-    backgroundColor: PRIMARY_08,
+    borderColor: theme.colors.primary,
+    backgroundColor: theme.colors.primaryLight08,
   },
   checkbox: {
     width: 26,
     height: 26,
     borderRadius: 8,
     borderWidth: 2,
-    borderColor: '#c8cdd8',
+    borderColor: theme.isDark ? theme.colors.borderInput : '#c8cdd8',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: theme.colors.bgPrimary,
     flexShrink: 0,
   },
   checkMark: {
@@ -929,7 +941,7 @@ const styles = StyleSheet.create({
   },
   agreeLabel: {
     flex: 1,
-    color: '#4b515e',
+    color: theme.isDark ? theme.colors.textSecondary : '#4b515e',
     fontSize: 14,
     fontWeight: '700',
     lineHeight: 20,
@@ -939,13 +951,13 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   termsLinkText: {
-    color: '#9499a5',
+    color: theme.isDark ? theme.colors.textMeta : '#9499a5',
     fontSize: 13,
     fontWeight: '600',
     textDecorationLine: 'underline',
   },
   termsErrorText: {
-    color: '#d53d18',
+    color: theme.colors.error,
     fontSize: 13,
     fontWeight: '600',
     textAlign: 'center',

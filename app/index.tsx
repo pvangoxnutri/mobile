@@ -31,6 +31,12 @@ export default function SplashRoute() {
   );
 }
 
+// THEME EXEMPTION (deliberate): this is the launch splash — it renders on the
+// same brand-pink surface as the NATIVE splash (app.json), which cannot know
+// the in-app theme. Keeping both surfaces identical in BOTH themes makes
+// launch one continuous branded moment instead of pink → dark → app; the
+// ink wordmark belongs on this fixed light-pink surface (see BrandMark's
+// tone rules). Do not migrate these to page tokens.
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
