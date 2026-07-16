@@ -49,7 +49,10 @@ import { getCached, setCached, invalidateCache, invalidateTripCache } from '@/li
 import { uploadImageIfNeeded } from '@/lib/uploads';
 import { isSealedInLists } from '@/lib/activity-blur';
 import type { Quest, SideQuestActivity, TripInvite, LinkPreview } from '@/lib/types';
-import { COLORS, SHADOWS, SPACING, RADIUS, TYPOGRAPHY } from '@/constants/design-tokens';
+import { SPACING, RADIUS, TYPOGRAPHY } from '@/constants/design-tokens';
+import { useTheme } from '@/components/theme-provider';
+import { useThemedStyles } from '@/hooks/use-themed-styles';
+import type { AppTheme } from '@/constants/themes';
 
 type ChatReaction = {
   emoji: string;
@@ -150,21 +153,6 @@ type TripMember = {
   isOnline?: boolean;
 };
 
-// Hotel-reservation surface palette — the ONLY place stay visuals get their
-// colors, so the dark-theme migration (phase 3) can swap this object for
-// semantic theme tokens in one move instead of hunting literals. Light-mode
-// values are a quiet amber family: a reservation embedded in the itinerary,
-// not a second card and never a success-green.
-const STAY_COLORS = {
-  accentBar: '#d97706',
-  anchorSurface: '#fdf6ec',
-  ambientSurface: '#fdfaf3',
-  textStrong: '#92600a',
-  textMuted: '#b45309',
-  pillBackground: '#ffffff',
-  pillBorder: 'rgba(217,119,6,0.35)',
-} as const;
-
 export default function TripDetailsScreen() {
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView | null>(null);
@@ -181,6 +169,8 @@ export default function TripDetailsScreen() {
   const { id, openChat: openChatParam } = useLocalSearchParams<{ id: string; openChat?: string }>();
   const { user } = useAuth();
   const { t, language } = useI18n();
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const locale = language === 'sv' ? 'sv-SE' : 'en-US';
   const [trip, setTrip] = useState<Quest | null>(null);
   const [members, setMembers] = useState<TripMember[]>([]);
@@ -1175,7 +1165,7 @@ export default function TripDetailsScreen() {
               style={[
                 styles.chatBubbleCard,
                 styles.chatBubbleCardOwn,
-                { backgroundColor: COLORS.primary },
+                { backgroundColor: theme.colors.primary },
                 isPending && styles.chatMessagePending,
                 isFailed && styles.chatBubbleCardFailed,
               ]}>
@@ -1201,14 +1191,14 @@ export default function TripDetailsScreen() {
                 forceFallback={failedAvatars.has(message.userId || '')}
                 onError={() => message.userId && setFailedAvatars((prev) => new Set([...prev, message.userId!]))}
                 size={28}
-                fallbackBackgroundColor="#c2c8d2"
+                fallbackBackgroundColor={theme.isDark ? theme.colors.textMuted : '#c2c8d2'}
                 fallbackTextColor="#fff"
               />
             </View>
             <View style={styles.chatMessageContent}>
               <Text style={styles.chatAuthorBlocked}>{message.userName}</Text>
               <View style={styles.chatBubbleBlocked}>
-                <Ionicons name="ban" size={12} color="#a3a9b4" />
+                <Ionicons name="ban" size={12} color={theme.isDark ? theme.colors.textMeta : '#a3a9b4'} />
                 <Text style={styles.chatBubbleBlockedText}>{t('trip.chat.blockedMessage')}</Text>
               </View>
             </View>
@@ -1228,7 +1218,7 @@ export default function TripDetailsScreen() {
                 onError={() => message.userId && setFailedAvatars((prev) => new Set([...prev, message.userId!]))}
                 size={28}
                 online={senderOnline}
-                fallbackBackgroundColor="#1d212a"
+                fallbackBackgroundColor={theme.colors.avatarDark}
                 fallbackTextColor="#fff"
               />
             </TouchableOpacity>
@@ -1441,11 +1431,11 @@ export default function TripDetailsScreen() {
           }}>
           <View style={styles.header}>
             <TouchableOpacity style={styles.backButton} activeOpacity={0.88} onPress={() => router.back()}>
-              <Ionicons name="arrow-back" size={24} color="#11131a" />
+              <Ionicons name="arrow-back" size={24} color={theme.isDark ? theme.colors.textPrimary : '#11131a'} />
             </TouchableOpacity>
             <Text style={styles.headerTitle}>{trip?.title ?? t('home.defaultTripName')}</Text>
             <TouchableOpacity style={styles.settingsButton} activeOpacity={0.88} onPress={() => router.push(`/trip/${id}/settings`)}>
-              <Ionicons name="settings-outline" size={20} color="#11131a" />
+              <Ionicons name="settings-outline" size={20} color={theme.isDark ? theme.colors.textPrimary : '#11131a'} />
             </TouchableOpacity>
           </View>
 
@@ -1546,7 +1536,7 @@ export default function TripDetailsScreen() {
                       <Ionicons
                         name={row.kind === 'stayNight' ? 'bed-outline' : 'log-out-outline'}
                         size={13}
-                        color={STAY_COLORS.textMuted}
+                        color={theme.colors.stayTextMuted}
                       />
                       <Text style={styles.stayRowTitle} numberOfLines={1}>
                         {stay.title?.trim() || t('trip.activityFallbackTitle')}
@@ -1610,7 +1600,7 @@ export default function TripDetailsScreen() {
                         </Text>
                         {stayCard ? (
                           <View style={styles.stayBadgeRow}>
-                            <Ionicons name="moon-outline" size={11} color={STAY_COLORS.textMuted} />
+                            <Ionicons name="moon-outline" size={11} color={theme.colors.stayTextMuted} />
                             <Text style={styles.stayBadgeText} numberOfLines={1}>
                               {/* Dates only — the nights pill by the title
                                   already carries the stay length. */}
@@ -1636,9 +1626,9 @@ export default function TripDetailsScreen() {
         </ScrollView>
 
         <View pointerEvents="box-none" style={[styles.chatBubbleWrap, { bottom: Math.max(insets.bottom, 16) + 6 }]}>
-          <TouchableOpacity activeOpacity={0.92} style={[styles.chatBubble, { backgroundColor: COLORS.secondary, shadowColor: COLORS.secondary }]} onPress={() => setChatOpen(true)}>
+          <TouchableOpacity activeOpacity={0.92} style={[styles.chatBubble, { backgroundColor: theme.colors.secondary, shadowColor: theme.colors.secondary }]} onPress={() => setChatOpen(true)}>
             <Ionicons name="chatbubble-ellipses-outline" size={20} color="#fff" />
-            {chatUnread ? <View style={[styles.chatUnreadDot, { backgroundColor: COLORS.primary }]} /> : null}
+            {chatUnread ? <View style={[styles.chatUnreadDot, { backgroundColor: theme.colors.primary }]} /> : null}
           </TouchableOpacity>
         </View>
 
@@ -1651,12 +1641,12 @@ export default function TripDetailsScreen() {
             accessibilityRole="button"
             accessibilityLabel={t('trip.tools.openLabel')}
             onPress={() => setToolsSheetOpen(true)}>
-            <Ionicons name="grid-outline" size={20} color={COLORS.primary} />
+            <Ionicons name="grid-outline" size={20} color={theme.colors.primary} />
           </TouchableOpacity>
         </View>
 
         <View pointerEvents="box-none" style={[styles.floatingWrap, { bottom: Math.max(insets.bottom, 16) + 6 }]}>
-          <TouchableOpacity activeOpacity={0.92} style={[styles.floatingButton, { backgroundColor: COLORS.primary, shadowColor: COLORS.primary }]} onPress={() => router.push(`/trip/${id}/sidequest/new`)}>
+          <TouchableOpacity activeOpacity={0.92} style={[styles.floatingButton, { backgroundColor: theme.colors.primary, shadowColor: theme.colors.primary }]} onPress={() => router.push(`/trip/${id}/sidequest/new`)}>
             <Ionicons name="add" size={20} color="#fff" />
             <Text style={styles.floatingButtonText}>{t('trip.addActivity')}</Text>
           </TouchableOpacity>
@@ -1674,7 +1664,7 @@ export default function TripDetailsScreen() {
               <Text style={styles.sheetTitle}>{t('trip.tools.title')}</Text>
             </View>
             <TouchableOpacity style={styles.sheetCloseButton} activeOpacity={0.88} onPress={() => setToolsSheetOpen(false)}>
-              <Ionicons name="close" size={20} color="#161821" />
+              <Ionicons name="close" size={20} color={theme.colors.textPrimary} />
             </TouchableOpacity>
           </View>
           <View style={[styles.toolsList, { paddingBottom: Math.max(insets.bottom, 16) + 8 }]}>
@@ -1685,11 +1675,11 @@ export default function TripDetailsScreen() {
                 setToolsSheetOpen(false);
                 router.push(`/trip/${id}/split`);
               }}>
-              <View style={[styles.toolRowIcon, { backgroundColor: '#fff0f4' }]}>
-                <Ionicons name="calculator-outline" size={20} color={COLORS.primary} />
+              <View style={[styles.toolRowIcon, { backgroundColor: theme.isDark ? theme.colors.primaryLight12 : '#fff0f4' }]}>
+                <Ionicons name="calculator-outline" size={20} color={theme.colors.primary} />
               </View>
               <Text style={styles.toolRowLabel}>{t('trip.costSplit')}</Text>
-              <Ionicons name="chevron-forward" size={18} color="#b2b7c0" />
+              <Ionicons name="chevron-forward" size={18} color={theme.isDark ? theme.colors.textMuted : '#b2b7c0'} />
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -1699,7 +1689,7 @@ export default function TripDetailsScreen() {
                 setToolsSheetOpen(false);
                 setSpotifyModalOpen(true);
               }}>
-              <View style={[styles.toolRowIcon, { backgroundColor: '#e7f8ef' }]}>
+              <View style={[styles.toolRowIcon, { backgroundColor: theme.isDark ? theme.colors.successLight : '#e7f8ef' }]}>
                 <FontAwesome name="spotify" size={20} color="#1cb35b" />
               </View>
               <Text style={styles.toolRowLabel}>{t('trip.tools.spotify')}</Text>
@@ -1718,7 +1708,7 @@ export default function TripDetailsScreen() {
                   <Text style={styles.toolRowSpotifyOpenText}>{t('common.open')}</Text>
                 </TouchableOpacity>
               ) : null}
-              <Ionicons name="chevron-forward" size={18} color="#b2b7c0" />
+              <Ionicons name="chevron-forward" size={18} color={theme.isDark ? theme.colors.textMuted : '#b2b7c0'} />
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -1728,11 +1718,11 @@ export default function TripDetailsScreen() {
                 setToolsSheetOpen(false);
                 router.push(`/trip/${id}/packing-list`);
               }}>
-              <View style={[styles.toolRowIcon, { backgroundColor: '#eef4ff' }]}>
-                <Ionicons name="checkmark-done-outline" size={20} color="#3b82f6" />
+              <View style={[styles.toolRowIcon, { backgroundColor: theme.isDark ? 'rgba(59,130,246,0.16)' : '#eef4ff' }]}>
+                <Ionicons name="checkmark-done-outline" size={20} color={theme.isDark ? '#60a5fa' : '#3b82f6'} />
               </View>
               <Text style={styles.toolRowLabel}>{t('trip.packingList.title')}</Text>
-              <Ionicons name="chevron-forward" size={18} color="#b2b7c0" />
+              <Ionicons name="chevron-forward" size={18} color={theme.isDark ? theme.colors.textMuted : '#b2b7c0'} />
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -1742,11 +1732,11 @@ export default function TripDetailsScreen() {
                 setToolsSheetOpen(false);
                 setPeopleSheetOpen(true);
               }}>
-              <View style={[styles.toolRowIcon, { backgroundColor: '#f3e8ff' }]}>
-                <Ionicons name="person-add-outline" size={20} color="#9333ea" />
+              <View style={[styles.toolRowIcon, { backgroundColor: theme.isDark ? 'rgba(147,51,234,0.2)' : '#f3e8ff' }]}>
+                <Ionicons name="person-add-outline" size={20} color={theme.isDark ? '#a78bfa' : '#9333ea'} />
               </View>
               <Text style={styles.toolRowLabel}>{t('trip.tools.inviteFriends')}</Text>
-              <Ionicons name="chevron-forward" size={18} color="#b2b7c0" />
+              <Ionicons name="chevron-forward" size={18} color={theme.isDark ? theme.colors.textMuted : '#b2b7c0'} />
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -1756,11 +1746,11 @@ export default function TripDetailsScreen() {
                 setToolsSheetOpen(false);
                 router.push(`/trip/${id}/settings`);
               }}>
-              <View style={[styles.toolRowIcon, { backgroundColor: '#f1f5f9' }]}>
-                <Ionicons name="settings-outline" size={20} color="#475569" />
+              <View style={[styles.toolRowIcon, { backgroundColor: theme.isDark ? theme.colors.bgLight : '#f1f5f9' }]}>
+                <Ionicons name="settings-outline" size={20} color={theme.isDark ? theme.colors.textSecondary : '#475569'} />
               </View>
               <Text style={styles.toolRowLabel}>{t('settings.title')}</Text>
-              <Ionicons name="chevron-forward" size={18} color="#b2b7c0" />
+              <Ionicons name="chevron-forward" size={18} color={theme.isDark ? theme.colors.textMuted : '#b2b7c0'} />
             </TouchableOpacity>
           </View>
         </ModalSheet>
@@ -1774,7 +1764,7 @@ export default function TripDetailsScreen() {
               <Text style={styles.sheetTitle}>{t('trip.everyoneOnAdventure')}</Text>
             </View>
             <TouchableOpacity style={styles.sheetCloseButton} activeOpacity={0.88} onPress={() => setPeopleSheetOpen(false)}>
-              <Ionicons name="close" size={20} color="#161821" />
+              <Ionicons name="close" size={20} color={theme.colors.textPrimary} />
             </TouchableOpacity>
           </View>
 
@@ -1808,7 +1798,7 @@ export default function TripDetailsScreen() {
                           onError={() => setFailedAvatars(prev => new Set([...prev, member.id]))}
                           size={42}
                           online={member.isOnline}
-                          fallbackBackgroundColor="#1d212a"
+                          fallbackBackgroundColor={theme.colors.avatarDark}
                           fallbackTextColor="#fff"
                         />
                       </TouchableOpacity>
@@ -1825,7 +1815,7 @@ export default function TripDetailsScreen() {
                             setPeopleSheetOpen(false);
                             setTimeout(() => setProfileCardUserId(member.id), 280);
                           }}>
-                          <Ionicons name="ellipsis-vertical" size={18} color="#8e95a2" />
+                          <Ionicons name="ellipsis-vertical" size={18} color={theme.isDark ? theme.colors.textMeta : '#8e95a2'} />
                         </TouchableOpacity>
                       ) : null}
                     </Pressable>
@@ -1840,13 +1830,13 @@ export default function TripDetailsScreen() {
                           setInviteComposerOpen((current) => !current);
                         }}>
                         <View style={[styles.personAvatar, styles.inviteAvatar]}>
-                          <Ionicons name="add" size={20} color={COLORS.primary} />
+                          <Ionicons name="add" size={20} color={theme.colors.primary} />
                         </View>
                         <View style={styles.personCopy}>
                           <Text style={styles.personName}>{t('trip.inviteTraveler')}</Text>
                           <Text style={styles.personMeta}>{t('trip.inviteTravelerHint')}</Text>
                         </View>
-                        <Ionicons name={inviteComposerOpen ? 'chevron-up' : 'chevron-forward'} size={18} color="#8e95a2" />
+                        <Ionicons name={inviteComposerOpen ? 'chevron-up' : 'chevron-forward'} size={18} color={theme.isDark ? theme.colors.textMeta : '#8e95a2'} />
                       </TouchableOpacity>
 
                       {inviteComposerOpen ? (
@@ -1880,10 +1870,11 @@ export default function TripDetailsScreen() {
                                   }).start();
                                 }}
                                 placeholder={t('trip.invites.placeholder')}
-                                placeholderTextColor="#afb5bf"
+                                placeholderTextColor={theme.isDark ? theme.colors.placeholderText : '#afb5bf'}
                                 keyboardType="email-address"
                                 autoCapitalize="none"
                                 autoCorrect={false}
+                                keyboardAppearance={theme.keyboardAppearance}
                                 style={styles.inviteInput}
                                 returnKeyType="done"
                                 onSubmitEditing={() => Keyboard.dismiss()}
@@ -1891,7 +1882,7 @@ export default function TripDetailsScreen() {
                             </Animated.View>
                             <TouchableOpacity
                               activeOpacity={0.9}
-                              style={[styles.inviteAddButton, { backgroundColor: COLORS.primary }, inviteSubmitting ? styles.inviteAddButtonDisabled : null]}
+                              style={[styles.inviteAddButton, { backgroundColor: theme.colors.primary }, inviteSubmitting ? styles.inviteAddButtonDisabled : null]}
                               disabled={inviteSubmitting}
                               onPress={() => void handleAddInvite()}>
                               {inviteSubmitting ? (
@@ -1904,18 +1895,18 @@ export default function TripDetailsScreen() {
 
                           <View style={styles.inviteActions}>
                             <TouchableOpacity activeOpacity={0.9} style={styles.secondaryInviteButton} onPress={() => void handleCopyInviteCode()}>
-                              <Ionicons name="copy-outline" size={16} color={COLORS.primary} />
-                              <Text style={[styles.secondaryInviteButtonText, { color: COLORS.primary }]}>{t('trip.copyCode')}</Text>
+                              <Ionicons name="copy-outline" size={16} color={theme.colors.primary} />
+                              <Text style={[styles.secondaryInviteButtonText, { color: theme.colors.primary }]}>{t('trip.copyCode')}</Text>
                             </TouchableOpacity>
                             <TouchableOpacity activeOpacity={0.9} style={styles.secondaryInviteButton} onPress={() => void handleShareInvite()}>
-                              <Ionicons name="share-social-outline" size={16} color={COLORS.primary} />
-                              <Text style={[styles.secondaryInviteButtonText, { color: COLORS.primary }]}>{t('common.share')}</Text>
+                              <Ionicons name="share-social-outline" size={16} color={theme.colors.primary} />
+                              <Text style={[styles.secondaryInviteButtonText, { color: theme.colors.primary }]}>{t('common.share')}</Text>
                             </TouchableOpacity>
                           </View>
 
                           <View style={styles.inviteHintRow}>
                             <Text style={styles.inviteHintLabel}>{t('trip.invite_code_section')}</Text>
-                            <Text style={[styles.inviteHintCode, { color: COLORS.primary }]}>{trip?.inviteCode ?? '------'}</Text>
+                            <Text style={[styles.inviteHintCode, { color: theme.colors.primary }]}>{trip?.inviteCode ?? '------'}</Text>
                           </View>
 
                           {inviteMessage ? <Text style={styles.inviteMessage}>{inviteMessage}</Text> : null}
@@ -1931,7 +1922,7 @@ export default function TripDetailsScreen() {
                     invites.map((invite) => (
                       <View key={invite.id} style={styles.personRow}>
                         <View style={[styles.personAvatar, styles.pendingAvatar]}>
-                          <Ionicons name="mail-outline" size={16} color="#7a8290" />
+                          <Ionicons name="mail-outline" size={16} color={theme.isDark ? theme.colors.textSecondary : '#7a8290'} />
                         </View>
                         <View style={styles.personCopy}>
                           <Text style={styles.personName}>{invite.email}</Text>
@@ -1944,9 +1935,9 @@ export default function TripDetailsScreen() {
                             disabled={inviteDeletingId === invite.id}
                             onPress={() => handleDeleteInvite(invite)}>
                             {inviteDeletingId === invite.id ? (
-                              <ActivityIndicator size="small" color="#8e95a2" />
+                              <ActivityIndicator size="small" color={theme.isDark ? theme.colors.textMeta : '#8e95a2'} />
                             ) : (
-                              <Ionicons name="close-circle-outline" size={20} color="#8e95a2" />
+                              <Ionicons name="close-circle-outline" size={20} color={theme.isDark ? theme.colors.textMeta : '#8e95a2'} />
                             )}
                           </TouchableOpacity>
                         ) : null}
@@ -1979,7 +1970,7 @@ export default function TripDetailsScreen() {
                   <Text style={styles.chatPanelTitle}>{trip?.title ?? t('trip.adventureChatFallback')}</Text>
                 </View>
                 <TouchableOpacity style={styles.chatPanelClose} activeOpacity={0.88} onPress={closeChat}>
-                  <Ionicons name="close" size={20} color="#161821" />
+                  <Ionicons name="close" size={20} color={theme.colors.textPrimary} />
                 </TouchableOpacity>
               </View>
 
@@ -1992,8 +1983,8 @@ export default function TripDetailsScreen() {
                       name={u.userName}
                       size={30}
                       style={styles.chatPresenceBubble}
-                      fallbackBackgroundColor="#e8f4f7"
-                      fallbackTextColor={COLORS.secondary}
+                      fallbackBackgroundColor={theme.isDark ? 'rgba(34,174,199,0.16)' : '#e8f4f7'}
+                      fallbackTextColor={theme.colors.secondary}
                     />
                   ))}
                   {chatPresence.length > 6 ? (
@@ -2009,7 +2000,7 @@ export default function TripDetailsScreen() {
 
               {chatError ? (
                 <View style={styles.chatErrorBanner}>
-                  <Ionicons name="alert-circle" size={14} color={COLORS.error} />
+                  <Ionicons name="alert-circle" size={14} color={theme.colors.error} />
                   <Text style={styles.chatErrorBannerText} numberOfLines={2}>{chatError}</Text>
                 </View>
               ) : null}
@@ -2055,7 +2046,7 @@ export default function TripDetailsScreen() {
                   ListHeaderComponent={
                     hasHiddenMessages ? (
                       <View style={styles.chatBlockedBanner}>
-                        <Ionicons name="ban-outline" size={13} color="#b45309" />
+                        <Ionicons name="ban-outline" size={13} color={theme.isDark ? theme.colors.warning : '#b45309'} />
                         <Text style={styles.chatBlockedBannerText}>{t('trip.chat.blockedUsersBanner')}</Text>
                       </View>
                     ) : null
@@ -2088,7 +2079,7 @@ export default function TripDetailsScreen() {
               ) : null}
               {blockChatNotice ? (
                 <View style={styles.chatBlockNotice}>
-                  <Ionicons name="ban-outline" size={14} color="#5c6370" />
+                  <Ionicons name="ban-outline" size={14} color={theme.isDark ? theme.colors.textSecondary : '#5c6370'} />
                   <Text style={styles.chatBlockNoticeText}>
                     {t('trip.chat.blockedNotice', { name: blockChatNotice })}
                   </Text>
@@ -2101,7 +2092,7 @@ export default function TripDetailsScreen() {
                   style={styles.chatAttachButton}
                   disabled={chatSending || chatImageUploading}
                   onPress={() => void handlePickChatImage()}>
-                  <Ionicons name="image-outline" size={22} color={chatSending || chatImageUploading ? '#c2c8d2' : '#161821'} />
+                  <Ionicons name="image-outline" size={22} color={chatSending || chatImageUploading ? (theme.isDark ? theme.colors.textMuted : '#c2c8d2') : theme.colors.textPrimary} />
                 </TouchableOpacity>
                 <Animated.View style={{ flex: 1, opacity: chatInputOpacityRef }}>
                   <TextInput
@@ -2123,7 +2114,8 @@ export default function TripDetailsScreen() {
                       }).start();
                     }}
                     placeholder={t('trip.chatPlaceholder')}
-                    placeholderTextColor="#afb5bf"
+                    placeholderTextColor={theme.isDark ? theme.colors.placeholderText : '#afb5bf'}
+                    keyboardAppearance={theme.keyboardAppearance}
                     style={styles.chatInput}
                     multiline
                   />
@@ -2132,7 +2124,7 @@ export default function TripDetailsScreen() {
                   activeOpacity={0.9}
                   style={[
                     styles.chatSendButton,
-                    { backgroundColor: COLORS.primary },
+                    { backgroundColor: theme.colors.primary },
                     (!chatDraft.trim() && !chatPendingImage) || chatSending || chatImageUploading ? styles.chatSendButtonDisabled : null,
                   ]}
                   disabled={(!chatDraft.trim() && !chatPendingImage) || chatSending || chatImageUploading}
@@ -2170,7 +2162,10 @@ export default function TripDetailsScreen() {
               onRequestClose={closeReactionPicker}>
               <Pressable style={styles.reactionOverlay} onPress={closeReactionPicker}>
                 {/* Blurred, dimmed chat behind — the message stays in place
-                    and comes forward. */}
+                    and comes forward. The tint is deliberately "dark" in BOTH
+                    themes: this overlay is an Instagram-style dim (see the
+                    scrim below), so a theme-following light tint would wash
+                    the light theme's approved look out. */}
                 <BlurView intensity={38} tint="dark" style={StyleSheet.absoluteFill} />
                 {/* Darker scrim so the dimmed chat reads clearly behind the
                     overlay (Instagram-style), not washed-out light. */}
@@ -2207,7 +2202,7 @@ export default function TripDetailsScreen() {
                                 style={[styles.reactionAddButton, emojiGridOpen && styles.reactionAddButtonActive]}
                                 accessibilityLabel={t('trip.chat.reactionPickMore')}
                                 onPress={() => setEmojiGridOpen((v) => !v)}>
-                                <Ionicons name="add" size={22} color={emojiGridOpen ? COLORS.primary : '#5c6370'} />
+                                <Ionicons name="add" size={22} color={emojiGridOpen ? theme.colors.primary : (theme.isDark ? theme.colors.textSecondary : '#5c6370')} />
                               </TouchableOpacity>
                             </View>
                           </Pressable>
@@ -2233,7 +2228,7 @@ export default function TripDetailsScreen() {
                             style={[
                               styles.chatBubbleCard,
                               styles.reactionPreviewBubble,
-                              own && [styles.chatBubbleCardOwn, { backgroundColor: COLORS.primary }],
+                              own && [styles.chatBubbleCardOwn, { backgroundColor: theme.colors.primary }],
                               // Fill the measured rect exactly so the copy matches
                               // the real bubble (overrides the own-bubble maxWidth).
                               // Height is locked to the measured bubble and
@@ -2325,7 +2320,7 @@ export default function TripDetailsScreen() {
                   <Text style={styles.sheetTitle}>{t('trip.spotifyForEvent')}</Text>
                 </View>
                 <TouchableOpacity style={styles.sheetCloseButton} activeOpacity={0.88} onPress={() => setSpotifyModalOpen(false)}>
-                  <Ionicons name="close" size={20} color="#161821" />
+                  <Ionicons name="close" size={20} color={theme.colors.textPrimary} />
                 </TouchableOpacity>
               </View>
 
@@ -2365,10 +2360,11 @@ export default function TripDetailsScreen() {
                       }).start();
                     }}
                     placeholder="https://open.spotify.com/..."
-                    placeholderTextColor="#a3a9b4"
+                    placeholderTextColor={theme.isDark ? theme.colors.placeholderText : '#a3a9b4'}
                     autoCapitalize="none"
                     autoCorrect={false}
                     keyboardType="url"
+                    keyboardAppearance={theme.keyboardAppearance}
                     style={styles.spotifyInput}
                     returnKeyType="done"
                     onSubmitEditing={() => Keyboard.dismiss()}
@@ -2400,7 +2396,7 @@ export default function TripDetailsScreen() {
             <View style={[styles.categoryModalContent, { paddingTop: 14 }]}>
               <View style={styles.categoryModalHeader}>
                 <TouchableOpacity onPress={() => setSelectedCategoryKey(null)} style={styles.categoryModalCloseButton}>
-                  <Ionicons name="chevron-down" size={24} color="#161821" />
+                  <Ionicons name="chevron-down" size={24} color={theme.colors.textPrimary} />
                 </TouchableOpacity>
                 <View style={{ flex: 1 }} />
                 <TouchableOpacity
@@ -2453,7 +2449,7 @@ export default function TripDetailsScreen() {
                                       {formatActivityDate(activity.date, locale)}
                                     </Text>
                                   </View>
-                                  <Ionicons name="chevron-forward" size={18} color="#c5cad2" />
+                                  <Ionicons name="chevron-forward" size={18} color={theme.isDark ? theme.colors.textMuted : '#c5cad2'} />
                                 </>
                               ) : (
                                 <>
@@ -2511,6 +2507,7 @@ const URL_REGEX = /https?:\/\/[^\s]+/g;
 // placeholder rows shown only on a true cold-start chat load, alternating
 // sides so it reads as "messages are coming" rather than a generic spinner.
 function ChatLoadingSkeleton() {
+  const styles = useThemedStyles(createStyles);
   const widths = [0.55, 0.4, 0.62];
   return (
     <View style={styles.chatSkeletonWrap}>
@@ -2528,6 +2525,7 @@ function ChatLoadingSkeleton() {
 }
 
 function ChatMessageText({ text, isOwn }: { text: string; isOwn: boolean }) {
+  const styles = useThemedStyles(createStyles);
   const parts = text.split(URL_REGEX);
   const urls = text.match(URL_REGEX) || [];
 
@@ -2566,6 +2564,7 @@ function ChatMessageText({ text, isOwn }: { text: string; isOwn: boolean }) {
 }
 
 function LinkPreviewCardInline({ preview, isOwn }: { preview: LinkPreview; isOwn?: boolean }) {
+  const styles = useThemedStyles(createStyles);
   return (
     <TouchableOpacity
       activeOpacity={0.85}
@@ -2602,6 +2601,7 @@ function TripMetaChip({
   label: string;
   onPress?: () => void;
 }) {
+  const styles = useThemedStyles(createStyles);
   return (
     <TouchableOpacity activeOpacity={0.88} style={styles.heroChip} onPress={onPress}>
       <Ionicons name={icon} size={15} color="#fff" />
@@ -2720,10 +2720,10 @@ function formatChatTimestamp(value: string, locale: string) {
   return new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' }).format(new Date(value));
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: theme.colors.bgPrimary,
   },
   content: {
     paddingHorizontal: 22,
@@ -2739,12 +2739,12 @@ const styles = StyleSheet.create({
     borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#f5f6f8',
+    backgroundColor: theme.isDark ? theme.colors.bgLight : '#f5f6f8',
   },
   headerTitle: {
     flex: 1,
     marginLeft: 12,
-    color: '#121317',
+    color: theme.isDark ? theme.colors.textPrimary : '#121317',
     fontSize: 24,
     fontWeight: '900',
     letterSpacing: -0.8,
@@ -2755,7 +2755,7 @@ const styles = StyleSheet.create({
     borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#f5f6f8',
+    backgroundColor: theme.isDark ? theme.colors.bgLight : '#f5f6f8',
   },
   heroCardSize: {
     minHeight: 270,
@@ -2793,7 +2793,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 100,
-    backgroundColor: 'rgba(0,0,0,0.42)',
+    backgroundColor: theme.colors.pillDark42,
     maxWidth: '70%',
   },
   heroLocText: {
@@ -2840,8 +2840,8 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#eaedf2',
-    backgroundColor: '#ffffff',
+    borderColor: theme.isDark ? theme.colors.borderPrimary : '#eaedf2',
+    backgroundColor: theme.colors.surface,
   },
   functionsCard: {
     marginTop: 12,
@@ -2852,14 +2852,14 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: '#eceef2',
-    backgroundColor: '#fff',
+    borderColor: theme.isDark ? theme.colors.borderPrimary : '#eceef2',
+    backgroundColor: theme.colors.surface,
   },
   functionsCardIcon: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#fff0f4',
+    backgroundColor: theme.isDark ? theme.colors.primaryLight12 : '#fff0f4',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -2867,14 +2867,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   functionsCardTitle: {
-    color: '#161821',
+    color: theme.colors.textPrimary,
     fontSize: 15,
     fontWeight: '800',
     letterSpacing: -0.3,
   },
   functionsCardSubtitle: {
     marginTop: 2,
-    color: '#8a909d',
+    color: theme.isDark ? theme.colors.textSecondary : '#8a909d',
     fontSize: 12.5,
     fontWeight: '600',
   },
@@ -2899,8 +2899,8 @@ const styles = StyleSheet.create({
     marginTop: 14,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#eaedf2',
-    backgroundColor: '#ffffff',
+    borderColor: theme.isDark ? theme.colors.borderPrimary : '#eaedf2',
+    backgroundColor: theme.colors.surface,
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
@@ -2912,8 +2912,8 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: '#eceef2',
-    backgroundColor: '#fff',
+    borderColor: theme.isDark ? theme.colors.borderPrimary : '#eceef2',
+    backgroundColor: theme.colors.surface,
   },
   spotifyRowIcon: {
     width: 44,
@@ -2927,14 +2927,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   spotifyRowTitle: {
-    color: '#161821',
+    color: theme.colors.textPrimary,
     fontSize: 15,
     fontWeight: '800',
     letterSpacing: -0.3,
   },
   spotifyRowSubtitle: {
     marginTop: 2,
-    color: '#8a909d',
+    color: theme.isDark ? theme.colors.textSecondary : '#8a909d',
     fontSize: 12.5,
     fontWeight: '600',
   },
@@ -2951,7 +2951,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   spotifyRowBtnPrimary: {
-    backgroundColor: '#e7f8ef',
+    backgroundColor: theme.isDark ? theme.colors.successLight : '#e7f8ef',
   },
   spotifyRowBtnPrimaryText: {
     color: '#1cb35b',
@@ -2959,12 +2959,12 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   spotifyRowBtnGhost: {
-    backgroundColor: '#fff',
+    backgroundColor: theme.colors.surface,
     borderWidth: 1,
-    borderColor: '#e4e7ee',
+    borderColor: theme.isDark ? theme.colors.borderPrimary : '#e4e7ee',
   },
   spotifyRowBtnGhostText: {
-    color: '#161821',
+    color: theme.colors.textPrimary,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -2978,27 +2978,27 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#f3f6f4',
+    backgroundColor: theme.isDark ? theme.colors.bgLight : '#f3f6f4',
     marginRight: 8,
   },
   spotifyCopy: {
     flex: 1,
   },
   spotifyLabel: {
-    color: '#1b2029',
+    color: theme.isDark ? theme.colors.textPrimary : '#1b2029',
     fontSize: 14,
     fontWeight: '700',
     letterSpacing: -0.2,
   },
   spotifyHint: {
     marginTop: 1,
-    color: '#8a92a0',
+    color: theme.isDark ? theme.colors.textMeta : '#8a92a0',
     fontSize: 11,
     lineHeight: 15,
   },
   spotifyUrlText: {
     marginTop: 8,
-    color: '#4f5866',
+    color: theme.isDark ? theme.colors.textSecondary : '#4f5866',
     fontSize: 12,
     lineHeight: 17,
   },
@@ -3011,16 +3011,16 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 34,
     borderRadius: 10,
-    backgroundColor: '#eef8f1',
+    backgroundColor: theme.isDark ? theme.colors.successLight : '#eef8f1',
     borderWidth: 1,
-    borderColor: '#d3e9da',
+    borderColor: theme.isDark ? theme.colors.successBorder : '#d3e9da',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
   },
   spotifyPrimaryButtonText: {
-    color: '#167a3a',
+    color: theme.isDark ? theme.colors.success : '#167a3a',
     fontSize: 12,
     fontWeight: '700',
   },
@@ -3029,8 +3029,8 @@ const styles = StyleSheet.create({
     minHeight: 34,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#e0e5ec',
-    backgroundColor: '#fff',
+    borderColor: theme.isDark ? theme.colors.borderPrimary : '#e0e5ec',
+    backgroundColor: theme.colors.surface,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -3038,7 +3038,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
   },
   spotifyGhostButtonText: {
-    color: '#4e5664',
+    color: theme.isDark ? theme.colors.textSecondary : '#4e5664',
     fontSize: 12,
     fontWeight: '700',
   },
@@ -3047,21 +3047,21 @@ const styles = StyleSheet.create({
     minHeight: 34,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#dde4e8',
-    backgroundColor: '#fff',
+    borderColor: theme.isDark ? theme.colors.borderPrimary : '#dde4e8',
+    backgroundColor: theme.colors.surface,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
   },
   spotifyEmptyButtonText: {
-    color: '#4e5664',
+    color: theme.isDark ? theme.colors.textSecondary : '#4e5664',
     fontSize: 12,
     fontWeight: '700',
   },
   spotifyMessage: {
     marginTop: 6,
-    color: '#79838f',
+    color: theme.isDark ? theme.colors.textSecondary : '#79838f',
     fontSize: 11,
     lineHeight: 15,
   },
@@ -3070,7 +3070,7 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   spotifySheetCopy: {
-    color: '#6c7480',
+    color: theme.isDark ? theme.colors.textSecondary : '#6c7480',
     fontSize: 14,
     lineHeight: 21,
   },
@@ -3078,10 +3078,10 @@ const styles = StyleSheet.create({
     minHeight: 56,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#e5e8ee',
-    backgroundColor: '#f9fbfc',
+    borderColor: theme.isDark ? theme.colors.borderInput : '#e5e8ee',
+    backgroundColor: theme.isDark ? theme.colors.bgLightest : '#f9fbfc',
     paddingHorizontal: 16,
-    color: '#141821',
+    color: theme.isDark ? theme.colors.textPrimary : '#141821',
     fontSize: 16,
   },
   spotifySheetButtons: {
@@ -3092,14 +3092,14 @@ const styles = StyleSheet.create({
     minHeight: 52,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#e4e8ef',
-    backgroundColor: '#fff',
+    borderColor: theme.isDark ? theme.colors.borderInput : '#e4e8ef',
+    backgroundColor: theme.isDark ? theme.colors.surfaceElevated : '#fff',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 16,
   },
   spotifySheetSecondaryButtonText: {
-    color: '#525a67',
+    color: theme.isDark ? theme.colors.textSecondary : '#525a67',
     fontSize: 15,
     fontWeight: '700',
   },
@@ -3122,14 +3122,14 @@ const styles = StyleSheet.create({
   },
   sheetBackdrop: {
     flex: 1,
-    backgroundColor: COLORS.backdropModal,
+    backgroundColor: theme.colors.backdropModal,
     justifyContent: 'flex-end',
   },
   sheetCard: {
     maxHeight: '82%',
     borderTopLeftRadius: RADIUS.xl,
     borderTopRightRadius: RADIUS.xl,
-    backgroundColor: COLORS.bgPrimary,
+    backgroundColor: theme.colors.bgPrimary,
     paddingTop: SPACING.md,
     paddingHorizontal: SPACING.lg,
   },
@@ -3138,7 +3138,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 5,
     borderRadius: RADIUS.circle,
-    backgroundColor: COLORS.borderInput,
+    backgroundColor: theme.colors.sheetHandle,
   },
   sheetHeader: {
     marginTop: SPACING.lg,
@@ -3148,12 +3148,12 @@ const styles = StyleSheet.create({
   },
   sheetEyebrow: {
     ...TYPOGRAPHY.eyebrow,
-    color: COLORS.textMeta,
+    color: theme.colors.textMeta,
   },
   sheetTitle: {
     marginTop: SPACING.xs,
     ...TYPOGRAPHY.pageHeading,
-    color: COLORS.textPrimary,
+    color: theme.colors.textPrimary,
   },
   sheetCloseButton: {
     width: 38,
@@ -3161,7 +3161,7 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.circle,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.bgLight,
+    backgroundColor: theme.colors.bgLight,
   },
   sheetContent: {
     paddingTop: SPACING.lg,
@@ -3171,14 +3171,14 @@ const styles = StyleSheet.create({
   inviteCard: {
     borderRadius: 28,
     borderWidth: 1,
-    borderColor: '#ebedf2',
-    backgroundColor: '#fff',
+    borderColor: theme.isDark ? theme.colors.borderPrimary : '#ebedf2',
+    backgroundColor: theme.isDark ? theme.colors.surfaceElevated : '#fff',
     padding: 18,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.04,
+    shadowOpacity: theme.isDark ? 0.2 : 0.04,
     shadowRadius: 20,
-    elevation: 4,
+    elevation: theme.isDark ? 0 : 4,
   },
   inviteHeader: {
     flexDirection: 'row',
@@ -3187,14 +3187,14 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   inviteEyebrow: {
-    color: '#97a0ad',
+    color: theme.isDark ? theme.colors.textMeta : '#97a0ad',
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 1.4,
   },
   inviteTitle: {
     marginTop: 6,
-    color: '#161821',
+    color: theme.colors.textPrimary,
     fontSize: 18,
     fontWeight: '900',
     letterSpacing: -0.5,
@@ -3205,14 +3205,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     borderRadius: 999,
-    backgroundColor: '#fff3f6',
+    backgroundColor: theme.isDark ? theme.colors.primaryLight08 : '#fff3f6',
     borderWidth: 1,
-    borderColor: '#ffd4de',
+    borderColor: theme.isDark ? theme.colors.primaryLight20 : '#ffd4de',
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
   inviteCodePillText: {
-    color: '#ff4f74',
+    color: theme.colors.primary,
     fontSize: 12,
     fontWeight: '900',
     letterSpacing: 1.1,
@@ -3228,10 +3228,10 @@ const styles = StyleSheet.create({
     minHeight: 56,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#e6e9ef',
-    backgroundColor: '#f9fafc',
+    borderColor: theme.isDark ? theme.colors.borderInput : '#e6e9ef',
+    backgroundColor: theme.isDark ? theme.colors.bgLightest : '#f9fafc',
     paddingHorizontal: 16,
-    color: '#161821',
+    color: theme.colors.textPrimary,
     fontSize: 15,
   },
   inviteAddButton: {
@@ -3244,7 +3244,7 @@ const styles = StyleSheet.create({
     // width if the row is ever tight, not this button.
     flexShrink: 0,
     borderRadius: 18,
-    backgroundColor: '#ff4f74',
+    backgroundColor: theme.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 16,
@@ -3268,31 +3268,31 @@ const styles = StyleSheet.create({
     gap: 8,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#ffd4de',
-    backgroundColor: '#fff',
+    borderColor: theme.isDark ? theme.colors.primaryLight20 : '#ffd4de',
+    backgroundColor: theme.isDark ? theme.colors.surfaceElevated : '#fff',
     paddingHorizontal: 14,
     paddingVertical: 11,
   },
   secondaryInviteButtonText: {
-    color: '#ff4f74',
+    color: theme.colors.primary,
     fontSize: 14,
     fontWeight: '700',
   },
   inviteMessage: {
     marginTop: 12,
-    color: '#6f7683',
+    color: theme.colors.textSecondary,
     fontSize: 14,
     fontWeight: '600',
   },
   peopleSection: {
     borderRadius: 26,
     borderWidth: 1,
-    borderColor: '#ebedf2',
-    backgroundColor: '#fff',
+    borderColor: theme.isDark ? theme.colors.borderPrimary : '#ebedf2',
+    backgroundColor: theme.isDark ? theme.colors.surfaceElevated : '#fff',
     padding: 18,
   },
   peopleSectionTitle: {
-    color: '#161821',
+    color: theme.colors.textPrimary,
     fontSize: 18,
     fontWeight: '900',
     letterSpacing: -0.5,
@@ -3303,7 +3303,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#f1f3f6',
+    borderBottomColor: theme.isDark ? theme.colors.borderPrimary : '#f1f3f6',
   },
   personRowInvite: {
     borderBottomWidth: 0,
@@ -3317,16 +3317,16 @@ const styles = StyleSheet.create({
     borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#1d212a',
+    backgroundColor: theme.colors.avatarDark,
     marginRight: 12,
   },
   pendingAvatar: {
-    backgroundColor: '#f3f5f8',
+    backgroundColor: theme.isDark ? theme.colors.bgLight : '#f3f5f8',
   },
   inviteAvatar: {
-    backgroundColor: '#fff2f5',
+    backgroundColor: theme.isDark ? theme.colors.primaryLight08 : '#fff2f5',
     borderWidth: 1.5,
-    borderColor: '#ffd4de',
+    borderColor: theme.isDark ? theme.colors.primaryLight20 : '#ffd4de',
   },
   personCopy: {
     flex: 1,
@@ -3336,25 +3336,25 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   personName: {
-    color: '#161821',
+    color: theme.colors.textPrimary,
     fontSize: 15,
     fontWeight: '700',
   },
   personMeta: {
     marginTop: 3,
-    color: '#7b828e',
+    color: theme.isDark ? theme.colors.textSecondary : '#7b828e',
     fontSize: 13,
     fontWeight: '600',
   },
   peopleEmpty: {
-    color: '#7b828e',
+    color: theme.isDark ? theme.colors.textSecondary : '#7b828e',
     fontSize: 14,
     fontWeight: '600',
   },
   inviteInlineWrap: {
     marginTop: 4,
     borderTopWidth: 1,
-    borderTopColor: '#f1f3f6',
+    borderTopColor: theme.isDark ? theme.colors.borderPrimary : '#f1f3f6',
     paddingTop: 4,
   },
   inviteInlineComposer: {
@@ -3367,20 +3367,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     borderRadius: 16,
-    backgroundColor: '#fff5f7',
+    backgroundColor: theme.isDark ? theme.colors.primaryLight08 : '#fff5f7',
     borderWidth: 1,
-    borderColor: '#ffd6df',
+    borderColor: theme.isDark ? theme.colors.primaryLight20 : '#ffd6df',
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
   inviteHintLabel: {
-    color: '#8f5665',
+    color: theme.isDark ? theme.colors.textSecondary : '#8f5665',
     fontSize: 12,
     fontWeight: '800',
     letterSpacing: 1,
   },
   inviteHintCode: {
-    color: COLORS.primary,
+    color: theme.colors.primary,
     fontSize: 13,
     fontWeight: '900',
     letterSpacing: 1.1,
@@ -3393,7 +3393,7 @@ const styles = StyleSheet.create({
   },
   miniCalendarEyebrow: {
     ...TYPOGRAPHY.eyebrow,
-    color: COLORS.textMeta,
+    color: theme.colors.textMeta,
   },
   miniCalendarRow: {
     paddingTop: 12,
@@ -3405,12 +3405,12 @@ const styles = StyleSheet.create({
     borderRadius: 31,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#fff6f8',
+    backgroundColor: theme.isDark ? theme.colors.primaryLight08 : '#fff6f8',
     borderWidth: 1,
-    borderColor: '#ffd8e2',
+    borderColor: theme.isDark ? theme.colors.primaryLight20 : '#ffd8e2',
   },
   miniCalendarWeekday: {
-    color: '#cf295f',
+    color: theme.isDark ? theme.colors.primary : '#cf295f',
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 0.9,
@@ -3418,19 +3418,19 @@ const styles = StyleSheet.create({
   },
   miniCalendarDay: {
     marginTop: SPACING.xs,
-    color: COLORS.textPrimary,
+    color: theme.colors.textPrimary,
     fontSize: 20,
     fontWeight: '900',
     letterSpacing: -0.5,
   },
   sectionEyebrow: {
     ...TYPOGRAPHY.eyebrow,
-    color: COLORS.textMeta,
+    color: theme.colors.textMeta,
   },
   sectionTitle: {
     marginTop: SPACING.sm,
     ...TYPOGRAPHY.pageHeading,
-    color: COLORS.textPrimary,
+    color: theme.colors.textPrimary,
     fontSize: 30,
     lineHeight: 34,
     letterSpacing: -1.2,
@@ -3438,15 +3438,15 @@ const styles = StyleSheet.create({
   sectionCopy: {
     marginTop: SPACING.sm,
     ...TYPOGRAPHY.body,
-    color: COLORS.textSecondary,
+    color: theme.colors.textSecondary,
     lineHeight: 22,
   },
   emptyState: {
     marginTop: 18,
     borderRadius: 30,
     borderWidth: 1,
-    borderColor: '#ebedf2',
-    backgroundColor: '#fff',
+    borderColor: theme.isDark ? theme.colors.borderPrimary : '#ebedf2',
+    backgroundColor: theme.colors.surface,
     paddingHorizontal: 24,
     paddingVertical: 40,
     alignItems: 'center',
@@ -3457,25 +3457,25 @@ const styles = StyleSheet.create({
     borderRadius: 37,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#f5f6f8',
+    backgroundColor: theme.isDark ? theme.colors.bgLight : '#f5f6f8',
   },
   emptyTitle: {
     marginTop: 18,
-    color: '#161821',
+    color: theme.colors.textPrimary,
     fontSize: 24,
     fontWeight: '900',
     letterSpacing: -0.8,
   },
   emptyCopy: {
     marginTop: 10,
-    color: '#79808c',
+    color: theme.isDark ? theme.colors.textSecondary : '#79808c',
     fontSize: 15,
     lineHeight: 23,
     textAlign: 'center',
   },
   errorText: {
     marginTop: 18,
-    color: '#d53d18',
+    color: theme.colors.error,
     textAlign: 'center',
   },
   floatingWrap: {
@@ -3498,17 +3498,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 999,
-    backgroundColor: '#f1f3f7',
+    backgroundColor: theme.isDark ? theme.colors.avatarDark : '#f1f3f7',
     borderWidth: 1,
-    borderColor: '#e4e7ee',
+    borderColor: theme.isDark ? theme.colors.borderPrimary : '#e4e7ee',
   },
   reactionChipMine: {
-    backgroundColor: '#ffe9ef',
-    borderColor: '#ff4f74',
+    backgroundColor: theme.isDark ? theme.colors.primaryLight12 : '#ffe9ef',
+    borderColor: theme.colors.primary,
   },
   reactionChipText: {
     fontSize: 12,
-    color: '#3c4250',
+    color: theme.isDark ? theme.colors.textPrimary : '#3c4250',
     fontWeight: '600',
   },
   reactionOverlay: {
@@ -3532,15 +3532,17 @@ const styles = StyleSheet.create({
   },
   reactionPickerCard: {
     maxWidth: '100%',
-    backgroundColor: '#fff',
+    backgroundColor: theme.colors.surfaceElevated,
+    borderWidth: theme.isDark ? StyleSheet.hairlineWidth : 0,
+    borderColor: theme.colors.borderPrimary,
     borderRadius: 28,
     paddingHorizontal: 14,
     paddingVertical: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: 0.25,
+    shadowOpacity: theme.isDark ? 0.5 : 0.25,
     shadowRadius: 32,
-    elevation: 12,
+    elevation: theme.isDark ? 0 : 12,
   },
   reactionEmojiRow: {
     flexDirection: 'row',
@@ -3558,7 +3560,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   reactionEmojiButtonMine: {
-    backgroundColor: '#ffe9ef',
+    backgroundColor: theme.isDark ? theme.colors.primaryLight12 : '#ffe9ef',
   },
   reactionEmojiText: {
     fontSize: 24,
@@ -3571,33 +3573,35 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#f1f3f7',
+    backgroundColor: theme.isDark ? theme.colors.avatarDark : '#f1f3f7',
   },
   reactionAddButtonActive: {
-    backgroundColor: '#ffe9ef',
+    backgroundColor: theme.isDark ? theme.colors.primaryLight12 : '#ffe9ef',
   },
   // The reacted message copy, rendered at its exact rect and lifted forward
   // with a soft shadow so it reads above the blur.
   reactionPreviewBubble: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.35,
+    shadowOpacity: theme.isDark ? 0.5 : 0.35,
     shadowRadius: 22,
-    elevation: 12,
+    elevation: theme.isDark ? 0 : 12,
   },
   deleteActionCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#fff',
+    backgroundColor: theme.colors.surfaceElevated,
+    borderWidth: theme.isDark ? StyleSheet.hairlineWidth : 0,
+    borderColor: theme.colors.borderPrimary,
     borderRadius: 22,
     paddingHorizontal: 18,
     paddingVertical: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.2,
+    shadowOpacity: theme.isDark ? 0.4 : 0.2,
     shadowRadius: 24,
-    elevation: 10,
+    elevation: theme.isDark ? 0 : 10,
   },
   deleteActionText: {
     fontSize: 15,
@@ -3615,15 +3619,17 @@ const styles = StyleSheet.create({
   emojiGridCard: {
     width: '100%',
     maxWidth: 360,
-    backgroundColor: '#fff',
+    backgroundColor: theme.colors.surfaceElevated,
+    borderWidth: theme.isDark ? StyleSheet.hairlineWidth : 0,
+    borderColor: theme.colors.borderPrimary,
     borderRadius: 22,
     paddingHorizontal: 12,
     paddingVertical: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: 0.25,
+    shadowOpacity: theme.isDark ? 0.5 : 0.25,
     shadowRadius: 32,
-    elevation: 12,
+    elevation: theme.isDark ? 0 : 12,
   },
   emojiGridWrap: {
     flexDirection: 'row',
@@ -3657,14 +3663,14 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.circle,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: theme.colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: '#eceef2',
+    borderColor: theme.isDark ? theme.colors.borderPrimary : '#eceef2',
     shadowColor: '#11131a',
     shadowOffset: { width: 0, height: 14 },
-    shadowOpacity: 0.12,
+    shadowOpacity: theme.isDark ? 0.4 : 0.12,
     shadowRadius: 24,
-    elevation: 8,
+    elevation: theme.isDark ? 0 : 8,
   },
   // marginTop adds breathing room between the "Reseverktyg" header and the
   // first row; paddingBottom is overridden inline with the safe-area inset.
@@ -3676,8 +3682,8 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#eceef2',
-    backgroundColor: '#fff',
+    borderColor: theme.isDark ? theme.colors.borderPrimary : '#eceef2',
+    backgroundColor: theme.isDark ? theme.colors.surfaceElevated : '#fff',
   },
   toolRowIcon: {
     width: 40,
@@ -3688,7 +3694,7 @@ const styles = StyleSheet.create({
   },
   toolRowLabel: {
     flex: 1,
-    color: '#161821',
+    color: theme.colors.textPrimary,
     fontSize: 15,
     fontWeight: '700',
     letterSpacing: -0.3,
@@ -3698,7 +3704,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     borderRadius: 14,
-    backgroundColor: '#e7f8ef',
+    backgroundColor: theme.isDark ? theme.colors.successLight : '#e7f8ef',
     paddingHorizontal: 10,
     paddingVertical: 6,
     marginRight: 6,
@@ -3713,14 +3719,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     borderRadius: 14,
-    backgroundColor: '#e7f8ef',
+    backgroundColor: theme.isDark ? theme.colors.successLight : '#e7f8ef',
     paddingHorizontal: 12,
     paddingVertical: 10,
     marginBottom: 12,
   },
   spotifySheetOpenText: {
     flex: 1,
-    color: '#14803c',
+    color: theme.isDark ? theme.colors.success : '#14803c',
     fontSize: 13,
     fontWeight: '600',
   },
@@ -3730,12 +3736,12 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.circle,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.secondary,
-    shadowColor: COLORS.secondary,
+    backgroundColor: theme.colors.secondary,
+    shadowColor: theme.colors.secondary,
     shadowOffset: { width: 0, height: 14 },
-    shadowOpacity: 0.22,
+    shadowOpacity: theme.isDark ? 0.45 : 0.22,
     shadowRadius: 24,
-    elevation: 8,
+    elevation: theme.isDark ? 0 : 8,
   },
   chatUnreadDot: {
     position: 'absolute',
@@ -3744,13 +3750,13 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: COLORS.primary,
+    backgroundColor: theme.colors.primary,
     borderWidth: 2,
-    borderColor: COLORS.bgPrimary,
+    borderColor: theme.colors.bgPrimary,
   },
   chatModalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(9,11,17,0.42)',
+    backgroundColor: theme.isDark ? theme.colors.backdropModal : 'rgba(9,11,17,0.42)',
     paddingHorizontal: 14,
   },
   chatKeyboardAvoider: {
@@ -3759,7 +3765,9 @@ const styles = StyleSheet.create({
   chatPanel: {
     flex: 1,
     borderRadius: 30,
-    backgroundColor: '#fff',
+    backgroundColor: theme.colors.surfaceElevated,
+    borderWidth: theme.isDark ? StyleSheet.hairlineWidth : 0,
+    borderColor: theme.colors.borderPrimary,
     paddingHorizontal: 16,
   },
   chatPanelHeader: {
@@ -3768,7 +3776,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     paddingBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#eef1f5',
+    borderBottomColor: theme.isDark ? theme.colors.borderPrimary : '#eef1f5',
   },
   chatPanelHeaderLeft: {
     flex: 1,
@@ -3780,37 +3788,37 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#eef1f5',
+    borderBottomColor: theme.isDark ? theme.colors.borderPrimary : '#eef1f5',
   },
   chatPresenceBubble: {
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: '#e8f4f7',
+    backgroundColor: theme.isDark ? 'rgba(34,174,199,0.16)' : '#e8f4f7',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: '#fff',
+    borderColor: theme.colors.surfaceElevated,
   },
   chatPresenceBubbleText: {
     fontSize: 10,
     fontWeight: '800',
-    color: COLORS.secondary,
+    color: theme.colors.secondary,
   },
   chatPresenceLabel: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textSecondary,
+    color: theme.colors.textSecondary,
     fontWeight: '600',
     marginLeft: 2,
   },
   chatPanelEyebrow: {
     ...TYPOGRAPHY.eyebrow,
-    color: COLORS.textMeta,
+    color: theme.colors.textMeta,
   },
   chatPanelTitle: {
     marginTop: SPACING.xs,
     ...TYPOGRAPHY.pageHeading,
-    color: COLORS.textPrimary,
+    color: theme.colors.textPrimary,
     fontSize: 26,
   },
   chatPanelClose: {
@@ -3819,7 +3827,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#f5f6f8',
+    backgroundColor: theme.isDark ? theme.colors.bgLight : '#f5f6f8',
   },
   floatingButton: {
     flexDirection: 'row',
@@ -3828,12 +3836,12 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingHorizontal: 18,
     paddingVertical: 14,
-    backgroundColor: '#ff4f74',
-    shadowColor: '#ff4f74',
+    backgroundColor: theme.colors.primary,
+    shadowColor: theme.colors.primary,
     shadowOffset: { width: 0, height: 14 },
-    shadowOpacity: 0.24,
+    shadowOpacity: theme.isDark ? 0.45 : 0.24,
     shadowRadius: 24,
-    elevation: 8,
+    elevation: theme.isDark ? 0 : 8,
   },
   floatingButtonText: {
     color: '#fff',
@@ -3850,7 +3858,7 @@ const styles = StyleSheet.create({
   },
   chatTimeLabel: {
     textAlign: 'center',
-    color: '#a4aab4',
+    color: theme.isDark ? theme.colors.textMeta : '#a4aab4',
     fontSize: 11,
     fontWeight: '600',
     marginBottom: 6,
@@ -3862,7 +3870,7 @@ const styles = StyleSheet.create({
   },
   chatSystemLabel: {
     textAlign: 'center',
-    color: '#a4aab4',
+    color: theme.isDark ? theme.colors.textMeta : '#a4aab4',
     fontSize: 12,
     marginVertical: 2,
   },
@@ -3876,7 +3884,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#1d212a',
+    backgroundColor: theme.colors.avatarDark,
     alignItems: 'center',
     justifyContent: 'center',
     // No overflow:hidden — Avatar clips its own image and the online dot
@@ -3890,7 +3898,7 @@ const styles = StyleSheet.create({
   },
   chatAuthor: {
     marginBottom: 3,
-    color: '#9aa2ae',
+    color: theme.isDark ? theme.colors.textSecondary : '#9aa2ae',
     fontSize: 11,
     fontWeight: '700',
   },
@@ -3898,35 +3906,35 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     maxWidth: '100%',
     borderRadius: 20,
-    backgroundColor: '#f3f5f8',
+    backgroundColor: theme.isDark ? theme.colors.avatarDark : '#f3f5f8',
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
   chatBubbleCardOwn: {
     alignSelf: 'flex-end',
     maxWidth: '70%',
-    backgroundColor: '#ff4f74',
+    backgroundColor: theme.colors.primary,
   },
   chatMessagePending: {
     opacity: 0.55,
   },
   chatBubbleCardFailed: {
     borderWidth: 1.5,
-    borderColor: COLORS.error,
+    borderColor: theme.colors.error,
   },
   chatStatusPending: {
     alignSelf: 'flex-end',
     marginTop: 3,
     fontSize: 11,
     fontWeight: '600',
-    color: '#a4aab4',
+    color: theme.isDark ? theme.colors.textMeta : '#a4aab4',
   },
   chatStatusFailed: {
     alignSelf: 'flex-end',
     marginTop: 3,
     fontSize: 11,
     fontWeight: '700',
-    color: COLORS.error,
+    color: theme.colors.error,
   },
   chatErrorBanner: {
     flexDirection: 'row',
@@ -3936,15 +3944,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 14,
-    backgroundColor: COLORS.errorLight,
+    backgroundColor: theme.colors.errorLight,
     borderWidth: 1,
-    borderColor: COLORS.errorBorder,
+    borderColor: theme.colors.errorBorder,
   },
   chatErrorBannerText: {
     flex: 1,
     fontSize: 12,
     fontWeight: '600',
-    color: COLORS.error,
+    color: theme.colors.error,
   },
   chatSkeletonWrap: {
     flex: 1,
@@ -3954,10 +3962,10 @@ const styles = StyleSheet.create({
   chatSkeletonBubble: {
     height: 38,
     borderRadius: 18,
-    backgroundColor: '#f0f1f4',
+    backgroundColor: theme.isDark ? theme.colors.avatarDark : '#f0f1f4',
   },
   chatBubbleText: {
-    color: '#161821',
+    color: theme.colors.textPrimary,
     fontSize: 14,
     lineHeight: 20,
   },
@@ -3969,13 +3977,13 @@ const styles = StyleSheet.create({
     textDecorationLine: 'underline',
   },
   chatBubbleLinkOther: {
-    color: '#ff4f74',
+    color: theme.colors.primary,
     textDecorationLine: 'underline',
   },
   linkPreviewInline: {
     flexDirection: 'row',
     borderRadius: 10,
-    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+    backgroundColor: theme.isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0, 0, 0, 0.05)',
     overflow: 'hidden',
     marginTop: 8,
   },
@@ -3996,7 +4004,7 @@ const styles = StyleSheet.create({
   linkPreviewInlineTitle: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#161821',
+    color: theme.colors.textPrimary,
     marginBottom: 2,
   },
   linkPreviewInlineTitleOwn: {
@@ -4004,7 +4012,7 @@ const styles = StyleSheet.create({
   },
   linkPreviewInlineDescription: {
     fontSize: 12,
-    color: '#8a909d',
+    color: theme.isDark ? theme.colors.textSecondary : '#8a909d',
     marginBottom: 3,
   },
   linkPreviewInlineDescriptionOwn: {
@@ -4012,7 +4020,7 @@ const styles = StyleSheet.create({
   },
   linkPreviewInlineUrl: {
     fontSize: 11,
-    color: '#a4aab4',
+    color: theme.isDark ? theme.colors.textMeta : '#a4aab4',
     fontWeight: '500',
   },
   linkPreviewInlineUrlOwn: {
@@ -4020,7 +4028,7 @@ const styles = StyleSheet.create({
   },
   chatMeta: {
     marginTop: 4,
-    color: '#9aa2ae',
+    color: theme.isDark ? theme.colors.textSecondary : '#9aa2ae',
     fontSize: 11,
     fontWeight: '700',
   },
@@ -4030,14 +4038,14 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 14,
     paddingVertical: 7,
-    backgroundColor: '#f0f2f5',
+    backgroundColor: theme.isDark ? theme.colors.bgLight : '#f0f2f5',
     borderRadius: 10,
     marginBottom: 6,
   },
   chatBlockNoticeText: {
     flex: 1,
     fontSize: 12,
-    color: '#5c6370',
+    color: theme.isDark ? theme.colors.textSecondary : '#5c6370',
     fontWeight: '500',
   },
   chatHiddenNotice: {
@@ -4047,7 +4055,7 @@ const styles = StyleSheet.create({
   },
   chatHiddenNoticeText: {
     fontSize: 11,
-    color: '#a3a9b4',
+    color: theme.isDark ? theme.colors.textMeta : '#a3a9b4',
     fontWeight: '500',
   },
   chatBlockedBanner: {
@@ -4059,21 +4067,21 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    backgroundColor: '#fef3c7',
+    backgroundColor: theme.isDark ? 'rgba(245,166,35,0.14)' : '#fef3c7',
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#fcd34d',
+    borderColor: theme.isDark ? 'rgba(245,166,35,0.35)' : '#fcd34d',
   },
   chatBlockedBannerText: {
     flex: 1,
     fontSize: 12,
-    color: '#92400e',
+    color: theme.isDark ? theme.colors.warning : '#92400e',
     fontWeight: '600',
   },
   chatAuthorBlocked: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#b0b6c1',
+    color: theme.isDark ? theme.colors.textMuted : '#b0b6c1',
     marginBottom: 3,
   },
   chatBubbleBlocked: {
@@ -4082,14 +4090,14 @@ const styles = StyleSheet.create({
     gap: 5,
     paddingHorizontal: 10,
     paddingVertical: 7,
-    backgroundColor: '#f0f2f5',
+    backgroundColor: theme.isDark ? theme.colors.bgLight : '#f0f2f5',
     borderRadius: 14,
     borderTopLeftRadius: 4,
     alignSelf: 'flex-start',
   },
   chatBubbleBlockedText: {
     fontSize: 13,
-    color: '#a3a9b4',
+    color: theme.isDark ? theme.colors.textMeta : '#a3a9b4',
     fontStyle: 'italic',
   },
   chatComposer: {
@@ -4103,8 +4111,8 @@ const styles = StyleSheet.create({
     minHeight: 54,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#e6e9ef',
-    backgroundColor: '#f9fafc',
+    borderColor: theme.isDark ? theme.colors.borderInput : '#e6e9ef',
+    backgroundColor: theme.isDark ? theme.colors.bgLightest : '#f9fafc',
     paddingHorizontal: 16,
     // Multiline TextInput defaults to top-aligned text on both platforms —
     // without this the placeholder/draft sits at the top of the 54px box
@@ -4112,7 +4120,7 @@ const styles = StyleSheet.create({
     // paddingVertical keeps a single line of text centered on iOS too.
     paddingVertical: 15,
     textAlignVertical: 'center',
-    color: '#161821',
+    color: theme.colors.textPrimary,
     fontSize: 15,
   },
   chatSendButton: {
@@ -4121,7 +4129,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#ff4f74',
+    backgroundColor: theme.colors.primary,
   },
   chatSendButtonDisabled: {
     opacity: 0.55,
@@ -4159,7 +4167,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#f1f3f6',
+    backgroundColor: theme.isDark ? theme.colors.bgLight : '#f1f3f6',
   },
   chatPendingImageWrap: {
     marginTop: 8,
@@ -4208,17 +4216,17 @@ const styles = StyleSheet.create({
   },
   dayHeaderText: {
     ...TYPOGRAPHY.cardTitle,
-    color: COLORS.textPrimary,
+    color: theme.colors.textPrimary,
     fontWeight: '800',
   },
   dayHeaderDay: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: theme.colors.textMeta,
   },
   dayHeaderLine: {
     flex: 1,
     height: 1,
-    backgroundColor: COLORS.borderPrimary,
+    backgroundColor: theme.colors.borderPrimary,
     marginLeft: SPACING.xs,
   },
   timelineRow: {
@@ -4230,10 +4238,10 @@ const styles = StyleSheet.create({
   // ── Hotel-reservation surface family ─────────────────────────────────────
   // One visual identity chains the whole stay through the feed: the anchor
   // card on the check-in day, the "night X of Y" rows, and the check-out row
-  // all share the amber wash + left accent bar (colors live in STAY_COLORS).
+  // all share the amber wash + left accent bar (colors: the stay* theme tokens).
   // Quiet by design — elevation through tint, never shadow.
   stayAnchorSurface: {
-    backgroundColor: STAY_COLORS.anchorSurface,
+    backgroundColor: theme.colors.staySurface,
     borderRadius: RADIUS.sm,
     paddingHorizontal: SPACING.md,
     marginVertical: 2,
@@ -4249,7 +4257,7 @@ const styles = StyleSheet.create({
     bottom: 8,
     width: 3,
     borderRadius: 2,
-    backgroundColor: STAY_COLORS.accentBar,
+    backgroundColor: theme.colors.stayAccent,
   },
   stayTitleRow: {
     flexDirection: 'row',
@@ -4260,15 +4268,15 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   stayNightsPill: {
-    backgroundColor: STAY_COLORS.pillBackground,
+    backgroundColor: theme.colors.stayPillBackground,
     borderWidth: 1,
-    borderColor: STAY_COLORS.pillBorder,
+    borderColor: theme.colors.stayPillBorder,
     borderRadius: 999,
     paddingHorizontal: 8,
     paddingVertical: 2,
   },
   stayNightsPillText: {
-    color: STAY_COLORS.textMuted,
+    color: theme.colors.stayTextMuted,
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: -0.1,
@@ -4284,7 +4292,7 @@ const styles = StyleSheet.create({
     // the same x throughout the reservation family.
     paddingLeft: SPACING.md,
     paddingRight: 10,
-    backgroundColor: STAY_COLORS.ambientSurface,
+    backgroundColor: theme.colors.staySurfaceSubtle,
     borderRadius: RADIUS.sm,
     marginVertical: 2,
   },
@@ -4295,18 +4303,18 @@ const styles = StyleSheet.create({
     bottom: 8,
     width: 3,
     borderRadius: 2,
-    backgroundColor: STAY_COLORS.accentBar,
+    backgroundColor: theme.colors.stayAccent,
   },
   stayRowTitle: {
     flexShrink: 1,
-    color: STAY_COLORS.textStrong,
+    color: theme.colors.stayText,
     fontSize: 13,
     fontWeight: '700',
     letterSpacing: -0.2,
   },
   stayRowLabel: {
     flex: 1,
-    color: STAY_COLORS.textMuted,
+    color: theme.colors.stayTextMuted,
     fontSize: 12,
     fontWeight: '600',
     opacity: 0.85,
@@ -4319,13 +4327,13 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   stayBadgeText: {
-    color: STAY_COLORS.textMuted,
+    color: theme.colors.stayTextMuted,
     fontSize: 12,
     fontWeight: '700',
   },
   timelineTime: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: theme.colors.textMeta,
     marginLeft: SPACING.sm,
   },
   timelineIconWrap: {
@@ -4340,7 +4348,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   timelineIconHidden: {
-    backgroundColor: COLORS.avatarDark,
+    backgroundColor: theme.colors.avatarDark,
   },
   timelineBody: {
     flex: 1,
@@ -4348,13 +4356,13 @@ const styles = StyleSheet.create({
   },
   timelineTitle: {
     ...TYPOGRAPHY.cardTitle,
-    color: COLORS.textPrimary,
+    color: theme.colors.textPrimary,
     fontWeight: '800',
   },
   timelineSubtitle: {
     marginTop: 2,
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: theme.colors.textMeta,
     fontWeight: '500',
   },
   categoryGrid: {
@@ -4374,14 +4382,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderRadius: 18,
-    backgroundColor: '#fff',
+    backgroundColor: theme.colors.surface,
     borderWidth: 1,
-    borderColor: '#ebedf2',
+    borderColor: theme.isDark ? theme.colors.borderPrimary : '#ebedf2',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.05,
+    shadowOpacity: theme.isDark ? 0.2 : 0.05,
     shadowRadius: 12,
-    elevation: 2,
+    elevation: theme.isDark ? 0 : 2,
   },
   categoryCardAddButton: {
     width: 48,
@@ -4389,12 +4397,12 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.primary,
-    shadowColor: COLORS.primary,
+    backgroundColor: theme.colors.primary,
+    shadowColor: theme.colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
-    elevation: 4,
+    elevation: theme.isDark ? 0 : 4,
   },
   categoryCardHeader: {
     flex: 1,
@@ -4411,7 +4419,7 @@ const styles = StyleSheet.create({
   categoryLabel: {
     fontSize: 12,
     fontWeight: '800',
-    color: '#8a919d',
+    color: theme.isDark ? theme.colors.textMeta : '#8a919d',
     letterSpacing: 0.5,
     textTransform: 'uppercase',
   },
@@ -4419,20 +4427,20 @@ const styles = StyleSheet.create({
     marginTop: 4,
     fontSize: 16,
     fontWeight: '700',
-    color: '#161821',
+    color: theme.colors.textPrimary,
   },
   categoryCount: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#8a919d',
+    color: theme.isDark ? theme.colors.textMeta : '#8a919d',
   },
   categoryModalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: theme.isDark ? theme.colors.backdropModal : 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'flex-end',
   },
   categoryModalContent: {
-    backgroundColor: '#fff',
+    backgroundColor: theme.colors.surfaceElevated,
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
     maxHeight: '90%',
@@ -4452,7 +4460,7 @@ const styles = StyleSheet.create({
     borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#f5f6f8',
+    backgroundColor: theme.isDark ? theme.colors.bgLight : '#f5f6f8',
   },
   categoryModalAddButton: {
     width: 42,
@@ -4460,7 +4468,7 @@ const styles = StyleSheet.create({
     borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.primary,
+    backgroundColor: theme.colors.primary,
   },
   categoryModalBody: {
     paddingBottom: 4,
@@ -4477,14 +4485,14 @@ const styles = StyleSheet.create({
   categoryModalLabel: {
     fontSize: 12,
     fontWeight: '800',
-    color: '#8a919d',
+    color: theme.isDark ? theme.colors.textMeta : '#8a919d',
     letterSpacing: 0.5,
     textTransform: 'uppercase',
   },
   categoryModalCount: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#161821',
+    color: theme.colors.textPrimary,
     marginTop: 4,
   },
   categoryModalActivities: {
@@ -4505,12 +4513,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
     borderRadius: 16,
-    backgroundColor: '#f9fafc',
+    backgroundColor: theme.isDark ? theme.colors.bgLightest : '#f9fafc',
     borderWidth: 1,
-    borderColor: '#ebedf2',
+    borderColor: theme.isDark ? theme.colors.borderPrimary : '#ebedf2',
   },
   lockedBadge: {
-    backgroundColor: '#f5f6f8',
+    backgroundColor: theme.isDark ? theme.colors.bgLight : '#f5f6f8',
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 8,
@@ -4518,17 +4526,17 @@ const styles = StyleSheet.create({
   lockedBadgeText: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#8a919d',
+    color: theme.isDark ? theme.colors.textMeta : '#8a919d',
     letterSpacing: 0.5,
   },
   categoryModalActivityTitle: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#161821',
+    color: theme.colors.textPrimary,
   },
   categoryModalActivityDate: {
     fontSize: 13,
-    color: '#8a919d',
+    color: theme.isDark ? theme.colors.textMeta : '#8a919d',
     marginTop: 4,
   },
 });

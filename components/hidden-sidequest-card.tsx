@@ -1,7 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Animated, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useCallback, useMemo, useRef, useEffect } from 'react';
-import { COLORS, SPACING, TYPOGRAPHY, RADIUS } from '@/constants/design-tokens';
+import { SPACING, TYPOGRAPHY, RADIUS } from '@/constants/design-tokens';
+import { useTheme } from '@/components/theme-provider';
+import { useThemedStyles } from '@/hooks/use-themed-styles';
+import type { AppTheme } from '@/constants/themes';
 import { useScalePress } from '@/hooks/useMotion';
 import { useI18n } from '@/components/i18n-provider';
 import ActivityImageFallback from '@/components/activity-image-fallback';
@@ -33,6 +36,8 @@ export default function HiddenSidequestCard({
   formatTimeUntilReveal,
 }: HiddenSidequestCardProps) {
   const { t } = useI18n();
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const shimmerOpacityRef = useRef(new Animated.Value(1)).current;
   const blurAmount = useMemo(() => extractBlur(description) ?? DEFAULT_BLUR, [description]);
 
@@ -93,7 +98,7 @@ export default function HiddenSidequestCard({
           <ActivityImageFallback category={category} size="small" style={styles.timelineIcon} />
         )}
         <Animated.View style={[styles.lockScrim, { opacity: shimmerOpacityRef }]}>
-          <Ionicons name="lock-closed" size={15} color="#fff" />
+          <Ionicons name="lock-closed" size={15} color={theme.colors.white} />
         </Animated.View>
         {isRevealImminent && (
           <View style={styles.revealBadge}>
@@ -116,7 +121,7 @@ export default function HiddenSidequestCard({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   // Mirrors app/trip/[id]/index.tsx's own timelineRow/timelineIconWrap/
   // timelineIcon/timelineBody/timelineTitle/timelineSubtitle/timelineTime
   // exactly, so a hidden card lines up pixel-for-pixel with a visible one.
@@ -125,6 +130,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: SPACING.md,
     paddingVertical: SPACING.md,
+    // Dark: the warm sealed-parchment wash (the app-wide hidden/"mystery
+    // envelope" family — see calendar's sealed upcoming cards) so the row
+    // reads sealed against normal rows without glaring; never pure black.
+    // Light: transparent exactly as pre-theming — the radius is invisible on
+    // a transparent background, so light stays pixel-identical. No padding or
+    // border is added so the row keeps lining up with visible rows.
+    backgroundColor: theme.isDark ? theme.colors.sealedSurface : 'transparent',
+    borderRadius: theme.isDark ? RADIUS.sm : 0,
   },
   timelineIconWrap: {
     width: 42,
@@ -140,6 +153,8 @@ const styles = StyleSheet.create({
   lockScrim: {
     ...StyleSheet.absoluteFillObject,
     borderRadius: RADIUS.xs,
+    // On-photo scrim over the blurred cover — identical in both themes, like
+    // the shared image-overlay tokens (photos stay photos regardless of theme).
     backgroundColor: 'rgba(15, 17, 23, 0.38)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -151,7 +166,7 @@ const styles = StyleSheet.create({
     width: 16,
     height: 16,
     borderRadius: 999,
-    backgroundColor: COLORS.primary,
+    backgroundColor: theme.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -159,7 +174,8 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 999,
-    backgroundColor: '#fff',
+    // Stays white in both themes — a dot on the brand-pink badge.
+    backgroundColor: theme.colors.white,
   },
   timelineBody: {
     flex: 1,
@@ -167,18 +183,18 @@ const styles = StyleSheet.create({
   },
   timelineTitle: {
     ...TYPOGRAPHY.cardTitle,
-    color: COLORS.textPrimary,
+    color: theme.colors.textPrimary,
     fontWeight: '800',
   },
   timelineSubtitle: {
     marginTop: 2,
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: theme.colors.textMeta,
     fontWeight: '500',
   },
   timelineTime: {
     ...TYPOGRAPHY.meta,
-    color: COLORS.textMeta,
+    color: theme.colors.textMeta,
     marginLeft: SPACING.sm,
   },
 });

@@ -17,14 +17,22 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ModalSheet from '@/components/modal-sheet';
 import { useI18n } from '@/components/i18n-provider';
+import { useTheme } from '@/components/theme-provider';
+import { useThemedStyles } from '@/hooks/use-themed-styles';
+import type { AppTheme } from '@/constants/themes';
 import { apiFetch, apiJson } from '@/lib/api';
-import { COLORS } from '@/constants/design-tokens';
+
+// Spotify's brand green — a deliberate third-party brand accent, identical in
+// both themes (never remapped to the app's semantic success green).
+const SPOTIFY_GREEN = '#1cb35b';
 
 type TripData = { spotifyUrl?: string | null };
 
 export default function FunctionsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { t } = useI18n();
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const insets = useSafeAreaInsets();
 
   const [spotifyUrl, setSpotifyUrl] = useState<string | null | undefined>(undefined);
@@ -73,11 +81,12 @@ export default function FunctionsScreen() {
   }
 
   return (
-    <View style={[styles.screen, { backgroundColor: '#f7f8fa' }]}>
+    <View style={styles.screen}>
       {/* Header */}
       <View style={[styles.header, { paddingTop: Math.max(insets.top, 18) + 4 }]}>
         <TouchableOpacity style={styles.backButton} activeOpacity={0.88} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color="#11131a" />
+          {/* Light: exact pre-theming ink (#11131a, slightly deeper than textPrimary). */}
+          <Ionicons name="arrow-back" size={24} color={theme.isDark ? theme.colors.textPrimary : '#11131a'} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{t('trip.functions.title')}</Text>
         <View style={styles.headerSpacer} />
@@ -90,7 +99,7 @@ export default function FunctionsScreen() {
         {/* Spotify card */}
         <View style={styles.featureCard}>
           <View style={styles.spotifyRowIcon}>
-            <FontAwesome name="spotify" size={20} color="#fff" />
+            <FontAwesome name="spotify" size={20} color={theme.colors.white} />
           </View>
           <View style={styles.featureCardBody}>
             <Text style={styles.featureCardTitle}>Spotify</Text>
@@ -105,7 +114,7 @@ export default function FunctionsScreen() {
                   activeOpacity={0.85}
                   style={[styles.featureBtn, styles.featureBtnGreen]}
                   onPress={() => void openSpotifyLink(spotifyUrl)}>
-                  <Ionicons name="play" size={11} color="#1cb35b" />
+                  <Ionicons name="play" size={11} color={SPOTIFY_GREEN} />
                   <Text style={styles.featureBtnGreenText}>{t('common.open')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -116,7 +125,7 @@ export default function FunctionsScreen() {
                     setSpotifyMessage('');
                     setSpotifyModalOpen(true);
                   }}>
-                  <Ionicons name="pencil" size={11} color="#161821" />
+                  <Ionicons name="pencil" size={11} color={theme.colors.textPrimary} />
                   <Text style={styles.featureBtnGhostText}>{t('common.change')}</Text>
                 </TouchableOpacity>
               </>
@@ -130,7 +139,7 @@ export default function FunctionsScreen() {
                   setSpotifyMessage('');
                   setSpotifyModalOpen(true);
                 }}>
-                <Ionicons name="add" size={13} color="#1cb35b" />
+                <Ionicons name="add" size={13} color={SPOTIFY_GREEN} />
                 <Text style={styles.featureBtnGreenText}>{t('common.add')}</Text>
               </TouchableOpacity>
             )}
@@ -143,14 +152,16 @@ export default function FunctionsScreen() {
           style={styles.featureCard}
           activeOpacity={0.86}
           onPress={() => router.push(`/trip/${id}/split`)}>
-          <View style={[styles.featureIconCircle, { backgroundColor: '#fff0f4' }]}>
-            <Ionicons name="calculator-outline" size={20} color={COLORS.primary} />
+          {/* Light: exact pre-theming pink wash; dark: brand-pink tint token. */}
+          <View style={[styles.featureIconCircle, { backgroundColor: theme.isDark ? theme.colors.primaryLight12 : '#fff0f4' }]}>
+            <Ionicons name="calculator-outline" size={20} color={theme.colors.primary} />
           </View>
           <View style={styles.featureCardBody}>
             <Text style={styles.featureCardTitle}>{t('trip.costSplit')}</Text>
             <Text style={styles.featureCardSubtitle}>{t('trip.functions.costSplitSubtitle')}</Text>
           </View>
-          <Ionicons name="chevron-forward" size={20} color="#b2b7c0" />
+          {/* Light: exact pre-theming chevron gray (#b2b7c0, no matching token). */}
+          <Ionicons name="chevron-forward" size={20} color={theme.isDark ? theme.colors.textMuted : '#b2b7c0'} />
         </TouchableOpacity>
 
         {/* Packing List card */}
@@ -158,14 +169,17 @@ export default function FunctionsScreen() {
           style={styles.featureCard}
           activeOpacity={0.86}
           onPress={() => router.push(`/trip/${id}/packing-list`)}>
-          <View style={[styles.featureIconCircle, { backgroundColor: '#eef4ff' }]}>
+          {/* Deliberate packing-list blue accent (#3b82f6) — kept in both themes;
+              light keeps its exact wash, dark gets the same blue as a tint. */}
+          <View style={[styles.featureIconCircle, { backgroundColor: theme.isDark ? 'rgba(59,130,246,0.16)' : '#eef4ff' }]}>
             <Ionicons name="checkmark-done-outline" size={20} color="#3b82f6" />
           </View>
           <View style={styles.featureCardBody}>
             <Text style={styles.featureCardTitle}>{t('trip.packingList.title')}</Text>
             <Text style={styles.featureCardSubtitle}>{t('trip.functions.packingListSubtitle')}</Text>
           </View>
-          <Ionicons name="chevron-forward" size={20} color="#b2b7c0" />
+          {/* Light: exact pre-theming chevron gray (#b2b7c0, no matching token). */}
+          <Ionicons name="chevron-forward" size={20} color={theme.isDark ? theme.colors.textMuted : '#b2b7c0'} />
         </TouchableOpacity>
 
       </ScrollView>
@@ -181,7 +195,7 @@ export default function FunctionsScreen() {
                 <Text style={styles.sheetTitle}>{t('trip.spotifyForEvent')}</Text>
               </View>
               <TouchableOpacity style={styles.sheetCloseButton} activeOpacity={0.88} onPress={() => setSpotifyModalOpen(false)}>
-                <Ionicons name="close" size={20} color="#161821" />
+                <Ionicons name="close" size={20} color={theme.colors.textPrimary} />
               </TouchableOpacity>
             </View>
             <View style={styles.spotifySheetBody}>
@@ -193,7 +207,9 @@ export default function FunctionsScreen() {
                   onFocus={() => Animated.timing(spotifyUrlOpacityRef, { toValue: 1, duration: 300, useNativeDriver: false }).start()}
                   onBlur={() => Animated.timing(spotifyUrlOpacityRef, { toValue: 0.5, duration: 300, useNativeDriver: false }).start()}
                   placeholder="https://open.spotify.com/..."
-                  placeholderTextColor="#a3a9b4"
+                  // Light: exact pre-theming placeholder gray (#a3a9b4, no matching token).
+                  placeholderTextColor={theme.isDark ? theme.colors.placeholderText : '#a3a9b4'}
+                  keyboardAppearance={theme.keyboardAppearance}
                   autoCapitalize="none"
                   autoCorrect={false}
                   keyboardType="url"
@@ -224,16 +240,22 @@ export default function FunctionsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1 },
+const createStyles = (theme: AppTheme) => StyleSheet.create({
+  // Light literals below are the exact pre-theming values (several sit just
+  // off the shared tokens — #f7f8fa page, #eceef2 hairlines, #11131a ink), so
+  // they stay verbatim behind isDark ternaries instead of being remapped.
+  screen: {
+    flex: 1,
+    backgroundColor: theme.isDark ? theme.colors.bgPrimary : '#f7f8fa',
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingBottom: 12,
-    backgroundColor: '#f7f8fa',
+    backgroundColor: theme.isDark ? theme.colors.bgPrimary : '#f7f8fa',
     borderBottomWidth: 1,
-    borderBottomColor: '#eceef2',
+    borderBottomColor: theme.isDark ? theme.colors.borderPrimary : '#eceef2',
   },
   backButton: {
     width: 40,
@@ -241,16 +263,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 12,
-    backgroundColor: '#fff',
+    backgroundColor: theme.colors.surface,
     borderWidth: 1,
-    borderColor: '#eceef2',
+    borderColor: theme.isDark ? theme.colors.borderPrimary : '#eceef2',
   },
   headerTitle: {
     flex: 1,
     textAlign: 'center',
     fontSize: 17,
     fontWeight: '800',
-    color: '#11131a',
+    color: theme.isDark ? theme.colors.textPrimary : '#11131a',
     letterSpacing: -0.4,
   },
   headerSpacer: { width: 40 },
@@ -261,15 +283,17 @@ const styles = StyleSheet.create({
     gap: 14,
     padding: 16,
     borderRadius: 22,
+    // Light already draws a 1px #eceef2 border (cards on this screen are
+    // border-defined, not shadow-defined), so only the color adapts in dark.
     borderWidth: 1,
-    borderColor: '#eceef2',
-    backgroundColor: '#fff',
+    borderColor: theme.isDark ? theme.colors.borderPrimary : '#eceef2',
+    backgroundColor: theme.colors.surface,
   },
   spotifyRowIcon: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#1cb35b',
+    backgroundColor: SPOTIFY_GREEN,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -282,14 +306,15 @@ const styles = StyleSheet.create({
   },
   featureCardBody: { flex: 1 },
   featureCardTitle: {
-    color: '#161821',
+    color: theme.colors.textPrimary,
     fontSize: 15,
     fontWeight: '800',
     letterSpacing: -0.3,
   },
   featureCardSubtitle: {
     marginTop: 2,
-    color: '#8a909d',
+    // Light: exact pre-theming meta gray (#8a909d, one off the textMeta token).
+    color: theme.isDark ? theme.colors.textMeta : '#8a909d',
     fontSize: 12.5,
     fontWeight: '600',
   },
@@ -302,21 +327,32 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 12,
   },
-  featureBtnGreen: { backgroundColor: '#e7f8ef' },
-  featureBtnGreenText: { color: '#1cb35b', fontSize: 12, fontWeight: '800' },
-  featureBtnGhost: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#e4e7ee' },
-  featureBtnGhostText: { color: '#161821', fontSize: 12, fontWeight: '700' },
+  // Spotify-green chip: exact pre-theming mint in light; the same brand green
+  // as a translucent tint on the dark card surface.
+  featureBtnGreen: { backgroundColor: theme.isDark ? 'rgba(28,179,91,0.16)' : '#e7f8ef' },
+  featureBtnGreenText: { color: SPOTIFY_GREEN, fontSize: 12, fontWeight: '800' },
+  featureBtnGhost: {
+    backgroundColor: theme.isDark ? theme.colors.surfaceElevated : '#fff',
+    borderWidth: 1,
+    // Light: exact pre-theming button hairline (#e4e7ee, no matching token).
+    borderColor: theme.isDark ? theme.colors.borderInput : '#e4e7ee',
+  },
+  featureBtnGhostText: { color: theme.colors.textPrimary, fontSize: 12, fontWeight: '700' },
   featureMessage: {
     marginTop: -4,
     marginLeft: 6,
     fontSize: 12,
-    color: '#4e8c6a',
+    // Confirmation-green: exact pre-theming deep green in light; the shared
+    // semantic success green reads better on the dark page.
+    color: theme.isDark ? theme.colors.success : '#4e8c6a',
     fontWeight: '600',
   },
   sheetContent: { paddingHorizontal: 20 },
   sheetHandle: {
     width: 40, height: 4, borderRadius: 2,
-    backgroundColor: '#dde1e8', alignSelf: 'center', marginBottom: 20,
+    // Light: exact pre-theming handle gray (#dde1e8, just off the sheetHandle token).
+    backgroundColor: theme.isDark ? theme.colors.sheetHandle : '#dde1e8',
+    alignSelf: 'center', marginBottom: 20,
   },
   sheetHeader: {
     flexDirection: 'row', alignItems: 'flex-start',
@@ -324,29 +360,54 @@ const styles = StyleSheet.create({
   },
   sheetEyebrow: {
     fontSize: 10, fontWeight: '800', letterSpacing: 1.2,
-    color: '#a3a9b4', textTransform: 'uppercase', marginBottom: 4,
+    // Light: exact pre-theming eyebrow gray (#a3a9b4, no matching token).
+    color: theme.isDark ? theme.colors.textMeta : '#a3a9b4',
+    textTransform: 'uppercase', marginBottom: 4,
   },
-  sheetTitle: { fontSize: 22, fontWeight: '900', color: '#14161d', letterSpacing: -0.8 },
+  sheetTitle: {
+    fontSize: 22, fontWeight: '900',
+    // Light: exact pre-theming sheet ink (#14161d, just off textPrimary).
+    color: theme.isDark ? theme.colors.textPrimary : '#14161d',
+    letterSpacing: -0.8,
+  },
   sheetCloseButton: {
     width: 36, height: 36, borderRadius: 18,
-    backgroundColor: '#f4f6fa', alignItems: 'center', justifyContent: 'center',
+    // Light: exact pre-theming pale circle (#f4f6fa, no matching token).
+    backgroundColor: theme.isDark ? theme.colors.bgLight : '#f4f6fa',
+    alignItems: 'center', justifyContent: 'center',
   },
   spotifySheetBody: { gap: 12 },
-  spotifySheetCopy: { fontSize: 14, color: '#5c6370', lineHeight: 20 },
+  spotifySheetCopy: {
+    fontSize: 14,
+    // Light: exact pre-theming body gray (#5c6370, no matching token).
+    color: theme.isDark ? theme.colors.textSecondary : '#5c6370',
+    lineHeight: 20,
+  },
   spotifyInput: {
-    height: 52, borderRadius: 18, borderWidth: 1, borderColor: '#eadfe3',
-    backgroundColor: '#fffdfd', paddingHorizontal: 16, fontSize: 15, color: '#14161d',
+    height: 52, borderRadius: 18, borderWidth: 1,
+    // Light: exact pre-theming warm input border/fill/ink (#eadfe3 / #fffdfd / #14161d).
+    borderColor: theme.isDark ? theme.colors.borderInput : '#eadfe3',
+    backgroundColor: theme.isDark ? theme.colors.bgLightest : '#fffdfd',
+    paddingHorizontal: 16, fontSize: 15,
+    color: theme.isDark ? theme.colors.textPrimary : '#14161d',
   },
   spotifySheetButtons: { flexDirection: 'row', gap: 10, marginTop: 4 },
   spotifySheetSecondaryButton: {
     flex: 1, height: 48, borderRadius: 14, borderWidth: 1.5,
-    borderColor: '#e4e7ee', alignItems: 'center', justifyContent: 'center',
+    // Light: exact pre-theming button hairline (#e4e7ee, no matching token).
+    borderColor: theme.isDark ? theme.colors.borderInput : '#e4e7ee',
+    alignItems: 'center', justifyContent: 'center',
   },
-  spotifySheetSecondaryButtonText: { fontSize: 14, fontWeight: '700', color: '#7b828e' },
+  spotifySheetSecondaryButtonText: {
+    fontSize: 14, fontWeight: '700',
+    // Light: exact pre-theming label gray (#7b828e, no matching token).
+    color: theme.isDark ? theme.colors.textSecondary : '#7b828e',
+  },
   spotifySheetPrimaryButton: {
     flex: 2, height: 48, borderRadius: 14,
-    backgroundColor: '#1cb35b', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: SPOTIFY_GREEN, alignItems: 'center', justifyContent: 'center',
   },
   spotifySheetPrimaryButtonDisabled: { opacity: 0.6 },
-  spotifySheetPrimaryButtonText: { fontSize: 15, fontWeight: '800', color: '#fff' },
+  // Stays white in both themes — label on the solid Spotify-green button.
+  spotifySheetPrimaryButtonText: { fontSize: 15, fontWeight: '800', color: theme.colors.white },
 });
