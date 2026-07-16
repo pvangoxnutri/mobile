@@ -12,9 +12,12 @@ import { getCategorySymbol } from '@/lib/category-symbol';
 import type { Quest, SideQuestActivity } from '@/lib/types';
 import { isStay, stayNightDates, stayNights } from '@/lib/stay';
 import { DEFAULT_BLUR, extractBlur, isSealedInLists } from '@/lib/activity-blur';
-import { SPACING, TYPOGRAPHY, COLORS, RADIUS, SHADOWS } from '@/constants/design-tokens';
+import { SPACING, TYPOGRAPHY, RADIUS } from '@/constants/design-tokens';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { useTheme } from '@/components/theme-provider';
+import { useThemedStyles } from '@/hooks/use-themed-styles';
+import type { AppTheme } from '@/constants/themes';
 
 type CalendarItem = {
   id: string;
@@ -41,6 +44,8 @@ type CalendarItem = {
 export default function CalendarScreen() {
   const { t, language } = useI18n();
   const locale = language === 'sv' ? 'sv-SE' : 'en-US';
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const insets = useSafeAreaInsets();
   // See Home's app/(tabs)/index.tsx for why this is measured — the header
   // floats on top of the ScrollView, so its rendered height (not a guess)
@@ -214,7 +219,7 @@ export default function CalendarScreen() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: COLORS.white }}>
+    <View style={{ flex: 1, backgroundColor: theme.colors.bgPrimary }}>
       <ScrollView
         ref={scrollRef}
         style={{ flex: 1 }}
@@ -224,19 +229,19 @@ export default function CalendarScreen() {
         {/* Month switcher */}
         <View style={styles.monthSwitchRow}>
           <TouchableOpacity activeOpacity={0.84} style={styles.monthSwitchButton} onPress={() => setMonthDate((current) => addMonths(current, -1))}>
-            <Ionicons name="chevron-back" size={18} color={COLORS.textPrimary} />
+            <Ionicons name="chevron-back" size={18} color={theme.colors.textPrimary} />
           </TouchableOpacity>
           <Text style={styles.monthTitle}>{monthTitle}</Text>
           <TouchableOpacity activeOpacity={0.84} style={styles.monthSwitchButton} onPress={() => setMonthDate((current) => addMonths(current, 1))}>
-            <Ionicons name="chevron-forward" size={18} color={COLORS.textPrimary} />
+            <Ionicons name="chevron-forward" size={18} color={theme.colors.textPrimary} />
           </TouchableOpacity>
         </View>
 
         {/* Active trip card */}
         {activeTrip ? (
           <TouchableOpacity activeOpacity={0.9} style={styles.activeCard} onPress={() => router.push(`/trip/${activeTrip.id}`)}>
-            <View style={[styles.activeIcon, { backgroundColor: COLORS.primary }]}>
-              <Ionicons name="airplane" size={16} color={COLORS.white} />
+            <View style={[styles.activeIcon, { backgroundColor: theme.colors.primary }]}>
+              <Ionicons name="airplane" size={16} color={theme.colors.white} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.activeLabel}>{t('calendar.activeTrip')}</Text>
@@ -245,7 +250,7 @@ export default function CalendarScreen() {
               </Text>
             </View>
             {activeTripDay ? (
-              <View style={[styles.dayBadge, { backgroundColor: COLORS.primary }]}>
+              <View style={[styles.dayBadge, { backgroundColor: theme.colors.primary }]}>
                 <Text style={styles.dayBadgeText}>{t('trip.dayNumber', { day: activeTripDay })}</Text>
               </View>
             ) : null}
@@ -274,17 +279,17 @@ export default function CalendarScreen() {
                   key={dateKey}
                   style={({ pressed }) => [styles.dateChip, isSelected && styles.dateChipSelected, pressed && { opacity: 0.8 }]}
                   onPress={() => jumpToSelectedDay(dateKey)}>
-                  <Text style={[styles.dateChipWeekday, isSelected && { color: COLORS.primary }]}>
+                  <Text style={[styles.dateChipWeekday, isSelected && { color: theme.colors.primary }]}>
                     {new Intl.DateTimeFormat(locale, { weekday: 'short' }).format(date).toUpperCase()}
                   </Text>
-                  <Text style={[styles.dateChipDay, isSelected && { color: COLORS.primary }]}>{date.getDate()}</Text>
+                  <Text style={[styles.dateChipDay, isSelected && { color: theme.colors.primary }]}>{date.getDate()}</Text>
                   <View style={styles.dateChipDots}>
                     {getCalendarDots(items).map((tone, index) => (
                       <View
                         key={`${dateKey}-${tone}-${index}`}
                         style={[
                           styles.dateChipDot,
-                          tone === 'trip' ? { backgroundColor: COLORS.secondary } : tone === 'hidden' ? { backgroundColor: COLORS.textMuted } : { backgroundColor: COLORS.primary },
+                          tone === 'trip' ? { backgroundColor: theme.colors.secondary } : tone === 'hidden' ? { backgroundColor: theme.colors.textMuted } : { backgroundColor: theme.colors.primary },
                         ]}
                       />
                     ))}
@@ -296,7 +301,7 @@ export default function CalendarScreen() {
         ) : (
           <View style={styles.emptyMonthState}>
             <View style={styles.emptyMonthIconCircle}>
-              <Ionicons name="calendar-clear-outline" size={40} color={COLORS.textMuted} />
+              <Ionicons name="calendar-clear-outline" size={40} color={theme.colors.textMuted} />
             </View>
             <Text style={styles.emptyMonthText}>{t('calendar.empty.noEventDates')}</Text>
           </View>
@@ -319,7 +324,7 @@ export default function CalendarScreen() {
                   </Text>
                 ) : null}
                 <TouchableOpacity style={styles.addButton} activeOpacity={0.85} onPress={handleAddPress}>
-                  <Ionicons name="add" size={18} color={COLORS.white} />
+                  <Ionicons name="add" size={18} color={theme.colors.white} />
                   <Text style={styles.addButtonText}>{t('calendar.addButton')}</Text>
                 </TouchableOpacity>
               </View>
@@ -328,14 +333,14 @@ export default function CalendarScreen() {
               {(tripStartItem || tripEndItem) ? (
                 <View style={styles.tripBadgeRow}>
                   {tripStartItem ? (
-                    <TouchableOpacity activeOpacity={0.85} style={[styles.tripBadge, { backgroundColor: COLORS.secondary }]} onPress={() => router.push(`/trip/${tripStartItem.tripId}`)}>
-                      <Ionicons name="airplane" size={11} color={COLORS.white} />
+                    <TouchableOpacity activeOpacity={0.85} style={[styles.tripBadge, { backgroundColor: theme.colors.secondary }]} onPress={() => router.push(`/trip/${tripStartItem.tripId}`)}>
+                      <Ionicons name="airplane" size={11} color={theme.colors.white} />
                       <Text style={styles.tripBadgeText}>{t('calendar.tripStarts', { title: tripStartItem.title })}</Text>
                     </TouchableOpacity>
                   ) : null}
                   {tripEndItem ? (
-                    <TouchableOpacity activeOpacity={0.85} style={[styles.tripBadge, { backgroundColor: COLORS.secondary }]} onPress={() => router.push(`/trip/${tripEndItem.tripId}`)}>
-                      <Ionicons name="flag" size={11} color={COLORS.white} />
+                    <TouchableOpacity activeOpacity={0.85} style={[styles.tripBadge, { backgroundColor: theme.colors.secondary }]} onPress={() => router.push(`/trip/${tripEndItem.tripId}`)}>
+                      <Ionicons name="flag" size={11} color={theme.colors.white} />
                       <Text style={styles.tripBadgeText}>{t('calendar.tripEnds', { title: tripEndItem.title })}</Text>
                     </TouchableOpacity>
                   ) : null}
@@ -346,7 +351,7 @@ export default function CalendarScreen() {
                 !tripStartItem && !tripEndItem ? (
                   <View style={styles.upcomingEmptyCard}>
                     <View style={styles.upcomingEmptyIcon}>
-                      <Ionicons name="sparkles-outline" size={20} color={COLORS.textMuted} />
+                      <Ionicons name="sparkles-outline" size={20} color={theme.colors.textMuted} />
                     </View>
                     <Text style={styles.upcomingEmptyText}>{t('calendar.empty.nothingPlanned')}</Text>
                   </View>
@@ -381,7 +386,7 @@ export default function CalendarScreen() {
                             <Ionicons
                               name={item.hidden ? 'lock-closed' : symbol.icon}
                               size={14}
-                              color={item.hidden ? COLORS.textMeta : symbol.iconColor}
+                              color={item.hidden ? theme.colors.textMeta : symbol.iconColor}
                             />
                           </View>
                         </View>
@@ -590,12 +595,14 @@ function getCalendarDots(items: CalendarItem[]) {
   });
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   screen: {
     paddingHorizontal: SPACING.xl,
   },
   // Floats ON TOP of the ScrollView (see Home's app/(tabs)/index.tsx for the
-  // full explanation) — same look as the bottom tab bar too.
+  // full explanation) — same look as the bottom tab bar too (matching the
+  // tab bar's dark treatment in (tabs)/_layout.tsx: near-opaque surface pill,
+  // hairline ring instead of the drop shadow).
   fixedHeader: {
     position: 'absolute',
     left: 16,
@@ -603,12 +610,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.lg,
     paddingVertical: 10,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.97)',
+    backgroundColor: theme.colors.surfaceBar,
+    borderWidth: theme.isDark ? StyleSheet.hairlineWidth : 0,
+    borderColor: theme.colors.borderPrimary,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.07,
+    shadowOpacity: theme.isDark ? 0.35 : 0.07,
     shadowRadius: 20,
-    elevation: 10,
+    elevation: theme.isDark ? 0 : 10,
   },
 
   // Month switcher
@@ -617,12 +626,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: COLORS.white,
+    backgroundColor: theme.colors.surface,
     borderRadius: RADIUS.lg,
     paddingHorizontal: SPACING.sm,
     paddingVertical: SPACING.sm,
     marginBottom: SPACING.lg,
-    ...SHADOWS.subtle,
+    ...theme.shadows.subtle,
+    // Dark cards separate via hairline border (see components/ui/card.tsx);
+    // light stays borderless and pixel-identical.
+    borderWidth: theme.isDark ? StyleSheet.hairlineWidth : 0,
+    borderColor: theme.colors.borderPrimary,
   },
   monthSwitchButton: {
     width: 36,
@@ -635,21 +648,26 @@ const styles = StyleSheet.create({
     flex: 1,
     ...TYPOGRAPHY.cardTitle,
     fontWeight: '700',
-    color: COLORS.textPrimary,
+    color: theme.colors.textPrimary,
     textAlign: 'center',
   },
 
-  // Active trip card (dark background variant)
+  // Active trip card (dark background variant). Light keeps its exact
+  // pre-theming ink surface (COLORS.textPrimary); on dark it becomes an
+  // elevated surface with a hairline ring — textPrimary would flip to
+  // near-white there and invert the card.
   activeCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.lg,
-    backgroundColor: COLORS.textPrimary,
+    backgroundColor: theme.isDark ? theme.colors.surfaceElevated : '#161821',
     borderRadius: RADIUS.lg,
     paddingHorizontal: SPACING.xl,
     paddingVertical: SPACING.xl,
     marginBottom: SPACING.xxl,
-    ...SHADOWS.strong,
+    ...theme.shadows.strong,
+    borderWidth: theme.isDark ? StyleSheet.hairlineWidth : 0,
+    borderColor: theme.colors.borderPrimary,
   },
   activeIcon: {
     width: 36,
@@ -661,13 +679,15 @@ const styles = StyleSheet.create({
   activeLabel: {
     ...TYPOGRAPHY.eyebrow,
     fontWeight: '700',
-    color: COLORS.textMuted,
+    // Light: exact pre-theming muted gray on the ink card. Dark textMuted is
+    // too dim on surfaceElevated, so the eyebrow steps up to textSecondary.
+    color: theme.isDark ? theme.colors.textSecondary : '#bbc0c8',
     marginBottom: SPACING.xs,
   },
   activeTitle: {
     ...TYPOGRAPHY.cardTitle,
     fontWeight: '700',
-    color: COLORS.white,
+    color: theme.colors.white,
   },
   dayBadge: {
     borderRadius: RADIUS.xs,
@@ -677,7 +697,8 @@ const styles = StyleSheet.create({
   dayBadgeText: {
     ...TYPOGRAPHY.buttonSmall,
     fontWeight: '800',
-    color: COLORS.white,
+    // White on the pink day badge in both themes.
+    color: theme.colors.white,
   },
 
   // Section header
@@ -690,17 +711,17 @@ const styles = StyleSheet.create({
   sectionEyebrow: {
     ...TYPOGRAPHY.eyebrow,
     fontWeight: '800',
-    color: COLORS.textMeta,
+    color: theme.colors.textMeta,
   },
   sectionLine: {
     flex: 1,
     height: 1,
-    backgroundColor: COLORS.borderPrimary,
+    backgroundColor: theme.colors.borderPrimary,
   },
   sectionMeta: {
     ...TYPOGRAPHY.meta,
     fontWeight: '600',
-    color: COLORS.textMeta,
+    color: theme.colors.textMeta,
   },
 
   // Date grid (compact calendar-grid feel)
@@ -715,29 +736,35 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.xs,
     paddingHorizontal: SPACING.sm,
     paddingVertical: SPACING.sm,
-    backgroundColor: COLORS.white,
+    backgroundColor: theme.colors.surface,
     alignItems: 'center',
-    ...SHADOWS.subtle,
+    ...theme.shadows.subtle,
     // Android: elevation 2 paints a hard grey shadow around each cell (the
     // iOS shadow is a near-invisible 4% wash). Swap it for a hairline border
     // that gives the same subtle cell definition without the grey.
+    // (Dark iOS gets the same hairline: dark shadows are elevation 0 there,
+    // so the border is what defines the cell — light iOS stays borderless.)
     ...(Platform.OS === 'android'
-      ? { elevation: 0, borderWidth: 1, borderColor: '#EEF0F4' }
-      : null),
+      ? { elevation: 0, borderWidth: 1, borderColor: theme.isDark ? theme.colors.borderPrimary : '#EEF0F4' }
+      : theme.isDark
+        ? { borderWidth: StyleSheet.hairlineWidth, borderColor: theme.colors.borderPrimary }
+        : null),
   },
   dateChipSelected: {
     // Opaque equivalent of primaryLight12 over the white cell. On Android an
     // elevation shadow renders *through* a translucent background as a grey
     // rectangle in the middle of the cell — opaque kills the artifact and is
-    // pixel-identical on iOS (the cell base is white).
-    backgroundColor: '#FFEAEE',
+    // pixel-identical on iOS (the cell base is white). Dark uses the same
+    // trick: dark primaryLight12 (rgba(255,79,116,0.16)) pre-blended over
+    // the dark surface (#161922) so it stays opaque too.
+    backgroundColor: theme.isDark ? '#3b222f' : '#FFEAEE',
     borderWidth: 2,
-    borderColor: COLORS.primary,
+    borderColor: theme.colors.primary,
   },
   dateChipWeekday: {
     fontSize: 9,
     fontWeight: '800',
-    color: COLORS.textMeta,
+    color: theme.colors.textMeta,
     letterSpacing: 1.0,
     // Strip Android's extra font padding so the weekday/day/dots stack
     // aligns the same as on iOS (the chips looked off on Android otherwise).
@@ -748,7 +775,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     lineHeight: 22,
     fontWeight: '900',
-    color: COLORS.textPrimary,
+    color: theme.colors.textPrimary,
     letterSpacing: -0.6,
     includeFontPadding: false,
     textAlign: 'center',
@@ -767,13 +794,15 @@ const styles = StyleSheet.create({
   },
   emptyMonthState: {
     borderRadius: RADIUS.xl,
-    backgroundColor: COLORS.white,
+    backgroundColor: theme.colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: SPACING.xxxl + SPACING.md,
     paddingHorizontal: SPACING.xl,
     marginBottom: SPACING.xl,
-    ...SHADOWS.subtle,
+    ...theme.shadows.subtle,
+    borderWidth: theme.isDark ? StyleSheet.hairlineWidth : 0,
+    borderColor: theme.colors.borderPrimary,
   },
   emptyMonthIconCircle: {
     width: 96,
@@ -781,11 +810,11 @@ const styles = StyleSheet.create({
     borderRadius: 48,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.bgLight,
+    backgroundColor: theme.colors.bgLight,
   },
   emptyMonthText: {
     marginTop: SPACING.xl,
-    color: COLORS.textPrimary,
+    color: theme.colors.textPrimary,
     fontSize: 22,
     lineHeight: 26,
     fontWeight: '900',
@@ -805,7 +834,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.xs,
-    backgroundColor: COLORS.primary,
+    backgroundColor: theme.colors.primary,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     borderRadius: RADIUS.circle,
@@ -813,7 +842,8 @@ const styles = StyleSheet.create({
   addButtonText: {
     ...TYPOGRAPHY.buttonSmall,
     fontWeight: '800',
-    color: COLORS.white,
+    // White on the pink button in both themes.
+    color: theme.colors.white,
   },
   tripBadgeRow: {
     flexDirection: 'row',
@@ -832,13 +862,14 @@ const styles = StyleSheet.create({
   tripBadgeText: {
     ...TYPOGRAPHY.meta,
     fontWeight: '700',
-    color: COLORS.white,
+    // White on the teal trip badge in both themes.
+    color: theme.colors.white,
   },
   errorText: {
     marginTop: SPACING.lg,
     ...TYPOGRAPHY.meta,
     fontWeight: '500',
-    color: COLORS.error,
+    color: theme.colors.error,
     textAlign: 'center',
   },
 
@@ -849,21 +880,26 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.xl,
   },
   upcomingCard: {
-    backgroundColor: COLORS.white,
+    backgroundColor: theme.colors.surface,
     borderRadius: RADIUS.sm,
     overflow: 'hidden',
-    ...SHADOWS.subtle,
+    ...theme.shadows.subtle,
+    borderWidth: theme.isDark ? StyleSheet.hairlineWidth : 0,
+    borderColor: theme.colors.borderPrimary,
   },
+  // Sealed/hidden cards keep their warm "envelope" parchment identity in
+  // both themes — light literals are the exact pre-theming values; dark is
+  // the same warmth pre-blended onto the dark surface scale.
   upcomingCardSealed: {
-    backgroundColor: '#ece7df',
+    backgroundColor: theme.colors.sealedSurface,
   },
   upcomingImageBox: {
     height: 76,
-    backgroundColor: '#e6e2d8',
+    backgroundColor: theme.colors.sealedSurfaceSubtle,
     position: 'relative',
   },
   upcomingImageBoxSealed: {
-    backgroundColor: '#ece7df',
+    backgroundColor: theme.colors.sealedSurface,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -883,7 +919,9 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: COLORS.white,
+    // Stays white in both themes — it floats on the photo/fallback image and
+    // the category icon colors are designed against white.
+    backgroundColor: theme.colors.white,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
@@ -898,7 +936,10 @@ const styles = StyleSheet.create({
     transform: [{ translateX: -14 }],
     width: 28,
     height: 28,
-    backgroundColor: 'rgba(255,255,255,0.85)',
+    // Sits on the sealed wash (never a photo — sealed variant only applies
+    // when there's no image), so dark swaps the near-solid white pill for a
+    // frosted one instead of a glaring white disc.
+    backgroundColor: theme.isDark ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.85)',
   },
   upcomingBody: {
     padding: 9,
@@ -906,27 +947,27 @@ const styles = StyleSheet.create({
   upcomingDate: {
     fontSize: 10,
     fontWeight: '700',
-    color: COLORS.textMeta,
+    color: theme.colors.textMeta,
     letterSpacing: 0.5,
     marginBottom: 4,
   },
   upcomingTitle: {
     fontSize: 13,
     fontWeight: '800',
-    color: COLORS.textPrimary,
+    color: theme.colors.textPrimary,
     letterSpacing: -0.2,
   },
   upcomingTripName: {
     fontSize: 11,
-    color: COLORS.textMeta,
+    color: theme.colors.textMeta,
     marginTop: 4,
     fontWeight: '500',
   },
   upcomingEmptyCard: {
-    backgroundColor: COLORS.white,
+    backgroundColor: theme.colors.surface,
     borderRadius: RADIUS.sm,
     borderWidth: 1,
-    borderColor: COLORS.borderPrimary,
+    borderColor: theme.colors.borderPrimary,
     borderStyle: 'dashed',
     paddingVertical: SPACING.xl,
     paddingHorizontal: SPACING.lg,
@@ -940,7 +981,7 @@ const styles = StyleSheet.create({
   },
   upcomingEmptyText: {
     fontSize: 12,
-    color: COLORS.textMeta,
+    color: theme.colors.textMeta,
     fontWeight: '500',
     textAlign: 'center',
   },

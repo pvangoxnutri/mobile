@@ -147,7 +147,7 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     borderRadius: 999,
     // Near-opaque surface pill; dark separates from the page via a hairline
     // ring instead of the big drop shadow.
-    backgroundColor: theme.isDark ? 'rgba(29,33,42,0.97)' : 'rgba(255,255,255,0.97)',
+    backgroundColor: theme.colors.surfaceBar,
     borderWidth: theme.isDark ? StyleSheet.hairlineWidth : 0,
     borderColor: theme.colors.borderPrimary,
     shadowColor: '#000',

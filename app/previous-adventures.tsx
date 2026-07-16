@@ -6,10 +6,15 @@ import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
 import { getCompletedTrips, revokeTripShare, shareTrip } from '@/lib/api';
 import { useAuth } from '@/components/auth-provider';
+import { useTheme } from '@/components/theme-provider';
+import { useThemedStyles } from '@/hooks/use-themed-styles';
+import type { AppTheme } from '@/constants/themes';
 import type { Quest } from '@/lib/types';
 
 export default function PreviousAdventuresScreen() {
   const { user } = useAuth();
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const insets = useSafeAreaInsets();
   const [trips, setTrips] = useState<Quest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -91,14 +96,14 @@ export default function PreviousAdventuresScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.container, { backgroundColor: '#F7F8FA', paddingTop: insets.top }]}>
-        <ActivityIndicator size="large" color="#ff4f74" />
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
       </View>
     );
   }
 
   return (
-    <View style={[styles.screen, { backgroundColor: '#F7F8FA' }]}>
+    <View style={styles.screen}>
       <View
         style={[
           styles.content,
@@ -107,7 +112,11 @@ export default function PreviousAdventuresScreen() {
         {/* ── Header ───────────────────────────────────────────────── */}
         <View style={styles.topBar}>
           <TouchableOpacity style={styles.backButton} activeOpacity={0.8} onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={26} color="#6D7380" />
+            <Ionicons
+              name="arrow-back"
+              size={26}
+              color={theme.isDark ? theme.colors.textSecondary : '#6D7380'}
+            />
           </TouchableOpacity>
           <View style={styles.headerText}>
             <Text style={styles.title}>Previous Adventures</Text>
@@ -118,7 +127,11 @@ export default function PreviousAdventuresScreen() {
         {/* ── List ───────────────────────────────────────────────── */}
         {trips.length === 0 ? (
           <View style={styles.emptyState}>
-            <Ionicons name="checkmark-circle-outline" size={64} color="#ddd" />
+            <Ionicons
+              name="checkmark-circle-outline"
+              size={64}
+              color={theme.isDark ? theme.colors.textMuted : '#ddd'}
+            />
             <Text style={styles.emptyText}>No completed adventures yet</Text>
           </View>
         ) : (
@@ -150,9 +163,9 @@ export default function PreviousAdventuresScreen() {
                       disabled={revokingId === item.id}
                       accessibilityLabel="Stop sharing">
                       {revokingId === item.id ? (
-                        <ActivityIndicator size="small" color="#fff" />
+                        <ActivityIndicator size="small" color={theme.colors.white} />
                       ) : (
-                        <Ionicons name="link" size={16} color="#fff" />
+                        <Ionicons name="link" size={16} color={theme.colors.white} />
                       )}
                     </Pressable>
                   ) : null}
@@ -163,9 +176,9 @@ export default function PreviousAdventuresScreen() {
                     disabled={sharingId === item.id}
                     accessibilityLabel="Share">
                     {sharingId === item.id ? (
-                      <ActivityIndicator size="small" color="#fff" />
+                      <ActivityIndicator size="small" color={theme.colors.white} />
                     ) : (
-                      <Ionicons name="share-social" size={18} color="#fff" />
+                      <Ionicons name="share-social" size={18} color={theme.colors.white} />
                     )}
                   </Pressable>
                 </View>
@@ -181,14 +194,22 @@ export default function PreviousAdventuresScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+// Everything painted ON the trip photos — the 0.3 black scrim and the white
+// title/destination/date text — is INTENTIONAL image-overlay styling, kept
+// byte-identical in both themes so completed-trip photos stay vibrant and
+// legible regardless of appearance (same policy as big-hero-card). Only the
+// page background, header text, empty state and the brand/overlay pills go
+// through the theme.
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   screen: {
     flex: 1,
+    backgroundColor: theme.isDark ? theme.colors.bgPrimary : '#F7F8FA',
   },
   container: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: theme.isDark ? theme.colors.bgPrimary : '#F7F8FA',
   },
   content: {
     flex: 1,
@@ -212,11 +233,11 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 22,
     fontWeight: '700',
-    color: '#161821',
+    color: theme.colors.textPrimary,
   },
   subtitle: {
     fontSize: 13,
-    color: '#8a909b',
+    color: theme.isDark ? theme.colors.textMeta : '#8a909b',
     marginTop: 2,
   },
   listContent: {
@@ -235,6 +256,8 @@ const styles = StyleSheet.create({
   },
   cardOverlay: {
     ...StyleSheet.absoluteFillObject,
+    // INTENTIONAL image overlay — scrim on the trip photo, identical in both
+    // themes (see comment above createStyles).
     backgroundColor: 'rgba(0,0,0,0.3)',
   },
   cardContent: {
@@ -244,16 +267,19 @@ const styles = StyleSheet.create({
   tripTitle: {
     fontSize: 18,
     fontWeight: '700',
+    // INTENTIONAL — white text on the photo scrim, identical in both themes.
     color: '#ffffff',
     marginBottom: 4,
   },
   destination: {
     fontSize: 14,
+    // INTENTIONAL — white text on the photo scrim, identical in both themes.
     color: 'rgba(255,255,255,0.9)',
     marginBottom: 4,
   },
   dates: {
     fontSize: 12,
+    // INTENTIONAL — white text on the photo scrim, identical in both themes.
     color: 'rgba(255,255,255,0.8)',
   },
   actionRow: {
@@ -269,7 +295,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#ff4f74',
+    backgroundColor: theme.colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -277,7 +303,9 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(20,22,29,0.7)',
+    // Dark pill floating on the trip photo — pillDark70 is byte-identical to
+    // the original rgba(20,22,29,0.7) in both themes.
+    backgroundColor: theme.colors.pillDark70,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -291,7 +319,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 16,
-    color: '#999999',
+    color: theme.isDark ? theme.colors.textMuted : '#999999',
     marginTop: 12,
   },
 });

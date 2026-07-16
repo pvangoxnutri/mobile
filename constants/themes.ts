@@ -80,6 +80,18 @@ export interface ThemeColors {
   avatarDark: string;
   avatarLight: string;
 
+  // Sealed / hidden-SideQuest "mystery envelope" family — warm parchment in
+  // light, a deep warm wash in dark. Deliberately NOT the stay* amber:
+  // sealed ≠ hotel-stay semantics.
+  sealedSurface: string;
+  sealedSurfaceSubtle: string;
+
+  // Near-opaque floating bar/pill surface (bottom tab bar, fixed headers).
+  surfaceBar: string;
+
+  // Bottom-sheet grab handle / inactive dash.
+  sheetHandle: string;
+
   // Hotel-stay / reservation family — the amber identity that chains a stay
   // through the trip feed (anchor card, night rows, check-out row). Dark is
   // deliberately muted amber-on-dark-surface, never a bright inversion.
@@ -186,6 +198,11 @@ const lightColors: ThemeColors = {
   avatarDark: '#1d212a',
   avatarLight: '#fff1f5',
 
+  sealedSurface: '#ece7df',
+  sealedSurfaceSubtle: '#e6e2d8',
+  surfaceBar: 'rgba(255,255,255,0.97)',
+  sheetHandle: '#d9dde4',
+
   // Exactly the approved reservation-surface values from the trip feed
   // (see STAY_COLORS there — replaced by these tokens in the trip batch).
   stayAccent: '#d97706',
@@ -282,6 +299,11 @@ const darkColors: ThemeColors = {
   // surfaceElevated color), so it steps one level lighter here.
   avatarDark: '#262c38',
   avatarLight: 'rgba(255,79,116,0.16)',
+
+  sealedSurface: '#26221a',
+  sealedSurfaceSubtle: '#211e18',
+  surfaceBar: 'rgba(29,33,42,0.97)',
+  sheetHandle: 'rgba(255,255,255,0.18)',
 
   // Muted premium amber on dark: warm-tinted surfaces one step above the
   // page, softened accent/text so the reservation glows quietly instead of

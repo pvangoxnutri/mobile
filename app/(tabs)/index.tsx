@@ -27,7 +27,10 @@ import { formatRelativeTime } from '@/lib/format-time';
 import { markStartup, markStartupSync } from '@/lib/startup-timing'; // TEMPORARY — see lib/startup-timing.ts
 import { useScalePress } from '@/hooks/useMotion';
 import type { PendingInvite, Quest, SideQuestActivity, TripEvent } from '@/lib/types';
-import { COLORS, SHADOWS, SPACING, RADIUS, TYPOGRAPHY } from '@/constants/design-tokens';
+import { SPACING, RADIUS, TYPOGRAPHY } from '@/constants/design-tokens';
+import { useTheme } from '@/components/theme-provider';
+import { useThemedStyles } from '@/hooks/use-themed-styles';
+import type { AppTheme } from '@/constants/themes';
 
 // TripMember, TripWithEvent and BigHeroCard live in components/big-hero-card.tsx
 // so the create-trip preview can reuse the exact same rendering as home.
@@ -36,6 +39,8 @@ export default function HomeScreen() {
   markStartup('[HOME] HomeScreen render');
   const { user, signOut } = useAuth();
   const { t } = useI18n();
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const insets = useSafeAreaInsets();
   // Set when this screen was opened via a trip-invite push notification's
   // deep link (?inviteId=...) — used to highlight that specific invite so
@@ -442,8 +447,8 @@ export default function HomeScreen() {
           {pendingInvites.length > 0 ? (
             <View style={[styles.inviteSection, { marginTop: 20 }]}>
               <View style={styles.inviteSectionHeader}>
-                <Ionicons name="mail-unread-outline" size={16} color={COLORS.primary} />
-                <Text style={[styles.inviteSectionTitle, { color: COLORS.primary }]}>{t('home.invited')}</Text>
+                <Ionicons name="mail-unread-outline" size={16} color={theme.colors.primary} />
+                <Text style={[styles.inviteSectionTitle, { color: theme.colors.primary }]}>{t('home.invited')}</Text>
               </View>
               {pendingInvites.map((invite) => (
                 <InviteCard
@@ -461,7 +466,7 @@ export default function HomeScreen() {
           <Text style={styles.emptySectionHeading}>{t('home.upcoming')}</Text>
           <View style={styles.emptyUpcoming}>
             <View style={styles.emptyRocketCircle}>
-              <Ionicons name="rocket-outline" size={46} color="#c8c7ca" />
+              <Ionicons name="rocket-outline" size={46} color={theme.isDark ? theme.colors.textMuted : '#c8c7ca'} />
             </View>
             <Text style={styles.emptyUpcomingTitle}>{t('home.no_adventures')}</Text>
             <Text style={styles.emptyUpcomingCopy}>{t('home.create_first_trip')}</Text>
@@ -514,7 +519,7 @@ export default function HomeScreen() {
         {pendingInvites.length > 0 ? (
           <View style={styles.inviteSection}>
             <View style={styles.inviteSectionHeader}>
-              <Ionicons name="mail-unread-outline" size={16} color="#ff4f74" />
+              <Ionicons name="mail-unread-outline" size={16} color={theme.colors.primary} />
               <Text style={styles.inviteSectionTitle}>{t('home.invited')}</Text>
             </View>
             {pendingInvites.map((invite) => (
@@ -593,7 +598,7 @@ export default function HomeScreen() {
                 {selectedTripIndex < sortedTrips.length - 1 ? (
                   <View style={styles.swipeHint}>
                     <Text style={styles.swipeHintText}>{t('home.swipe_for_more')}</Text>
-                    <Ionicons name="arrow-forward" size={14} color="#8a909e" />
+                    <Ionicons name="arrow-forward" size={14} color={theme.colors.textMeta} />
                   </View>
                 ) : null}
               </View>
@@ -666,7 +671,7 @@ export default function HomeScreen() {
                 <Text style={styles.membersTitle}>{featuredTrip?.quest.title ?? t('home.defaultTripName')}</Text>
               </View>
               <TouchableOpacity style={styles.membersClose} activeOpacity={0.88} onPress={() => setMembersOpen(false)}>
-                <Ionicons name="close" size={20} color="#161821" />
+                <Ionicons name="close" size={20} color={theme.colors.textPrimary} />
               </TouchableOpacity>
             </View>
 
@@ -691,7 +696,7 @@ export default function HomeScreen() {
                         onError={() => setFailedMemberAvatars(prev => new Set([...prev, member.id]))}
                         size={42}
                         online={member.isOnline}
-                        fallbackBackgroundColor="#1d212a"
+                        fallbackBackgroundColor={theme.colors.avatarDark}
                         fallbackTextColor="#fff"
                       />
                     </View>
@@ -727,6 +732,8 @@ function FloatingFab({
   onJoin: () => void;
   t?: (key: string) => string;
 }) {
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
   // Animated values — driven from the `open` prop:
   //   menu  → fade + slide-up + scale
   //   back  → fade only
@@ -803,7 +810,7 @@ function FloatingFab({
             ]}>
             <TouchableOpacity
               activeOpacity={0.88}
-              style={[styles.fabMenuButton, styles.fabMenuButtonPrimary, { backgroundColor: COLORS.primary }]}
+              style={[styles.fabMenuButton, styles.fabMenuButtonPrimary, { backgroundColor: theme.colors.primary }]}
               onPress={() => {
                 onDismiss();
                 router.push('/create-trip');
@@ -814,11 +821,11 @@ function FloatingFab({
               <Text style={styles.fabMenuButtonPrimaryText} numberOfLines={1}>{t ? t('home.create_adventure') : 'Create Adventure'}</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity activeOpacity={0.88} style={[styles.fabMenuButton, styles.fabMenuButtonSecondary, { borderColor: COLORS.primary }]} onPress={onJoin}>
-              <View style={[styles.fabMenuIconWrap, { backgroundColor: COLORS.primaryLight12 }]}>
-                <Ionicons name="person-add" size={18} color={COLORS.primary} />
+            <TouchableOpacity activeOpacity={0.88} style={[styles.fabMenuButton, styles.fabMenuButtonSecondary, { borderColor: theme.colors.primary }]} onPress={onJoin}>
+              <View style={[styles.fabMenuIconWrap, { backgroundColor: theme.colors.primaryLight12 }]}>
+                <Ionicons name="person-add" size={18} color={theme.colors.primary} />
               </View>
-              <Text style={[styles.fabMenuButtonText, { color: COLORS.primary }]} numberOfLines={1}>{t ? t('home.join_adventure') : 'Join Adventure'}</Text>
+              <Text style={[styles.fabMenuButtonText, { color: theme.colors.primary }]} numberOfLines={1}>{t ? t('home.join_adventure') : 'Join Adventure'}</Text>
             </TouchableOpacity>
 
             <View style={styles.fabMenuCaret} />
@@ -827,7 +834,7 @@ function FloatingFab({
 
         <TouchableOpacity
           activeOpacity={0.92}
-          style={[styles.floatingFab, { backgroundColor: COLORS.primary, shadowColor: COLORS.primary }]}
+          style={[styles.floatingFab, { backgroundColor: theme.colors.primary, shadowColor: theme.colors.primary }]}
           onPress={onToggle}>
           <Animated.View style={{ transform: [{ rotate: fabRotation }] }}>
             <Ionicons name="add" size={30} color="#fff" />
@@ -849,9 +856,11 @@ function InfoBadge({
   tone: 'cyan' | 'pink';
   onPress?: () => void;
 }) {
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const content = (
     <View style={styles.infoBadge}>
-      <View style={[styles.infoBadgeIcon, tone === 'cyan' ? styles.infoBadgeIconCyan : styles.infoBadgeIconPink, { backgroundColor: tone === 'cyan' ? COLORS.secondary : COLORS.primary }]}>
+      <View style={[styles.infoBadgeIcon, tone === 'cyan' ? styles.infoBadgeIconCyan : styles.infoBadgeIconPink, { backgroundColor: tone === 'cyan' ? theme.colors.secondary : theme.colors.primary }]}>
         <Ionicons name={icon} size={16} color="#fff" />
       </View>
       <Text style={styles.infoBadgeLabel}>{label}</Text>
@@ -881,6 +890,8 @@ function QuestCard({
   imageUrl?: string | null;
   cardWidth: number;
 }) {
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
   return (
     <TouchableOpacity
       activeOpacity={0.86}
@@ -888,7 +899,7 @@ function QuestCard({
       style={[styles.questCard, { width: cardWidth }, badgeTone === 'cyan' ? styles.questCardSky : styles.questCardLava]}>
       {imageUrl ? <Image source={{ uri: imageUrl }} style={styles.questCardImage} /> : null}
       <View style={[styles.questCardOverlay, badgeTone === 'cyan' ? styles.questCardOverlaySky : styles.questCardOverlayLava]} />
-      <View style={[styles.questCardBadge, badgeTone === 'cyan' ? styles.questCardBadgeCyan : styles.questCardBadgePink, { backgroundColor: badgeTone === 'cyan' ? COLORS.secondary : COLORS.primary }]}>
+      <View style={[styles.questCardBadge, badgeTone === 'cyan' ? styles.questCardBadgeCyan : styles.questCardBadgePink, { backgroundColor: badgeTone === 'cyan' ? theme.colors.secondary : theme.colors.primary }]}>
         <Text style={[styles.questCardBadgeText, badgeTone === 'cyan' ? styles.questCardBadgeTextDark : null]}>{badge}</Text>
       </View>
       <Text style={styles.questCardTitle}>{title}</Text>
@@ -932,6 +943,8 @@ function ActivityFeedCard({
   now: Date;
   t: (key: string, vars?: Record<string, string | number>) => string;
 }) {
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
   if (!tripId) return null;
 
   // This is just a preview feed — Home shows at most 3 rows total. The full
@@ -1007,7 +1020,7 @@ function ActivityFeedCard({
             style={[styles.activityRow, index > 0 && styles.activityRowBorder]}>
             <View style={[styles.activityAvatar, isHiddenAdd && styles.activityAvatarMuted, isRevealed && styles.activityAvatarGold]}>
               {isHiddenAdd ? (
-                <Ionicons name="lock-closed-outline" size={16} color="#8a909e" />
+                <Ionicons name="lock-closed-outline" size={16} color={theme.colors.textMeta} />
               ) : isRevealed ? (
                 <Ionicons name="gift-outline" size={16} color="#fff" />
               ) : (
@@ -1058,7 +1071,7 @@ function ActivityFeedCard({
           onPress={() => router.push(`/trip/${tripId}`)}
           style={[styles.activityRow, tripEvents.length > 0 && styles.activityRowBorder]}>
           <View style={[styles.activityAvatar, styles.activityAvatarMuted]}>
-            <Ionicons name={categoryIonicon(firstPlanTomorrow?.category)} size={16} color="#8a909e" />
+            <Ionicons name={categoryIonicon(firstPlanTomorrow?.category)} size={16} color={theme.colors.textMeta} />
           </View>
           <View style={styles.activityTextBlock}>
             <Text style={styles.activityTitle}>
@@ -1069,14 +1082,14 @@ function ActivityFeedCard({
               {sealedTomorrow > 0 ? ` · +${sealedTomorrow} sealed` : ''}
             </Text>
           </View>
-          <Ionicons name="chevron-forward" size={16} color="#bbc0c8" />
+          <Ionicons name="chevron-forward" size={16} color={theme.colors.textMuted} />
         </TouchableOpacity>
       ) : null}
 
       {isEmpty ? (
         <View style={[styles.activityRow, styles.activityEmptyRow]}>
           <View style={[styles.activityAvatar, styles.activityAvatarMuted]}>
-            <Ionicons name="time-outline" size={16} color="#bbc0c8" />
+            <Ionicons name="time-outline" size={16} color={theme.colors.textMuted} />
           </View>
           <View style={styles.activityTextBlock}>
             <Text style={styles.activityEmptyText}>{t('home.activity.empty')}</Text>
@@ -1100,6 +1113,8 @@ function UpNextRow({
   now: Date;
   t: (key: string, vars?: Record<string, string | number>) => string;
 }) {
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
   if (!trip) return null;
 
   // Pick the next 3 upcoming activities (today or future), sorted by date+time
@@ -1130,7 +1145,7 @@ function UpNextRow({
           onPress={() => router.push(`/trip/${trip.quest.id}/sidequest/new`)}
           style={styles.upNextEmptyCard}>
           <View style={styles.upNextEmptyIcon}>
-            <Ionicons name="add-circle-outline" size={22} color="#bbc0c8" />
+            <Ionicons name="add-circle-outline" size={22} color={theme.colors.textMuted} />
           </View>
           <Text style={styles.upNextEmptyText}>{t('home.upnext.empty')}</Text>
         </TouchableOpacity>
@@ -1162,6 +1177,7 @@ function UpNextCard({
   now: Date;
   t: (key: string, vars?: Record<string, string | number>) => string;
 }) {
+  const styles = useThemedStyles(createStyles);
   const isSealed = activity.isHidden && !activity.isRevealed;
   const todayStr = now.toISOString().slice(0, 10);
   const tomorrow = new Date(now);
@@ -1267,6 +1283,8 @@ function JoinModal({
   insets: { bottom: number };
   t?: (key: string, vars?: Record<string, string | number>) => string;
 }) {
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
   return (
     <KeyboardAvoidingView style={styles.modalBackdrop} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={onClose} />
@@ -1277,7 +1295,7 @@ function JoinModal({
             <Text style={styles.joinTitle}>{t ? t('home.join_title') : 'Join an Adventure'}</Text>
           </View>
           <TouchableOpacity style={styles.membersClose} activeOpacity={0.88} onPress={onClose}>
-            <Ionicons name="close" size={20} color="#161821" />
+            <Ionicons name="close" size={20} color={theme.colors.textPrimary} />
           </TouchableOpacity>
         </View>
         <Text style={styles.joinSubtitle}>
@@ -1286,7 +1304,8 @@ function JoinModal({
         <TextInput
           style={styles.joinInput}
           placeholder={t ? t('home.code_placeholder') : 'e.g. A3F9B2'}
-          placeholderTextColor="#b0b5c0"
+          placeholderTextColor={theme.isDark ? theme.colors.placeholderText : '#b0b5c0'}
+          keyboardAppearance={theme.keyboardAppearance}
           value={code}
           // No native maxLength: iOS silently rejects the ENTIRE paste when
           // the clipboard exceeds it (a code copied from Notes often carries
@@ -1300,7 +1319,7 @@ function JoinModal({
         />
         {error ? <Text style={styles.joinError}>{error}</Text> : null}
         <Pressable
-          style={({ pressed }) => [styles.joinButton, { backgroundColor: COLORS.primary }, pressed && { opacity: 0.88 }, (!code.trim() || busy) && styles.joinButtonDisabled]}
+          style={({ pressed }) => [styles.joinButton, { backgroundColor: theme.colors.primary }, pressed && { opacity: 0.88 }, (!code.trim() || busy) && styles.joinButtonDisabled]}
           onPress={onJoin}
           disabled={!code.trim() || busy}>
           {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.joinButtonText}>{t ? t('home.join_adventure') : 'Join Adventure'}</Text>}
@@ -1415,10 +1434,10 @@ function getMembersLabel(quest?: Quest | null, t?: (key: string, vars?: Record<s
   return `${count} MEMBERS`;
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: COLORS.white,
+    backgroundColor: theme.colors.bgPrimary,
   },
   // Floats ON TOP of the ScrollView (position: absolute) instead of
   // reserving its own space above it — the same relationship the bottom tab
@@ -1433,12 +1452,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.lg,
     paddingVertical: 10,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.97)',
+    // Mirrors the tab bar pill (app/(tabs)/_layout.tsx): near-opaque surface;
+    // dark separates via a hairline ring instead of the big drop shadow.
+    backgroundColor: theme.colors.surfaceBar,
+    borderWidth: theme.isDark ? StyleSheet.hairlineWidth : 0,
+    borderColor: theme.colors.borderPrimary,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.07,
+    shadowOpacity: theme.isDark ? 0.35 : 0.07,
     shadowRadius: 20,
-    elevation: 10,
+    elevation: theme.isDark ? 0 : 10,
   },
   screenContent: {
     paddingHorizontal: SPACING.xl,
@@ -1452,7 +1475,7 @@ const styles = StyleSheet.create({
   emptySectionHeading: {
     marginTop: SPACING.xxxl,
     ...TYPOGRAPHY.eyebrow,
-    color: COLORS.textMeta,
+    color: theme.colors.textMeta,
   },
   emptyUpcoming: {
     alignItems: 'center',
@@ -1466,11 +1489,11 @@ const styles = StyleSheet.create({
     borderRadius: 56,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.bgLight,
+    backgroundColor: theme.colors.bgLight,
   },
   emptyUpcomingTitle: {
     marginTop: 28,
-    color: COLORS.textPrimary,
+    color: theme.colors.textPrimary,
     fontSize: 30,
     fontWeight: '900',
     letterSpacing: -1.2,
@@ -1478,7 +1501,7 @@ const styles = StyleSheet.create({
   emptyUpcomingCopy: {
     marginTop: SPACING.lg,
     maxWidth: 240,
-    color: COLORS.textSecondary,
+    color: theme.colors.textSecondary,
     fontSize: 18,
     lineHeight: 30,
     textAlign: 'center',
@@ -1486,7 +1509,8 @@ const styles = StyleSheet.create({
   emptyHint: {
     marginTop: 'auto',
     textAlign: 'center',
-    color: COLORS.textMuted,
+    // Instructional copy — textMuted is too faint on the dark page bg.
+    color: theme.isDark ? theme.colors.textMeta : theme.colors.textMuted,
     fontSize: 14,
   },
   topRow: {
@@ -1500,14 +1524,14 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: COLORS.bgLight,
+    backgroundColor: theme.colors.bgLight,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.05,
+    shadowOpacity: theme.isDark ? 0.2 : 0.05,
     shadowRadius: 12,
-    elevation: 3,
+    elevation: theme.isDark ? 0 : 3,
     overflow: 'hidden',
   },
   avatarImage: {
@@ -1518,12 +1542,12 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: COLORS.avatarDark,
+    backgroundColor: theme.colors.avatarDark,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarText: {
-    color: COLORS.white,
+    color: theme.colors.white,
     fontSize: 14,
     fontWeight: '800',
     letterSpacing: -0.6,
@@ -1532,7 +1556,7 @@ const styles = StyleSheet.create({
     marginTop: SPACING.xxxl,
   },
   heroTitle: {
-    color: COLORS.textPrimary,
+    color: theme.colors.textPrimary,
     fontSize: 40,
     lineHeight: 42,
     fontWeight: '900',
@@ -1544,7 +1568,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   loadingText: {
-    color: COLORS.textSecondary,
+    color: theme.colors.textSecondary,
     fontSize: 15,
     fontWeight: '600',
   },
@@ -1555,7 +1579,7 @@ const styles = StyleSheet.create({
     gap: SPACING.md,
   },
   dateText: {
-    color: COLORS.textSecondary,
+    color: theme.colors.textSecondary,
     fontSize: 17,
     letterSpacing: -0.3,
   },
@@ -1570,9 +1594,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: SPACING.md,
     borderRadius: RADIUS.circle,
-    backgroundColor: COLORS.bgLight,
+    backgroundColor: theme.colors.bgLight,
     borderWidth: 1,
-    borderColor: COLORS.borderPrimary,
+    borderColor: theme.colors.borderPrimary,
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.md,
   },
@@ -1584,13 +1608,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   infoBadgeIconCyan: {
-    backgroundColor: COLORS.secondary,
+    backgroundColor: theme.colors.secondary,
   },
   infoBadgeIconPink: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: theme.colors.primary,
   },
   infoBadgeLabel: {
-    color: COLORS.textSecondary,
+    color: theme.colors.textSecondary,
     fontSize: 13,
     fontWeight: '700',
     letterSpacing: 0.9,
@@ -1603,12 +1627,12 @@ const styles = StyleSheet.create({
   },
   sectionLabel: {
     ...TYPOGRAPHY.eyebrow,
-    color: COLORS.textMeta,
+    color: theme.colors.textMeta,
   },
   sectionLine: {
     flex: 1,
     height: 1,
-    backgroundColor: COLORS.borderPrimary,
+    backgroundColor: theme.colors.borderPrimary,
   },
   carousel: {
     marginTop: 16,
@@ -1769,7 +1793,7 @@ const styles = StyleSheet.create({
   bigHeroAvatarText: {
     fontSize: 11,
     fontWeight: '800',
-    color: COLORS.primary,
+    color: theme.colors.primary,
   },
   bigHeroSealed: {
     flexDirection: 'row',
@@ -1815,11 +1839,12 @@ const styles = StyleSheet.create({
   dash: {
     width: 16, height: 3,
     borderRadius: 2,
-    backgroundColor: '#d8dce3',
+    // Same treatment as the sheet handles: visible-but-quiet track in dark.
+    backgroundColor: theme.colors.sheetHandle,
   },
   dashActive: {
     width: 28,
-    backgroundColor: '#14161d',
+    backgroundColor: theme.colors.textPrimary,
   },
   swipeHint: {
     flexDirection: 'row',
@@ -1827,7 +1852,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   swipeHintText: {
-    color: '#8a909e',
+    color: theme.colors.textMeta,
     fontSize: 12,
     fontWeight: '500',
   },
@@ -1835,14 +1860,17 @@ const styles = StyleSheet.create({
   // ── Activity feed card ─────────────────────────────────────────────────
   activityCard: {
     marginTop: 10,
-    backgroundColor: '#fff',
+    backgroundColor: theme.colors.surface,
     borderRadius: 18,
     paddingVertical: 2,
+    // Dark separates from the page via surface contrast + hairline border.
+    borderWidth: theme.isDark ? StyleSheet.hairlineWidth : 0,
+    borderColor: theme.colors.borderPrimary,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
+    shadowOpacity: theme.isDark ? 0.2 : 0.05,
     shadowRadius: 8,
-    elevation: 2,
+    elevation: theme.isDark ? 0 : 2,
   },
   activityHeader: {
     flexDirection: 'row',
@@ -1860,18 +1888,18 @@ const styles = StyleSheet.create({
   activityHeaderDot: {
     width: 7, height: 7,
     borderRadius: 4,
-    backgroundColor: '#3ddc8c',
+    backgroundColor: theme.colors.success,
   },
   activityHeaderLabel: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#14161d',
+    color: theme.colors.textPrimary,
     letterSpacing: 1.4,
   },
   activityHeaderCount: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#8a909e',
+    color: theme.colors.textMeta,
   },
   activityRow: {
     flexDirection: 'row',
@@ -1882,19 +1910,19 @@ const styles = StyleSheet.create({
   },
   activityRowBorder: {
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#eef0f4',
+    borderTopColor: theme.isDark ? theme.colors.borderPrimary : '#eef0f4',
   },
   activityAvatar: {
     width: 36, height: 36,
     borderRadius: 18,
-    backgroundColor: '#fff1f5',
+    backgroundColor: theme.colors.avatarLight,
     alignItems: 'center',
     justifyContent: 'center',
     // No overflow:hidden — Avatar clips its own image and the online dot
     // must be able to sit on the circle's edge.
   },
   activityAvatarMuted: {
-    backgroundColor: '#f4f5f7',
+    backgroundColor: theme.colors.bgLight,
   },
   activityAvatarGold: {
     backgroundColor: '#d79a19',
@@ -1905,7 +1933,7 @@ const styles = StyleSheet.create({
   },
   activityTitle: {
     fontSize: 13,
-    color: '#14161d',
+    color: theme.colors.textPrimary,
     fontWeight: '500',
     lineHeight: 18,
   },
@@ -1914,7 +1942,7 @@ const styles = StyleSheet.create({
   },
   activityMeta: {
     fontSize: 11,
-    color: '#8a909e',
+    color: theme.colors.textMeta,
     marginTop: 2,
   },
   activityEmptyRow: {
@@ -1922,7 +1950,7 @@ const styles = StyleSheet.create({
   },
   activityEmptyText: {
     fontSize: 12,
-    color: '#8a909e',
+    color: theme.colors.textMeta,
     fontWeight: '500',
   },
 
@@ -1939,13 +1967,13 @@ const styles = StyleSheet.create({
   upNextHeading: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#14161d',
+    color: theme.colors.textPrimary,
     letterSpacing: 1.4,
   },
   upNextSeeAll: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#8a909e',
+    color: theme.colors.textMeta,
   },
   upNextRow: {
     flexDirection: 'row',
@@ -1953,25 +1981,30 @@ const styles = StyleSheet.create({
   },
   upNextCard: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: theme.colors.surface,
     borderRadius: 16,
     overflow: 'hidden',
+    borderWidth: theme.isDark ? StyleSheet.hairlineWidth : 0,
+    borderColor: theme.colors.borderPrimary,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
+    shadowOpacity: theme.isDark ? 0.2 : 0.04,
     shadowRadius: 6,
-    elevation: 1,
+    elevation: theme.isDark ? 0 : 1,
   },
   upNextCardSealed: {
-    backgroundColor: '#ece7df',
+    // Warm "mystery" wash — dark keeps the same warmth as a muted tint
+    // (same family as the stay surfaces), never a bright beige block.
+    backgroundColor: theme.colors.sealedSurface,
   },
   upNextImageBox: {
     height: 76,
-    backgroundColor: '#e6e2d8',
+    // Image loading fill — dark-aware so covers never flash a light box.
+    backgroundColor: theme.colors.sealedSurfaceSubtle,
     position: 'relative',
   },
   upNextImageBoxSealed: {
-    backgroundColor: '#ece7df',
+    backgroundColor: theme.colors.sealedSurface,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -2014,33 +2047,33 @@ const styles = StyleSheet.create({
   upNextDate: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#8a909e',
+    color: theme.colors.textMeta,
     letterSpacing: 0.5,
     marginBottom: 4,
   },
   upNextTitle: {
     fontSize: 13,
     fontWeight: '800',
-    color: '#14161d',
+    color: theme.colors.textPrimary,
     letterSpacing: -0.2,
   },
   upNextCreator: {
     fontSize: 11,
-    color: '#8a909e',
+    color: theme.colors.textMeta,
     marginTop: 4,
     fontWeight: '500',
   },
   upNextTeaser: {
     fontSize: 11,
-    color: '#6e7480',
+    color: theme.colors.textSecondary,
     marginTop: 4,
     fontStyle: 'italic',
   },
   upNextEmptyCard: {
-    backgroundColor: '#fff',
+    backgroundColor: theme.colors.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#eef0f4',
+    borderColor: theme.isDark ? theme.colors.borderPrimary : '#eef0f4',
     borderStyle: 'dashed',
     paddingVertical: 22,
     paddingHorizontal: 18,
@@ -2053,7 +2086,7 @@ const styles = StyleSheet.create({
   },
   upNextEmptyText: {
     fontSize: 12,
-    color: '#8a909e',
+    color: theme.colors.textMeta,
     fontWeight: '500',
     textAlign: 'center',
   },
@@ -2122,15 +2155,11 @@ const styles = StyleSheet.create({
     width: 245,
     height: 68,
     borderRadius: 24,
-    backgroundColor: '#fff',
+    backgroundColor: theme.colors.surface,
     borderWidth: 1,
-    borderColor: '#edf0f4',
+    borderColor: theme.isDark ? theme.colors.borderPrimary : '#edf0f4',
     paddingHorizontal: 18,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.06,
-    shadowRadius: 22,
-    elevation: 5,
+    ...theme.shadows.medium,
   },
   activeQuestDot: {
     width: 14,
@@ -2143,33 +2172,33 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   activeQuestLabel: {
-    color: '#252833',
+    color: theme.isDark ? theme.colors.textPrimary : '#252833',
     fontSize: 9,
     fontWeight: '700',
     letterSpacing: 2.4,
   },
   activeQuestTitle: {
     marginTop: 2,
-    color: '#0b7a94',
+    color: theme.isDark ? theme.colors.secondary : '#0b7a94',
     fontSize: 15,
     fontWeight: '500',
     letterSpacing: -0.4,
   },
   activeQuestMeta: {
     marginTop: 2,
-    color: '#6f7683',
+    color: theme.colors.textSecondary,
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.2,
   },
   errorText: {
     marginTop: 22,
-    color: '#d53d18',
+    color: theme.colors.error,
     textAlign: 'center',
   },
   fabBackdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(17,18,23,0.08)',
+    backgroundColor: theme.colors.backdropFab,
   },
   fabWrap: {
     position: 'absolute',
@@ -2180,28 +2209,27 @@ const styles = StyleSheet.create({
     width: 68,
     height: 68,
     borderRadius: 34,
-    backgroundColor: '#d5004f',
+    backgroundColor: theme.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#d5004f',
+    // Pink glow reads on both themes; Android elevation off in dark (grey box).
+    shadowColor: theme.colors.primary,
     shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.26,
+    shadowOpacity: theme.isDark ? 0.45 : 0.26,
     shadowRadius: 22,
-    elevation: 8,
+    elevation: theme.isDark ? 0 : 8,
   },
   fabMenu: {
     position: 'relative',
     width: 240,
     marginBottom: 14,
     borderRadius: 22,
-    backgroundColor: '#fff',
+    backgroundColor: theme.colors.surfaceElevated,
+    borderWidth: theme.isDark ? StyleSheet.hairlineWidth : 0,
+    borderColor: theme.colors.borderPrimary,
     padding: 12,
     gap: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 18 },
-    shadowOpacity: 0.16,
-    shadowRadius: 28,
-    elevation: 14,
+    ...theme.shadows.floating,
   },
   fabMenuButton: {
     minHeight: 56,
@@ -2213,14 +2241,14 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   fabMenuButtonPrimary: {
-    // backgroundColor applied inline via COLORS.primary for theme consistency
+    // backgroundColor applied inline via theme.colors.primary for theme consistency
     borderWidth: 1.5,
     borderColor: 'transparent', // match secondary's footprint so both buttons render at identical height
   },
   fabMenuButtonSecondary: {
-    backgroundColor: '#fff',
+    backgroundColor: theme.colors.surfaceElevated,
     borderWidth: 1.5,
-    // borderColor applied inline via COLORS.primary
+    // borderColor applied inline via theme.colors.primary
   },
   fabMenuButtonPrimaryText: {
     color: '#fff',
@@ -2248,25 +2276,25 @@ const styles = StyleSheet.create({
     bottom: -7,
     width: 14,
     height: 14,
-    backgroundColor: '#fff',
+    backgroundColor: theme.colors.surfaceElevated,
     transform: [{ rotate: '45deg' }],
   },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(10,12,18,0.28)',
+    backgroundColor: theme.colors.backdropModal,
     justifyContent: 'center',
     paddingHorizontal: 22,
   },
   membersBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(12,14,19,0.28)',
+    backgroundColor: theme.isDark ? theme.colors.backdropModal : 'rgba(12,14,19,0.28)',
     justifyContent: 'flex-end',
   },
   membersCard: {
     maxHeight: '82%',
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
-    backgroundColor: '#fff',
+    backgroundColor: theme.colors.surfaceElevated,
     paddingTop: 10,
     paddingHorizontal: 22,
   },
@@ -2275,7 +2303,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 5,
     borderRadius: 999,
-    backgroundColor: '#d9dde4',
+    backgroundColor: theme.colors.sheetHandle,
     marginBottom: 4,
   },
   membersHeader: {
@@ -2285,14 +2313,14 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   membersEyebrow: {
-    color: '#9aa2ae',
+    color: theme.isDark ? theme.colors.textMeta : '#9aa2ae',
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 1.4,
   },
   membersTitle: {
     marginTop: 6,
-    color: '#161821',
+    color: theme.colors.textPrimary,
     fontSize: 24,
     fontWeight: '900',
     letterSpacing: -0.8,
@@ -2303,11 +2331,11 @@ const styles = StyleSheet.create({
     borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#f5f6f8',
+    backgroundColor: theme.isDark ? theme.colors.bgLight : '#f5f6f8',
   },
   membersLoading: {
     marginTop: 18,
-    color: '#7b828e',
+    color: theme.isDark ? theme.colors.textSecondary : '#7b828e',
     fontSize: 14,
   },
   membersList: {
@@ -2318,7 +2346,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#f1f3f6',
+    borderBottomColor: theme.isDark ? theme.colors.borderPrimary : '#f1f3f6',
     gap: 12,
   },
   memberAvatar: {
@@ -2327,7 +2355,7 @@ const styles = StyleSheet.create({
     borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#1d212a',
+    backgroundColor: theme.colors.avatarDark,
     // No overflow:hidden — Avatar clips its own image and the online dot
     // must be able to sit on the circle's edge.
   },
@@ -2335,13 +2363,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   memberName: {
-    color: '#161821',
+    color: theme.colors.textPrimary,
     fontSize: 15,
     fontWeight: '700',
   },
   memberMeta: {
     marginTop: 3,
-    color: '#7b828e',
+    color: theme.isDark ? theme.colors.textSecondary : '#7b828e',
     fontSize: 13,
     fontWeight: '600',
   },
@@ -2358,7 +2386,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   inviteSectionTitle: {
-    color: '#ff4f74',
+    color: theme.colors.primary,
     fontSize: 13,
     fontWeight: '800',
     letterSpacing: 0.4,
@@ -2368,8 +2396,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 20,
     borderWidth: 1.5,
-    borderColor: '#ffd5df',
-    backgroundColor: '#fff8fa',
+    borderColor: theme.isDark ? theme.colors.primaryLight20 : '#ffd5df',
+    backgroundColor: theme.isDark ? theme.colors.primaryLight08 : '#fff8fa',
     padding: 12,
     gap: 12,
   },
@@ -2379,7 +2407,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
   },
   inviteCardImagePlaceholder: {
-    backgroundColor: '#f0f1f5',
+    backgroundColor: theme.colors.bgLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -2387,19 +2415,19 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   inviteCardTitle: {
-    color: '#161821',
+    color: theme.colors.textPrimary,
     fontSize: 15,
     fontWeight: '800',
     letterSpacing: -0.3,
   },
   inviteCardMeta: {
     marginTop: 2,
-    color: '#7b828e',
+    color: theme.isDark ? theme.colors.textSecondary : '#7b828e',
     fontSize: 12,
   },
   inviteCardFrom: {
     marginTop: 3,
-    color: '#a0a6b2',
+    color: theme.isDark ? theme.colors.textMeta : '#a0a6b2',
     fontSize: 11,
     fontWeight: '600',
   },
@@ -2412,7 +2440,7 @@ const styles = StyleSheet.create({
     height: 34,
     paddingHorizontal: 16,
     borderRadius: 17,
-    backgroundColor: '#ff4f74',
+    backgroundColor: theme.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -2425,7 +2453,7 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: '#f3f4f7',
+    backgroundColor: theme.colors.bgLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -2433,7 +2461,9 @@ const styles = StyleSheet.create({
   // ─ Join modal
   joinCard: {
     borderRadius: 28,
-    backgroundColor: '#fff',
+    backgroundColor: theme.colors.surfaceElevated,
+    borderWidth: theme.isDark ? StyleSheet.hairlineWidth : 0,
+    borderColor: theme.colors.borderPrimary,
     padding: 20,
   },
   joinHeader: {
@@ -2443,20 +2473,20 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   joinEyebrow: {
-    color: '#97a0ad',
+    color: theme.isDark ? theme.colors.textMeta : '#97a0ad',
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 1.4,
   },
   joinTitle: {
     marginTop: 4,
-    color: '#161821',
+    color: theme.colors.textPrimary,
     fontSize: 22,
     fontWeight: '900',
     letterSpacing: -0.7,
   },
   joinSubtitle: {
-    color: '#6f7683',
+    color: theme.colors.textSecondary,
     fontSize: 14,
     lineHeight: 20,
     marginBottom: 18,
@@ -2465,18 +2495,18 @@ const styles = StyleSheet.create({
     height: 54,
     borderRadius: 16,
     borderWidth: 1.5,
-    borderColor: '#e2e5ee',
-    backgroundColor: '#f8f9fc',
+    borderColor: theme.colors.borderInput,
+    backgroundColor: theme.colors.bgLightest,
     paddingHorizontal: 18,
     fontSize: 22,
     fontWeight: '800',
     letterSpacing: 6,
-    color: '#161821',
+    color: theme.colors.textPrimary,
     textAlign: 'center',
   },
   joinError: {
     marginTop: 8,
-    color: '#d53d18',
+    color: theme.colors.error,
     fontSize: 13,
     lineHeight: 18,
   },
@@ -2484,7 +2514,7 @@ const styles = StyleSheet.create({
     marginTop: 14,
     height: 52,
     borderRadius: 16,
-    backgroundColor: '#ff4f74',
+    backgroundColor: theme.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },

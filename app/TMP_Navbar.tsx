@@ -2,30 +2,39 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
 import type { Href } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Avatar, { getInitials } from '@/components/avatar';
+import { useTheme } from '@/components/theme-provider';
+import { useThemedStyles } from '@/hooks/use-themed-styles';
+import type { AppTheme } from '@/constants/themes';
 import { getCached, setCached } from '@/lib/cache';
 import { formatRelativeTime } from '@/lib/format-time';
 import { loadNotifications, markNotificationsAsRead, type AppNotification } from '@/lib/social';
-import { PRIMARY_COLOR, SECONDARY_COLOR } from '@/constants/colors';
 
-const ICON_BY_TYPE: Record<AppNotification['type'], { name: keyof typeof Ionicons.glyphMap; background: string; color: string }> = {
-  member_joined: { name: 'person-add-outline', background: SECONDARY_COLOR, color: '#fff' },
+// White icons on saturated accent circles stay white in both themes; the
+// amber (activity/reveal) and money-green (expense) accents are intentional
+// notification identities, kept as-is — they read fine on both surfaces.
+const getIconByType = (theme: AppTheme): Record<AppNotification['type'], { name: keyof typeof Ionicons.glyphMap; background: string; color: string }> => ({
+  member_joined: { name: 'person-add-outline', background: theme.colors.secondary, color: '#fff' },
   new_activity: { name: 'calendar-outline', background: '#d79a19', color: '#fff' },
-  new_hidden_sidequest: { name: 'lock-closed-outline', background: '#f4f5f7', color: '#8a909e' },
+  // Neutral (non-accent) circle: muted glyph on a subtle fill in both themes.
+  new_hidden_sidequest: { name: 'lock-closed-outline', background: theme.isDark ? theme.colors.bgLight : '#f4f5f7', color: theme.colors.textMeta },
   sidequest_revealed: { name: 'gift-outline', background: '#d79a19', color: '#fff' },
-  chat: { name: 'chatbubble-outline', background: PRIMARY_COLOR, color: '#fff' },
+  chat: { name: 'chatbubble-outline', background: theme.colors.primary, color: '#fff' },
   expense: { name: 'cash-outline', background: '#2f9e6f', color: '#fff' },
-  support_reply: { name: 'mail-outline', background: SECONDARY_COLOR, color: '#fff' },
-  system_message: { name: 'warning-outline', background: '#d53d18', color: '#fff' },
-};
+  support_reply: { name: 'mail-outline', background: theme.colors.secondary, color: '#fff' },
+  system_message: { name: 'warning-outline', background: theme.colors.error, color: '#fff' },
+});
 
 const NOTIFICATIONS_CACHE_KEY = '/api/notifications';
 
 export default function TmpNavbarScreen() {
   const insets = useSafeAreaInsets();
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
+  const iconByType = useMemo(() => getIconByType(theme), [theme]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [error, setError] = useState('');
   const [now, setNow] = useState(() => new Date());
@@ -74,7 +83,7 @@ export default function TmpNavbarScreen() {
         showsVerticalScrollIndicator={false}>
         <View style={styles.topBar}>
           <TouchableOpacity style={styles.topButton} activeOpacity={0.84} onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={24} color="#161821" />
+            <Ionicons name="arrow-back" size={24} color={theme.colors.textPrimary} />
           </TouchableOpacity>
           <Text style={styles.topTitle}>Notifications</Text>
           <View style={styles.topSpacer} />
@@ -86,7 +95,7 @@ export default function TmpNavbarScreen() {
           <Text style={styles.sectionTitle}>All activity</Text>
           {notifications.length > 0 ? (
             notifications.map((item, index) => {
-              const icon = ICON_BY_TYPE[item.type];
+              const icon = iconByType[item.type];
               const isSystemMsg = item.type === 'system_message';
               return (
                 <TouchableOpacity
@@ -119,7 +128,7 @@ export default function TmpNavbarScreen() {
                     <Text style={styles.feedMeta}>{formatRelativeTime(item.createdAt, now)}</Text>
                   </View>
                   {isSystemMsg ? (
-                    <Ionicons name="chevron-forward" size={16} color="#d53d18" />
+                    <Ionicons name="chevron-forward" size={16} color={theme.colors.error} />
                   ) : null}
                 </TouchableOpacity>
               );
@@ -160,14 +169,14 @@ export default function TmpNavbarScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: theme.colors.bgPrimary,
   },
   screen: {
     flexGrow: 1,
-    backgroundColor: '#fff',
+    backgroundColor: theme.colors.bgPrimary,
     paddingHorizontal: 20,
   },
   topBar: {
@@ -181,10 +190,12 @@ const styles = StyleSheet.create({
     borderRadius: 23,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#f5f6f8',
+    // Exact pre-theming light value — matches the bell button that opens
+    // this screen (see components/top-alerts-button.tsx).
+    backgroundColor: theme.isDark ? theme.colors.bgLight : '#f5f6f8',
   },
   topTitle: {
-    color: '#121317',
+    color: theme.isDark ? theme.colors.textPrimary : '#121317',
     fontSize: 24,
     fontWeight: '900',
     letterSpacing: -0.9,
@@ -196,19 +207,19 @@ const styles = StyleSheet.create({
   copy: {
     marginTop: 14,
     fontSize: 16,
-    color: '#737883',
+    color: theme.isDark ? theme.colors.textSecondary : '#737883',
     lineHeight: 24,
   },
   feedCard: {
     marginTop: 22,
     borderRadius: 28,
     borderWidth: 1,
-    borderColor: '#ebeef3',
-    backgroundColor: '#fff',
+    borderColor: theme.isDark ? theme.colors.borderPrimary : '#ebeef3',
+    backgroundColor: theme.colors.surface,
     padding: 18,
   },
   sectionTitle: {
-    color: '#171821',
+    color: theme.isDark ? theme.colors.textPrimary : '#171821',
     fontSize: 18,
     fontWeight: '800',
     marginBottom: 6,
@@ -225,7 +236,7 @@ const styles = StyleSheet.create({
   },
   feedRowBorder: {
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#eef0f4',
+    borderTopColor: theme.isDark ? theme.colors.borderPrimary : '#eef0f4',
   },
   feedIcon: {
     width: 36,
@@ -241,7 +252,7 @@ const styles = StyleSheet.create({
   },
   feedTitle: {
     fontSize: 13,
-    color: '#14161d',
+    color: theme.isDark ? theme.colors.textPrimary : '#14161d',
     fontWeight: '500',
     lineHeight: 18,
   },
@@ -250,53 +261,62 @@ const styles = StyleSheet.create({
   },
   feedMeta: {
     fontSize: 11,
-    color: '#8a909e',
+    color: theme.colors.textMeta,
     marginTop: 2,
   },
   emptyText: {
-    color: '#171821',
+    color: theme.isDark ? theme.colors.textPrimary : '#171821',
     fontSize: 15,
     fontWeight: '700',
     marginTop: 8,
   },
   emptyBody: {
-    color: '#7c8290',
+    color: theme.isDark ? theme.colors.textSecondary : '#7c8290',
     fontSize: 14,
     marginTop: 4,
   },
   errorText: {
     marginTop: 14,
-    color: '#d53d18',
+    color: theme.colors.error,
     textAlign: 'center',
   },
   feedRowSystem: {
-    backgroundColor: '#fff5f5',
+    // Highlighted (system-message) row: in dark a subtle translucent red
+    // wash instead of the light mode's near-white pink — distinct without
+    // a harsh bright block on the dark surface.
+    backgroundColor: theme.isDark ? theme.colors.errorLight : '#fff5f5',
     borderRadius: 12,
     paddingHorizontal: 10,
     marginTop: 4,
   },
   feedTitleSystem: {
-    color: '#b91c1c',
+    // #b91c1c is too dim against dark surfaces — use the brightened error.
+    color: theme.isDark ? theme.colors.error : '#b91c1c',
   },
   feedSystemTap: {
     fontSize: 11,
-    color: '#d53d18',
+    color: theme.colors.error,
     fontWeight: '600',
     marginTop: 1,
   },
   // System message modal
   msgBackdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: theme.isDark ? theme.colors.backdropModal : 'rgba(0,0,0,0.5)',
   },
   msgCard: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#fff',
+    // Bottom sheet → elevated surface step + hairline edge in dark
+    // (same treatment as components/modal-sheet.tsx).
+    backgroundColor: theme.colors.surfaceElevated,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
+    borderWidth: theme.isDark ? StyleSheet.hairlineWidth : 0,
+    borderBottomWidth: 0,
+    borderColor: theme.colors.borderPrimary,
     padding: 24,
     gap: 12,
   },
@@ -310,33 +330,38 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#d53d18',
+    backgroundColor: theme.colors.error,
     alignItems: 'center',
     justifyContent: 'center',
   },
   msgFrom: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#d53d18',
+    color: theme.colors.error,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   msgTitle: {
     fontSize: 20,
     fontWeight: '900',
-    color: '#14161d',
+    color: theme.isDark ? theme.colors.textPrimary : '#14161d',
     letterSpacing: -0.5,
   },
   msgBody: {
     fontSize: 15,
-    color: '#4a5060',
+    color: theme.isDark ? theme.colors.textSecondary : '#4a5060',
     lineHeight: 22,
   },
   msgClose: {
     marginTop: 8,
     height: 50,
     borderRadius: 16,
-    backgroundColor: '#14161d',
+    // Near-black filled button reads as "primary neutral" in light; in dark
+    // it would vanish into the sheet, so step up to avatarDark (one level
+    // above surfaceElevated) with a hairline edge. White label works on both.
+    backgroundColor: theme.isDark ? theme.colors.avatarDark : '#14161d',
+    borderWidth: theme.isDark ? StyleSheet.hairlineWidth : 0,
+    borderColor: theme.colors.borderPrimary,
     alignItems: 'center',
     justifyContent: 'center',
   },

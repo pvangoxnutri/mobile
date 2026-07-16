@@ -20,7 +20,9 @@ import { getDefaultNotificationPreferences, loadNotificationPreferences, saveNot
 import { disablePushNotifications, getCurrentPermissionStatus, maybeRequestPushPermission } from '@/lib/push-notifications';
 import { supabase } from '@/lib/supabase';
 import type { Quest } from '@/lib/types';
-import { COLORS, SHADOWS, SPACING, RADIUS, TYPOGRAPHY } from '@/constants/design-tokens';
+import { SPACING, RADIUS, TYPOGRAPHY } from '@/constants/design-tokens';
+import type { AppTheme } from '@/constants/themes';
+import { useThemedStyles } from '@/hooks/use-themed-styles';
 
 export default function ProfileScreen() {
   const { user, signOut, refreshProfile, deleteAccount } = useAuth();
@@ -46,7 +48,8 @@ export default function ProfileScreen() {
   const [editingPassword, setEditingPassword] = useState(false);
   const [editingLanguage, setEditingLanguage] = useState(false);
   const [editingAppearance, setEditingAppearance] = useState(false);
-  const { preference: themePreference, setPreference: setThemePreference } = useTheme();
+  const { theme, preference: themePreference, setPreference: setThemePreference } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const [editingNotifications, setEditingNotifications] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferences>(getDefaultNotificationPreferences());
@@ -530,7 +533,7 @@ export default function ProfileScreen() {
 
 
   return (
-    <View style={{ flex: 1, backgroundColor: COLORS.white }}>
+    <View style={{ flex: 1, backgroundColor: theme.colors.bgPrimary }}>
       <ScrollView
         style={styles.screen}
         contentContainerStyle={[
@@ -543,7 +546,7 @@ export default function ProfileScreen() {
         <Animated.View
           style={[
             styles.avatarRing,
-            { borderColor: COLORS.primary },
+            { borderColor: theme.colors.primary },
             {
               opacity: heroOpacity,
               transform: [
@@ -561,7 +564,7 @@ export default function ProfileScreen() {
           )}
         </Animated.View>
 
-        <TouchableOpacity style={[styles.editAvatarButton, { backgroundColor: COLORS.secondary, shadowColor: COLORS.secondary }]} activeOpacity={0.85} onPress={() => void handleAvatarPick()}>
+        <TouchableOpacity style={[styles.editAvatarButton, { backgroundColor: theme.colors.secondary, shadowColor: theme.colors.secondary }]} activeOpacity={0.85} onPress={() => void handleAvatarPick()}>
           {busy === 'avatar' ? <ActivityIndicator size="small" color="#fff" /> : <Ionicons name="create-outline" size={18} color="#fff" />}
         </TouchableOpacity>
 
@@ -570,22 +573,22 @@ export default function ProfileScreen() {
         {user?.bio ? <Text style={styles.bioText}>{user.bio}</Text> : null}
         <View style={styles.statsBadgeRow}>
           <View style={styles.statsBadge}>
-            <View style={[styles.statsBadgeIcon, { backgroundColor: COLORS.secondary }]}>
-              <Ionicons name="airplane" size={11} color={COLORS.white} />
+            <View style={[styles.statsBadgeIcon, { backgroundColor: theme.colors.secondary }]}>
+              <Ionicons name="airplane" size={11} color={theme.colors.white} />
             </View>
             <Text style={styles.statsBadgeValue}>{joinedTrips}</Text>
             <Text style={styles.statsBadgeLabel}>{t('profile.statsBadge.trips')}</Text>
           </View>
           <View style={styles.statsBadge}>
-            <View style={[styles.statsBadgeIcon, { backgroundColor: COLORS.primary }]}>
-              <Ionicons name="sparkles" size={11} color={COLORS.white} />
+            <View style={[styles.statsBadgeIcon, { backgroundColor: theme.colors.primary }]}>
+              <Ionicons name="sparkles" size={11} color={theme.colors.white} />
             </View>
             <Text style={styles.statsBadgeValue}>{createdQuests}</Text>
             <Text style={styles.statsBadgeLabel}>{t('profile.statsBadge.sidequests')}</Text>
           </View>
           <View style={styles.statsBadge}>
-            <View style={[styles.statsBadgeIcon, { backgroundColor: COLORS.secondary }]}>
-              <Ionicons name="earth" size={11} color={COLORS.white} />
+            <View style={[styles.statsBadgeIcon, { backgroundColor: theme.colors.secondary }]}>
+              <Ionicons name="earth" size={11} color={theme.colors.white} />
             </View>
             <Text style={styles.statsBadgeValue}>{visitedCountries}</Text>
             <Text style={styles.statsBadgeLabel}>{t('profile.statsBadge.countries')}</Text>
@@ -596,7 +599,7 @@ export default function ProfileScreen() {
             <Ionicons
               name={message.type === 'success' ? 'checkmark-circle' : 'alert-circle'}
               size={18}
-              color={message.type === 'success' ? '#0b9b72' : COLORS.error}
+              color={message.type === 'success' ? (theme.isDark ? theme.colors.success : '#0b9b72') : theme.colors.error}
             />
             <Text style={[styles.messageText, message.type === 'success' ? styles.messageTextSuccess : styles.messageTextError]}>
               {message.text}
@@ -618,7 +621,7 @@ export default function ProfileScreen() {
 
       {previousTrips.length === 0 ? (
         <View style={styles.adventureEmpty}>
-          <Ionicons name="compass-outline" size={20} color={COLORS.textMuted} />
+          <Ionicons name="compass-outline" size={20} color={theme.colors.textMuted} />
           <Text style={styles.adventureEmptyText}>{t('profile.previousAdventures.empty')}</Text>
         </View>
       ) : (
@@ -657,19 +660,19 @@ export default function ProfileScreen() {
       <SectionCard
         title={t('profile.sections.explore')}
         items={[
-          { icon: 'earth-outline', label: t('profile.explore.travelTracker'), accent: COLORS.secondary, onPress: () => router.push('/travel-tracker') },
+          { icon: 'earth-outline', label: t('profile.explore.travelTracker'), accent: theme.colors.secondary, onPress: () => router.push('/travel-tracker') },
         ]}
       />
 
       <SectionCard
         title={t('profile.sections.preferences')}
         items={[
-          { icon: 'person-circle-outline', label: t('profile.editProfile.changeName'), accent: COLORS.primary, onPress: () => setEditingName(true) },
-          { icon: 'text-outline', label: t('profile.editProfile.editBio'), accent: COLORS.primary, onPress: () => setEditingBio(true) },
-          { icon: 'camera-outline', label: busy === 'avatar' ? t('profile.editProfile.uploading') : t('profile.editProfile.changeImage'), accent: COLORS.primary, onPress: () => void handleAvatarPick() },
-          { icon: 'notifications-outline', label: t('profile.notifications.title'), accent: COLORS.primary, onPress: () => { setPushTestResult(null); setEditingNotifications(true); } },
-          { icon: 'lock-closed-outline', label: t('profile.accountSettings.changePassword'), accent: COLORS.secondary, onPress: () => setEditingPassword(true) },
-          { icon: 'language-outline', label: t('profile.accountSettings.changeLanguage'), accent: COLORS.secondary, onPress: () => setEditingLanguage(true) },
+          { icon: 'person-circle-outline', label: t('profile.editProfile.changeName'), accent: theme.colors.primary, onPress: () => setEditingName(true) },
+          { icon: 'text-outline', label: t('profile.editProfile.editBio'), accent: theme.colors.primary, onPress: () => setEditingBio(true) },
+          { icon: 'camera-outline', label: busy === 'avatar' ? t('profile.editProfile.uploading') : t('profile.editProfile.changeImage'), accent: theme.colors.primary, onPress: () => void handleAvatarPick() },
+          { icon: 'notifications-outline', label: t('profile.notifications.title'), accent: theme.colors.primary, onPress: () => { setPushTestResult(null); setEditingNotifications(true); } },
+          { icon: 'lock-closed-outline', label: t('profile.accountSettings.changePassword'), accent: theme.colors.secondary, onPress: () => setEditingPassword(true) },
+          { icon: 'language-outline', label: t('profile.accountSettings.changeLanguage'), accent: theme.colors.secondary, onPress: () => setEditingLanguage(true) },
           // Appearance stays hidden until the theme migration is complete —
           // see ENABLE_THEME_SWITCHING in constants/feature-flags.ts.
           ...(ENABLE_THEME_SWITCHING
@@ -677,11 +680,11 @@ export default function ProfileScreen() {
                 icon: 'contrast-outline' as const,
                 label: t('profile.appearance.title'),
                 detail: themePreference === 'dark' ? t('profile.appearance.dark') : t('profile.appearance.light'),
-                accent: COLORS.secondary,
+                accent: theme.colors.secondary,
                 onPress: () => setEditingAppearance(true),
               }]
             : []),
-          { icon: 'ban-outline', label: t('profile.blockedUsers.title'), accent: COLORS.secondary, onPress: () => { void loadBlockedUsers(); setBlockedUsersOpen(true); } },
+          { icon: 'ban-outline', label: t('profile.blockedUsers.title'), accent: theme.colors.secondary, onPress: () => { void loadBlockedUsers(); setBlockedUsersOpen(true); } },
         ]}
       />
 
@@ -694,6 +697,8 @@ export default function ProfileScreen() {
               value={name}
               onChangeText={setName}
               placeholder={t('profile.editProfile.displayNamePlaceholder')}
+              placeholderTextColor={theme.colors.placeholderText}
+              keyboardAppearance={theme.keyboardAppearance}
               style={[styles.input, { marginTop: 16 }]}
               returnKeyType="done"
               onSubmitEditing={() => Keyboard.dismiss()}
@@ -702,7 +707,7 @@ export default function ProfileScreen() {
               <TouchableOpacity style={styles.confirmCancel} activeOpacity={0.88} onPress={() => setEditingName(false)}>
                 <Text style={styles.confirmCancelText}>Cancel</Text>
               </TouchableOpacity>
-              <Pressable style={[styles.confirmDelete, { backgroundColor: COLORS.primary }]} onPress={() => void handleNameSave()} disabled={busy === 'name'}>
+              <Pressable style={[styles.confirmDelete, { backgroundColor: theme.colors.primary }]} onPress={() => void handleNameSave()} disabled={busy === 'name'}>
                 {busy === 'name' ? <ActivityIndicator color="#fff" /> : <Text style={styles.confirmDeleteText}>{t('profile.modals.saveNameButton')}</Text>}
               </Pressable>
             </View>
@@ -719,6 +724,8 @@ export default function ProfileScreen() {
               value={bio}
               onChangeText={setBio}
               placeholder={t('profile.editProfile.bioPlaceholder')}
+              placeholderTextColor={theme.colors.placeholderText}
+              keyboardAppearance={theme.keyboardAppearance}
               style={[styles.bioInput, { marginTop: 16 }]}
               multiline
               numberOfLines={4}
@@ -728,7 +735,7 @@ export default function ProfileScreen() {
               <TouchableOpacity style={styles.confirmCancel} activeOpacity={0.88} onPress={() => setEditingBio(false)}>
                 <Text style={styles.confirmCancelText}>Cancel</Text>
               </TouchableOpacity>
-              <Pressable style={[styles.confirmDelete, { backgroundColor: COLORS.primary }]} onPress={() => void handleBioSave()} disabled={busy === 'bio'}>
+              <Pressable style={[styles.confirmDelete, { backgroundColor: theme.colors.primary }]} onPress={() => void handleBioSave()} disabled={busy === 'bio'}>
                 {busy === 'bio' ? <ActivityIndicator color="#fff" /> : <Text style={styles.confirmDeleteText}>{t('profile.modals.saveBioButton')}</Text>}
               </Pressable>
             </View>
@@ -745,11 +752,11 @@ export default function ProfileScreen() {
             <View style={styles.blockedUsersHeader}>
               <Text style={styles.blockedUsersTitle}>{t('profile.blockedUsers.title')}</Text>
               <TouchableOpacity onPress={() => setBlockedUsersOpen(false)} hitSlop={10}>
-                <Ionicons name="close" size={22} color="#14161d" />
+                <Ionicons name="close" size={22} color={theme.isDark ? theme.colors.textPrimary : '#14161d'} />
               </TouchableOpacity>
             </View>
             {blockedUsersLoading ? (
-              <ActivityIndicator style={{ marginTop: 40 }} color={COLORS.primary} />
+              <ActivityIndicator style={{ marginTop: 40 }} color={theme.colors.primary} />
             ) : blockedUsers.length === 0 ? (
               <Text style={styles.blockedUsersEmpty}>{t('profile.blockedUsers.empty')}</Text>
             ) : (
@@ -761,7 +768,7 @@ export default function ProfileScreen() {
                       name={u.name}
                       fallbackText={u.name.slice(0, 2).toUpperCase()}
                       size={42}
-                      fallbackBackgroundColor="#1d212a"
+                      fallbackBackgroundColor={theme.colors.avatarDark}
                       fallbackTextColor="#fff"
                     />
                     <Text style={styles.blockedUserName} numberOfLines={1}>{u.name}</Text>
@@ -771,7 +778,7 @@ export default function ProfileScreen() {
                       disabled={unblockingId === u.id}
                       onPress={() => void handleUnblock(u.id)}>
                       {unblockingId === u.id
-                        ? <ActivityIndicator size="small" color={COLORS.primary} />
+                        ? <ActivityIndicator size="small" color={theme.colors.primary} />
                         : <Text style={styles.unblockButtonText}>{t('profile.blockedUsers.unblock')}</Text>
                       }
                     </TouchableOpacity>
@@ -789,25 +796,25 @@ export default function ProfileScreen() {
           {
             icon: 'people-outline',
             label: t('profile.support.communityGuidelines'),
-            accent: COLORS.secondary,
+            accent: theme.colors.secondary,
             onPress: () => void WebBrowser.openBrowserAsync(`https://sidequesttravel.app/community-guidelines?lang=${language}`),
           },
           {
             icon: 'mail-outline',
             label: t('profile.support.contactSupport'),
-            accent: COLORS.secondary,
+            accent: theme.colors.secondary,
             onPress: () => router.push('/support' as never),
           },
           {
             icon: 'shield-checkmark-outline',
             label: t('profile.support.privacyPolicy'),
-            accent: COLORS.secondary,
+            accent: theme.colors.secondary,
             onPress: () => void WebBrowser.openBrowserAsync(`https://sidequesttravel.app/privacy?lang=${language}`),
           },
           {
             icon: 'document-text-outline',
             label: t('profile.support.termsOfService'),
-            accent: COLORS.secondary,
+            accent: theme.colors.secondary,
             onPress: () => void WebBrowser.openBrowserAsync(`https://sidequesttravel.app/terms?lang=${language}`),
           },
         ]}
@@ -821,7 +828,7 @@ export default function ProfileScreen() {
             {
               icon: 'shield-checkmark-outline',
               label: 'Moderation',
-              accent: '#d53d18',
+              accent: theme.colors.error,
               onPress: () => router.push('/admin/moderation' as never),
             },
           ]}
@@ -834,7 +841,7 @@ export default function ProfileScreen() {
           {
             icon: 'log-out-outline',
             label: t('profile.accountSettings.logout'),
-            accent: COLORS.primary,
+            accent: theme.colors.primary,
             onPress: () => {
               void signOut().then(() => router.replace('/(auth)/login'));
             },
@@ -842,7 +849,7 @@ export default function ProfileScreen() {
           {
             icon: 'trash-outline',
             label: busy === 'delete' ? t('profile.accountSettings.deleting') : t('profile.accountSettings.deleteAccount'),
-            accent: COLORS.error,
+            accent: theme.colors.error,
             onPress: handleDeleteAccount,
           },
         ]}
@@ -857,6 +864,8 @@ export default function ProfileScreen() {
               value={newPassword}
               onChangeText={setNewPassword}
               placeholder={t('profile.password.newPasswordPlaceholder')}
+              placeholderTextColor={theme.colors.placeholderText}
+              keyboardAppearance={theme.keyboardAppearance}
               secureTextEntry
               style={[styles.input, { marginTop: 16 }]}
               returnKeyType="done"
@@ -867,7 +876,7 @@ export default function ProfileScreen() {
               <TouchableOpacity style={styles.confirmCancel} activeOpacity={0.88} onPress={() => setEditingPassword(false)}>
                 <Text style={styles.confirmCancelText}>Cancel</Text>
               </TouchableOpacity>
-              <Pressable style={[styles.confirmDelete, { backgroundColor: COLORS.primary }]} onPress={() => void handlePasswordSave()} disabled={busy === 'password'}>
+              <Pressable style={[styles.confirmDelete, { backgroundColor: theme.colors.primary }]} onPress={() => void handlePasswordSave()} disabled={busy === 'password'}>
                 {busy === 'password' ? <ActivityIndicator color="#fff" /> : <Text style={styles.confirmDeleteText}>{t('profile.modals.updatePasswordButton')}</Text>}
               </Pressable>
             </View>
@@ -892,7 +901,7 @@ export default function ProfileScreen() {
               <TouchableOpacity style={styles.confirmCancel} activeOpacity={0.88} onPress={() => setEditingLanguage(false)}>
                 <Text style={styles.confirmCancelText}>Cancel</Text>
               </TouchableOpacity>
-              <Pressable style={[styles.confirmDelete, { backgroundColor: COLORS.primary }]} onPress={() => void handleLanguageSave()} disabled={busy === 'language'}>
+              <Pressable style={[styles.confirmDelete, { backgroundColor: theme.colors.primary }]} onPress={() => void handleLanguageSave()} disabled={busy === 'language'}>
                 {busy === 'language' ? <ActivityIndicator color="#fff" /> : <Text style={styles.confirmDeleteText}>{t('profile.modals.saveLanguageButton')}</Text>}
               </Pressable>
             </View>
@@ -920,7 +929,7 @@ export default function ProfileScreen() {
                     onPress={() => setThemePreference(option.value)}>
                     <Text style={styles.appearanceEmoji}>{option.emoji}</Text>
                     <Text style={[styles.appearanceLabel, active && styles.appearanceLabelActive]}>{option.label}</Text>
-                    {active ? <Ionicons name="checkmark-circle" size={22} color={COLORS.primary} /> : null}
+                    {active ? <Ionicons name="checkmark-circle" size={22} color={theme.colors.primary} /> : null}
                   </TouchableOpacity>
                 );
               })}
@@ -957,7 +966,7 @@ export default function ProfileScreen() {
                   disabled={busy === 'pushTest'}
                   onPress={() => void handleSendTestPush()}>
                   {busy === 'pushTest' ? (
-                    <ActivityIndicator color={COLORS.textPrimary} />
+                    <ActivityIndicator color={theme.colors.textPrimary} />
                   ) : (
                     <Text style={styles.confirmCancelText}>{t('profile.notifications.sendTestPush')}</Text>
                   )}
@@ -966,7 +975,7 @@ export default function ProfileScreen() {
                   <Text
                     style={[
                       styles.helperText,
-                      { marginTop: 8, color: pushTestResult.type === 'success' ? '#0b9b72' : COLORS.error },
+                      { marginTop: 8, color: pushTestResult.type === 'success' ? (theme.isDark ? theme.colors.success : '#0b9b72') : theme.colors.error },
                     ]}>
                     {pushTestResult.text}
                   </Text>
@@ -1037,10 +1046,12 @@ function NotificationSettingRow({
   disabled?: boolean;
   onValueChange: (value: boolean) => void;
 }) {
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
   return (
     <View style={styles.notificationRow}>
-      <View style={[styles.notificationIcon, { backgroundColor: COLORS.avatarLight }]}>
-        <Ionicons name={icon} size={18} color="#ff4f74" />
+      <View style={[styles.notificationIcon, { backgroundColor: theme.colors.avatarLight }]}>
+        <Ionicons name={icon} size={18} color={theme.colors.primary} />
       </View>
       <View style={styles.notificationCopy}>
         <Text style={styles.notificationTitle}>{title}</Text>
@@ -1050,14 +1061,18 @@ function NotificationSettingRow({
         value={value}
         disabled={disabled}
         onValueChange={onValueChange}
-        trackColor={{ false: '#d8dde6', true: '#ffe5ec' }}
-        thumbColor={value ? COLORS.primary : COLORS.white}
+        trackColor={{
+          false: theme.isDark ? theme.colors.textMuted : '#d8dde6',
+          true: theme.isDark ? theme.colors.primaryLight20 : '#ffe5ec',
+        }}
+        thumbColor={value ? theme.colors.primary : theme.colors.white}
       />
     </View>
   );
 }
 
 function StatCard({ value, label, accent }: { value: string; label: string; accent: string }) {
+  const styles = useThemedStyles(createStyles);
   return (
     <View style={styles.statCard}>
       <Text style={[styles.statValue, { color: accent }]}>{value}</Text>
@@ -1073,6 +1088,8 @@ function SectionCard({
   title: string;
   items: { icon: keyof typeof Ionicons.glyphMap; label: string; detail?: string; accent: string; onPress: () => void }[];
 }) {
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
   return (
     <View style={styles.sectionCard}>
       <Text style={styles.sectionTitle}>{title}</Text>
@@ -1086,7 +1103,7 @@ function SectionCard({
             </View>
             <View style={styles.rowRight}>
               {item.detail ? <Text style={styles.rowDetail}>{item.detail}</Text> : null}
-              <Ionicons name="chevron-forward" size={20} color={COLORS.textMuted} />
+              <Ionicons name="chevron-forward" size={20} color={theme.colors.textMuted} />
             </View>
           </TouchableOpacity>
         </View>
@@ -1111,13 +1128,14 @@ function createTimeoutSignal(timeoutMs: number) {
   return controller.signal;
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: COLORS.white,
+    backgroundColor: theme.colors.bgPrimary,
   },
   // Floats ON TOP of the ScrollView (see Home's app/(tabs)/index.tsx for the
-  // full explanation) — same look as the bottom tab bar too.
+  // full explanation) — same look as the bottom tab bar too (see the pill in
+  // app/(tabs)/_layout.tsx for the matching dark treatment).
   fixedHeader: {
     position: 'absolute',
     left: 16,
@@ -1125,12 +1143,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.lg,
     paddingVertical: 10,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.97)',
+    backgroundColor: theme.colors.surfaceBar,
+    borderWidth: theme.isDark ? StyleSheet.hairlineWidth : 0,
+    borderColor: theme.colors.borderPrimary,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.07,
+    shadowOpacity: theme.isDark ? 0.35 : 0.07,
     shadowRadius: 20,
-    elevation: 10,
+    elevation: theme.isDark ? 0 : 10,
   },
   content: {
     paddingHorizontal: SPACING.xl,
@@ -1146,25 +1166,27 @@ const styles = StyleSheet.create({
     height: 160,
     borderRadius: 80,
     borderWidth: 5,
-    borderColor: COLORS.primary,
+    borderColor: theme.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: COLORS.primary,
+    shadowColor: theme.colors.primary,
     shadowOffset: { width: 0, height: 16 },
     shadowOpacity: 0.18,
     shadowRadius: 26,
-    elevation: 9,
+    // Android elevation renders a muddy gray box on dark surfaces — the pink
+    // glow stays iOS-only there, matching the tab bar's dark treatment.
+    elevation: theme.isDark ? 0 : 9,
   },
   avatar: {
     width: 142,
     height: 142,
     borderRadius: 71,
-    backgroundColor: '#d8c1a3',
+    backgroundColor: theme.isDark ? theme.colors.avatarDark : '#d8c1a3',
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarInitials: {
-    color: COLORS.white,
+    color: theme.colors.white,
     fontSize: 42,
     fontWeight: '900',
     letterSpacing: -1.2,
@@ -1176,20 +1198,21 @@ const styles = StyleSheet.create({
     width: 46,
     height: 46,
     borderRadius: 23,
-    backgroundColor: COLORS.secondary,
+    backgroundColor: theme.colors.secondary,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 4,
-    borderColor: COLORS.white,
-    shadowColor: COLORS.secondary,
+    // A "cutout" ring — matches the page background in both themes.
+    borderColor: theme.colors.bgPrimary,
+    shadowColor: theme.colors.secondary,
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.22,
     shadowRadius: 18,
-    elevation: 8,
+    elevation: theme.isDark ? 0 : 8,
   },
   name: {
     marginTop: SPACING.xxl + 10,
-    color: COLORS.textPrimary,
+    color: theme.colors.textPrimary,
     fontSize: 40,
     lineHeight: 44,
     fontWeight: '900',
@@ -1199,13 +1222,13 @@ const styles = StyleSheet.create({
   },
   email: {
     marginTop: SPACING.sm,
-    color: COLORS.textMeta,
+    color: theme.colors.textMeta,
     fontSize: 17,
     letterSpacing: -0.3,
   },
   bioText: {
     marginTop: SPACING.md,
-    color: COLORS.textSecondary,
+    color: theme.colors.textSecondary,
     fontSize: 15,
     lineHeight: 22,
     textAlign: 'center',
@@ -1228,9 +1251,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     borderRadius: RADIUS.circle,
-    backgroundColor: COLORS.bgLight,
-    borderWidth: 1,
-    borderColor: COLORS.borderPrimary,
+    // Dark: elevated surface + hairline instead of a light gray fill — the
+    // stat pills must never read as bright blocks around the avatar.
+    backgroundColor: theme.isDark ? theme.colors.surfaceElevated : theme.colors.bgLight,
+    borderWidth: theme.isDark ? StyleSheet.hairlineWidth : 1,
+    borderColor: theme.colors.borderPrimary,
   },
   statsBadgeIcon: {
     width: 22,
@@ -1242,13 +1267,13 @@ const styles = StyleSheet.create({
   statsBadgeValue: {
     fontSize: 14,
     fontWeight: '800',
-    color: COLORS.textPrimary,
+    color: theme.colors.textPrimary,
     letterSpacing: -0.2,
   },
   statsBadgeLabel: {
     fontSize: 12,
     fontWeight: '600',
-    color: COLORS.textSecondary,
+    color: theme.colors.textSecondary,
     letterSpacing: 0.2,
   },
   // Previous Adventures carousel (Home Up Next-style cards)
@@ -1262,15 +1287,15 @@ const styles = StyleSheet.create({
   adventureEyebrow: {
     ...TYPOGRAPHY.eyebrow,
     fontWeight: '800',
-    color: COLORS.textMeta,
+    color: theme.colors.textMeta,
   },
   adventureLine: {
     flex: 1,
     height: 1,
-    backgroundColor: COLORS.borderPrimary,
+    backgroundColor: theme.colors.borderPrimary,
   },
   adventureSeeAll: {
-    color: COLORS.textMeta,
+    color: theme.colors.textMeta,
     fontSize: 12,
     fontWeight: '600',
   },
@@ -1283,14 +1308,17 @@ const styles = StyleSheet.create({
   },
   adventureCard: {
     width: 180,
-    backgroundColor: COLORS.white,
+    backgroundColor: theme.colors.surface,
     borderRadius: RADIUS.sm,
     overflow: 'hidden',
-    ...SHADOWS.subtle,
+    borderWidth: theme.isDark ? StyleSheet.hairlineWidth : 0,
+    borderColor: theme.colors.borderPrimary,
+    ...theme.shadows.subtle,
   },
   adventureImageBox: {
     height: 110,
-    backgroundColor: '#e6e2d8',
+    // Image placeholder wash behind trip photos.
+    backgroundColor: theme.colors.sealedSurfaceSubtle,
     position: 'relative',
   },
   adventureImage: {
@@ -1308,20 +1336,20 @@ const styles = StyleSheet.create({
   adventureCardDate: {
     fontSize: 10,
     fontWeight: '700',
-    color: COLORS.textMeta,
+    color: theme.colors.textMeta,
     letterSpacing: 0.5,
     marginBottom: 4,
   },
   adventureCardTitle: {
     fontSize: 14,
     fontWeight: '800',
-    color: COLORS.textPrimary,
+    color: theme.colors.textPrimary,
     letterSpacing: -0.2,
   },
   adventureCardMeta: {
     marginTop: 4,
     fontSize: 11,
-    color: COLORS.textMeta,
+    color: theme.colors.textMeta,
     fontWeight: '500',
   },
   adventureEmpty: {
@@ -1332,13 +1360,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.lg,
     borderRadius: RADIUS.sm,
     borderWidth: 1,
-    borderColor: COLORS.borderPrimary,
+    borderColor: theme.colors.borderPrimary,
     borderStyle: 'dashed',
     justifyContent: 'center',
     marginBottom: SPACING.xl,
   },
   adventureEmptyText: {
-    color: COLORS.textMeta,
+    color: theme.colors.textMeta,
     fontSize: 13,
     fontWeight: '500',
   },
@@ -1352,14 +1380,14 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   messageBannerSuccess: {
-    backgroundColor: COLORS.successLight,
+    backgroundColor: theme.colors.successLight,
     borderWidth: 1,
-    borderColor: COLORS.successBorder,
+    borderColor: theme.colors.successBorder,
   },
   messageBannerError: {
-    backgroundColor: COLORS.errorLight,
+    backgroundColor: theme.colors.errorLight,
     borderWidth: 1,
-    borderColor: COLORS.errorBorder,
+    borderColor: theme.colors.errorBorder,
   },
   messageText: {
     flex: 1,
@@ -1368,10 +1396,12 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   messageTextSuccess: {
-    color: '#0b9b72',
+    // Light keeps the original deep green; the token green carries the same
+    // meaning with enough contrast on the dark successLight wash.
+    color: theme.isDark ? theme.colors.success : '#0b9b72',
   },
   messageTextError: {
-    color: COLORS.error,
+    color: theme.colors.error,
   },
   statsRow: {
     marginTop: 28,
@@ -1381,12 +1411,12 @@ const styles = StyleSheet.create({
   statCard: {
     flex: 1,
     borderRadius: RADIUS.lg,
-    borderWidth: 1,
-    borderColor: COLORS.borderPrimary,
-    backgroundColor: COLORS.white,
+    borderWidth: theme.isDark ? StyleSheet.hairlineWidth : 1,
+    borderColor: theme.colors.borderPrimary,
+    backgroundColor: theme.colors.surfaceElevated,
     alignItems: 'center',
     paddingVertical: SPACING.xxl,
-    ...SHADOWS.medium,
+    ...theme.shadows.medium,
   },
   statValue: {
     fontSize: 36,
@@ -1395,7 +1425,7 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     marginTop: 10,
-    color: COLORS.textMeta,
+    color: theme.colors.textMeta,
     fontSize: 12,
     fontWeight: '700',
     letterSpacing: 1.8,
@@ -1405,27 +1435,28 @@ const styles = StyleSheet.create({
     marginTop: SPACING.lg,
     borderRadius: RADIUS.xl,
     borderWidth: 1,
-    borderColor: COLORS.borderPrimary,
-    backgroundColor: COLORS.white,
+    borderColor: theme.colors.borderPrimary,
+    backgroundColor: theme.colors.surface,
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.lg,
-    ...SHADOWS.medium,
+    ...theme.shadows.medium,
   },
   editorCard: {
     marginTop: SPACING.md,
     borderRadius: RADIUS.lg,
     borderWidth: 1,
-    borderColor: COLORS.borderPrimary,
-    backgroundColor: COLORS.white,
+    borderColor: theme.colors.borderPrimary,
+    backgroundColor: theme.colors.surface,
     padding: SPACING.lg,
-    ...SHADOWS.medium,
+    ...theme.shadows.medium,
   },
   input: {
     height: 52,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: COLORS.borderInput,
-    backgroundColor: COLORS.bgLightest,
+    borderColor: theme.colors.borderInput,
+    backgroundColor: theme.colors.bgLightest,
+    color: theme.colors.textPrimary,
     paddingHorizontal: 16,
     fontSize: 16,
   },
@@ -1433,8 +1464,9 @@ const styles = StyleSheet.create({
     minHeight: 100,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: COLORS.borderInput,
-    backgroundColor: COLORS.bgLightest,
+    borderColor: theme.colors.borderInput,
+    backgroundColor: theme.colors.bgLightest,
+    color: theme.colors.textPrimary,
     paddingHorizontal: 16,
     paddingVertical: 12,
     fontSize: 15,
@@ -1442,7 +1474,7 @@ const styles = StyleSheet.create({
   },
   helperText: {
     marginTop: 10,
-    color: COLORS.textSecondary,
+    color: theme.colors.textSecondary,
     fontSize: 13,
     lineHeight: 18,
   },
@@ -1452,7 +1484,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     fontSize: 12,
     lineHeight: 17,
-    color: COLORS.textMeta,
+    color: theme.colors.textMeta,
     textAlign: 'center',
   },
   saveButton: {
@@ -1461,15 +1493,15 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.primary,
+    backgroundColor: theme.colors.primary,
   },
   saveButtonText: {
-    color: COLORS.white,
+    color: theme.colors.white,
     fontSize: 15,
     fontWeight: '800',
   },
   sectionTitle: {
-    color: COLORS.textPrimary,
+    color: theme.colors.textPrimary,
     fontSize: 18,
     fontWeight: '800',
     letterSpacing: -0.6,
@@ -1477,7 +1509,7 @@ const styles = StyleSheet.create({
   },
   rowDivider: {
     height: 1,
-    backgroundColor: COLORS.borderPrimary,
+    backgroundColor: theme.colors.borderPrimary,
   },
   rowButton: {
     minHeight: 60,
@@ -1491,7 +1523,7 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   rowLabel: {
-    color: COLORS.textPrimary,
+    color: theme.colors.textPrimary,
     fontSize: 17,
     letterSpacing: -0.4,
   },
@@ -1501,7 +1533,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   rowDetail: {
-    color: COLORS.textMeta,
+    color: theme.colors.textMeta,
     fontSize: 15,
     letterSpacing: -0.2,
   },
@@ -1513,25 +1545,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: COLORS.borderPrimary,
+    borderColor: theme.colors.borderPrimary,
     marginBottom: 10,
   },
   appearanceOptionActive: {
-    borderColor: COLORS.primary,
-    backgroundColor: COLORS.primaryLight08,
+    // primary + primaryLight08 read correctly in both appearances.
+    borderColor: theme.colors.primary,
+    backgroundColor: theme.colors.primaryLight08,
   },
   appearanceEmoji: {
     fontSize: 20,
   },
   appearanceLabel: {
     flex: 1,
-    color: COLORS.textPrimary,
+    color: theme.colors.textPrimary,
     fontSize: 16,
     fontWeight: '600',
     letterSpacing: -0.3,
   },
   appearanceLabelActive: {
-    color: COLORS.primary,
+    color: theme.colors.primary,
     fontWeight: '800',
   },
   notificationRow: {
@@ -1546,7 +1579,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.avatarLight,
+    backgroundColor: theme.colors.avatarLight,
     marginRight: 12,
   },
   notificationCopy: {
@@ -1554,13 +1587,13 @@ const styles = StyleSheet.create({
     paddingRight: 12,
   },
   notificationTitle: {
-    color: COLORS.textPrimary,
+    color: theme.colors.textPrimary,
     fontSize: 15,
     fontWeight: '700',
   },
   notificationSubtitle: {
     marginTop: 2,
-    color: COLORS.textSecondary,
+    color: theme.colors.textSecondary,
     fontSize: 13,
     lineHeight: 18,
   },
@@ -1570,8 +1603,8 @@ const styles = StyleSheet.create({
   themeCard: {
     borderRadius: 18,
     borderWidth: 2,
-    borderColor: COLORS.borderInput,
-    backgroundColor: COLORS.bgLight,
+    borderColor: theme.colors.borderInput,
+    backgroundColor: theme.colors.bgLight,
     overflow: 'hidden',
   },
   themeColorStrip: {
@@ -1600,13 +1633,13 @@ const styles = StyleSheet.create({
     borderRadius: 11,
   },
   themeName: {
-    color: COLORS.textPrimary,
+    color: theme.colors.textPrimary,
     fontSize: 14,
     fontWeight: '800',
     letterSpacing: -0.3,
   },
   themeColorCodes: {
-    color: COLORS.textMeta,
+    color: theme.colors.textMeta,
     fontSize: 10,
     marginTop: 1,
     letterSpacing: 0.2,
@@ -1623,47 +1656,50 @@ const styles = StyleSheet.create({
     height: 26,
     borderRadius: 13,
     borderWidth: 1.5,
-    borderColor: COLORS.borderInput,
+    borderColor: theme.colors.borderInput,
   },
   brandBlock: {
     marginTop: 22,
     alignItems: 'center',
   },
   brandWord: {
-    color: '#e6e8ee',
+    // Watermark word — barely-there against the page in either appearance.
+    color: theme.isDark ? theme.colors.bgLight : '#e6e8ee',
     fontSize: 46,
     fontWeight: '900',
     letterSpacing: -1.6,
   },
   brandTagline: {
     marginTop: 4,
-    color: COLORS.textMeta,
+    color: theme.colors.textMeta,
     fontSize: 12,
     fontWeight: '700',
     letterSpacing: 2.6,
   },
   confirmBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(12,16,26,0.45)',
+    backgroundColor: theme.isDark ? theme.colors.backdropModal : 'rgba(12,16,26,0.45)',
     justifyContent: 'center',
     paddingHorizontal: 24,
   },
   confirmCard: {
     borderRadius: RADIUS.lg,
-    backgroundColor: COLORS.white,
-    borderWidth: 1,
-    borderColor: COLORS.borderPrimary,
+    backgroundColor: theme.colors.surfaceElevated,
+    // Light keeps its original 1px border; dark separates via hairline on the
+    // elevated surface instead.
+    borderWidth: theme.isDark ? StyleSheet.hairlineWidth : 1,
+    borderColor: theme.colors.borderPrimary,
     padding: SPACING.lg,
   },
   confirmTitle: {
-    color: COLORS.textPrimary,
+    color: theme.colors.textPrimary,
     fontSize: 22,
     fontWeight: '800',
     letterSpacing: -0.5,
   },
   confirmBody: {
     marginTop: 10,
-    color: COLORS.textSecondary,
+    color: theme.colors.textSecondary,
     fontSize: 14,
     lineHeight: 21,
   },
@@ -1677,13 +1713,13 @@ const styles = StyleSheet.create({
     height: 46,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: COLORS.borderInput,
-    backgroundColor: COLORS.bgLightest,
+    borderColor: theme.colors.borderInput,
+    backgroundColor: theme.colors.bgLightest,
     alignItems: 'center',
     justifyContent: 'center',
   },
   confirmCancelText: {
-    color: COLORS.textSecondary,
+    color: theme.colors.textSecondary,
     fontSize: 14,
     fontWeight: '700',
   },
@@ -1691,24 +1727,25 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 46,
     borderRadius: 12,
-    backgroundColor: COLORS.error,
+    // Destructive stays loud in dark — the error token brightens there.
+    backgroundColor: theme.colors.error,
     alignItems: 'center',
     justifyContent: 'center',
   },
   confirmDeleteText: {
-    color: COLORS.white,
+    color: theme.colors.white,
     fontSize: 14,
     fontWeight: '800',
   },
   thanksCard: {
     borderRadius: RADIUS.xl,
-    backgroundColor: COLORS.white,
-    borderWidth: 1,
-    borderColor: COLORS.borderPrimary,
+    backgroundColor: theme.colors.surfaceElevated,
+    borderWidth: theme.isDark ? StyleSheet.hairlineWidth : 1,
+    borderColor: theme.colors.borderPrimary,
     paddingHorizontal: SPACING.xl,
     paddingVertical: SPACING.xxl,
     alignItems: 'center',
-    ...SHADOWS.floating,
+    ...theme.shadows.floating,
   },
   thanksIconCircle: {
     width: 72,
@@ -1719,7 +1756,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   thanksTitle: {
-    color: COLORS.textPrimary,
+    color: theme.colors.textPrimary,
     fontSize: 24,
     fontWeight: '900',
     letterSpacing: -0.6,
@@ -1727,7 +1764,7 @@ const styles = StyleSheet.create({
   },
   thanksBody: {
     marginTop: 10,
-    color: COLORS.textSecondary,
+    color: theme.colors.textSecondary,
     fontSize: 15,
     lineHeight: 22,
     textAlign: 'center',
@@ -1742,7 +1779,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   thanksButtonText: {
-    color: COLORS.white,
+    color: theme.colors.white,
     fontSize: 15,
     fontWeight: '800',
     letterSpacing: -0.2,
@@ -1750,10 +1787,10 @@ const styles = StyleSheet.create({
   blockedUsersBackdrop: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: 'rgba(12,16,26,0.45)',
+    backgroundColor: theme.isDark ? theme.colors.backdropModal : 'rgba(12,16,26,0.45)',
   },
   blockedUsersSheet: {
-    backgroundColor: '#fff',
+    backgroundColor: theme.colors.surfaceElevated,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     paddingHorizontal: 20,
@@ -1764,7 +1801,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#dde1e8',
+    backgroundColor: theme.colors.sheetHandle,
     alignSelf: 'center',
     marginBottom: 18,
   },
@@ -1777,12 +1814,12 @@ const styles = StyleSheet.create({
   blockedUsersTitle: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#14161d',
+    color: theme.isDark ? theme.colors.textPrimary : '#14161d',
     letterSpacing: -0.5,
   },
   blockedUsersEmpty: {
     textAlign: 'center',
-    color: '#8e95a2',
+    color: theme.isDark ? theme.colors.textMeta : '#8e95a2',
     fontSize: 14,
     marginTop: 32,
     marginBottom: 40,
@@ -1792,27 +1829,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#f1f3f6',
+    borderBottomColor: theme.isDark ? theme.colors.borderPrimary : '#f1f3f6',
     gap: 12,
   },
   blockedUserName: {
     flex: 1,
     fontSize: 15,
     fontWeight: '600',
-    color: '#161821',
+    // '#161821' is exactly the light textPrimary token value.
+    color: theme.colors.textPrimary,
   },
   unblockButton: {
     paddingHorizontal: 14,
     paddingVertical: 7,
     borderRadius: 20,
     borderWidth: 1.5,
-    borderColor: COLORS.primary,
+    borderColor: theme.colors.primary,
     minWidth: 80,
     alignItems: 'center',
   },
   unblockButtonText: {
     fontSize: 13,
     fontWeight: '700',
-    color: COLORS.primary,
+    color: theme.colors.primary,
   },
 });
