@@ -767,6 +767,19 @@ function SideQuestFormInner({
     onDirtyChange?.(dirty);
   }, [dirty, onDirtyChange]);
 
+  // Check-out picker bounds. Guards two native-picker hard-crashes: an
+  // invalid check-in date must never reach addDaysIso (RangeError), and a
+  // check-in on the trip's LAST day makes "day after check-in" exceed the
+  // trip end — minimumDate > maximumDate crashes the iOS picker, so that
+  // case is flagged impossible and the picker never opens.
+  const checkoutRange = useMemo(() => {
+    const base = isDateInputValid(date) ? date : defaultActivityDate(tripStartDate, tripEndDate);
+    const minIso = addDaysIso(base, 1);
+    const maxIso = tripEndDate && isDateInputValid(tripEndDate) ? tripEndDate : null;
+    const impossible = maxIso != null && minIso > maxIso;
+    return { minIso: impossible && maxIso ? maxIso : minIso, maxIso, impossible };
+  }, [date, tripStartDate, tripEndDate]);
+
   const pickerValue = useMemo(() => {
     if (pickerTarget === 'date') {
       // Clamp to the trip range so the picker never gets a value outside
@@ -781,10 +794,9 @@ function SideQuestFormInner({
     if (pickerTarget === 'endDate') {
       // Check-out: earliest the day after check-in, latest the trip's end.
       // Same clamp-for-crash-safety as the other date targets.
-      const minIso = addDaysIso(date, 1);
-      const v = new Date(`${(endDate && isDateInputValid(endDate) ? endDate : minIso)}T12:00:00`);
-      const min = new Date(`${minIso}T12:00:00`);
-      const max = tripEndDate && isDateInputValid(tripEndDate) ? new Date(`${tripEndDate}T12:00:00`) : undefined;
+      const v = new Date(`${(endDate && isDateInputValid(endDate) ? endDate : checkoutRange.minIso)}T12:00:00`);
+      const min = new Date(`${checkoutRange.minIso}T12:00:00`);
+      const max = checkoutRange.maxIso ? new Date(`${checkoutRange.maxIso}T12:00:00`) : undefined;
       return clampDate(v, min, max);
     }
 
@@ -813,7 +825,7 @@ function SideQuestFormInner({
       return localDateTime(getDefaultDate(), time || DEFAULT_ACTIVITY_TIME);
     }
     return localDateTime(getDefaultDate(), revealTime);
-  }, [date, endDate, pickerTarget, revealDate, revealRange.min, revealRange.max, revealTime, time, tripStartDate, tripEndDate]);
+  }, [checkoutRange, date, endDate, pickerTarget, revealDate, revealRange.min, revealRange.max, revealTime, time, tripStartDate, tripEndDate]);
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
@@ -1232,6 +1244,13 @@ function SideQuestFormInner({
               ]}
               onPress={() => {
                 Keyboard.dismiss();
+                if (checkoutRange.impossible) {
+                  // Check-in on the trip's last day → no valid check-out
+                  // exists. Explain instead of opening a picker whose
+                  // min > max would crash natively.
+                  setMessage({ type: 'error', text: t('sidequest.form.checkoutNoRoom') });
+                  return;
+                }
                 setPickerTarget('endDate');
               }}>
               <View style={{ flex: 1 }}>
@@ -1529,7 +1548,7 @@ function SideQuestFormInner({
               minimumDate={
                 pickerTarget === 'date'
                   ? tripStartDate ? new Date(`${tripStartDate}T12:00:00`) : undefined
-                  : pickerTarget === 'endDate' ? new Date(`${addDaysIso(date, 1)}T12:00:00`)
+                  : pickerTarget === 'endDate' ? new Date(`${checkoutRange.minIso}T12:00:00`)
                   : pickerTarget === 'revealDate' ? new Date(`${revealRange.min}T12:00:00`) : undefined
               }
               maximumDate={
