@@ -155,12 +155,6 @@ type TripMember = {
 // semantic theme tokens in one move instead of hunting literals. Light-mode
 // values are a quiet amber family: a reservation embedded in the itinerary,
 // not a second card and never a success-green.
-// Reservation-line variant under comparison — flip to preview the other:
-//   'A': "5–7 aug · 2 nätter"            (date range)
-//   'B': "Utcheckning 7 aug · 2 nätter"  (check-out only)
-// Delete the loser (and this comment) once the choice is made.
-const STAY_META_VARIANT: 'A' | 'B' = 'A';
-
 const STAY_COLORS = {
   accentBar: '#d97706',
   anchorSurface: '#fdf6ec',
@@ -1618,9 +1612,9 @@ export default function TripDetailsScreen() {
                           <View style={styles.stayBadgeRow}>
                             <Ionicons name="moon-outline" size={11} color={STAY_COLORS.textMuted} />
                             <Text style={styles.stayBadgeText} numberOfLines={1}>
-                              {STAY_META_VARIANT === 'A'
-                                ? `${formatStayDateRange(activity.date, activity.endDate!, locale)} · ${formatNights(stayNights(activity), t)}`
-                                : `${t('activity.checkOut')} ${formatStayDayMonth(activity.endDate!, locale)} · ${formatNights(stayNights(activity), t)}`}
+                              {/* Dates only — the nights pill by the title
+                                  already carries the stay length. */}
+                              {formatStayDateRange(activity.date, activity.endDate!, locale)}
                             </Text>
                           </View>
                         ) : null}
@@ -2644,8 +2638,10 @@ function formatStayDateRange(startIso: string, endIso: string, locale: string) {
   const end = new Date(`${endIso.slice(0, 10)}T12:00:00`);
   const sameMonth = start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear();
   if (sameMonth) {
-    // "5–7 aug" / "5–7 Aug" — day-first in both languages per the mock.
-    return `${start.getDate()}–${end.getDate()} ${formatStayMonthShort(end, locale)}`;
+    // "5–7 aug" (sv) / "Aug 5–7" (en) — each language's natural date order.
+    return locale.startsWith('sv')
+      ? `${start.getDate()}–${end.getDate()} ${formatStayMonthShort(end, locale)}`
+      : `${formatStayMonthShort(end, locale)} ${start.getDate()}–${end.getDate()}`;
   }
   return `${formatStayDayMonth(startIso, locale)} – ${formatStayDayMonth(endIso, locale)}`;
 }
