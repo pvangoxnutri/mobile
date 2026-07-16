@@ -256,6 +256,56 @@ export default function PackingListScreen() {
 
   // --- Item handlers ---
 
+  // Tap-to-edit for saved items: tapping the text swaps it for a focused
+  // input. The ref mirrors the state so onSubmitEditing + onBlur (which both
+  // fire on Return) commit exactly once. Empty or unchanged text reverts.
+  const [editingItem, setEditingItem] = useState<{ id: string; text: string } | null>(null);
+  const editingItemRef = useRef<{ id: string; text: string } | null>(null);
+
+  function startItemEdit(item: PackingItem) {
+    const edit = { id: item.id, text: item.text };
+    editingItemRef.current = edit;
+    setEditingItem(edit);
+  }
+
+  function updateItemEdit(text: string) {
+    if (!editingItemRef.current) return;
+    const edit = { ...editingItemRef.current, text: stripNotesChecklistMarkers(text) };
+    editingItemRef.current = edit;
+    setEditingItem(edit);
+  }
+
+  async function commitItemEdit(categoryId: string, item: PackingItem) {
+    const edit = editingItemRef.current;
+    if (!edit || edit.id !== item.id) return;
+    editingItemRef.current = null;
+    setEditingItem(null);
+
+    const trimmed = edit.text.trim();
+    if (!trimmed || trimmed === item.text) return;
+
+    const applyText = (text: string) =>
+      setData((prev) => ({
+        ...prev,
+        [activeTab]: prev[activeTab].map((c) =>
+          c.id === categoryId ? { ...c, items: c.items.map((i) => (i.id === item.id ? { ...i, text } : i)) } : c,
+        ),
+      }));
+
+    applyText(trimmed);
+    try {
+      const response = await apiFetch(`/api/trips/${tripId}/packing-list/items/${item.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: trimmed }),
+      });
+      if (!response.ok) throw new Error();
+    } catch {
+      applyText(item.text);
+      Alert.alert(t('trip.packingList.addItemError'));
+    }
+  }
+
   async function handleToggleItem(categoryId: string, item: PackingItem) {
     const newChecked = !item.isChecked;
     setData((prev) => ({
@@ -510,9 +560,26 @@ export default function PackingListScreen() {
                         {item.isChecked ? <Ionicons name="checkmark" size={13} color="#fff" /> : null}
                       </TouchableOpacity>
 
-                      <Text style={[styles.itemText, item.isChecked && styles.itemTextChecked]} numberOfLines={2}>
-                        {item.text}
-                      </Text>
+                      {editingItem?.id === item.id ? (
+                        <TextInput
+                          value={editingItem.text}
+                          onChangeText={updateItemEdit}
+                          style={[styles.itemText, styles.itemEditInput]}
+                          autoFocus
+                          returnKeyType="done"
+                          onSubmitEditing={() => void commitItemEdit(category.id, item)}
+                          onBlur={() => void commitItemEdit(category.id, item)}
+                        />
+                      ) : (
+                        <TouchableOpacity
+                          style={styles.itemTextTap}
+                          activeOpacity={0.7}
+                          onPress={() => startItemEdit(item)}>
+                          <Text style={[styles.itemText, item.isChecked && styles.itemTextChecked]} numberOfLines={2}>
+                            {item.text}
+                          </Text>
+                        </TouchableOpacity>
+                      )}
 
                       {/* Assignment (shared only) */}
                       {!isPrivate ? (
@@ -787,6 +854,10 @@ const styles = StyleSheet.create({
   checkboxDraft: { borderColor: '#e8eaf0', borderStyle: 'dashed' },
   itemText: { flex: 1, fontSize: 14, color: '#14161d', fontWeight: '500' },
   itemTextChecked: { color: '#a3a9b4', textDecorationLine: 'line-through' },
+  itemTextTap: { flex: 1 },
+  // Match the Text row height exactly — TextInput brings its own platform
+  // padding, which would otherwise make the row jump when editing starts.
+  itemEditInput: { paddingVertical: 0, paddingHorizontal: 0 },
 
   draftInput: { flex: 1, fontSize: 14, color: '#14161d', paddingVertical: 0, minHeight: 22 },
 
