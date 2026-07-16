@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import * as SplashScreen from 'expo-splash-screen';
 import { ActivityIndicator, AppState, View } from 'react-native';
 import { apiFetch, API_URL } from '@/lib/api';
 import { normalizeLanguage, useI18n, type AppLanguage } from '@/components/i18n-provider';
@@ -299,6 +300,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const { loading } = useAuth();
+
+  // Hand-off from the native splash (held open in app/_layout.tsx): once
+  // auth is restored the first real frame is the in-app SideQuest splash
+  // route, so this is the seamless moment to reveal the app.
+  useEffect(() => {
+    if (!loading) {
+      void SplashScreen.hideAsync().catch(() => {});
+    }
+  }, [loading]);
 
   if (loading) {
     markStartup('[AUTH] AuthGate rendering spinner (children NOT mounted yet)');

@@ -2,6 +2,7 @@ import { ThemeProvider as NavigationThemeProvider } from '@react-navigation/nati
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as NavigationBar from 'expo-navigation-bar';
+import * as SplashScreen from 'expo-splash-screen';
 import * as SystemUI from 'expo-system-ui';
 import 'react-native-reanimated';
 import { useEffect } from 'react';
@@ -21,6 +22,14 @@ export const unstable_settings = {
 };
 
 markStartup('[LAYOUT] _layout.tsx module evaluated');
+
+// Keep the native splash (a plain brand-colored surface — see app.json) up
+// until auth has restored and the in-app SideQuest splash can take over, so
+// launch reads as ONE continuous splash instead of square-logo → white
+// spinner → wordmark. AuthGate hides it when loading finishes; the timer is
+// a safety net so a hung startup can never strand the user on the splash.
+void SplashScreen.preventAutoHideAsync().catch(() => {});
+setTimeout(() => void SplashScreen.hideAsync().catch(() => {}), 10_000);
 
 export default function RootLayout() {
   markStartup('[LAYOUT] RootLayout render');
