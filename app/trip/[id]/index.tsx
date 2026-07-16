@@ -42,6 +42,8 @@ import ModalSheet from '@/components/modal-sheet';
 import { EmptyState } from '@/components/ui/empty-state';
 import { useKeyboardFocusScroll } from '@/hooks/useKeyboardFocusScroll';
 import { apiFetch, apiJson } from '@/lib/api';
+import { getCurrentPermissionStatus, maybeRequestPushPermission } from '@/lib/push-notifications';
+import { loadNotificationPreferences, saveNotificationPreferences } from '@/lib/social';
 import { addDaysIso, formatNights, isStay, stayNightDates, stayNights } from '@/lib/stay';
 import { getCached, setCached, invalidateCache, invalidateTripCache } from '@/lib/cache';
 import { uploadImageIfNeeded } from '@/lib/uploads';
@@ -479,6 +481,55 @@ export default function TripDetailsScreen() {
     for (const m of members) map.set(m.id, m.isOnline ?? false);
     return map;
   }, [members]);
+
+  // A hidden SideQuest is pointless if you never learn it was revealed —
+  // when this trip contains one sealed for the viewer and their
+  // notifications are off (OS permission or the app toggle), nudge once per
+  // trip to enable them. "Not now" is remembered; own secrets never nag
+  // (isHiddenForViewer is false for the creator).
+  const hiddenNotifPromptCheckedRef = useRef(false);
+  useEffect(() => {
+    if (hiddenNotifPromptCheckedRef.current) return;
+    if (!activities.some((a) => a.isHiddenForViewer)) return;
+    hiddenNotifPromptCheckedRef.current = true;
+    void (async () => {
+      try {
+        const dismissKey = `sidequest.hiddenNotifPrompt.${id}`;
+        if (await AsyncStorage.getItem(dismissKey)) return;
+        const [status, prefs] = await Promise.all([getCurrentPermissionStatus(), loadNotificationPreferences()]);
+        if (status === 'unsupported') return;
+        if (status === 'granted' && prefs.pushEnabled) return;
+        Alert.alert(t('trip.hiddenNotifPrompt.title'), t('trip.hiddenNotifPrompt.body'), [
+          {
+            text: t('trip.hiddenNotifPrompt.later'),
+            style: 'cancel',
+            onPress: () => void AsyncStorage.setItem(dismissKey, '1').catch(() => {}),
+          },
+          {
+            text: t('trip.hiddenNotifPrompt.enable'),
+            onPress: () => {
+              void (async () => {
+                await AsyncStorage.setItem(dismissKey, '1').catch(() => {});
+                await saveNotificationPreferences({ ...prefs, pushEnabled: true });
+                // Same flow as Profile's toggle: force re-shows the OS dialog
+                // whenever the system still allows it; permanently blocked
+                // can only be fixed in the system settings.
+                const outcome = await maybeRequestPushPermission({ force: true });
+                if (outcome === 'blocked') {
+                  Alert.alert(t('profile.notifications.osBlockedTitle'), t('profile.notifications.osBlockedBody'), [
+                    { text: t('common.cancel'), style: 'cancel' },
+                    { text: t('profile.notifications.openSettings'), onPress: () => void Linking.openSettings() },
+                  ]);
+                }
+              })();
+            },
+          },
+        ]);
+      } catch {
+        // Best-effort nudge — must never break the trip screen.
+      }
+    })();
+  }, [activities, id, t]);
 
   const hasHiddenMessages = useMemo(
     () => chatMessages.some((m) =>
