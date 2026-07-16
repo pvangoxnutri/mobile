@@ -44,6 +44,9 @@ import { useI18n } from '@/components/i18n-provider';
 import { PRIMARY_COLOR, PRIMARY_08, PRIMARY_20, SECONDARY_COLOR } from '@/constants/colors';
 import { MOTION_TIMING, MOTION_SPRING, MOTION_TRANSLATE, MOTION_STAGGER } from '@/MOTION_CONSTANTS';
 import { useListItemStagger } from '@/hooks/useMotion';
+import { useTheme } from '@/components/theme-provider';
+import { useThemedStyles } from '@/hooks/use-themed-styles';
+import type { AppTheme } from '@/constants/themes';
 
 type PickerTarget = 'date' | 'time' | 'endDate' | 'endTime' | 'revealDate' | 'revealTime' | null;
 type MessageState = { type: 'success' | 'error'; text: string } | null;
@@ -152,6 +155,8 @@ function SideQuestFormInner({
   onSaved,
 }: Props, ref: Ref<SideQuestFormHandle>) {
   const insets = useSafeAreaInsets();
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const { t, language } = useI18n();
   const { width: screenWidth } = useWindowDimensions();
   const containerWidth = screenWidth - 44; // content paddingHorizontal: 22 × 2
@@ -882,7 +887,8 @@ function SideQuestFormInner({
           // when the clipboard is longer than maxLength (e.g. from Notes).
           onChangeText={(v) => setTitle(stripNotesChecklistMarkers(v).slice(0, TITLE_MAX_LENGTH))}
           placeholder={t('sidequest.form.titlePlaceholder')}
-          placeholderTextColor="#b7bcc7"
+          placeholderTextColor={theme.isDark ? theme.colors.placeholderText : '#b7bcc7'}
+          keyboardAppearance={theme.keyboardAppearance}
           style={styles.titleInput}
           onFocus={onFocusField(titleRef)}
           returnKeyType="next"
@@ -906,7 +912,7 @@ function SideQuestFormInner({
                 <TouchableOpacity
                   key={value}
                   activeOpacity={0.8}
-                  style={[styles.categoryChip, active && { borderColor: PRIMARY_COLOR, backgroundColor: PRIMARY_08 }]}
+                  style={[styles.categoryChip, active && { borderColor: theme.colors.primary, backgroundColor: theme.isDark ? theme.colors.primaryLight12 : PRIMARY_08 }]}
                   onPress={() => {
                     const next = active ? null : value;
                     confirmStayClearIfNeeded(next === 'hotel', () => {
@@ -918,10 +924,10 @@ function SideQuestFormInner({
                   <Ionicons
                     name={symbol.icon}
                     size={16}
-                    color={active ? PRIMARY_COLOR : symbol.iconColor}
+                    color={active ? theme.colors.primary : symbol.iconColor}
                     style={{ marginRight: 6 }}
                   />
-                  <Text style={[styles.categoryLabel, active && { color: PRIMARY_COLOR, fontWeight: '600' }]}>{label}</Text>
+                  <Text style={[styles.categoryLabel, active && { color: theme.colors.primary, fontWeight: '600' }]}>{label}</Text>
                 </TouchableOpacity>
               );
             })}
@@ -930,7 +936,7 @@ function SideQuestFormInner({
             {categoryExpanded ? (
               <TouchableOpacity
                 activeOpacity={0.8}
-                style={[styles.categoryChip, isCustomCategory && { borderColor: PRIMARY_COLOR, backgroundColor: PRIMARY_08 }]}
+                style={[styles.categoryChip, isCustomCategory && { borderColor: theme.colors.primary, backgroundColor: theme.isDark ? theme.colors.primaryLight12 : PRIMARY_08 }]}
                 onPress={() => {
                   if (isCustomCategory) {
                     setIsCustomCategory(false);
@@ -948,10 +954,10 @@ function SideQuestFormInner({
                 <Ionicons
                   name="add-circle-outline"
                   size={16}
-                  color={isCustomCategory ? PRIMARY_COLOR : '#5f6570'}
+                  color={isCustomCategory ? theme.colors.primary : (theme.isDark ? theme.colors.textSecondary : '#5f6570')}
                   style={{ marginRight: 6 }}
                 />
-                <Text style={[styles.categoryLabel, isCustomCategory && { color: PRIMARY_COLOR, fontWeight: '600' }]}>
+                <Text style={[styles.categoryLabel, isCustomCategory && { color: theme.colors.primary, fontWeight: '600' }]}>
                   {t('sidequest.form.categoryCustom')}
                 </Text>
               </TouchableOpacity>
@@ -970,7 +976,7 @@ function SideQuestFormInner({
               <Ionicons
                 name={categoryExpanded ? 'chevron-up' : 'chevron-down'}
                 size={15}
-                color={PRIMARY_COLOR}
+                color={theme.colors.primary}
                 style={{ marginLeft: 4 }}
               />
             </TouchableOpacity>
@@ -983,7 +989,8 @@ function SideQuestFormInner({
                 value={customLabel}
                 onChangeText={(v) => setCustomLabel(v.slice(0, 60))}
                 placeholder={t('sidequest.form.categoryCustomNamePlaceholder')}
-                placeholderTextColor="#b7bcc7"
+                placeholderTextColor={theme.isDark ? theme.colors.placeholderText : '#b7bcc7'}
+                keyboardAppearance={theme.keyboardAppearance}
                 style={styles.customCategoryInput}
                 returnKeyType="done"
                 onFocus={onFocusField(customNameRef)}
@@ -1047,7 +1054,8 @@ function SideQuestFormInner({
                 value={flightFrom}
                 onChangeText={setFlightFrom}
                 placeholder="CPH"
-                placeholderTextColor="#b7bcc7"
+                placeholderTextColor={theme.isDark ? theme.colors.placeholderText : '#b7bcc7'}
+                keyboardAppearance={theme.keyboardAppearance}
                 autoCapitalize="characters"
                 style={styles.flightInput}
                 onFocus={onFocusField(flightFromRef)}
@@ -1056,7 +1064,7 @@ function SideQuestFormInner({
               />
             </View>
             <View style={styles.flightArrow}>
-              <Ionicons name="airplane" size={18} color={SECONDARY_COLOR} />
+              <Ionicons name="airplane" size={18} color={theme.colors.secondary} />
             </View>
             <View style={styles.flightField}>
               <Text style={styles.flightFieldLabel}>{t('sidequest.form.flightTo')}</Text>
@@ -1065,7 +1073,8 @@ function SideQuestFormInner({
                 value={flightTo}
                 onChangeText={setFlightTo}
                 placeholder="HND"
-                placeholderTextColor="#b7bcc7"
+                placeholderTextColor={theme.isDark ? theme.colors.placeholderText : '#b7bcc7'}
+                keyboardAppearance={theme.keyboardAppearance}
                 autoCapitalize="characters"
                 style={styles.flightInput}
                 onFocus={onFocusField(flightToRef)}
@@ -1076,7 +1085,7 @@ function SideQuestFormInner({
           </View>
           {flightFrom.trim() || flightTo.trim() ? (
             <View style={styles.flightPreview}>
-              <Ionicons name="airplane-outline" size={15} color={SECONDARY_COLOR} />
+              <Ionicons name="airplane-outline" size={15} color={theme.colors.secondary} />
               <Text style={styles.flightPreviewText}>
                 {flightFrom.trim() && flightTo.trim()
                   ? `${flightFrom.trim()} → ${flightTo.trim()}`
@@ -1094,7 +1103,8 @@ function SideQuestFormInner({
           value={description}
           onChangeText={(v) => setDescription(stripNotesChecklistMarkers(v))}
           placeholder={t('sidequest.form.descriptionPlaceholder')}
-          placeholderTextColor="#b7bcc7"
+          placeholderTextColor={theme.isDark ? theme.colors.placeholderText : '#b7bcc7'}
+          keyboardAppearance={theme.keyboardAppearance}
           multiline
           textAlignVertical="top"
           style={styles.textArea}
@@ -1114,7 +1124,8 @@ function SideQuestFormInner({
             }
           }}
           placeholder={t('sidequest.form.locationPlaceholder')}
-          placeholderTextColor="#b7bcc7"
+          placeholderTextColor={theme.isDark ? theme.colors.placeholderText : '#b7bcc7'}
+          keyboardAppearance={theme.keyboardAppearance}
           style={styles.input}
           onFocus={onFocusField(locationQueryRef)}
           returnKeyType="done"
@@ -1131,7 +1142,7 @@ function SideQuestFormInner({
                 activeOpacity={0.9}
                 style={styles.locationSuggestionRow}
                 onPress={() => void handlePickPlace(item)}>
-                <Ionicons name="location-outline" size={16} color={SECONDARY_COLOR} />
+                <Ionicons name="location-outline" size={16} color={theme.colors.secondary} />
                 <View style={styles.locationSuggestionCopy}>
                   <Text style={styles.locationSuggestionTitle}>{item.primaryText}</Text>
                   {item.secondaryText ? <Text style={styles.locationSuggestionSubtitle}>{item.secondaryText}</Text> : null}
@@ -1153,14 +1164,15 @@ function SideQuestFormInner({
                   value={date}
                   onChangeText={handleActivityDateInput}
                   placeholder="ÅÅÅÅ-MM-DD"
-                  placeholderTextColor="#b7bcc7"
+                  placeholderTextColor={theme.isDark ? theme.colors.placeholderText : '#b7bcc7'}
+                  keyboardAppearance={theme.keyboardAppearance}
                   style={styles.webDateInput}
                   keyboardType="numbers-and-punctuation"
                   maxLength={10}
                 />
                 <Text style={styles.selectionHint}>{t('sidequest.form.withinRange', { range: tripRangeText })}</Text>
               </View>
-              <Ionicons name="calendar-outline" size={22} color="#5f6570" />
+              <Ionicons name="calendar-outline" size={22} color={theme.isDark ? theme.colors.textSecondary : '#5f6570'} />
             </View>
           ) : (
             <TouchableOpacity
@@ -1177,7 +1189,7 @@ function SideQuestFormInner({
                 <Text style={styles.selectionValue} numberOfLines={1}>{formatLongDate(date, locale)}</Text>
                 <Text style={styles.selectionHint}>{t('sidequest.form.withinRange', { range: tripRangeText })}</Text>
               </View>
-              <Ionicons name="calendar-outline" size={22} color="#5f6570" />
+              <Ionicons name="calendar-outline" size={22} color={theme.isDark ? theme.colors.textSecondary : '#5f6570'} />
             </TouchableOpacity>
           )}
           {Platform.OS === 'web' ? (
@@ -1188,12 +1200,13 @@ function SideQuestFormInner({
                   value={time}
                   onChangeText={setTime}
                   placeholder="HH:MM"
-                  placeholderTextColor="#b7bcc7"
+                  placeholderTextColor={theme.isDark ? theme.colors.placeholderText : '#b7bcc7'}
+                  keyboardAppearance={theme.keyboardAppearance}
                   style={styles.webDateInput}
                   maxLength={5}
                 />
               </View>
-              <Ionicons name="time-outline" size={22} color="#5f6570" />
+              <Ionicons name="time-outline" size={22} color={theme.isDark ? theme.colors.textSecondary : '#5f6570'} />
             </View>
           ) : (
             <TouchableOpacity
@@ -1219,10 +1232,10 @@ function SideQuestFormInner({
                     e.stopPropagation();
                     setTime('');
                   }}>
-                  <Ionicons name="close-circle" size={22} color="#b7bcc7" />
+                  <Ionicons name="close-circle" size={22} color={theme.isDark ? theme.colors.textMuted : '#b7bcc7'} />
                 </TouchableOpacity>
               ) : (
-                <Ionicons name="time-outline" size={22} color="#5f6570" />
+                <Ionicons name="time-outline" size={22} color={theme.isDark ? theme.colors.textSecondary : '#5f6570'} />
               )}
             </TouchableOpacity>
           )}
@@ -1274,10 +1287,10 @@ function SideQuestFormInner({
                     setEndDate('');
                     setEndTime('');
                   }}>
-                  <Ionicons name="close-circle" size={22} color="#b7bcc7" />
+                  <Ionicons name="close-circle" size={22} color={theme.isDark ? theme.colors.textMuted : '#b7bcc7'} />
                 </TouchableOpacity>
               ) : (
-                <Ionicons name="calendar-outline" size={22} color="#5f6570" />
+                <Ionicons name="calendar-outline" size={22} color={theme.isDark ? theme.colors.textSecondary : '#5f6570'} />
               )}
             </TouchableOpacity>
 
@@ -1313,17 +1326,17 @@ function SideQuestFormInner({
                     e.stopPropagation();
                     setEndTime('');
                   }}>
-                  <Ionicons name="close-circle" size={22} color="#b7bcc7" />
+                  <Ionicons name="close-circle" size={22} color={theme.isDark ? theme.colors.textMuted : '#b7bcc7'} />
                 </TouchableOpacity>
               ) : (
-                <Ionicons name="time-outline" size={22} color="#5f6570" />
+                <Ionicons name="time-outline" size={22} color={theme.isDark ? theme.colors.textSecondary : '#5f6570'} />
               )}
             </TouchableOpacity>
           </View>
 
           {endDate ? (
             <View style={styles.staySummaryRow}>
-              <Ionicons name="bed-outline" size={15} color="#b45309" />
+              <Ionicons name="bed-outline" size={15} color={theme.colors.stayTextMuted} />
               <Text style={styles.staySummaryText}>
                 {formatNights(stayNights({ date, endDate }), t)} · {formatLongDate(date, locale)} – {formatLongDate(endDate, locale)}
               </Text>
@@ -1384,14 +1397,15 @@ function SideQuestFormInner({
                       value={revealDate}
                       onChangeText={setRevealDate}
                       placeholder="ÅÅÅÅ-MM-DD"
-                      placeholderTextColor="#b7bcc7"
+                      placeholderTextColor={theme.isDark ? theme.colors.placeholderText : '#b7bcc7'}
+                      keyboardAppearance={theme.keyboardAppearance}
                       style={styles.webDateInput}
                       keyboardType="numbers-and-punctuation"
                       maxLength={10}
                     />
                     <Text style={styles.selectionHint} numberOfLines={1}>{`${formatShortDate(revealRange.min, locale)} – ${formatShortDate(revealRange.max, locale)}`}</Text>
                   </View>
-                  <Ionicons name="calendar-outline" size={22} color="#5f6570" />
+                  <Ionicons name="calendar-outline" size={22} color={theme.isDark ? theme.colors.textSecondary : '#5f6570'} />
                 </View>
               ) : (
                 <TouchableOpacity
@@ -1408,7 +1422,7 @@ function SideQuestFormInner({
                     <Text style={styles.selectionValue} numberOfLines={1}>{formatShortDate(revealDate, locale)}</Text>
                     <Text style={styles.selectionHint} numberOfLines={1}>{`${formatShortDate(revealRange.min, locale)} – ${formatShortDate(revealRange.max, locale)}`}</Text>
                   </View>
-                  <Ionicons name="calendar-outline" size={22} color="#5f6570" />
+                  <Ionicons name="calendar-outline" size={22} color={theme.isDark ? theme.colors.textSecondary : '#5f6570'} />
                 </TouchableOpacity>
               )}
               {Platform.OS === 'web' ? (
@@ -1419,12 +1433,13 @@ function SideQuestFormInner({
                       value={revealTime}
                       onChangeText={setRevealTime}
                       placeholder="HH:MM"
-                      placeholderTextColor="#b7bcc7"
+                      placeholderTextColor={theme.isDark ? theme.colors.placeholderText : '#b7bcc7'}
+                      keyboardAppearance={theme.keyboardAppearance}
                       style={styles.webDateInput}
                       maxLength={5}
                     />
                   </View>
-                  <Ionicons name="time-outline" size={22} color="#5f6570" />
+                  <Ionicons name="time-outline" size={22} color={theme.isDark ? theme.colors.textSecondary : '#5f6570'} />
                 </View>
               ) : (
                 <TouchableOpacity activeOpacity={0.92} style={[styles.selectionCard, styles.revealCard, pickerTarget === 'revealTime' ? styles.selectionCardActive : null]} onPress={() => setPickerTarget('revealTime')}>
@@ -1432,7 +1447,7 @@ function SideQuestFormInner({
                     <Text style={styles.selectionEyebrow}>{t('sidequest.form.revealTimeEyebrow')}</Text>
                     <Text style={styles.selectionValue} numberOfLines={1}>{formatTime(revealTime)}</Text>
                   </View>
-                  <Ionicons name="time-outline" size={22} color="#5f6570" />
+                  <Ionicons name="time-outline" size={22} color={theme.isDark ? theme.colors.textSecondary : '#5f6570'} />
                 </TouchableOpacity>
               )}
             </View>
@@ -1440,7 +1455,7 @@ function SideQuestFormInner({
               <Ionicons
                 name={revealIsPast ? 'alert-circle-outline' : 'sparkles-outline'}
                 size={16}
-                color={revealIsPast ? '#a52617' : PRIMARY_COLOR}
+                color={revealIsPast ? (theme.isDark ? theme.colors.error : '#a52617') : theme.colors.primary}
               />
               <Text style={[styles.revealSummaryText, revealIsPast ? styles.revealSummaryTextWarn : null]} numberOfLines={2}>
                 {revealIsPast ? t('sidequest.form.revealTimePast') : revealAtPreview}
@@ -1455,7 +1470,8 @@ function SideQuestFormInner({
               value={teaser}
               onChangeText={setTeaser}
               placeholder={t('sidequest.form.teaserPlaceholder')}
-              placeholderTextColor="#b7bcc7"
+              placeholderTextColor={theme.isDark ? theme.colors.placeholderText : '#b7bcc7'}
+              keyboardAppearance={theme.keyboardAppearance}
               style={styles.input}
               maxLength={TEASER_MAX_LENGTH}
               onFocus={onFocusField(teaserRef)}
@@ -1509,12 +1525,12 @@ function SideQuestFormInner({
 
       {message ? (
         <View style={[styles.messageBanner, message.type === 'success' ? styles.messageBannerSuccess : styles.messageBannerError]}>
-          <Ionicons name={message.type === 'success' ? 'checkmark-circle' : 'alert-circle'} size={18} color={message.type === 'success' ? '#16734d' : '#a52617'} />
+          <Ionicons name={message.type === 'success' ? 'checkmark-circle' : 'alert-circle'} size={18} color={message.type === 'success' ? (theme.isDark ? theme.colors.success : '#16734d') : (theme.isDark ? theme.colors.error : '#a52617')} />
           <Text style={[styles.messageText, message.type === 'success' ? styles.messageTextSuccess : styles.messageTextError]}>{message.text}</Text>
         </View>
       ) : null}
 
-      <TouchableOpacity activeOpacity={0.92} style={[styles.primaryButton, { backgroundColor: PRIMARY_COLOR, shadowColor: PRIMARY_COLOR }, submitting ? styles.primaryButtonDisabled : null]} disabled={submitting} onPress={() => void handleSubmit()}>
+      <TouchableOpacity activeOpacity={0.92} style={[styles.primaryButton, { backgroundColor: theme.colors.primary, shadowColor: theme.colors.primary }, submitting ? styles.primaryButtonDisabled : null]} disabled={submitting} onPress={() => void handleSubmit()}>
         <Text style={styles.primaryButtonText}>{submitting ? t('sidequest.form.saving') : mode === 'edit' ? t('sidequest.form.saveChanges') : t('sidequest.form.addActivity')}</Text>
       </TouchableOpacity>
 
@@ -1562,9 +1578,9 @@ function SideQuestFormInner({
                   ? tripEndDate ? new Date(`${tripEndDate}T12:00:00`) : undefined
                   : pickerTarget === 'revealDate' ? new Date(`${revealRange.max}T12:00:00`) : undefined
               }
-              themeVariant="light"
-              accentColor={PRIMARY_COLOR}
-              textColor="#161821"
+              themeVariant={theme.mode}
+              accentColor={theme.colors.primary}
+              textColor={theme.colors.textPrimary}
               onChange={handleDateChange}
             />
           ) : null}
@@ -1617,6 +1633,7 @@ function parseRevealTime(value: string): { hour: number; minute: number } {
 }
 
 function WheelColumn({ data, selected, onSelect }: { data: number[]; selected: number; onSelect: (value: number) => void }) {
+  const styles = useThemedStyles(createStyles);
   const scrollRef = useRef<ScrollView>(null);
   const didInit = useRef(false);
   const selectedIndex = Math.max(0, data.indexOf(selected));
@@ -1671,6 +1688,7 @@ function WheelColumn({ data, selected, onSelect }: { data: number[]; selected: n
 }
 
 function TimeWheel({ value, onChange }: { value: string; onChange: (next: string) => void }) {
+  const styles = useThemedStyles(createStyles);
   const { hour, minute } = parseRevealTime(value);
 
   const update = (nextHour: number, nextMinute: number) => {
@@ -1693,6 +1711,7 @@ function TimeWheel({ value, onChange }: { value: string; onChange: (next: string
 // native view to crash on Fabric). Maps touch position on the track to a value.
 
 function BlurSlider({ value, min, max, onChange }: { value: number; min: number; max: number; onChange: (next: number) => void }) {
+  const styles = useThemedStyles(createStyles);
   const trackRef = useRef<View>(null);
   // Absolute page-X of the track's left edge + its width. Using absolute
   // screen coordinates (gestureState.moveX) avoids the jumpiness you get from
@@ -1743,7 +1762,7 @@ function BlurSlider({ value, min, max, onChange }: { value: number; min: number;
 
 // Catches render-time errors from the native date/time picker so a bad value
 // surfaces as an on-screen message instead of taking down the whole app.
-class PickerErrorBoundary extends Component<{ children: ReactNode; t: (key: string, vars?: Record<string, string | number>) => string }, { error: Error | null }> {
+class PickerErrorBoundary extends Component<{ children: ReactNode; t: (key: string, vars?: Record<string, string | number>) => string; color: string }, { error: Error | null }> {
   state: { error: Error | null } = { error: null };
 
   static getDerivedStateFromError(error: Error) {
@@ -1753,7 +1772,7 @@ class PickerErrorBoundary extends Component<{ children: ReactNode; t: (key: stri
   render() {
     if (this.state.error) {
       return (
-        <Text style={{ color: '#a52617', fontSize: 13, padding: 16, textAlign: 'center' }}>
+        <Text style={{ color: this.props.color, fontSize: 13, padding: 16, textAlign: 'center' }}>
           {this.props.t('sidequest.form.timePickerFailed', { message: this.state.error.message })}
         </Text>
       );
@@ -1776,6 +1795,8 @@ function PickerSheet({
   children: React.ReactNode;
 }) {
   const { t } = useI18n();
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.modalBackdrop}>
@@ -1785,9 +1806,9 @@ function PickerSheet({
           <Text style={styles.modalTitle}>{title}</Text>
           <Text style={styles.modalSubtitle}>{subtitle}</Text>
           <View style={styles.modalPickerWrap}>
-            <PickerErrorBoundary t={t}>{children}</PickerErrorBoundary>
+            <PickerErrorBoundary t={t} color={theme.isDark ? theme.colors.error : '#a52617'}>{children}</PickerErrorBoundary>
           </View>
-          <TouchableOpacity activeOpacity={0.9} style={[styles.doneButton, { backgroundColor: PRIMARY_COLOR }]} onPress={onClose}>
+          <TouchableOpacity activeOpacity={0.9} style={[styles.doneButton, { backgroundColor: theme.colors.primary }]} onPress={onClose}>
             <Text style={styles.doneButtonText}>{t('common.done')}</Text>
           </TouchableOpacity>
         </View>
@@ -1806,10 +1827,13 @@ function VisibilityOption({
   subtitle: string;
   active: boolean;
   onPress: () => void;
-}) {  return (
-    <TouchableOpacity activeOpacity={0.92} style={[styles.segmentOption, active && { borderColor: PRIMARY_20, backgroundColor: PRIMARY_08 }]} onPress={onPress}>
-      <Text style={[styles.segmentTitle, active && { color: PRIMARY_COLOR }]}>{label}</Text>
-      <Text style={[styles.segmentSubtitle, active && { color: PRIMARY_20 }]}>{subtitle}</Text>
+}) {
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
+  return (
+    <TouchableOpacity activeOpacity={0.92} style={[styles.segmentOption, active && { borderColor: theme.isDark ? theme.colors.primaryLight20 : PRIMARY_20, backgroundColor: theme.isDark ? theme.colors.primaryLight12 : PRIMARY_08 }]} onPress={onPress}>
+      <Text style={[styles.segmentTitle, active && { color: theme.colors.primary }]}>{label}</Text>
+      <Text style={[styles.segmentSubtitle, active && { color: theme.isDark ? theme.colors.primaryLight20 : PRIMARY_20 }]}>{subtitle}</Text>
     </TouchableOpacity>
   );
 }
@@ -1868,6 +1892,7 @@ const TRACK_SPARKLES = [
 ] as const;
 
 function TrackSparkle({ left, topOffset, delay, duration }: { left: `${number}%`; topOffset: number; delay: number; duration: number }) {
+  const styles = useThemedStyles(createStyles);
   const opacity = useRef(new Animated.Value(0)).current;
   const scale = useRef(new Animated.Value(0.5)).current;
 
@@ -1910,6 +1935,7 @@ function SideQuestSlideToActivate({
   onDragStateChange?: (dragging: boolean) => void;
 }) {
   const { t } = useI18n();
+  const styles = useThemedStyles(createStyles);
   const [trackWidth, setTrackWidth] = useState(0);
   const progressAnim = useRef(new Animated.Value(0)).current; // 0..1, JS-driven (drives width + translateX)
   const sparkOpacity = useRef(new Animated.Value(0)).current;
@@ -2043,6 +2069,7 @@ function SideQuestSlideToActivate({
 // in the "on" position.
 function SideQuestActiveStatusRow({ onTurnOff }: { onTurnOff: () => void }) {
   const { t } = useI18n();
+  const styles = useThemedStyles(createStyles);
   return (
     <View style={styles.sideQuestStatusRow}>
       <View style={styles.sideQuestToggleIconWrap}>
@@ -2192,7 +2219,7 @@ export default SideQuestForm;
 const POSITIONER_PREVIEW_H = 240;
 const POSITIONER_FORM_W_PADDING = 44;
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   scroll: {
     flex: 1,
   },
@@ -2202,12 +2229,12 @@ const styles = StyleSheet.create({
   },
   labelOptional: {
     fontSize: 13,
-    color: '#9298a4',
+    color: theme.isDark ? theme.colors.textMeta : '#9298a4',
     fontWeight: '400',
   },
   labelRequired: {
     fontSize: 18,
-    color: '#ff4f74',
+    color: theme.colors.primary,
     fontWeight: '900',
   },
   charCounter: {
@@ -2215,7 +2242,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-end',
     fontSize: 11,
     fontWeight: '600',
-    color: '#9298a4',
+    color: theme.isDark ? theme.colors.textMeta : '#9298a4',
   },
   categoryRow: {
     flexDirection: 'row',
@@ -2231,12 +2258,12 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1.5,
-    borderColor: '#e2e5eb',
-    backgroundColor: '#fafbfc',
+    borderColor: theme.isDark ? theme.colors.borderInput : '#e2e5eb',
+    backgroundColor: theme.isDark ? theme.colors.bgLightest : '#fafbfc',
   },
   categoryChipActive: {
-    borderColor: '#ff4f74',
-    backgroundColor: '#fff0f3',
+    borderColor: theme.colors.primary,
+    backgroundColor: theme.isDark ? theme.colors.primaryLight12 : '#fff0f3',
   },
   categoryEmoji: {
     fontSize: 16,
@@ -2249,12 +2276,12 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1.5,
     borderStyle: 'dashed',
-    borderColor: '#ff9cb0',
-    backgroundColor: '#fff0f3',
+    borderColor: theme.isDark ? theme.colors.primaryLight20 : '#ff9cb0',
+    backgroundColor: theme.isDark ? theme.colors.primaryLight08 : '#fff0f3',
   },
   categoryMoreText: {
     fontSize: 14,
-    color: '#ff4f74',
+    color: theme.colors.primary,
     fontWeight: '700',
   },
   customCategoryBlock: {
@@ -2265,17 +2292,17 @@ const styles = StyleSheet.create({
     height: 48,
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: '#e2e5eb',
-    backgroundColor: '#fafbfc',
+    borderColor: theme.isDark ? theme.colors.borderInput : '#e2e5eb',
+    backgroundColor: theme.isDark ? theme.colors.bgLightest : '#fafbfc',
     paddingHorizontal: 14,
     fontSize: 15,
-    color: '#161821',
+    color: theme.isDark ? theme.colors.textPrimary : '#161821',
   },
   customCategorySymbolLabel: {
     fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0.4,
-    color: '#8a909d',
+    color: theme.isDark ? theme.colors.textMeta : '#8a909d',
     textTransform: 'uppercase',
   },
   customSymbolGrid: {
@@ -2293,7 +2320,7 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   customSymbolCellSelected: {
-    borderColor: '#ff4f74',
+    borderColor: theme.colors.primary,
   },
   customPreviewRow: {
     flexDirection: 'row',
@@ -2302,8 +2329,8 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#eceef2',
-    backgroundColor: '#fff',
+    borderColor: theme.isDark ? theme.colors.borderPrimary : '#eceef2',
+    backgroundColor: theme.isDark ? theme.colors.surfaceElevated : '#fff',
   },
   customPreviewIcon: {
     width: 40,
@@ -2316,22 +2343,23 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     fontWeight: '700',
-    color: '#161821',
+    color: theme.isDark ? theme.colors.textPrimary : '#161821',
   },
   categoryLabel: {
     fontSize: 14,
-    color: '#5a6072',
+    color: theme.isDark ? theme.colors.textSecondary : '#5a6072',
     fontWeight: '500',
   },
   categoryLabelActive: {
-    color: '#ff4f74',
+    color: theme.colors.primary,
     fontWeight: '600',
   },
   coverCard: {
     height: 240,
     borderRadius: 32,
     overflow: 'hidden',
-    backgroundColor: '#eef3f5',
+    // Dark: no bright flash behind a loading cover image.
+    backgroundColor: theme.isDark ? theme.colors.bgLight : '#eef3f5',
     justifyContent: 'flex-end',
   },
   coverImage: {
@@ -2339,7 +2367,7 @@ const styles = StyleSheet.create({
   },
   coverPlaceholderLayer: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(205,226,229,0.82)',
+    backgroundColor: theme.isDark ? theme.colors.bgLight : 'rgba(205,226,229,0.82)',
   },
   coverContent: {
     alignItems: 'center',
@@ -2353,9 +2381,11 @@ const styles = StyleSheet.create({
     borderRadius: 39,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.35)',
+    // Frosted circle on the (themed) placeholder wash — softened in dark so
+    // the white icon keeps its contrast instead of sitting on a gray puck.
+    backgroundColor: theme.isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.35)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.75)',
+    borderColor: theme.isDark ? theme.colors.borderInput : 'rgba(255,255,255,0.75)',
   },
   coverTitle: {
     marginTop: 16,
@@ -2410,7 +2440,7 @@ const styles = StyleSheet.create({
     marginTop: 24,
   },
   label: {
-    color: '#161821',
+    color: theme.isDark ? theme.colors.textPrimary : '#161821',
     fontSize: 20,
     fontWeight: '900',
     letterSpacing: -0.6,
@@ -2419,11 +2449,11 @@ const styles = StyleSheet.create({
   titleInput: {
     minHeight: 66,
     borderRadius: 24,
-    backgroundColor: '#fff',
+    backgroundColor: theme.isDark ? theme.colors.bgLight : '#fff',
     borderWidth: 1,
-    borderColor: '#eaedf2',
+    borderColor: theme.isDark ? theme.colors.borderInput : '#eaedf2',
     paddingHorizontal: 18,
-    color: '#161821',
+    color: theme.isDark ? theme.colors.textPrimary : '#161821',
     fontSize: 22,
     fontWeight: '800',
     letterSpacing: -0.8,
@@ -2431,31 +2461,31 @@ const styles = StyleSheet.create({
   textArea: {
     minHeight: 126,
     borderRadius: 24,
-    backgroundColor: '#fff',
+    backgroundColor: theme.isDark ? theme.colors.bgLight : '#fff',
     borderWidth: 1,
-    borderColor: '#eaedf2',
+    borderColor: theme.isDark ? theme.colors.borderInput : '#eaedf2',
     paddingHorizontal: 18,
     paddingVertical: 18,
-    color: '#1f232c',
+    color: theme.isDark ? theme.colors.textPrimary : '#1f232c',
     fontSize: 16,
     lineHeight: 24,
   },
   input: {
     minHeight: 58,
     borderRadius: 20,
-    backgroundColor: '#fff',
+    backgroundColor: theme.isDark ? theme.colors.bgLight : '#fff',
     borderWidth: 1,
-    borderColor: '#eaedf2',
+    borderColor: theme.isDark ? theme.colors.borderInput : '#eaedf2',
     paddingHorizontal: 16,
-    color: '#1f232c',
+    color: theme.isDark ? theme.colors.textPrimary : '#1f232c',
     fontSize: 16,
   },
   selectionCard: {
     minHeight: 84,
     borderRadius: 26,
     borderWidth: 1,
-    borderColor: '#eaedf2',
-    backgroundColor: '#fff',
+    borderColor: theme.isDark ? theme.colors.borderPrimary : '#eaedf2',
+    backgroundColor: theme.isDark ? theme.colors.surface : '#fff',
     paddingHorizontal: 18,
     paddingVertical: 16,
     flexDirection: 'row',
@@ -2463,46 +2493,46 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   selectionCardActive: {
-    borderColor: '#ff9db0',
-    shadowColor: '#ff4f74',
+    borderColor: theme.isDark ? theme.colors.primary : '#ff9db0',
+    shadowColor: theme.colors.primary,
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.08,
     shadowRadius: 18,
-    elevation: 4,
+    elevation: theme.isDark ? 0 : 4,
   },
   selectionEyebrow: {
-    color: '#8a909b',
+    color: theme.isDark ? theme.colors.textMeta : '#8a909b',
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 1.2,
   },
   webDateInput: {
     marginTop: 6,
-    color: '#161821',
+    color: theme.isDark ? theme.colors.textPrimary : '#161821',
     fontSize: 17,
     fontWeight: '700',
     paddingVertical: 2,
     borderBottomWidth: 1.5,
-    borderBottomColor: '#e2e5eb',
+    borderBottomColor: theme.isDark ? theme.colors.borderInput : '#e2e5eb',
     minWidth: 100,
   },
   selectionValue: {
     marginTop: 8,
-    color: '#161821',
+    color: theme.isDark ? theme.colors.textPrimary : '#161821',
     fontSize: 22,
     fontWeight: '800',
     letterSpacing: -0.8,
   },
   selectionValueSmall: {
     marginTop: 8,
-    color: '#161821',
+    color: theme.isDark ? theme.colors.textPrimary : '#161821',
     fontSize: 17,
     fontWeight: '800',
     letterSpacing: -0.5,
   },
   selectionHint: {
     marginTop: 6,
-    color: '#868d99',
+    color: theme.isDark ? theme.colors.textMeta : '#868d99',
     fontSize: 13,
     fontWeight: '600',
   },
@@ -2514,17 +2544,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 2,
   },
   staySummaryText: {
-    color: '#b45309',
+    // Light value is exactly the stay token's light literal ('#b45309').
+    color: theme.colors.stayTextMuted,
     fontSize: 13,
     fontWeight: '700',
   },
   selectionCardError: {
-    borderColor: '#ffb0bd',
-    backgroundColor: '#fff7f9',
+    borderColor: theme.isDark ? theme.colors.errorBorder : '#ffb0bd',
+    backgroundColor: theme.isDark ? theme.colors.errorLight : '#fff7f9',
   },
   doneButton: {
     borderRadius: 999,
-    backgroundColor: '#ff4f74',
+    backgroundColor: theme.colors.primary,
     paddingHorizontal: 16,
     paddingVertical: 10,
     alignSelf: 'stretch',
@@ -2542,8 +2573,8 @@ const styles = StyleSheet.create({
     gap: 14,
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: '#eaedf2',
-    backgroundColor: '#fff',
+    borderColor: theme.isDark ? theme.colors.borderPrimary : '#eaedf2',
+    backgroundColor: theme.isDark ? theme.colors.surface : '#fff',
     paddingHorizontal: 16,
     paddingVertical: 16,
   },
@@ -2553,7 +2584,8 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#f5f3ff',
+    // SideQuest-purple wash (matches the trip screen's purple icon wells).
+    backgroundColor: theme.isDark ? 'rgba(124,58,237,0.2)' : '#f5f3ff',
   },
   sideQuestSpark: {
     position: 'absolute',
@@ -2564,19 +2596,19 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   sideQuestToggleLabel: {
-    color: '#161821',
+    color: theme.isDark ? theme.colors.textPrimary : '#161821',
     fontSize: 16,
     fontWeight: '800',
     letterSpacing: -0.3,
   },
   sideQuestToggleHelper: {
     marginTop: 3,
-    color: '#7d8491',
+    color: theme.isDark ? theme.colors.textSecondary : '#7d8491',
     fontSize: 13,
     lineHeight: 18,
   },
   sideQuestTurnOffText: {
-    color: '#9298a4',
+    color: theme.isDark ? theme.colors.textMeta : '#9298a4',
     fontSize: 14,
     fontWeight: '700',
   },
@@ -2587,7 +2619,9 @@ const styles = StyleSheet.create({
   slideTrack: {
     height: SLIDE_TRACK_HEIGHT,
     borderRadius: SLIDE_TRACK_HEIGHT / 2,
-    backgroundColor: '#f5f3ff',
+    // Only visible for a frame before the gradient covers it — same purple
+    // wash pairing as sideQuestToggleIconWrap so dark never flashes bright.
+    backgroundColor: theme.isDark ? 'rgba(124,58,237,0.2)' : '#f5f3ff',
     overflow: 'hidden',
     justifyContent: 'center',
   },
@@ -2637,32 +2671,32 @@ const styles = StyleSheet.create({
   segmentOption: {
     borderRadius: 26,
     borderWidth: 1,
-    borderColor: '#eaedf2',
-    backgroundColor: '#fff',
+    borderColor: theme.isDark ? theme.colors.borderPrimary : '#eaedf2',
+    backgroundColor: theme.isDark ? theme.colors.surface : '#fff',
     paddingHorizontal: 18,
     paddingVertical: 16,
   },
   segmentOptionActive: {
-    borderColor: '#ff8ca0',
-    backgroundColor: '#fff7f9',
+    borderColor: theme.isDark ? theme.colors.primaryLight20 : '#ff8ca0',
+    backgroundColor: theme.isDark ? theme.colors.primaryLight12 : '#fff7f9',
   },
   segmentTitle: {
-    color: '#161821',
+    color: theme.isDark ? theme.colors.textPrimary : '#161821',
     fontSize: 18,
     fontWeight: '800',
     letterSpacing: -0.4,
   },
   segmentTitleActive: {
-    color: '#cf295f',
+    color: theme.isDark ? theme.colors.primary : '#cf295f',
   },
   segmentSubtitle: {
     marginTop: 6,
-    color: '#7d8491',
+    color: theme.isDark ? theme.colors.textSecondary : '#7d8491',
     fontSize: 14,
     lineHeight: 20,
   },
   segmentSubtitleActive: {
-    color: '#8c5363',
+    color: theme.isDark ? theme.colors.textSecondary : '#8c5363',
   },
   revealRow: {
     flexDirection: 'column',
@@ -2678,24 +2712,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     borderRadius: 18,
-    backgroundColor: '#fff3f6',
+    backgroundColor: theme.isDark ? theme.colors.primaryLight08 : '#fff3f6',
     borderWidth: 1,
-    borderColor: '#ffd8e1',
+    borderColor: theme.isDark ? theme.colors.primaryLight20 : '#ffd8e1',
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
   revealSummaryText: {
     flex: 1,
-    color: '#af2f59',
+    color: theme.isDark ? theme.colors.primary : '#af2f59',
     fontSize: 14,
     fontWeight: '700',
   },
   revealSummaryWarn: {
-    backgroundColor: '#ffefeb',
-    borderColor: '#ffd0c3',
+    // Light values are exactly the error tokens' light literals.
+    backgroundColor: theme.colors.errorLight,
+    borderColor: theme.colors.errorBorder,
   },
   revealSummaryTextWarn: {
-    color: '#a52617',
+    color: theme.isDark ? theme.colors.error : '#a52617',
   },
   teaserOptions: {
     marginTop: 14,
@@ -2706,38 +2741,38 @@ const styles = StyleSheet.create({
   teaserChip: {
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#e6e9ee',
-    backgroundColor: '#fff',
+    borderColor: theme.isDark ? theme.colors.borderInput : '#e6e9ee',
+    backgroundColor: theme.isDark ? theme.colors.surface : '#fff',
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
   teaserChipActive: {
-    borderColor: '#ff8ca0',
-    backgroundColor: '#fff4f7',
+    borderColor: theme.isDark ? theme.colors.primaryLight20 : '#ff8ca0',
+    backgroundColor: theme.isDark ? theme.colors.primaryLight12 : '#fff4f7',
   },
   teaserChipText: {
-    color: '#666d79',
+    color: theme.isDark ? theme.colors.textSecondary : '#666d79',
     fontSize: 13,
     fontWeight: '700',
   },
   teaserChipTextActive: {
-    color: '#cf295f',
+    color: theme.isDark ? theme.colors.primary : '#cf295f',
   },
   helperText: {
     marginTop: 10,
-    color: '#7d8491',
+    color: theme.isDark ? theme.colors.textSecondary : '#7d8491',
     fontSize: 14,
     lineHeight: 21,
   },
   locationStatus: {
     marginTop: 8,
-    color: '#7f8894',
+    color: theme.isDark ? theme.colors.textMeta : '#7f8894',
     fontSize: 13,
     fontWeight: '600',
   },
   locationError: {
     marginTop: 8,
-    color: '#b6321f',
+    color: theme.isDark ? theme.colors.error : '#b6321f',
     fontSize: 12,
     fontWeight: '600',
     lineHeight: 17,
@@ -2746,8 +2781,8 @@ const styles = StyleSheet.create({
     marginTop: 10,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#e4e8ef',
-    backgroundColor: '#fff',
+    borderColor: theme.isDark ? theme.colors.borderPrimary : '#e4e8ef',
+    backgroundColor: theme.isDark ? theme.colors.surfaceElevated : '#fff',
     overflow: 'hidden',
   },
   locationSuggestionRow: {
@@ -2755,7 +2790,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#eef1f5',
+    borderBottomColor: theme.isDark ? theme.colors.borderPrimary : '#eef1f5',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
@@ -2764,13 +2799,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   locationSuggestionTitle: {
-    color: '#151a22',
+    color: theme.isDark ? theme.colors.textPrimary : '#151a22',
     fontSize: 14,
     fontWeight: '700',
   },
   locationSuggestionSubtitle: {
     marginTop: 2,
-    color: '#7f8793',
+    color: theme.isDark ? theme.colors.textMeta : '#7f8793',
     fontSize: 12,
   },
   messageBanner: {
@@ -2783,14 +2818,16 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   messageBannerSuccess: {
-    backgroundColor: '#e9f8f1',
+    // Light values are exactly the success tokens' light literals.
+    backgroundColor: theme.colors.successLight,
     borderWidth: 1,
-    borderColor: '#bfe9d2',
+    borderColor: theme.colors.successBorder,
   },
   messageBannerError: {
-    backgroundColor: '#ffefeb',
+    // Light values are exactly the error tokens' light literals.
+    backgroundColor: theme.colors.errorLight,
     borderWidth: 1,
-    borderColor: '#ffd0c3',
+    borderColor: theme.colors.errorBorder,
   },
   messageText: {
     flex: 1,
@@ -2798,23 +2835,23 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   messageTextSuccess: {
-    color: '#16734d',
+    color: theme.isDark ? theme.colors.success : '#16734d',
   },
   messageTextError: {
-    color: '#a52617',
+    color: theme.isDark ? theme.colors.error : '#a52617',
   },
   primaryButton: {
     marginTop: 28,
     minHeight: 70,
     borderRadius: 999,
-    backgroundColor: '#ff4f74',
+    backgroundColor: theme.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#ff4f74',
+    shadowColor: theme.colors.primary,
     shadowOffset: { width: 0, height: 16 },
     shadowOpacity: 0.24,
     shadowRadius: 26,
-    elevation: 9,
+    elevation: theme.isDark ? 0 : 9,
   },
   primaryButtonDisabled: {
     opacity: 0.72,
@@ -2827,13 +2864,17 @@ const styles = StyleSheet.create({
   },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(10,12,18,0.28)',
+    // Light value is exactly the backdrop token's light literal.
+    backgroundColor: theme.colors.backdropModal,
     justifyContent: 'flex-end',
   },
   modalCard: {
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
-    backgroundColor: '#fff',
+    backgroundColor: theme.isDark ? theme.colors.surfaceElevated : '#fff',
+    // Dark: hairline instead of relying on shadow/elevation for separation.
+    borderWidth: theme.isDark ? StyleSheet.hairlineWidth : 0,
+    borderColor: theme.colors.borderPrimary,
     paddingHorizontal: 20,
     paddingTop: 10,
     paddingBottom: 24,
@@ -2843,18 +2884,18 @@ const styles = StyleSheet.create({
     width: 44,
     height: 5,
     borderRadius: 999,
-    backgroundColor: '#d8dce4',
+    backgroundColor: theme.colors.sheetHandle,
   },
   modalTitle: {
     marginTop: 14,
-    color: '#151821',
+    color: theme.isDark ? theme.colors.textPrimary : '#151821',
     fontSize: 22,
     fontWeight: '900',
     letterSpacing: -0.7,
   },
   modalSubtitle: {
     marginTop: 8,
-    color: '#7c8390',
+    color: theme.isDark ? theme.colors.textMeta : '#7c8390',
     fontSize: 14,
     lineHeight: 21,
   },
@@ -2862,9 +2903,9 @@ const styles = StyleSheet.create({
     marginTop: 10,
     marginBottom: 12,
     borderRadius: 22,
-    backgroundColor: '#ffffff',
+    backgroundColor: theme.isDark ? theme.colors.surfaceElevated : '#ffffff',
     borderWidth: 1,
-    borderColor: '#eef1f5',
+    borderColor: theme.isDark ? theme.colors.borderPrimary : '#eef1f5',
     overflow: 'hidden',
   },
   wheelWrap: {
@@ -2884,7 +2925,8 @@ const styles = StyleSheet.create({
     top: WHEEL_PAD,
     height: WHEEL_ITEM_HEIGHT,
     borderRadius: 16,
-    backgroundColor: PRIMARY_08,
+    // Slightly stronger pink wash in dark so the selected band stays visible.
+    backgroundColor: theme.isDark ? theme.colors.primaryLight12 : PRIMARY_08,
   },
   wheelColumn: {
     width: 78,
@@ -2898,18 +2940,18 @@ const styles = StyleSheet.create({
   wheelItemText: {
     fontSize: 22,
     fontWeight: '700',
-    color: '#b7bcc7',
+    color: theme.isDark ? theme.colors.textMuted : '#b7bcc7',
     letterSpacing: -0.4,
   },
   wheelItemTextActive: {
-    color: PRIMARY_COLOR,
+    color: theme.colors.primary,
     fontWeight: '900',
     fontSize: 24,
   },
   wheelColon: {
     fontSize: 24,
     fontWeight: '900',
-    color: '#161821',
+    color: theme.isDark ? theme.colors.textPrimary : '#161821',
     marginHorizontal: 4,
   },
   blurPreviewCard: {
@@ -2917,7 +2959,8 @@ const styles = StyleSheet.create({
     height: 180,
     borderRadius: 24,
     overflow: 'hidden',
-    backgroundColor: '#eef3f5',
+    // Dark: no bright flash behind the loading preview image.
+    backgroundColor: theme.isDark ? theme.colors.bgLight : '#eef3f5',
     justifyContent: 'flex-end',
   },
   blurPreviewImage: {
@@ -2960,7 +3003,7 @@ const styles = StyleSheet.create({
   sliderTrack: {
     height: 8,
     borderRadius: 999,
-    backgroundColor: '#e6e9ee',
+    backgroundColor: theme.isDark ? theme.colors.bgLight : '#e6e9ee',
     justifyContent: 'center',
   },
   sliderFill: {
@@ -2968,7 +3011,7 @@ const styles = StyleSheet.create({
     left: 0,
     height: 8,
     borderRadius: 999,
-    backgroundColor: PRIMARY_COLOR,
+    backgroundColor: theme.colors.primary,
   },
   sliderThumb: {
     position: 'absolute',
@@ -2977,14 +3020,16 @@ const styles = StyleSheet.create({
     height: 26,
     marginLeft: -13,
     borderRadius: 13,
-    backgroundColor: '#fff',
+    // Thumb stays white in both themes (iOS-slider convention); the pink
+    // border carries the accent.
+    backgroundColor: theme.colors.white,
     borderWidth: 2,
-    borderColor: PRIMARY_COLOR,
+    borderColor: theme.colors.primary,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.18,
     shadowRadius: 4,
-    elevation: 3,
+    elevation: theme.isDark ? 0 : 3,
   },
   blurSliderLabels: {
     marginTop: 10,
@@ -2992,7 +3037,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   blurSliderLabel: {
-    color: '#868d99',
+    color: theme.isDark ? theme.colors.textMeta : '#868d99',
     fontSize: 12,
     fontWeight: '700',
   },
@@ -3005,7 +3050,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   flightFieldLabel: {
-    color: '#8a909b',
+    color: theme.isDark ? theme.colors.textMeta : '#8a909b',
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 1.2,
@@ -3014,11 +3059,11 @@ const styles = StyleSheet.create({
   flightInput: {
     minHeight: 58,
     borderRadius: 20,
-    backgroundColor: '#fff',
+    backgroundColor: theme.isDark ? theme.colors.bgLight : '#fff',
     borderWidth: 1,
-    borderColor: '#eaedf2',
+    borderColor: theme.isDark ? theme.colors.borderInput : '#eaedf2',
     paddingHorizontal: 16,
-    color: '#161821',
+    color: theme.isDark ? theme.colors.textPrimary : '#161821',
     fontSize: 18,
     fontWeight: '800',
     letterSpacing: -0.4,
@@ -3029,7 +3074,8 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#eaf6f9',
+    // Teal (secondary) wash — same dark pairing as the trip screen's teal wells.
+    backgroundColor: theme.isDark ? 'rgba(34,174,199,0.16)' : '#eaf6f9',
     marginTop: 22,
   },
   flightPreview: {
@@ -3039,14 +3085,14 @@ const styles = StyleSheet.create({
     gap: 8,
     alignSelf: 'flex-start',
     borderRadius: 999,
-    backgroundColor: '#eaf6f9',
+    backgroundColor: theme.isDark ? 'rgba(34,174,199,0.16)' : '#eaf6f9',
     borderWidth: 1,
-    borderColor: '#cfe9ef',
+    borderColor: theme.isDark ? 'rgba(34,174,199,0.3)' : '#cfe9ef',
     paddingHorizontal: 14,
     paddingVertical: 9,
   },
   flightPreviewText: {
-    color: '#0d7d92',
+    color: theme.isDark ? theme.colors.secondary : '#0d7d92',
     fontSize: 14,
     fontWeight: '800',
     letterSpacing: 0.2,

@@ -23,9 +23,12 @@ import { BigHeroCard, type TripMember, type TripWithEvent } from '@/components/b
 import { apiFetch, apiJson } from '@/lib/api';
 import { invalidateCache } from '@/lib/cache';
 import type { Quest } from '@/lib/types';
-import { SPACING, TYPOGRAPHY, COLORS, RADIUS, SHADOWS } from '@/constants/design-tokens';
+import { SPACING, TYPOGRAPHY, RADIUS } from '@/constants/design-tokens';
 import { useKeyboardFocusScroll } from '@/hooks/useKeyboardFocusScroll';
 import { ImagePositionerModal, cropToPreview } from '@/components/image-positioner-modal';
+import { useTheme } from '@/components/theme-provider';
+import { useThemedStyles } from '@/hooks/use-themed-styles';
+import type { AppTheme } from '@/constants/themes';
 
 type MessageState = { type: 'success' | 'error'; text: string } | null;
 
@@ -38,6 +41,8 @@ const DESTINATION_MAX_LENGTH = 28;
 
 export default function CreateTripScreen() {
   const { t } = useI18n();
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const { user } = useAuth();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -239,7 +244,7 @@ export default function CreateTripScreen() {
         {...scrollViewProps}>
         <View style={styles.header}>
           <TouchableOpacity style={styles.backButton} activeOpacity={0.8} onPress={unsaved.requestBack}>
-            <Ionicons name="arrow-back" size={28} color={COLORS.primary} />
+            <Ionicons name="arrow-back" size={28} color={theme.colors.primary} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>{t('trip.title')}</Text>
         </View>
@@ -264,8 +269,8 @@ export default function CreateTripScreen() {
         {/* Cover pill: visible only when no image. Hero is already tappable. */}
         {!coverImage ? (
           <TouchableOpacity activeOpacity={0.85} style={styles.coverHint} onPress={() => void handlePickCover()}>
-            <Ionicons name="camera-outline" size={16} color={COLORS.primary} />
-            <Text style={[styles.coverHintText, { color: COLORS.primary }]}>
+            <Ionicons name="camera-outline" size={16} color={theme.colors.primary} />
+            <Text style={[styles.coverHintText, { color: theme.colors.primary }]}>
               {t('trip.add_cover')}
             </Text>
           </TouchableOpacity>
@@ -283,7 +288,8 @@ export default function CreateTripScreen() {
           // slicing keeps the first chars instead of pasting nothing.
           onChangeText={(v) => setTitle(v.slice(0, TITLE_MAX_LENGTH))}
           placeholder={t('trip.trip_name_placeholder')}
-          placeholderTextColor={COLORS.placeholderText}
+          placeholderTextColor={theme.colors.placeholderText}
+          keyboardAppearance={theme.keyboardAppearance}
           style={styles.titleInput}
           onFocus={onFocusField(titleRef)}
           returnKeyType="next"
@@ -300,7 +306,8 @@ export default function CreateTripScreen() {
           value={destination}
           onChangeText={(v) => setDestination(v.slice(0, DESTINATION_MAX_LENGTH))}
           placeholder={t('trip.destination_placeholder')}
-          placeholderTextColor={COLORS.placeholderText}
+          placeholderTextColor={theme.colors.placeholderText}
+          keyboardAppearance={theme.keyboardAppearance}
           style={styles.destinationInput}
           onFocus={onFocusField(destinationRef)}
           returnKeyType="done"
@@ -311,7 +318,7 @@ export default function CreateTripScreen() {
         {/* Optional date chip. Small pill, centered, secondary affordance. */}
         <View style={styles.dateChipWrap}>
           <Pressable style={styles.dateChip} onPress={() => setRangePickerOpen(true)}>
-            <Ionicons name="calendar-outline" size={15} color={COLORS.primary} />
+            <Ionicons name="calendar-outline" size={15} color={theme.colors.primary} />
             <Text style={styles.dateChipValue} numberOfLines={1}>
               {hasUserSelectedDates ? formatRangeDisplay(startDate, endDate) : t('trip.add_dates')}
             </Text>
@@ -320,7 +327,10 @@ export default function CreateTripScreen() {
 
         {message ? (
           <View style={[styles.messageBanner, message.type === 'success' ? styles.messageBannerSuccess : styles.messageBannerError]}>
-            <Ionicons name={message.type === 'success' ? 'checkmark-circle' : 'alert-circle'} size={18} color={message.type === 'success' ? '#16734d' : '#a52617'} />
+            {/* Light keeps the original deep-tinted icon colors; on the dark
+                translucent banner fills those would vanish, so dark uses the
+                bright semantic tokens instead. */}
+            <Ionicons name={message.type === 'success' ? 'checkmark-circle' : 'alert-circle'} size={18} color={message.type === 'success' ? (theme.isDark ? theme.colors.success : '#16734d') : (theme.isDark ? theme.colors.error : '#a52617')} />
             <Text style={[styles.messageText, message.type === 'success' ? styles.messageTextSuccess : styles.messageTextError]}>
               {message.text}
             </Text>
@@ -330,7 +340,7 @@ export default function CreateTripScreen() {
         {/* Primary CTA — always clickable. Validation handled in saveTrip. */}
         <TouchableOpacity
           activeOpacity={0.9}
-          style={[styles.primaryButton, { backgroundColor: COLORS.primary, shadowColor: COLORS.primary }]}
+          style={[styles.primaryButton, { backgroundColor: theme.colors.primary, shadowColor: theme.colors.primary }]}
           onPress={() => void handleCreateTrip()}>
           <Text style={styles.primaryButtonText}>{submitting ? t('trip.starting') : t('trip.start_adventure')}</Text>
         </TouchableOpacity>
@@ -427,10 +437,10 @@ function getDefaultEndDate() {
   return date.toISOString().slice(0, 10);
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: COLORS.white,
+    backgroundColor: theme.colors.bgPrimary,
   },
   scroll: {
     flex: 1,
@@ -455,14 +465,14 @@ const styles = StyleSheet.create({
   headerTitle: {
     ...TYPOGRAPHY.pageHeading,
     fontWeight: '900',
-    color: COLORS.textPrimary,
+    color: theme.colors.textPrimary,
   },
   previewLabel: {
     marginTop: SPACING.sm,
     marginBottom: SPACING.sm,
     ...TYPOGRAPHY.eyebrow,
     fontWeight: '800',
-    color: COLORS.textMeta,
+    color: theme.colors.textMeta,
   },
   coverHint: {
     marginTop: SPACING.sm,
@@ -473,9 +483,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     borderRadius: RADIUS.circle,
-    backgroundColor: COLORS.white,
+    // Light: a white pill floating on the white page (the pink border does
+    // the work). Dark: one surface step above the page so the pill still
+    // reads as a chip.
+    backgroundColor: theme.isDark ? theme.colors.surface : '#fff',
     borderWidth: 1,
-    borderColor: COLORS.primaryLight20,
+    borderColor: theme.colors.primaryLight20,
   },
   coverHintText: {
     ...TYPOGRAPHY.label,
@@ -485,7 +498,7 @@ const styles = StyleSheet.create({
     height: 300,
     borderRadius: RADIUS.lg,
     overflow: 'hidden',
-    backgroundColor: COLORS.bgLight,
+    backgroundColor: theme.colors.bgLight,
     position: 'relative',
     justifyContent: 'center',
     alignItems: 'center',
@@ -513,7 +526,7 @@ const styles = StyleSheet.create({
     width: 132,
     height: 18,
     borderRadius: RADIUS.circle,
-    backgroundColor: COLORS.gradientDark12,
+    backgroundColor: theme.colors.gradientDark12,
     opacity: 0.35,
   },
   coverOverlay: {
@@ -542,7 +555,7 @@ const styles = StyleSheet.create({
   },
   coverLabel: {
     marginTop: SPACING.lg,
-    color: COLORS.white,
+    color: theme.colors.white,
     fontSize: 18,
     fontWeight: '500',
     letterSpacing: -0.4,
@@ -557,10 +570,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     borderRadius: RADIUS.circle,
-    backgroundColor: COLORS.pillDark42,
+    backgroundColor: theme.colors.pillDark42,
   },
   coverEditBadgeText: {
-    color: COLORS.white,
+    color: theme.colors.white,
     fontSize: 13,
     fontWeight: '700',
     letterSpacing: -0.2,
@@ -572,24 +585,24 @@ const styles = StyleSheet.create({
     marginTop: SPACING.md,
     ...TYPOGRAPHY.eyebrow,
     fontWeight: '800',
-    color: COLORS.textMeta,
+    color: theme.colors.textMeta,
   },
   requiredAsterisk: {
-    color: COLORS.error,
+    color: theme.colors.error,
   },
   charCounter: {
     marginTop: SPACING.xs,
     alignSelf: 'flex-end',
     fontSize: 11,
     fontWeight: '600',
-    color: COLORS.textMeta,
+    color: theme.colors.textMeta,
   },
   // Caption-style inputs (NOT form boxes). Borderless, left-aligned, sized
   // like editable title + subtitle of the hero card. Mental model: the user
   // is captioning the trip, not filling in a form.
   titleInput: {
     marginTop: SPACING.xs,
-    color: COLORS.textPrimary,
+    color: theme.colors.textPrimary,
     fontSize: 24,
     fontWeight: '800',
     letterSpacing: -0.6,
@@ -597,7 +610,7 @@ const styles = StyleSheet.create({
   },
   destinationInput: {
     marginTop: SPACING.xs,
-    color: COLORS.textSecondary,
+    color: theme.colors.textSecondary,
     fontSize: 16,
     fontWeight: '500',
     letterSpacing: -0.2,
@@ -616,12 +629,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     borderRadius: RADIUS.circle,
-    backgroundColor: COLORS.bgLight,
+    backgroundColor: theme.colors.bgLight,
     borderWidth: 1,
-    borderColor: COLORS.borderPrimary,
+    borderColor: theme.colors.borderPrimary,
   },
   dateChipValue: {
-    color: COLORS.textPrimary,
+    color: theme.colors.textPrimary,
     fontSize: 13,
     fontWeight: '700',
     letterSpacing: -0.1,
@@ -636,14 +649,14 @@ const styles = StyleSheet.create({
     gap: SPACING.md,
   },
   messageBannerSuccess: {
-    backgroundColor: COLORS.successLight,
+    backgroundColor: theme.colors.successLight,
     borderWidth: 1,
-    borderColor: COLORS.successBorder,
+    borderColor: theme.colors.successBorder,
   },
   messageBannerError: {
-    backgroundColor: COLORS.errorLight,
+    backgroundColor: theme.colors.errorLight,
     borderWidth: 1,
-    borderColor: COLORS.errorBorder,
+    borderColor: theme.colors.errorBorder,
   },
   messageText: {
     flex: 1,
@@ -651,27 +664,30 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   messageTextSuccess: {
-    color: COLORS.success,
+    color: theme.colors.success,
   },
   messageTextError: {
-    color: COLORS.error,
+    color: theme.colors.error,
   },
   primaryButton: {
     marginTop: SPACING.md,
     height: 72,
     borderRadius: RADIUS.circle,
-    backgroundColor: COLORS.primary,
+    backgroundColor: theme.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: COLORS.primary,
+    // Brand-pink glow: the colored shadowColor stays in both themes (iOS
+    // keeps a stronger glow in dark); Android elevation is zeroed in dark —
+    // it renders as a muddy gray box there.
+    shadowColor: theme.colors.primary,
     shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: 0.28,
+    shadowOpacity: theme.isDark ? 0.45 : 0.28,
     shadowRadius: 28,
-    elevation: 10,
+    elevation: theme.isDark ? 0 : 10,
   },
   primaryButtonText: {
     ...TYPOGRAPHY.buttonLarge,
     fontWeight: '900',
-    color: COLORS.white,
+    color: theme.colors.white,
   },
 });

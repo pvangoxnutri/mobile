@@ -13,11 +13,15 @@ import { extractLocationQuery, extractStoredMapPlace, stripLocationMarker } from
 import { extractFlightRoute, stripFlightMarkers } from '@/lib/flight-route';
 import { extractBlur, stripBlurMarker, DEFAULT_BLUR } from '@/lib/activity-blur';
 import type { Quest, SideQuestActivity } from '@/lib/types';
-import { PRIMARY_COLOR } from '@/constants/colors';
-import { COLORS, SPACING, RADIUS, TYPOGRAPHY } from '@/constants/design-tokens';
+import { SPACING, RADIUS, TYPOGRAPHY } from '@/constants/design-tokens';
+import { useTheme } from '@/components/theme-provider';
+import { useThemedStyles } from '@/hooks/use-themed-styles';
+import type { AppTheme } from '@/constants/themes';
 
 export default function NewSideQuestScreen() {
   const { t } = useI18n();
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const insets = useSafeAreaInsets();
   const { id, editId, initialDate } = useLocalSearchParams<{ id: string; editId?: string; initialDate?: string }>();
   const [trip, setTrip] = useState<Quest | null>(null);
@@ -127,7 +131,7 @@ export default function NewSideQuestScreen() {
       <View style={styles.screen}>
         <View style={[styles.header, { paddingTop: Math.max(insets.top, 18) + 4 }]}>
           <TouchableOpacity style={styles.backButton} activeOpacity={0.88} onPress={unsaved.requestBack}>
-            <Ionicons name="arrow-back" size={24} color={COLORS.textPrimary} />
+            <Ionicons name="arrow-back" size={24} color={theme.colors.textPrimary} />
           </TouchableOpacity>
           <View>
             <Text style={styles.title}>{isEditMode ? t('sidequest.form.editActivityTitle') : t('sidequest.form.addActivity')}</Text>
@@ -139,7 +143,7 @@ export default function NewSideQuestScreen() {
 
         {loading ? (
           <View style={styles.centerState}>
-            <ActivityIndicator color={PRIMARY_COLOR} />
+            <ActivityIndicator color={theme.colors.primary} />
           </View>
         ) : error ? (
           <View style={styles.centerState}>
@@ -181,10 +185,10 @@ function formatTimeForInput(value: string) {
   return `${hours}:${minutes}`;
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: COLORS.bgPrimary,
+    backgroundColor: theme.colors.bgPrimary,
   },
   header: {
     paddingHorizontal: SPACING.xl,
@@ -199,17 +203,17 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.circle,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.bgLight,
+    backgroundColor: theme.colors.bgLight,
   },
   title: {
-    color: COLORS.textPrimary,
+    color: theme.colors.textPrimary,
     fontSize: 26,
     fontWeight: '900',
     letterSpacing: -0.8,
   },
   subtitle: {
     marginTop: SPACING.xs,
-    color: COLORS.textSecondary,
+    color: theme.colors.textSecondary,
     fontSize: 14,
   },
   centerState: {
@@ -220,7 +224,7 @@ const styles = StyleSheet.create({
   },
   errorText: {
     ...TYPOGRAPHY.body,
-    color: COLORS.error,
+    color: theme.colors.error,
     textAlign: 'center',
     fontSize: 15,
   },

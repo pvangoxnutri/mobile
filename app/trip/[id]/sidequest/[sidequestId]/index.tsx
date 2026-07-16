@@ -33,8 +33,9 @@ import { extractBlur, stripBlurMarker, DEFAULT_BLUR } from '@/lib/activity-blur'
 import { useRevealAnimation } from '@/hooks/useMotion';
 import { useKeyboardFocusScroll } from '@/hooks/useKeyboardFocusScroll';
 import type { ActivityComment, SideQuestActivity } from '@/lib/types';
-import { COLORS } from '@/constants/design-tokens';
-import { PRIMARY_COLOR, SECONDARY_COLOR } from '@/constants/colors';
+import { useTheme } from '@/components/theme-provider';
+import { useThemedStyles } from '@/hooks/use-themed-styles';
+import type { AppTheme } from '@/constants/themes';
 
 function stripLeadingEmoji(text: string): string {
   return text.replace(/^\p{Extended_Pictographic}️?\s*/u, '');
@@ -43,6 +44,8 @@ function stripLeadingEmoji(text: string): string {
 export default function SideQuestDetailScreen() {
   const { t } = useI18n();
   const { user } = useAuth();
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const insets = useSafeAreaInsets();
   const { id, sidequestId } = useLocalSearchParams<{ id: string; sidequestId: string }>();
   const [activity, setActivity] = useState<SideQuestActivity | null>(null);
@@ -261,7 +264,7 @@ export default function SideQuestDetailScreen() {
         {...scrollViewProps}>
         <View style={styles.header}>
           <TouchableOpacity style={styles.backButton} activeOpacity={0.88} onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={24} color="#11131a" />
+            <Ionicons name="arrow-back" size={24} color={theme.isDark ? theme.colors.textPrimary : '#11131a'} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>{t('activity.sidequest')}</Text>
           {activity?.canEdit ? (
@@ -271,9 +274,9 @@ export default function SideQuestDetailScreen() {
               disabled={deleting}
               onPress={handleDelete}>
               {deleting ? (
-                <ActivityIndicator size="small" color="#d92d4c" />
+                <ActivityIndicator size="small" color={theme.isDark ? theme.colors.error : '#d92d4c'} />
               ) : (
-                <Ionicons name="trash-outline" size={20} color="#d92d4c" />
+                <Ionicons name="trash-outline" size={20} color={theme.isDark ? theme.colors.error : '#d92d4c'} />
               )}
             </TouchableOpacity>
           ) : (
@@ -301,18 +304,18 @@ export default function SideQuestDetailScreen() {
                   ],
                 );
               }}>
-              <Ionicons name="flag-outline" size={20} color={COLORS.textMeta} />
+              <Ionicons name="flag-outline" size={20} color={theme.colors.textMeta} />
             </TouchableOpacity>
           )}
         </View>
 
         {loading ? (
           <View style={styles.centerState}>
-            <ActivityIndicator color={PRIMARY_COLOR} />
+            <ActivityIndicator color={theme.colors.primary} />
           </View>
         ) : notFound ? (
           <View style={styles.centerState}>
-            <Ionicons name="compass-outline" size={40} color={COLORS.textMeta} />
+            <Ionicons name="compass-outline" size={40} color={theme.colors.textMeta} />
             <Text style={styles.notFoundTitle}>{t('activity.notFoundTitle')}</Text>
             <Text style={styles.notFoundBody}>{t('activity.notFoundBody')}</Text>
             <TouchableOpacity
@@ -386,9 +389,12 @@ export default function SideQuestDetailScreen() {
               {!activity.imageUrl ? (
                 <>
                   <View style={styles.statusRowNoImage}>
+                    {/* On the card surface (no photo behind it) the chip is
+                        themed; the hero copy above stays on-photo styled. */}
                     <StatusChip
                       label={activity.visibility === 'hidden' && !activity.isRevealed ? 'Hidden' : activity.ownerName || 'Visible'}
                       tone={activity.visibility === 'hidden' && !activity.isRevealed ? 'dark' : 'pink'}
+                      onSurface
                     />
                   </View>
                   <Text style={styles.titleNoImage}>{hiddenTitle}</Text>
@@ -406,7 +412,7 @@ export default function SideQuestDetailScreen() {
                       onPress={() => {
                           router.push(`/trip/${encodeURIComponent(id)}/sidequest/new?editId=${encodeURIComponent(sidequestId)}`);
                         }}>
-                      <Ionicons name="create-outline" size={16} color="#0d90a8" />
+                      <Ionicons name="create-outline" size={16} color={theme.colors.secondary} />
                       <Text style={styles.editButtonTextNoImage}>Edit</Text>
                     </TouchableOpacity>
                   ) : null}
@@ -430,7 +436,7 @@ export default function SideQuestDetailScreen() {
               {showFlightRoute ? (
                 <MetaRow
                   icon="airplane"
-                  iconColor={SECONDARY_COLOR}
+                  iconColor={theme.colors.secondary}
                   label={t('activity.flightRoute')}
                   value={formatFlightRoute(flightRoute)}
                 />
@@ -472,7 +478,7 @@ export default function SideQuestDetailScreen() {
                       void Linking.openURL(url);
                     }
                   }}>
-                  <Ionicons name="map-outline" size={17} color={SECONDARY_COLOR} />
+                  <Ionicons name="map-outline" size={17} color={theme.colors.secondary} />
                   <Text style={styles.mapButtonText}>{t('activity.open_map')}{locationQuery}</Text>
                 </TouchableOpacity>
               ) : null}
@@ -524,7 +530,8 @@ export default function SideQuestDetailScreen() {
                     ref={inputRef}
                     style={styles.commentInput}
                     placeholder={t('activity.write_comment')}
-                    placeholderTextColor="#aab0bc"
+                    placeholderTextColor={theme.isDark ? theme.colors.placeholderText : '#aab0bc'}
+                    keyboardAppearance={theme.keyboardAppearance}
                     value={commentText}
                     onChangeText={setCommentText}
                     onFocus={onFocusField(inputRef)}
@@ -533,7 +540,7 @@ export default function SideQuestDetailScreen() {
                     onSubmitEditing={() => void submitComment()}
                   />
                   <TouchableOpacity
-                    style={[styles.commentSend, { backgroundColor: PRIMARY_COLOR }, (!commentText.trim() || submitting) && styles.commentSendDisabled]}
+                    style={[styles.commentSend, { backgroundColor: theme.colors.primary }, (!commentText.trim() || submitting) && styles.commentSendDisabled]}
                     activeOpacity={0.8}
                     onPress={() => void submitComment()}
                     disabled={!commentText.trim() || submitting}>
@@ -555,10 +562,12 @@ export default function SideQuestDetailScreen() {
 }
 
 function MetaRow({ icon, label, value, iconColor }: { icon: keyof typeof Ionicons.glyphMap; label: string; value: string; iconColor?: string }) {
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
   return (
     <View style={styles.metaRow}>
       <View style={styles.metaIcon}>
-        <Ionicons name={icon} size={18} color={iconColor ?? PRIMARY_COLOR} />
+        <Ionicons name={icon} size={18} color={iconColor ?? theme.colors.primary} />
       </View>
       <View style={styles.metaCopy}>
         <Text style={styles.metaLabel}>{label}</Text>
@@ -568,10 +577,29 @@ function MetaRow({ icon, label, value, iconColor }: { icon: keyof typeof Ionicon
   );
 }
 
-function StatusChip({ label, tone }: { label: string; tone: 'pink' | 'dark' }) {
+// The chip renders in two worlds: on the hero photo (default) where it keeps
+// its on-photo styling byte-identical in both themes, and on the meta card
+// surface (`onSurface`, no-image variant) where dark mode swaps to themed
+// fills — light mode resolves to the exact same literals either way.
+function StatusChip({ label, tone, onSurface }: { label: string; tone: 'pink' | 'dark'; onSurface?: boolean }) {
+  const styles = useThemedStyles(createStyles);
   return (
-    <View style={[styles.statusChip, tone === 'dark' ? styles.statusChipDark : styles.statusChipPink]}>
-      <Text style={[styles.statusChipText, tone === 'dark' ? styles.statusChipTextLight : null]}>{label}</Text>
+    <View
+      style={[
+        styles.statusChip,
+        tone === 'dark'
+          ? (onSurface ? styles.statusChipDarkOnSurface : styles.statusChipDark)
+          : (onSurface ? styles.statusChipPinkOnSurface : styles.statusChipPink),
+      ]}>
+      <Text
+        style={[
+          styles.statusChipText,
+          tone === 'dark'
+            ? (onSurface ? styles.statusChipTextLightOnSurface : styles.statusChipTextLight)
+            : (onSurface ? styles.statusChipTextPinkOnSurface : null),
+        ]}>
+        {label}
+      </Text>
     </View>
   );
 }
@@ -584,14 +612,14 @@ function formatReveal(value: string) {
   return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(value));
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   // On the outer flex:1 container, not just the ScrollView's content box —
   // otherwise, whenever content is shorter than the screen (e.g. the
   // loading spinner), the area below it falls through to the navigator's
-  // own (dark) default screen background instead of staying white.
+  // own default screen background instead of staying the page color.
   screenBackground: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: theme.colors.bgPrimary,
   },
   screen: {
     paddingHorizontal: 22,
@@ -607,12 +635,12 @@ const styles = StyleSheet.create({
     borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#f5f6f8',
+    backgroundColor: theme.isDark ? theme.colors.bgLight : '#f5f6f8',
   },
   headerTitle: {
     flex: 1,
     marginLeft: 12,
-    color: '#121317',
+    color: theme.isDark ? theme.colors.textPrimary : '#121317',
     fontSize: 24,
     fontWeight: '900',
     letterSpacing: -0.8,
@@ -626,7 +654,8 @@ const styles = StyleSheet.create({
     borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#fdeaee',
+    // Destructive-tinted circle — errorLight is a translucent red wash in dark.
+    backgroundColor: theme.isDark ? theme.colors.errorLight : '#fdeaee',
   },
   centerState: {
     minHeight: 300,
@@ -635,7 +664,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   errorText: {
-    color: '#d53d18',
+    color: theme.colors.error,
     fontSize: 15,
     textAlign: 'center',
   },
@@ -643,14 +672,14 @@ const styles = StyleSheet.create({
     marginTop: 14,
     fontSize: 17,
     fontWeight: '800',
-    color: COLORS.textPrimary,
+    color: theme.colors.textPrimary,
     textAlign: 'center',
   },
   notFoundBody: {
     marginTop: 6,
     fontSize: 14,
     lineHeight: 20,
-    color: COLORS.textMeta,
+    color: theme.colors.textMeta,
     textAlign: 'center',
   },
   notFoundButton: {
@@ -658,17 +687,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 22,
     paddingVertical: 12,
     borderRadius: 999,
-    backgroundColor: COLORS.primary,
+    backgroundColor: theme.colors.primary,
   },
   notFoundButtonText: {
     fontSize: 14,
     fontWeight: '700',
-    color: COLORS.white,
+    color: theme.colors.white,
   },
   heroCardSize: {
     minHeight: 360,
     justifyContent: 'flex-end',
   },
+  // On-photo reveal glow — identical in both themes, like every overlay that
+  // sits on the hero image rather than on a themed surface.
   heroGlow: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(20,24,31,0.16)',
@@ -686,6 +717,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
+  // On-photo chips (hero) — byte-identical in both themes.
   statusChipPink: {
     backgroundColor: '#ffe4ec',
   },
@@ -701,6 +733,23 @@ const styles = StyleSheet.create({
   statusChipTextLight: {
     color: '#fff',
   },
+  // On-surface chips (no-image meta card) — light keeps the exact hero
+  // literals; dark swaps to themed fills so the chip sits on the card
+  // instead of glaring. The "Hidden" chip uses the app-wide sealed family
+  // (see components/hidden-sidequest-card.tsx), never the stay* amber.
+  statusChipPinkOnSurface: {
+    backgroundColor: theme.isDark ? theme.colors.avatarLight : '#ffe4ec',
+  },
+  statusChipDarkOnSurface: {
+    backgroundColor: theme.isDark ? theme.colors.sealedSurface : 'rgba(17,19,25,0.62)',
+  },
+  statusChipTextPinkOnSurface: {
+    color: theme.isDark ? theme.colors.primary : '#c82f61',
+  },
+  statusChipTextLightOnSurface: {
+    color: theme.isDark ? theme.colors.textPrimary : '#fff',
+  },
+  // Floating edit pill on the hero photo — on-photo constants, both themes.
   editButtonFloating: {
     position: 'absolute',
     top: 18,
@@ -737,17 +786,19 @@ const styles = StyleSheet.create({
     marginTop: 18,
     borderRadius: 28,
     borderWidth: 1,
-    borderColor: '#eaedf2',
-    backgroundColor: '#fff',
+    borderColor: theme.isDark ? theme.colors.borderPrimary : '#eaedf2',
+    backgroundColor: theme.isDark ? theme.colors.surface : '#fff',
     padding: 18,
     gap: 16,
   },
+  // Teal-tinted "open in maps" row — dark uses a translucent wash of the
+  // (lifted) dark secondary, mirroring the trip screen's teal fills.
   mapButton: {
     minHeight: 44,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#d6edf3',
-    backgroundColor: '#f3fafc',
+    borderColor: theme.isDark ? 'rgba(34,174,199,0.32)' : '#d6edf3',
+    backgroundColor: theme.isDark ? 'rgba(34,174,199,0.14)' : '#f3fafc',
     paddingHorizontal: 12,
     flexDirection: 'row',
     alignItems: 'center',
@@ -755,7 +806,7 @@ const styles = StyleSheet.create({
   },
   mapButtonText: {
     flex: 1,
-    color: '#0f6f82',
+    color: theme.isDark ? theme.colors.secondary : '#0f6f82',
     fontSize: 13,
     fontWeight: '700',
   },
@@ -763,16 +814,18 @@ const styles = StyleSheet.create({
     marginTop: 16,
     minHeight: 52,
     borderRadius: 16,
-    backgroundColor: PRIMARY_COLOR,
+    backgroundColor: theme.colors.primary,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    shadowColor: PRIMARY_COLOR,
+    // Brand-pink glow stays in both themes (stronger on iOS in dark);
+    // Android elevation is zeroed in dark — it renders muddy gray there.
+    shadowColor: theme.colors.primary,
     shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.22,
+    shadowOpacity: theme.isDark ? 0.45 : 0.22,
     shadowRadius: 18,
-    elevation: 6,
+    elevation: theme.isDark ? 0 : 6,
   },
   revealNowButtonBusy: {
     opacity: 0.7,
@@ -793,21 +846,21 @@ const styles = StyleSheet.create({
     borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#fff3f6',
+    backgroundColor: theme.isDark ? theme.colors.primaryLight12 : '#fff3f6',
     marginRight: 12,
   },
   metaCopy: {
     flex: 1,
   },
   metaLabel: {
-    color: '#8a909b',
+    color: theme.isDark ? theme.colors.textMeta : '#8a909b',
     fontSize: 12,
     fontWeight: '800',
     letterSpacing: 1.1,
   },
   metaValue: {
     marginTop: 6,
-    color: '#161821',
+    color: theme.colors.textPrimary,
     fontSize: 16,
     fontWeight: '700',
     lineHeight: 23,
@@ -816,8 +869,8 @@ const styles = StyleSheet.create({
     marginTop: 18,
     borderRadius: 28,
     borderWidth: 1,
-    borderColor: '#eaedf2',
-    backgroundColor: '#fff',
+    borderColor: theme.isDark ? theme.colors.borderPrimary : '#eaedf2',
+    backgroundColor: theme.isDark ? theme.colors.surface : '#fff',
     padding: 18,
     gap: 14,
   },
@@ -825,12 +878,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
     letterSpacing: 1.1,
-    color: '#8a909b',
+    color: theme.isDark ? theme.colors.textMeta : '#8a909b',
     textTransform: 'uppercase',
   },
   commentsEmpty: {
     fontSize: 14,
-    color: '#aab0bc',
+    color: theme.isDark ? theme.colors.textMuted : '#aab0bc',
   },
   commentItem: {
     flexDirection: 'row',
@@ -838,10 +891,11 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   commentAvatar: {
+    // Pink avatar-fallback family — a translucent pink wash in dark.
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: '#ffe4ec',
+    backgroundColor: theme.isDark ? theme.colors.avatarLight : '#ffe4ec',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -851,7 +905,7 @@ const styles = StyleSheet.create({
     borderRadius: 17,
   },
   commentAvatarText: {
-    color: '#c82f61',
+    color: theme.isDark ? theme.colors.primary : '#c82f61',
     fontWeight: '800',
     fontSize: 14,
   },
@@ -861,12 +915,12 @@ const styles = StyleSheet.create({
   commentAuthor: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#161821',
+    color: theme.colors.textPrimary,
   },
   commentText: {
     marginTop: 3,
     fontSize: 14,
-    color: '#4a5060',
+    color: theme.isDark ? theme.colors.textSecondary : '#4a5060',
     lineHeight: 20,
   },
   commentInputRow: {
@@ -881,23 +935,25 @@ const styles = StyleSheet.create({
     maxHeight: 100,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#eaedf2',
-    backgroundColor: '#f8f9fb',
+    borderColor: theme.isDark ? theme.colors.borderInput : '#eaedf2',
+    backgroundColor: theme.isDark ? theme.colors.bgLightest : '#f8f9fb',
     paddingHorizontal: 14,
     paddingVertical: 10,
     fontSize: 14,
-    color: '#161821',
+    color: theme.colors.textPrimary,
   },
   commentSend: {
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: '#ff4f74',
+    backgroundColor: theme.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   commentSendDisabled: {
-    backgroundColor: '#f0c0cc',
+    // Light keeps the washed-out solid pink; dark uses a translucent pink so
+    // the disabled state recedes instead of glowing on the dark card.
+    backgroundColor: theme.isDark ? 'rgba(255,79,116,0.35)' : '#f0c0cc',
   },
   statusRowNoImage: {
     flexDirection: 'row',
@@ -905,7 +961,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   titleNoImage: {
-    color: '#161821',
+    color: theme.colors.textPrimary,
     fontSize: 28,
     fontWeight: '900',
     letterSpacing: -1,
@@ -913,12 +969,12 @@ const styles = StyleSheet.create({
   },
   descriptionNoImage: {
     marginBottom: 14,
-    color: '#666d7a',
+    color: theme.isDark ? theme.colors.textSecondary : '#666d7a',
     fontSize: 16,
     lineHeight: 24,
   },
   editButtonTextNoImage: {
-    color: '#0d90a8',
+    color: theme.colors.secondary,
     fontSize: 13,
     fontWeight: '800',
   },
