@@ -19,4 +19,4 @@ export const ENABLE_GLUNO_ASSISTANT = false;
 // themed screen. Flip to true locally to develop/test Dark. Must stay false
 // in shipping builds until every phase of the theme migration is complete
 // and both themes have passed the full visual audit (Phase 6).
-export const ENABLE_THEME_SWITCHING = false;
+export const ENABLE_THEME_SWITCHING = true; // TEMPORARILY ON for local dark-mode testing — flip back to false before any build/eas update until the theme migration completes (Phase 6).

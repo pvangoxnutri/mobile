@@ -73,7 +73,6 @@ function ThemedRoot() {
                 <Stack.Screen name="index" options={{ headerShown: false }} />
                 <Stack.Screen name="(auth)/login" options={{ headerShown: false }} />
                 <Stack.Screen name="create-trip" options={{ headerShown: false }} />
-                <Stack.Screen name="settings" options={{ headerShown: false }} />
                 <Stack.Screen name="forgot-password" options={{ headerShown: false }} />
                 <Stack.Screen name="reset-password" options={{ headerShown: false }} />
                 <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false }} />
@@ -86,7 +85,6 @@ function ThemedRoot() {
                 <Stack.Screen name="trip/[id]/split" options={{ headerShown: false }} />
                 <Stack.Screen name="trip/[id]/sidequest/new" options={{ headerShown: false }} />
                 <Stack.Screen name="trip/[id]/sidequest/[sidequestId]" options={{ headerShown: false }} />
-                <Stack.Screen name="modal" options={{ presentation: 'modal', headerShown: false }} />
               </Stack>
                 <StatusBar style={theme.statusBarStyle} />
               </View>

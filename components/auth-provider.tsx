@@ -3,6 +3,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { ActivityIndicator, AppState, View } from 'react-native';
 import { apiFetch, API_URL } from '@/lib/api';
 import { normalizeLanguage, useI18n, type AppLanguage } from '@/components/i18n-provider';
+import { useTheme } from '@/components/theme-provider';
 import { getEmailAuthRedirectUrl } from '@/lib/auth-redirect';
 import { disablePushNotifications } from '@/lib/push-notifications';
 import { supabase } from '@/lib/supabase';
@@ -300,6 +301,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const { loading } = useAuth();
+  const { theme } = useTheme();
 
   // Hand-off from the native splash (held open in app/_layout.tsx): once
   // auth is restored the first real frame is the in-app SideQuest splash
@@ -312,9 +314,12 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
   if (loading) {
     markStartup('[AUTH] AuthGate rendering spinner (children NOT mounted yet)');
+    // Themed startup surface (ThemeProvider gates children until the stored
+    // preference is read, so the theme is always resolved here) — a Dark
+    // user must never see a white flash between splash and first screen.
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' }}>
-        <ActivityIndicator size="large" color="#ff4f74" />{/* default brand color — theme not yet loaded */}
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.bgPrimary }}>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
       </View>
     );
   }

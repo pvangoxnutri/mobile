@@ -79,6 +79,17 @@ export interface ThemeColors {
   // Avatars
   avatarDark: string;
   avatarLight: string;
+
+  // Hotel-stay / reservation family — the amber identity that chains a stay
+  // through the trip feed (anchor card, night rows, check-out row). Dark is
+  // deliberately muted amber-on-dark-surface, never a bright inversion.
+  stayAccent: string;
+  staySurface: string;        // anchor (check-in) card wash
+  staySurfaceSubtle: string;  // night/check-out continuation rows
+  stayText: string;           // titles within stay rows
+  stayTextMuted: string;      // reservation line, night/check-out labels
+  stayPillBackground: string;
+  stayPillBorder: string;
 }
 
 type ShadowStyle = {
@@ -104,7 +115,28 @@ export interface AppTheme {
   navTheme: NavigationTheme;
   // expo-status-bar style ('dark' = dark icons for light backgrounds).
   statusBarStyle: 'light' | 'dark';
+  // For TextInput on iOS — pass straight through so the keyboard matches
+  // the appearance (no-op on Android).
+  keyboardAppearance: 'light' | 'dark';
 }
+
+// ─── MIGRATION CHECKLIST — apply in EVERY screen batch ─────────────────────
+// Styles:        const createStyles = (theme: AppTheme) => StyleSheet.create(…)
+//                + const styles = useThemedStyles(createStyles). Classify each
+//                literal semantically (surface/text/border/input/overlay/
+//                semantic/intentional) — never map mechanically.
+// TextInput:     keyboardAppearance={theme.keyboardAppearance}
+//                placeholderTextColor={theme.colors.placeholderText}
+// Native picker: <DateTimePicker themeVariant={theme.mode}
+//                textColor={theme.colors.textPrimary} …> (textColor only
+//                affects the iOS spinner display; harmless elsewhere).
+// BlurView:      tint={theme.mode}
+// StatusBar:     screens whose top content is a photo/dark hero keep a LOCAL
+//                <StatusBar style="light" /> override regardless of theme —
+//                the root bar follows theme.statusBarStyle for everything else.
+// Shadows:       spread theme.shadows.* — never the static SHADOWS tokens.
+// Keep intact:   category palette (lib/category-symbol), brand pink, image
+//                gradient overlays, online-dot green, semantic red/green.
 
 // ─── Light — must stay pixel-identical to the pre-theming app ──────────────
 
@@ -153,6 +185,16 @@ const lightColors: ThemeColors = {
 
   avatarDark: '#1d212a',
   avatarLight: '#fff1f5',
+
+  // Exactly the approved reservation-surface values from the trip feed
+  // (see STAY_COLORS there — replaced by these tokens in the trip batch).
+  stayAccent: '#d97706',
+  staySurface: '#fdf6ec',
+  staySurfaceSubtle: '#fdfaf3',
+  stayText: '#92600a',
+  stayTextMuted: '#b45309',
+  stayPillBackground: '#ffffff',
+  stayPillBorder: 'rgba(217,119,6,0.35)',
 };
 
 // Today's shadows, unchanged.
@@ -240,6 +282,17 @@ const darkColors: ThemeColors = {
   // surfaceElevated color), so it steps one level lighter here.
   avatarDark: '#262c38',
   avatarLight: 'rgba(255,79,116,0.16)',
+
+  // Muted premium amber on dark: warm-tinted surfaces one step above the
+  // page, softened accent/text so the reservation glows quietly instead of
+  // shouting. Elevation via tint + the pill's subtle border, not brightness.
+  stayAccent: '#e8a44a',
+  staySurface: '#211a10',
+  staySurfaceSubtle: '#1a1610',
+  stayText: '#e6bd7e',
+  stayTextMuted: '#c99b56',
+  stayPillBackground: 'rgba(232,164,74,0.1)',
+  stayPillBorder: 'rgba(232,164,74,0.3)',
 };
 
 // Elevation through contrast, not shadows: Android elevation renders muddy
@@ -312,6 +365,7 @@ export const lightTheme: AppTheme = {
   shadows: lightShadows,
   navTheme: lightNavTheme,
   statusBarStyle: 'dark',
+  keyboardAppearance: 'light',
 };
 
 export const darkTheme: AppTheme = {
@@ -321,6 +375,7 @@ export const darkTheme: AppTheme = {
   shadows: darkShadows,
   navTheme: darkNavTheme,
   statusBarStyle: 'light',
+  keyboardAppearance: 'dark',
 };
 
 export const themes: Record<ThemeMode, AppTheme> = {

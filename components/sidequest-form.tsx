@@ -797,7 +797,10 @@ function SideQuestFormInner({
       const v = new Date(`${(endDate && isDateInputValid(endDate) ? endDate : checkoutRange.minIso)}T12:00:00`);
       const min = new Date(`${checkoutRange.minIso}T12:00:00`);
       const max = checkoutRange.maxIso ? new Date(`${checkoutRange.maxIso}T12:00:00`) : undefined;
-      return clampDate(v, min, max);
+      const clamped = clampDate(v, min, max);
+      // TEMPORARY crash breadcrumb — remove with the tap log above.
+      console.log('[STAY-DEBUG] endDate pickerValue', JSON.stringify({ value: clamped.toISOString(), min: min.toISOString(), max: max?.toISOString() }));
+      return clamped;
     }
 
     if (pickerTarget === 'revealDate') {
@@ -1244,6 +1247,9 @@ function SideQuestFormInner({
               ]}
               onPress={() => {
                 Keyboard.dismiss();
+                // TEMPORARY crash breadcrumb — remove once the checkout
+                // picker crash is confirmed fixed.
+                console.log('[STAY-DEBUG] checkout tap', JSON.stringify({ date, endDate, time, checkoutRange, tripStartDate, tripEndDate }));
                 if (checkoutRange.impossible) {
                   // Check-in on the trip's last day → no valid check-out
                   // exists. Explain instead of opening a picker whose
