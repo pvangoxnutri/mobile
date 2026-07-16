@@ -16,3 +16,15 @@ export function stripNotesChecklistMarkers(text: string): string {
       .replace(/\s+-\s*\[\s?\]\s*/g, ' · ')
   );
 }
+
+// For list-shaped inputs (one entity per row, like packing-list items): break
+// a paste into its individual entries — one per line or per checklist marker,
+// with the bullet/check prefixes removed since the row brings its own
+// checkbox. A single-entry result means "not a list paste": callers should
+// treat the text as ordinary typing.
+export function splitPastedChecklistItems(text: string): string[] {
+  return stripNotesChecklistMarkers(text)
+    .split(/\n|\s·\s/)
+    .map((part) => part.replace(/^\s*[•✓]\s*/, '').trim())
+    .filter(Boolean);
+}

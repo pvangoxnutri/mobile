@@ -23,7 +23,7 @@ import { useI18n } from '@/components/i18n-provider';
 import { useKeyboardFocusScroll } from '@/hooks/useKeyboardFocusScroll';
 import Avatar from '@/components/avatar';
 import { apiFetch, apiJson } from '@/lib/api';
-import { stripNotesChecklistMarkers } from '@/lib/text-paste';
+import { splitPastedChecklistItems, stripNotesChecklistMarkers } from '@/lib/text-paste';
 import { COLORS } from '@/constants/design-tokens';
 
 type Member = { id: string; name: string; avatarUrl?: string | null; isOwner: boolean; isOnline?: boolean };
@@ -172,6 +172,37 @@ export default function PackingListScreen() {
       }
     } catch {
       Alert.alert(t('trip.packingList.addItemError'));
+    } finally {
+      setSavingDraft(null);
+    }
+  }
+
+  // A multi-row paste (e.g. a checklist from Apple Notes) becomes one item
+  // per row — each with its own checkbox — instead of one long mashed-together
+  // item. Items that were created before an error keep their place; the rows
+  // that never made it stay in the draft so nothing from the paste is lost.
+  async function addPastedItems(categoryId: string, draftKey: string, parts: string[]) {
+    if (savingDraft) return;
+    setSavingDraft(draftKey);
+    const remaining = [...parts];
+    try {
+      while (remaining.length > 0) {
+        const created = await apiJson<PackingItem>(
+          `/api/trips/${tripId}/packing-list/categories/${categoryId}/items`,
+          { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: remaining[0] }) },
+        );
+        remaining.shift();
+        setData((prev) => ({
+          ...prev,
+          [activeTab]: prev[activeTab].map((c) =>
+            c.id === categoryId ? { ...c, items: [...c.items, created] } : c,
+          ),
+        }));
+      }
+      updateDraft(categoryId, draftKey, '');
+    } catch {
+      Alert.alert(t('trip.packingList.addItemError'));
+      updateDraft(categoryId, draftKey, remaining.join(' · '));
     } finally {
       setSavingDraft(null);
     }
@@ -520,7 +551,19 @@ export default function PackingListScreen() {
                       <TextInput
                         ref={(r) => { draftRefs.current[draft.key] = r; }}
                         value={draft.text}
-                        onChangeText={(v) => updateDraft(category.id, draft.key, stripNotesChecklistMarkers(v))}
+                        onChangeText={(v) => {
+                          const parts = splitPastedChecklistItems(v);
+                          if (parts.length > 1) {
+                            // List paste → one item per row, draft cleared.
+                            void addPastedItems(category.id, draft.key, parts);
+                          } else {
+                            // Ordinary typing (or a single pasted row): keep
+                            // the text as-is minus any leading bullet/check —
+                            // no trim, or trailing spaces would vanish while
+                            // typing multi-word items.
+                            updateDraft(category.id, draft.key, stripNotesChecklistMarkers(v).replace(/^\s*[•✓]\s+/, ''));
+                          }
+                        }}
                         onFocus={() => onFocusField({ current: draftRefs.current[draft.key] })()}
                         placeholder={t('trip.packingList.addItemPlaceholder')}
                         placeholderTextColor="#b8bec8"
