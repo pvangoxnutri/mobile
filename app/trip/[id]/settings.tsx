@@ -30,7 +30,9 @@ import { apiFetch, apiJson } from '@/lib/api';
 import { getCached, setCached, invalidateTripCache } from '@/lib/cache';
 import type { Quest, TripInvite } from '@/lib/types';
 import { uploadImageIfNeeded } from '@/lib/uploads';
-import { PRIMARY_COLOR, PRIMARY_08 } from '@/constants/colors';
+import { useTheme } from '@/components/theme-provider';
+import { useThemedStyles } from '@/hooks/use-themed-styles';
+import type { AppTheme } from '@/constants/themes';
 
 type TripMember = {
   id: string;
@@ -42,6 +44,8 @@ type TripMember = {
 type MessageState = { type: 'success' | 'error'; text: string } | null;
 
 export default function TripSettingsScreen() {
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuth();
@@ -386,7 +390,7 @@ export default function TripSettingsScreen() {
 
           {loading ? (
             <View style={styles.centerState}>
-              <ActivityIndicator color={PRIMARY_COLOR} />
+              <ActivityIndicator color={theme.colors.primary} />
             </View>
           ) : canManageTrip ? (
 
@@ -407,6 +411,7 @@ export default function TripSettingsScreen() {
                   ref={titleRef}
                   value={title}
                   onChangeText={setTitle}
+                  keyboardAppearance={theme.keyboardAppearance}
                   placeholder="Trip title"
                   style={styles.input}
                   onFocus={onFocusField(titleRef)}
@@ -418,6 +423,7 @@ export default function TripSettingsScreen() {
                   ref={destinationRef}
                   value={destination}
                   onChangeText={setDestination}
+                  keyboardAppearance={theme.keyboardAppearance}
                   placeholder="Destination"
                   style={styles.input}
                   onFocus={onFocusField(destinationRef)}
@@ -433,8 +439,8 @@ export default function TripSettingsScreen() {
                     <Text style={styles.dateRangeValue}>{formatRangeDisplay(startDate, endDate)}</Text>
                     <Text style={styles.dateRangeHint}>Tap once and adjust the whole range in one calendar.</Text>
                   </View>
-                  <View style={[styles.dateRangeIcon, { backgroundColor: PRIMARY_08 }]}>
-                    <Ionicons name="calendar-outline" size={20} color={PRIMARY_COLOR} />
+                  <View style={[styles.dateRangeIcon, { backgroundColor: theme.colors.primaryLight08 }]}>
+                    <Ionicons name="calendar-outline" size={20} color={theme.colors.primary} />
                   </View>
                 </TouchableOpacity>
               </View>
@@ -449,7 +455,7 @@ export default function TripSettingsScreen() {
                     </View>
                     {!member.isOwner ? (
                       <TouchableOpacity activeOpacity={0.88} onPress={() => confirmRemoveMember(member)}>
-                        <Ionicons name="close-circle-outline" size={22} color="#d53d18" />
+                        <Ionicons name="close-circle-outline" size={22} color={theme.colors.error} />
                       </TouchableOpacity>
                     ) : null}
                   </View>
@@ -461,7 +467,7 @@ export default function TripSettingsScreen() {
                       <Text style={styles.inviteSubtitle}>Add by email or share the trip code directly from settings.</Text>
                     </View>
                     <View style={styles.inviteCodePill}>
-                      <Text style={[styles.inviteCodePillText, { color: PRIMARY_COLOR }]}>{trip?.inviteCode ?? '------'}</Text>
+                      <Text style={[styles.inviteCodePillText, { color: theme.colors.primary }]}>{trip?.inviteCode ?? '------'}</Text>
                     </View>
                   </View>
                   <View style={styles.inviteComposer}>
@@ -470,7 +476,8 @@ export default function TripSettingsScreen() {
                       value={inviteEmail}
                       onChangeText={setInviteEmail}
                       placeholder="friend@example.com"
-                      placeholderTextColor="#afb5bf"
+                      placeholderTextColor={theme.isDark ? theme.colors.placeholderText : '#afb5bf'}
+                      keyboardAppearance={theme.keyboardAppearance}
                       keyboardType="email-address"
                       autoCapitalize="none"
                       autoCorrect={false}
@@ -481,7 +488,7 @@ export default function TripSettingsScreen() {
                     />
                     <TouchableOpacity
                       activeOpacity={0.9}
-                      style={[styles.inviteAddButton, { backgroundColor: PRIMARY_COLOR }, inviteSubmitting ? styles.inviteAddButtonDisabled : null]}
+                      style={[styles.inviteAddButton, { backgroundColor: theme.colors.primary }, inviteSubmitting ? styles.inviteAddButtonDisabled : null]}
                       disabled={inviteSubmitting}
                       onPress={() => void handleAddInvite()}>
                       <Text style={styles.inviteAddButtonText}>{inviteSubmitting ? 'Adding...' : 'Invite'}</Text>
@@ -489,12 +496,12 @@ export default function TripSettingsScreen() {
                   </View>
                   <View style={styles.inviteActions}>
                     <TouchableOpacity activeOpacity={0.9} style={styles.secondaryInviteButton} onPress={() => void handleCopyInviteCode()}>
-                      <Ionicons name="copy-outline" size={16} color={PRIMARY_COLOR} />
-                      <Text style={[styles.secondaryInviteButtonText, { color: PRIMARY_COLOR }]}>Copy code</Text>
+                      <Ionicons name="copy-outline" size={16} color={theme.colors.primary} />
+                      <Text style={[styles.secondaryInviteButtonText, { color: theme.colors.primary }]}>Copy code</Text>
                     </TouchableOpacity>
                     <TouchableOpacity activeOpacity={0.9} style={styles.secondaryInviteButton} onPress={() => void handleShareInvite()}>
-                      <Ionicons name="share-social-outline" size={16} color={PRIMARY_COLOR} />
-                      <Text style={[styles.secondaryInviteButtonText, { color: PRIMARY_COLOR }]}>Share</Text>
+                      <Ionicons name="share-social-outline" size={16} color={theme.colors.primary} />
+                      <Text style={[styles.secondaryInviteButtonText, { color: theme.colors.primary }]}>Share</Text>
                     </TouchableOpacity>
                   </View>
                   {inviteMessage ? <Text style={styles.inviteMessage}>{inviteMessage}</Text> : null}
@@ -515,9 +522,9 @@ export default function TripSettingsScreen() {
                   <Switch
                     value={membersCanEdit}
                     onValueChange={setMembersCanEdit}
-                    trackColor={{ false: '#dfe3e8', true: PRIMARY_COLOR }}
+                    trackColor={{ false: theme.isDark ? theme.colors.textMuted : '#dfe3e8', true: theme.isDark ? theme.colors.primaryLight20 : theme.colors.primary }}
                     thumbColor="#fff"
-                    ios_backgroundColor="#dfe3e8"
+                    ios_backgroundColor={theme.isDark ? theme.colors.textMuted : '#dfe3e8'}
                   />
                 </View>
               </View>
@@ -532,7 +539,7 @@ export default function TripSettingsScreen() {
                         <Text style={styles.listMeta}>Pending</Text>
                       </View>
                       <TouchableOpacity activeOpacity={0.88} onPress={() => void removeInvite(invite.id)}>
-                        <Ionicons name="close-circle-outline" size={22} color="#d53d18" />
+                        <Ionicons name="close-circle-outline" size={22} color={theme.colors.error} />
                       </TouchableOpacity>
                     </View>
                   ))
@@ -547,7 +554,7 @@ export default function TripSettingsScreen() {
                 </View>
               ) : null}
 
-              <TouchableOpacity activeOpacity={0.92} style={[styles.primaryButton, { backgroundColor: PRIMARY_COLOR }, saving ? styles.primaryButtonDisabled : null]} disabled={saving} onPress={() => void handleSaveAndExit()}>
+              <TouchableOpacity activeOpacity={0.92} style={[styles.primaryButton, { backgroundColor: theme.colors.primary }, saving ? styles.primaryButtonDisabled : null]} disabled={saving} onPress={() => void handleSaveAndExit()}>
                 <Text style={styles.primaryButtonText}>{saving ? 'Saving...' : 'Save trip settings'}</Text>
               </TouchableOpacity>
 
@@ -572,7 +579,7 @@ export default function TripSettingsScreen() {
                   </View>
                 ) : (
                   <TouchableOpacity activeOpacity={0.88} style={styles.dangerButton} onPress={() => setConfirmingDelete(true)}>
-                    <Ionicons name="trash-outline" size={18} color="#d53d18" />
+                    <Ionicons name="trash-outline" size={18} color={theme.colors.error} />
                     <Text style={styles.dangerButtonText}>Delete adventure</Text>
                   </TouchableOpacity>
                 )}
@@ -640,7 +647,7 @@ export default function TripSettingsScreen() {
                   </View>
                 ) : (
                   <TouchableOpacity activeOpacity={0.88} style={styles.dangerButton} onPress={() => setConfirmingLeave(true)}>
-                    <Ionicons name="exit-outline" size={18} color="#d53d18" />
+                    <Ionicons name="exit-outline" size={18} color={theme.colors.error} />
                     <Text style={styles.dangerButtonText}>Leave adventure</Text>
                   </TouchableOpacity>
                 )}
@@ -677,8 +684,8 @@ export default function TripSettingsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#fff' },
+const createStyles = (theme: AppTheme) => StyleSheet.create({
+  screen: { flex: 1, backgroundColor: theme.colors.bgPrimary },
   content: { paddingHorizontal: 22 },
   header: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 18 },
   backButton: {
@@ -687,12 +694,13 @@ const styles = StyleSheet.create({
     borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#f5f6f8',
+    backgroundColor: theme.isDark ? theme.colors.bgLight : '#f5f6f8',
   },
   headerTitle: { color: '#121317', fontSize: 24, fontWeight: '900', letterSpacing: -0.8 },
   centerState: { minHeight: 260, alignItems: 'center', justifyContent: 'center' },
-  coverCard: { height: 210, borderRadius: 30, overflow: 'hidden', backgroundColor: '#eef1f4', marginBottom: 18 },
+  coverCard: { height: 210, borderRadius: 30, overflow: 'hidden', backgroundColor: theme.isDark ? theme.colors.bgLight : '#eef1f4', marginBottom: 18 },
   coverImage: { ...StyleSheet.absoluteFillObject },
+  // On-photo scrim — intentional, identical in both themes.
   coverOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(18,22,29,0.16)' },
   coverBadge: {
     position: 'absolute',
@@ -704,27 +712,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 999,
-    backgroundColor: 'rgba(18,22,29,0.48)',
+    backgroundColor: theme.isDark ? theme.colors.backdropModal : 'rgba(18,22,29,0.48)',
   },
   coverBadgeText: { color: '#fff', fontSize: 13, fontWeight: '700' },
   card: {
     borderRadius: 28,
     borderWidth: 1,
-    borderColor: '#eaedf2',
-    backgroundColor: '#fff',
+    borderColor: theme.isDark ? theme.colors.borderPrimary : '#eaedf2',
+    backgroundColor: theme.colors.surface,
     padding: 18,
     marginBottom: 16,
   },
-  label: { color: '#161821', fontSize: 15, fontWeight: '800', marginBottom: 8, marginTop: 4 },
+  label: { color: theme.isDark ? theme.colors.textPrimary : '#161821', fontSize: 15, fontWeight: '800', marginBottom: 8, marginTop: 4 },
   input: {
     minHeight: 54,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#e6e9ef',
-    backgroundColor: '#f9fafc',
+    borderColor: theme.isDark ? theme.colors.borderInput : '#e6e9ef',
+    backgroundColor: theme.isDark ? theme.colors.bgLightest : '#f9fafc',
     paddingHorizontal: 16,
     marginBottom: 10,
-    color: '#161821',
+    color: theme.isDark ? theme.colors.textPrimary : '#161821',
     fontSize: 16,
   },
   dateRangeCard: {
@@ -732,8 +740,8 @@ const styles = StyleSheet.create({
     minHeight: 96,
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: '#e6e9ef',
-    backgroundColor: '#f9fafc',
+    borderColor: theme.isDark ? theme.colors.borderInput : '#e6e9ef',
+    backgroundColor: theme.isDark ? theme.colors.bgLightest : '#f9fafc',
     paddingHorizontal: 16,
     paddingVertical: 16,
     flexDirection: 'row',
@@ -744,21 +752,21 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   dateRangeEyebrow: {
-    color: '#868d99',
+    color: theme.isDark ? theme.colors.textMeta : '#868d99',
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 1.1,
   },
   dateRangeValue: {
     marginTop: 8,
-    color: '#161821',
+    color: theme.isDark ? theme.colors.textPrimary : '#161821',
     fontSize: 18,
     fontWeight: '800',
     letterSpacing: -0.4,
   },
   dateRangeHint: {
     marginTop: 6,
-    color: '#7d8491',
+    color: theme.isDark ? theme.colors.textMeta : '#7d8491',
     fontSize: 13,
     lineHeight: 19,
   },
@@ -768,12 +776,12 @@ const styles = StyleSheet.create({
     borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#fff1f5',
+    backgroundColor: theme.isDark ? theme.colors.primaryLight08 : '#fff1f5',
     borderWidth: 1,
-    borderColor: '#ffd8e2',
+    borderColor: theme.isDark ? theme.colors.primaryLight20 : '#ffd8e2',
     marginLeft: 12,
   },
-  sectionTitle: { color: '#161821', fontSize: 18, fontWeight: '900', marginBottom: 6 },
+  sectionTitle: { color: theme.isDark ? theme.colors.textPrimary : '#161821', fontSize: 18, fontWeight: '900', marginBottom: 6 },
   listRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -783,8 +791,8 @@ const styles = StyleSheet.create({
     borderBottomColor: '#f0f2f5',
   },
   listCopy: { flex: 1, paddingRight: 12 },
-  listTitle: { color: '#161821', fontSize: 15, fontWeight: '700' },
-  listMeta: { marginTop: 2, color: '#7d8491', fontSize: 13 },
+  listTitle: { color: theme.isDark ? theme.colors.textPrimary : '#161821', fontSize: 15, fontWeight: '700' },
+  listMeta: { marginTop: 2, color: theme.isDark ? theme.colors.textMeta : '#7d8491', fontSize: 13 },
   inviteSection: {
     marginTop: 14,
     paddingTop: 16,
@@ -798,27 +806,27 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   inviteTitle: {
-    color: '#161821',
+    color: theme.isDark ? theme.colors.textPrimary : '#161821',
     fontSize: 16,
     fontWeight: '900',
   },
   inviteSubtitle: {
     marginTop: 4,
     maxWidth: 220,
-    color: '#7d8491',
+    color: theme.isDark ? theme.colors.textMeta : '#7d8491',
     fontSize: 13,
     lineHeight: 19,
   },
   inviteCodePill: {
     borderRadius: 999,
-    backgroundColor: '#fff3f6',
+    backgroundColor: theme.isDark ? theme.colors.primaryLight08 : '#fff3f6',
     borderWidth: 1,
-    borderColor: '#ffd4de',
+    borderColor: theme.isDark ? theme.colors.errorBorder : '#ffd4de',
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
   inviteCodePillText: {
-    color: PRIMARY_COLOR,
+    color: theme.colors.primary,
     fontSize: 12,
     fontWeight: '900',
     letterSpacing: 1,
@@ -834,16 +842,16 @@ const styles = StyleSheet.create({
     minHeight: 54,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#e6e9ef',
-    backgroundColor: '#f9fafc',
+    borderColor: theme.isDark ? theme.colors.borderInput : '#e6e9ef',
+    backgroundColor: theme.isDark ? theme.colors.bgLightest : '#f9fafc',
     paddingHorizontal: 16,
-    color: '#161821',
+    color: theme.isDark ? theme.colors.textPrimary : '#161821',
     fontSize: 15,
   },
   inviteAddButton: {
     minHeight: 54,
     borderRadius: 18,
-    backgroundColor: PRIMARY_COLOR,
+    backgroundColor: theme.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 16,
@@ -868,23 +876,23 @@ const styles = StyleSheet.create({
     gap: 8,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#ffd4de',
-    backgroundColor: '#fff',
+    borderColor: theme.isDark ? theme.colors.errorBorder : '#ffd4de',
+    backgroundColor: theme.colors.surface,
     paddingHorizontal: 14,
     paddingVertical: 11,
   },
   secondaryInviteButtonText: {
-    color: PRIMARY_COLOR,
+    color: theme.colors.primary,
     fontSize: 14,
     fontWeight: '700',
   },
   inviteMessage: {
     marginTop: 12,
-    color: '#6f7683',
+    color: theme.colors.textSecondary,
     fontSize: 14,
     fontWeight: '600',
   },
-  emptyText: { color: '#7d8491', fontSize: 14, marginTop: 6 },
+  emptyText: { color: theme.isDark ? theme.colors.textMeta : '#7d8491', fontSize: 14, marginTop: 6 },
   permissionRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -893,44 +901,44 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   permissionCopy: { flex: 1 },
-  permissionTitle: { color: '#161821', fontSize: 15, fontWeight: '700' },
-  permissionSubtitle: { marginTop: 4, color: '#7d8491', fontSize: 13, lineHeight: 19 },
+  permissionTitle: { color: theme.isDark ? theme.colors.textPrimary : '#161821', fontSize: 15, fontWeight: '700' },
+  permissionSubtitle: { marginTop: 4, color: theme.isDark ? theme.colors.textMeta : '#7d8491', fontSize: 13, lineHeight: 19 },
   messageBanner: {
     marginTop: 4,
     borderRadius: 18,
     paddingHorizontal: 14,
     paddingVertical: 13,
   },
-  messageBannerSuccess: { backgroundColor: '#e9f8f1', borderWidth: 1, borderColor: '#bfe9d2' },
-  messageBannerError: { backgroundColor: '#ffefeb', borderWidth: 1, borderColor: '#ffd0c3' },
+  messageBannerSuccess: { backgroundColor: theme.isDark ? theme.colors.successLight : '#e9f8f1', borderWidth: 1, borderColor: theme.isDark ? theme.colors.successBorder : '#bfe9d2' },
+  messageBannerError: { backgroundColor: theme.isDark ? theme.colors.errorLight : '#ffefeb', borderWidth: 1, borderColor: theme.isDark ? theme.colors.errorBorder : '#ffd0c3' },
   messageText: { fontSize: 14, fontWeight: '600' },
   messageTextSuccess: { color: '#16734d' },
-  messageTextError: { color: '#a52617' },
+  messageTextError: { color: theme.isDark ? theme.colors.error : '#a52617' },
   primaryButton: {
     marginTop: 16,
     minHeight: 64,
     borderRadius: 999,
-    backgroundColor: PRIMARY_COLOR,
+    backgroundColor: theme.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 20,
   },
   primaryButtonDisabled: { opacity: 0.7 },
   primaryButtonText: { color: '#fff', fontSize: 18, fontWeight: '900' },
-  readOnlyLabel: { color: '#868d99', fontSize: 12, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', marginTop: 4 },
-  readOnlyValue: { color: '#161821', fontSize: 16, fontWeight: '700', marginTop: 4, marginBottom: 4 },
-  readOnlyDivider: { height: 1, backgroundColor: '#f0f2f5', marginVertical: 10 },
+  readOnlyLabel: { color: theme.isDark ? theme.colors.textMeta : '#868d99', fontSize: 12, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', marginTop: 4 },
+  readOnlyValue: { color: theme.isDark ? theme.colors.textPrimary : '#161821', fontSize: 16, fontWeight: '700', marginTop: 4, marginBottom: 4 },
+  readOnlyDivider: { height: 1, backgroundColor: theme.isDark ? theme.colors.bgLight : '#f0f2f5', marginVertical: 10 },
   dangerCard: {
     marginTop: 16,
     marginBottom: 20,
     borderRadius: 28,
     borderWidth: 1,
-    borderColor: '#ffd0c3',
-    backgroundColor: '#fff9f8',
+    borderColor: theme.isDark ? theme.colors.errorBorder : '#ffd0c3',
+    backgroundColor: theme.isDark ? theme.colors.errorLight : '#fff9f8',
     padding: 18,
   },
-  dangerTitle: { color: '#a52617', fontSize: 16, fontWeight: '900', marginBottom: 6 },
-  dangerCopy: { color: '#7d4238', fontSize: 14, lineHeight: 20, marginBottom: 16 },
+  dangerTitle: { color: theme.isDark ? theme.colors.error : '#a52617', fontSize: 16, fontWeight: '900', marginBottom: 6 },
+  dangerCopy: { color: theme.isDark ? theme.colors.error : '#7d4238', fontSize: 14, lineHeight: 20, marginBottom: 16 },
   dangerButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -939,19 +947,19 @@ const styles = StyleSheet.create({
     minHeight: 52,
     borderRadius: 999,
     borderWidth: 1.5,
-    borderColor: '#f0b0a0',
-    backgroundColor: '#fff',
+    borderColor: theme.isDark ? theme.colors.errorBorder : '#f0b0a0',
+    backgroundColor: theme.colors.surface,
   },
   dangerButtonDisabled: { opacity: 0.6 },
-  dangerButtonText: { color: '#d53d18', fontSize: 15, fontWeight: '800' },
+  dangerButtonText: { color: theme.colors.error, fontSize: 15, fontWeight: '800' },
   dangerConfirmRow: { flexDirection: 'row', gap: 10 },
   dangerCancelButton: {
     flex: 1,
     minHeight: 52,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#dde0e6',
-    backgroundColor: '#fff',
+    borderColor: theme.isDark ? theme.colors.borderInput : '#dde0e6',
+    backgroundColor: theme.colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -964,7 +972,7 @@ const styles = StyleSheet.create({
     gap: 6,
     minHeight: 52,
     borderRadius: 999,
-    backgroundColor: '#d53d18',
+    backgroundColor: theme.colors.error,
   },
   dangerConfirmText: { color: '#fff', fontSize: 15, fontWeight: '800' },
 });

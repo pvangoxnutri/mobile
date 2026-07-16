@@ -26,7 +26,9 @@ import { apiFetch, apiJson } from '@/lib/api';
 import { getCached, setCached } from '@/lib/cache';
 import { uploadImageIfNeeded } from '@/lib/uploads';
 import type { BalancesResponse, Debt, Expense, Settlement } from '@/lib/types';
-import { PRIMARY_COLOR, PRIMARY_08 } from '@/constants/colors';
+import { useTheme } from '@/components/theme-provider';
+import { useThemedStyles } from '@/hooks/use-themed-styles';
+import type { AppTheme } from '@/constants/themes';
 
 type TripMember = {
   id: string;
@@ -91,6 +93,8 @@ function toDateInput(date: Date) {
 }
 
 export default function CostSplitScreen() {
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuth();
@@ -485,7 +489,7 @@ export default function CostSplitScreen() {
           <TouchableOpacity
             key={tab}
             activeOpacity={0.85}
-            style={[styles.tabPill, activeTab === tab && [styles.tabPillActive, { backgroundColor: PRIMARY_COLOR }]]}
+            style={[styles.tabPill, activeTab === tab && [styles.tabPillActive, { backgroundColor: theme.colors.primary }]]}
             onPress={() => setActiveTab(tab)}>
             <Text style={[styles.tabPillText, activeTab === tab && styles.tabPillTextActive]}>
               {tab === 'expenses' ? t('trip.split.tabExpenses') : tab === 'balances' ? t('trip.split.tabBalances') : t('trip.split.tabSettleUp')}
@@ -496,12 +500,12 @@ export default function CostSplitScreen() {
 
       {loading ? (
         <View style={styles.loadingWrap}>
-          <ActivityIndicator size="large" color={PRIMARY_COLOR} />
+          <ActivityIndicator size="large" color={theme.colors.primary} />
         </View>
       ) : error ? (
         <View style={styles.errorWrap}>
           <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity style={[styles.retryButton, { backgroundColor: PRIMARY_COLOR }]} onPress={() => void loadAll()}>
+          <TouchableOpacity style={[styles.retryButton, { backgroundColor: theme.colors.primary }]} onPress={() => void loadAll()}>
             <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
           </TouchableOpacity>
         </View>
@@ -516,7 +520,7 @@ export default function CostSplitScreen() {
               {expenses.length === 0 ? (
                 <View style={styles.emptyState}>
                   <View style={styles.emptyIcon}>
-                    <Ionicons name="wallet-outline" size={32} color="#b0b6c0" />
+                    <Ionicons name="wallet-outline" size={32} color={theme.isDark ? theme.colors.textMuted : '#b0b6c0'} />
                   </View>
                   <Text style={styles.emptyTitle}>{t('trip.split.emptyExpensesTitle')}</Text>
                   <Text style={styles.emptyCopy}>{t('trip.split.emptyExpensesCopy')}</Text>
@@ -540,7 +544,7 @@ export default function CostSplitScreen() {
                         <Text style={styles.expenseAmount}>
                           {expense.currency ? `${expense.currency} ` : ''}{formatAmount(expense.totalAmount, locale)}
                         </Text>
-                        <View style={[styles.splitModeChip, { backgroundColor: splitModeColor(expense.splitMode) }]}>
+                        <View style={[styles.splitModeChip, { backgroundColor: splitModeColor(expense.splitMode, theme.isDark) }]}>
                           <Text style={styles.splitModeChipText}>{splitModeLabel(expense.splitMode, t)}</Text>
                         </View>
                       </View>
@@ -563,7 +567,7 @@ export default function CostSplitScreen() {
                         style={styles.deleteButton}
                         activeOpacity={0.8}
                         onPress={() => { setActionError(''); setDeletingExpenseId(expense.id); }}>
-                        <Ionicons name="trash-outline" size={16} color="#d95f6a" />
+                        <Ionicons name="trash-outline" size={16} color={theme.isDark ? '#ef8391' : '#d95f6a'} />
                         <Text style={styles.deleteButtonText}>{t('common.remove')}</Text>
                       </TouchableOpacity>
                     ) : null}
@@ -616,7 +620,7 @@ export default function CostSplitScreen() {
                             </Text>
                           </View>
                           {isSettled ? (
-                            <Ionicons name="checkmark-circle" size={20} color="#27b371" />
+                            <Ionicons name="checkmark-circle" size={20} color={theme.isDark ? theme.colors.success : '#27b371'} />
                           ) : (
                             <Text style={[styles.balanceNet, bal.net > 0 ? styles.balancePositive : styles.balanceNegative]}>
                               {commonCurrency ? `${commonCurrency} ` : ''}{formatAmount(Math.abs(bal.net), locale)}
@@ -625,7 +629,7 @@ export default function CostSplitScreen() {
                           <Ionicons
                             name={isExpanded ? 'chevron-up' : 'chevron-down'}
                             size={16}
-                            color="#8a909b"
+                            color={theme.isDark ? theme.colors.textMeta : '#8a909b'}
                             style={{ marginLeft: 6 }}
                           />
                         </TouchableOpacity>
@@ -666,7 +670,7 @@ export default function CostSplitScreen() {
                               <Text style={styles.debtAvatarText}>{getInitials(debt.fromUserName)}</Text>
                             </View>
                             <View style={styles.debtArrow}>
-                              <Ionicons name="arrow-forward" size={16} color="#8a909b" />
+                              <Ionicons name="arrow-forward" size={16} color={theme.isDark ? theme.colors.textMeta : '#8a909b'} />
                             </View>
                             <View style={styles.debtAvatar}>
                               <Text style={styles.debtAvatarText}>{getInitials(debt.toUserName)}</Text>
@@ -676,7 +680,7 @@ export default function CostSplitScreen() {
                                 <Text style={styles.debtName}>{debt.fromUserName}</Text> {t('trip.split.pays')}{' '}
                                 <Text style={styles.debtName}>{debt.toUserName}</Text>
                               </Text>
-                              <Text style={[styles.debtAmount, { color: PRIMARY_COLOR }]}>
+                              <Text style={[styles.debtAmount, { color: theme.colors.primary }]}>
                                 {commonCurrency ? `${commonCurrency} ` : ''}{formatAmount(debt.amount, locale)}
                               </Text>
                             </View>
@@ -686,7 +690,7 @@ export default function CostSplitScreen() {
                     </>
                   ) : (
                     <View style={styles.allSettledWrap}>
-                      <Ionicons name="checkmark-circle-outline" size={24} color="#27b371" />
+                      <Ionicons name="checkmark-circle-outline" size={24} color={theme.isDark ? theme.colors.success : '#27b371'} />
                       <Text style={styles.allSettledText}>{t('trip.split.allSettledUp')}</Text>
                     </View>
                   )}
@@ -694,7 +698,7 @@ export default function CostSplitScreen() {
               ) : (
                 <View style={styles.emptyState}>
                   <View style={styles.emptyIcon}>
-                    <Ionicons name="scale-outline" size={32} color="#b0b6c0" />
+                    <Ionicons name="scale-outline" size={32} color={theme.isDark ? theme.colors.textMuted : '#b0b6c0'} />
                   </View>
                   <Text style={styles.emptyTitle}>{t('trip.split.emptyBalancesTitle')}</Text>
                   <Text style={styles.emptyCopy}>{t('trip.split.emptyBalancesCopy')}</Text>
@@ -714,7 +718,7 @@ export default function CostSplitScreen() {
                 if (outstanding.length === 0) {
                   return (
                     <View style={styles.allSettledWrap}>
-                      <Ionicons name="checkmark-circle-outline" size={40} color="#27b371" />
+                      <Ionicons name="checkmark-circle-outline" size={40} color={theme.isDark ? theme.colors.success : '#27b371'} />
                       <Text style={styles.allSettledTitle}>{t('trip.split.allSettledUp')}</Text>
                       <Text style={styles.emptyCopy}>{t('trip.split.noOutstandingDebts')}</Text>
                     </View>
@@ -743,7 +747,7 @@ export default function CostSplitScreen() {
                               <Text style={styles.debtAvatarText}>{getInitials(debt.fromUserName)}</Text>
                             </View>
                             <View style={styles.debtArrow}>
-                              <Ionicons name="arrow-forward" size={14} color="#8a909b" />
+                              <Ionicons name="arrow-forward" size={14} color={theme.isDark ? theme.colors.textMeta : '#8a909b'} />
                             </View>
                             <View style={styles.debtAvatar}>
                               <Text style={styles.debtAvatarText}>{getInitials(debt.toUserName)}</Text>
@@ -754,7 +758,7 @@ export default function CostSplitScreen() {
                                 {` ${t('trip.split.owes')} `}
                                 <Text style={styles.debtName}>{debt.toUserName}</Text>
                               </Text>
-                              <Text style={[styles.debtAmount, { color: PRIMARY_COLOR }]}>
+                              <Text style={[styles.debtAmount, { color: theme.colors.primary }]}>
                                 {commonCurrency ? `${commonCurrency} ` : ''}{formatAmount(debt.amount, locale)}
                               </Text>
                             </View>
@@ -764,8 +768,8 @@ export default function CostSplitScreen() {
                             activeOpacity={0.85}
                             style={styles.whyButton}
                             onPress={() => setExpandedDebtKey(expanded ? null : key)}>
-                            <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={14} color={PRIMARY_COLOR} />
-                            <Text style={[styles.whyButtonText, { color: PRIMARY_COLOR }]}>
+                            <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={14} color={theme.colors.primary} />
+                            <Text style={[styles.whyButtonText, { color: theme.colors.primary }]}>
                               {expanded ? t('trip.split.hideBreakdown') : t(related.length === 1 ? 'trip.split.whyExpenseCount_one' : 'trip.split.whyExpenseCount_other', { count: related.length })}
                             </Text>
                           </TouchableOpacity>
@@ -816,7 +820,7 @@ export default function CostSplitScreen() {
                           <TouchableOpacity
                             style={[
                               styles.markSettledButton,
-                              { backgroundColor: PRIMARY_COLOR },
+                              { backgroundColor: theme.colors.primary },
                               isBusy ? styles.submitButtonDisabled : null,
                             ]}
                             activeOpacity={0.88}
@@ -842,7 +846,7 @@ export default function CostSplitScreen() {
                   {settlements.map((s) => (
                     <View key={s.id} style={styles.settlementHistoryCard}>
                       <View style={styles.settlementPaidBadge}>
-                        <Ionicons name="checkmark-circle" size={16} color="#27b371" />
+                        <Ionicons name="checkmark-circle" size={16} color={theme.isDark ? theme.colors.success : '#27b371'} />
                         <Text style={styles.settlementPaidText}>{t('trip.split.paidBadge')}</Text>
                       </View>
                       <View style={styles.settlementHistoryRow}>
@@ -860,7 +864,7 @@ export default function CostSplitScreen() {
                           style={styles.deleteSmallButton}
                           activeOpacity={0.8}
                           onPress={() => { setActionError(''); setDeletingSettlementId(s.id); }}>
-                          <Ionicons name="close-circle-outline" size={20} color="#d95f6a" />
+                          <Ionicons name="close-circle-outline" size={20} color={theme.isDark ? '#ef8391' : '#d95f6a'} />
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -875,7 +879,7 @@ export default function CostSplitScreen() {
       {/* FAB for adding expense */}
       {activeTab === 'expenses' && !loading && (
         <View style={[styles.fab, { bottom: Math.max(insets.bottom, 16) + 10 }]}>
-          <TouchableOpacity activeOpacity={0.92} style={[styles.fabButton, { backgroundColor: PRIMARY_COLOR, shadowColor: PRIMARY_COLOR }]} onPress={openAddModal}>
+          <TouchableOpacity activeOpacity={0.92} style={[styles.fabButton, { backgroundColor: theme.colors.primary, shadowColor: theme.colors.primary }]} onPress={openAddModal}>
             <Ionicons name="add" size={22} color="#fff" />
             <Text style={styles.fabText}>{t('trip.split.addExpense')}</Text>
           </TouchableOpacity>
@@ -894,7 +898,7 @@ export default function CostSplitScreen() {
                 style={styles.modalCloseButton}
                 activeOpacity={0.88}
                 onPress={() => setAddModalOpen(false)}>
-                <Ionicons name="close" size={20} color="#161821" />
+                <Ionicons name="close" size={20} color={theme.isDark ? theme.colors.textPrimary : '#161821'} />
               </TouchableOpacity>
             </View>
 
@@ -905,7 +909,8 @@ export default function CostSplitScreen() {
                 ref={descriptionRef}
                 style={styles.textInput}
                 placeholder={t('trip.split.descriptionPlaceholder')}
-                placeholderTextColor="#afb5bf"
+                placeholderTextColor={theme.isDark ? theme.colors.placeholderText : '#afb5bf'}
+                keyboardAppearance={theme.keyboardAppearance}
                 value={form.description}
                 onChangeText={(v) => setField('description', v)}
                 onFocus={onFocusField(descriptionRef)}
@@ -922,7 +927,8 @@ export default function CostSplitScreen() {
                 ref={amountRef}
                 style={styles.textInput}
                 placeholder="250"
-                placeholderTextColor="#afb5bf"
+                placeholderTextColor={theme.isDark ? theme.colors.placeholderText : '#afb5bf'}
+                keyboardAppearance={theme.keyboardAppearance}
                 keyboardType="decimal-pad"
                 value={form.amount}
                 onChangeText={(v) => setField('amount', v)}
@@ -947,15 +953,15 @@ export default function CostSplitScreen() {
                       activeOpacity={0.85}
                       disabled={pickingReceipt}
                       onPress={() => void handlePickReceiptFromGallery()}>
-                      <Ionicons name="image-outline" size={15} color="#4a5068" />
+                      <Ionicons name="image-outline" size={15} color={theme.isDark ? theme.colors.textSecondary : '#4a5068'} />
                       <Text style={styles.receiptActionText}>{t('common.replace')}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={[styles.receiptActionButton, styles.receiptRemoveButton]}
                       activeOpacity={0.85}
                       onPress={handleRemoveReceipt}>
-                      <Ionicons name="trash-outline" size={15} color="#d95f6a" />
-                      <Text style={[styles.receiptActionText, { color: '#d95f6a' }]}>{t('common.remove')}</Text>
+                      <Ionicons name="trash-outline" size={15} color={theme.isDark ? '#ef8391' : '#d95f6a'} />
+                      <Text style={[styles.receiptActionText, { color: theme.isDark ? '#ef8391' : '#d95f6a' }]}>{t('common.remove')}</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -966,7 +972,7 @@ export default function CostSplitScreen() {
                     activeOpacity={0.85}
                     disabled={pickingReceipt}
                     onPress={() => void handleTakeReceiptPhoto()}>
-                    <Ionicons name="camera-outline" size={18} color="#4a5068" />
+                    <Ionicons name="camera-outline" size={18} color={theme.isDark ? theme.colors.textSecondary : '#4a5068'} />
                     <Text style={styles.receiptPickButtonText}>{t('trip.split.takePhoto')}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
@@ -974,7 +980,7 @@ export default function CostSplitScreen() {
                     activeOpacity={0.85}
                     disabled={pickingReceipt}
                     onPress={() => void handlePickReceiptFromGallery()}>
-                    <Ionicons name="images-outline" size={18} color="#4a5068" />
+                    <Ionicons name="images-outline" size={18} color={theme.isDark ? theme.colors.textSecondary : '#4a5068'} />
                     <Text style={styles.receiptPickButtonText}>{t('trip.split.chooseFromGallery')}</Text>
                   </TouchableOpacity>
                 </View>
@@ -988,7 +994,8 @@ export default function CostSplitScreen() {
                 <TextInput
                   style={styles.textInput}
                   placeholder={todayIso()}
-                  placeholderTextColor="#afb5bf"
+                  placeholderTextColor={theme.isDark ? theme.colors.placeholderText : '#afb5bf'}
+                keyboardAppearance={theme.keyboardAppearance}
                   value={form.date}
                   onChangeText={(v) => setField('date', v)}
                 />
@@ -1006,13 +1013,13 @@ export default function CostSplitScreen() {
                   touches on Android. */}
               {datePickerOpen && Platform.OS !== 'web' ? (
                 <View style={styles.dateInlinePickerWrap}>
-                  <PickerErrorBoundary t={t}>
+                  <PickerErrorBoundary t={t} errorColor={theme.isDark ? '#ef8391' : '#d95f6a'}>
                     <DateTimePicker
                       value={isDateInputValid(form.date) ? new Date(`${form.date}T12:00:00`) : new Date()}
                       mode="date"
                       display={Platform.OS === 'ios' ? 'inline' : 'default'}
-                      themeVariant="light"
-                      accentColor={PRIMARY_COLOR}
+                      themeVariant={theme.mode}
+                      accentColor={theme.colors.primary}
                       textColor="#161821"
                       onChange={handleDateChange}
                     />
@@ -1020,7 +1027,7 @@ export default function CostSplitScreen() {
                   {Platform.OS === 'ios' ? (
                     <TouchableOpacity
                       activeOpacity={0.9}
-                      style={[styles.datePickerDoneButton, { backgroundColor: PRIMARY_COLOR }]}
+                      style={[styles.datePickerDoneButton, { backgroundColor: theme.colors.primary }]}
                       onPress={() => setDatePickerOpen(false)}>
                       <Text style={styles.datePickerDoneText}>{t('common.done')}</Text>
                     </TouchableOpacity>
@@ -1036,7 +1043,7 @@ export default function CostSplitScreen() {
                 return (
                   <View key={member.id} style={styles.memberRow}>
                     <TouchableOpacity
-                      style={[styles.memberCheckbox, selected && [styles.memberCheckboxActive, { backgroundColor: PRIMARY_COLOR, borderColor: PRIMARY_COLOR }]]}
+                      style={[styles.memberCheckbox, selected && [styles.memberCheckboxActive, { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }]]}
                       activeOpacity={0.8}
                       onPress={() => togglePayer(member.id)}>
                       {selected && <Ionicons name="checkmark" size={14} color="#fff" />}
@@ -1049,7 +1056,8 @@ export default function CostSplitScreen() {
                         ref={(r) => { payerAmountRefs.current[member.id] = r; }}
                         style={styles.inlineAmountInput}
                         placeholder={t('trip.split.amount')}
-                        placeholderTextColor="#afb5bf"
+                        placeholderTextColor={theme.isDark ? theme.colors.placeholderText : '#afb5bf'}
+                keyboardAppearance={theme.keyboardAppearance}
                         keyboardType="decimal-pad"
                         onFocus={() => onFocusField({ current: payerAmountRefs.current[member.id] })()}
                         value={form.payerAmounts[member.id] ?? ''}
@@ -1079,7 +1087,7 @@ export default function CostSplitScreen() {
                   <TouchableOpacity
                     key={mode}
                     activeOpacity={0.85}
-                    style={[styles.modeChip, form.splitMode === mode && [styles.modeChipActive, { backgroundColor: PRIMARY_COLOR, borderColor: PRIMARY_COLOR }]]}
+                    style={[styles.modeChip, form.splitMode === mode && [styles.modeChipActive, { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }]]}
                     onPress={() => setField('splitMode', mode)}>
                     <Text style={[styles.modeChipText, form.splitMode === mode && styles.modeChipTextActive]}>
                       {splitModeLabel(mode, t)}
@@ -1108,7 +1116,7 @@ export default function CostSplitScreen() {
                   const remaining = total - used;
                   const isOver = remaining < -0.005;
                   return total > 0 ? (
-                    <Text style={[styles.fieldHint, { color: isOver ? '#d95f6a' : '#27b371', fontWeight: '600' }]}>
+                    <Text style={[styles.fieldHint, { color: isOver ? (theme.isDark ? '#ef8391' : '#d95f6a') : (theme.isDark ? theme.colors.success : '#27b371'), fontWeight: '600' }]}>
                       {isOver ? t('trip.split.overBy', { value: formatAmount(Math.abs(remaining), locale) }) : t('trip.split.remaining', { value: formatAmount(remaining, locale) })}
                     </Text>
                   ) : null;
@@ -1119,7 +1127,7 @@ export default function CostSplitScreen() {
                   const remaining = 100 - used;
                   const isOver = remaining < -0.05;
                   return (
-                    <Text style={[styles.fieldHint, { color: isOver ? '#d95f6a' : Math.abs(remaining) < 2 ? '#27b371' : '#8a909b', fontWeight: '600' }]}>
+                    <Text style={[styles.fieldHint, { color: isOver ? (theme.isDark ? '#ef8391' : '#d95f6a') : Math.abs(remaining) < 2 ? (theme.isDark ? theme.colors.success : '#27b371') : (theme.isDark ? theme.colors.textMeta : '#8a909b'), fontWeight: '600' }]}>
                       {isOver ? t('trip.split.overBy', { value: `${Math.abs(remaining).toFixed(1)}%` }) : t('trip.split.remaining', { value: `${remaining.toFixed(1)}%` })}
                     </Text>
                   );
@@ -1131,7 +1139,7 @@ export default function CostSplitScreen() {
                 return (
                   <View key={member.id} style={styles.memberRow}>
                     <TouchableOpacity
-                      style={[styles.memberCheckbox, selected && [styles.memberCheckboxActive, { backgroundColor: PRIMARY_COLOR, borderColor: PRIMARY_COLOR }]]}
+                      style={[styles.memberCheckbox, selected && [styles.memberCheckboxActive, { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary }]]}
                       activeOpacity={0.8}
                       onPress={() => toggleParticipant(member.id)}>
                       {selected && <Ionicons name="checkmark" size={14} color="#fff" />}
@@ -1144,7 +1152,8 @@ export default function CostSplitScreen() {
                         ref={(r) => { participantValueRefs.current[member.id] = r; }}
                         style={styles.inlineAmountInput}
                         placeholder={form.splitMode === 'percentage' ? t('trip.split.percentPlaceholder') : t('trip.split.amountPlaceholder')}
-                        placeholderTextColor="#afb5bf"
+                        placeholderTextColor={theme.isDark ? theme.colors.placeholderText : '#afb5bf'}
+                keyboardAppearance={theme.keyboardAppearance}
                         keyboardType="decimal-pad"
                         onFocus={() => onFocusField({ current: participantValueRefs.current[member.id] })()}
                         value={form.participantValues[member.id] ?? ''}
@@ -1173,7 +1182,7 @@ export default function CostSplitScreen() {
               {submitError ? <Text style={styles.submitError}>{submitError}</Text> : null}
 
               <TouchableOpacity
-                style={[styles.submitButton, { backgroundColor: PRIMARY_COLOR }, submitting && styles.submitButtonDisabled]}
+                style={[styles.submitButton, { backgroundColor: theme.colors.primary }, submitting && styles.submitButtonDisabled]}
                 activeOpacity={0.9}
                 disabled={submitting}
                 onPress={() => void handleSubmitExpense()}>
@@ -1218,7 +1227,7 @@ export default function CostSplitScreen() {
                 <Text style={styles.confirmCancelText}>{t('common.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.confirmOkButton, { backgroundColor: PRIMARY_COLOR }, settleSubmitting && styles.submitButtonDisabled]}
+                style={[styles.confirmOkButton, { backgroundColor: theme.colors.primary }, settleSubmitting && styles.submitButtonDisabled]}
                 activeOpacity={0.9}
                 disabled={settleSubmitting}
                 onPress={() => void handleConfirmSettle()}>
@@ -1260,7 +1269,7 @@ export default function CostSplitScreen() {
                 <Text style={styles.confirmCancelText}>{t('common.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.confirmOkButton, { backgroundColor: '#d95f6a' }, deletingBusy && styles.submitButtonDisabled]}
+                style={[styles.confirmOkButton, { backgroundColor: theme.isDark ? '#ef8391' : '#d95f6a' }, deletingBusy && styles.submitButtonDisabled]}
                 activeOpacity={0.9}
                 disabled={deletingBusy}
                 onPress={() => void handleConfirmDeleteExpense()}>
@@ -1322,7 +1331,7 @@ export default function CostSplitScreen() {
                 <Text style={styles.confirmCancelText}>{t('common.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.confirmOkButton, { backgroundColor: '#d95f6a' }, deletingBusy && styles.submitButtonDisabled]}
+                style={[styles.confirmOkButton, { backgroundColor: theme.isDark ? '#ef8391' : '#d95f6a' }, deletingBusy && styles.submitButtonDisabled]}
                 activeOpacity={0.9}
                 disabled={deletingBusy}
                 onPress={() => void handleConfirmDeleteSettlement()}>
@@ -1339,7 +1348,7 @@ export default function CostSplitScreen() {
 
 // Catches render-time errors from the native date picker so a bad value
 // surfaces as an on-screen message instead of taking down the whole app.
-class PickerErrorBoundary extends Component<{ children: ReactNode; t: (key: string, vars?: Record<string, string | number>) => string }, { error: Error | null }> {
+class PickerErrorBoundary extends Component<{ children: ReactNode; errorColor: string; t: (key: string, vars?: Record<string, string | number>) => string }, { error: Error | null }> {
   state: { error: Error | null } = { error: null };
 
   static getDerivedStateFromError(error: Error) {
@@ -1349,7 +1358,7 @@ class PickerErrorBoundary extends Component<{ children: ReactNode; t: (key: stri
   render() {
     if (this.state.error) {
       return (
-        <Text style={{ color: '#d95f6a', fontSize: 13, padding: 16, textAlign: 'center' }}>
+        <Text style={{ color: this.props.errorColor, fontSize: 13, padding: 16, textAlign: 'center' }}>
           {this.props.t('trip.split.datePickerError', { message: this.state.error.message })}
         </Text>
       );
@@ -1358,13 +1367,15 @@ class PickerErrorBoundary extends Component<{ children: ReactNode; t: (key: stri
   }
 }
 
-function splitModeColor(mode: string) {
+// Split-mode chip washes keep their hue identity in dark as translucent
+// tints; light keeps the exact original pastels.
+function splitModeColor(mode: string, isDark: boolean) {
   switch (mode) {
-    case 'equal': return '#eef3ff';
-    case 'exact': return '#fff4ee';
-    case 'percentage': return '#eefff5';
-    case 'shares': return '#fdf0ff';
-    default: return '#f0f2f5';
+    case 'equal': return isDark ? 'rgba(59,130,246,0.16)' : '#eef3ff';
+    case 'exact': return isDark ? 'rgba(217,95,106,0.14)' : '#fff4ee';
+    case 'percentage': return isDark ? 'rgba(61,220,140,0.14)' : '#eefff5';
+    case 'shares': return isDark ? 'rgba(147,51,234,0.16)' : '#fdf0ff';
+    default: return isDark ? 'rgba(255,255,255,0.08)' : '#f0f2f5';
   }
 }
 
@@ -1378,10 +1389,10 @@ function splitModeLabel(mode: string, t: (key: string, vars?: Record<string, str
   }
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: theme.colors.bgPrimary,
   },
   header: {
     flexDirection: 'row',
@@ -1395,7 +1406,7 @@ const styles = StyleSheet.create({
     borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#f5f6f8',
+    backgroundColor: theme.isDark ? theme.colors.bgLight : '#f5f6f8',
   },
   headerTitle: {
     flex: 1,
@@ -1412,7 +1423,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     marginHorizontal: 22,
     marginBottom: 14,
-    backgroundColor: '#f5f6f8',
+    backgroundColor: theme.isDark ? theme.colors.bgLight : '#f5f6f8',
     borderRadius: 16,
     padding: 4,
     gap: 4,
@@ -1424,12 +1435,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   tabPillActive: {
-    backgroundColor: '#ff4f74',
+    backgroundColor: theme.colors.primary,
   },
   tabPillText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#8a909b',
+    color: theme.isDark ? theme.colors.textMeta : '#8a909b',
   },
   tabPillTextActive: {
     color: '#fff',
@@ -1453,7 +1464,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 30,
   },
   errorText: {
-    color: '#d95f6a',
+    color: theme.isDark ? '#ef8391' : '#d95f6a',
     fontSize: 14,
     textAlign: 'center',
     marginBottom: 16,
@@ -1461,7 +1472,7 @@ const styles = StyleSheet.create({
   retryButton: {
     paddingHorizontal: 24,
     paddingVertical: 10,
-    backgroundColor: '#ff4f74',
+    backgroundColor: theme.colors.primary,
     borderRadius: 12,
   },
   retryButtonText: {
@@ -1478,7 +1489,7 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: '#f5f6f8',
+    backgroundColor: theme.isDark ? theme.colors.bgLight : '#f5f6f8',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
@@ -1486,35 +1497,35 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#161821',
+    color: theme.isDark ? theme.colors.textPrimary : '#161821',
     marginBottom: 8,
     letterSpacing: -0.4,
   },
   emptyCopy: {
     fontSize: 14,
-    color: '#8a909b',
+    color: theme.isDark ? theme.colors.textMeta : '#8a909b',
     textAlign: 'center',
     lineHeight: 20,
   },
   sectionLabel: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#8a909b',
+    color: theme.isDark ? theme.colors.textMeta : '#8a909b',
     letterSpacing: 1.1,
     marginBottom: 10,
     marginTop: 4,
   },
   sectionHelperText: {
     fontSize: 12.5,
-    color: '#8a909b',
+    color: theme.isDark ? theme.colors.textMeta : '#8a909b',
     marginBottom: 12,
     marginTop: -4,
   },
   expenseCard: {
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#eaedf2',
-    backgroundColor: '#fff',
+    borderColor: theme.isDark ? theme.colors.borderPrimary : '#eaedf2',
+    backgroundColor: theme.colors.surface,
     padding: 16,
     marginBottom: 12,
   },
@@ -1523,7 +1534,7 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: 10,
     marginRight: 12,
-    backgroundColor: '#eef0f4',
+    backgroundColor: theme.isDark ? theme.colors.bgLight : '#eef0f4',
   },
   expenseTop: {
     flexDirection: 'row',
@@ -1535,13 +1546,13 @@ const styles = StyleSheet.create({
   expenseDescription: {
     fontSize: 16,
     fontWeight: '800',
-    color: '#161821',
+    color: theme.isDark ? theme.colors.textPrimary : '#161821',
     letterSpacing: -0.3,
     marginBottom: 3,
   },
   expenseDate: {
     fontSize: 12,
-    color: '#8a909b',
+    color: theme.isDark ? theme.colors.textMeta : '#8a909b',
   },
   expenseRight: {
     alignItems: 'flex-end',
@@ -1550,7 +1561,7 @@ const styles = StyleSheet.create({
   expenseAmount: {
     fontSize: 20,
     fontWeight: '900',
-    color: '#161821',
+    color: theme.isDark ? theme.colors.textPrimary : '#161821',
     letterSpacing: -0.5,
   },
   splitModeChip: {
@@ -1561,7 +1572,7 @@ const styles = StyleSheet.create({
   splitModeChipText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#4a5068',
+    color: theme.isDark ? theme.colors.textSecondary : '#4a5068',
     textTransform: 'capitalize',
   },
   expenseMeta: {
@@ -1572,7 +1583,7 @@ const styles = StyleSheet.create({
   },
   expenseMetaText: {
     fontSize: 12,
-    color: '#8a909b',
+    color: theme.isDark ? theme.colors.textMeta : '#8a909b',
   },
   deleteButton: {
     flexDirection: 'row',
@@ -1583,19 +1594,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 8,
-    backgroundColor: '#fff2f3',
+    backgroundColor: theme.isDark ? 'rgba(217,95,106,0.16)' : '#fff2f3',
   },
   deleteButtonText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#d95f6a',
+    color: theme.isDark ? '#ef8391' : '#d95f6a',
   },
   balanceCard: {
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#eaedf2',
+    borderColor: theme.isDark ? theme.colors.borderPrimary : '#eaedf2',
     paddingHorizontal: 14,
     paddingVertical: 12,
     marginBottom: 8,
@@ -1605,14 +1616,14 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#f0f2f5',
+    backgroundColor: theme.isDark ? theme.colors.bgLight : '#f0f2f5',
     alignItems: 'center',
     justifyContent: 'center',
   },
   balanceAvatarText: {
     fontSize: 15,
     fontWeight: '800',
-    color: '#4a5068',
+    color: theme.isDark ? theme.colors.textSecondary : '#4a5068',
   },
   balanceNameCol: {
     flex: 1,
@@ -1620,12 +1631,12 @@ const styles = StyleSheet.create({
   balanceName: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#161821',
+    color: theme.isDark ? theme.colors.textPrimary : '#161821',
   },
   balanceStatusLabel: {
     marginTop: 2,
     fontSize: 12,
-    color: '#8a909b',
+    color: theme.isDark ? theme.colors.textMeta : '#8a909b',
     fontWeight: '600',
   },
   balanceNet: {
@@ -1637,23 +1648,23 @@ const styles = StyleSheet.create({
     color: '#1a9e55',
   },
   balanceNegative: {
-    color: '#d95f6a',
+    color: theme.isDark ? '#ef8391' : '#d95f6a',
   },
   balanceNeutral: {
-    color: '#8a909b',
+    color: theme.isDark ? theme.colors.textMeta : '#8a909b',
   },
   balanceCardSettled: {
-    backgroundColor: '#f7faf8',
+    backgroundColor: theme.isDark ? theme.colors.successLight : '#f7faf8',
   },
   balanceAvatarSettled: {
-    backgroundColor: '#dff1e6',
+    backgroundColor: theme.isDark ? theme.colors.successLight : '#dff1e6',
   },
   balanceStatusLabelSettled: {
-    color: '#27b371',
+    color: theme.isDark ? theme.colors.success : '#27b371',
     fontWeight: '700',
   },
   balanceExpenseList: {
-    backgroundColor: '#f7f8fa',
+    backgroundColor: theme.isDark ? theme.colors.bgLight : '#f7f8fa',
     borderRadius: 10,
     marginBottom: 8,
     marginTop: -4,
@@ -1681,18 +1692,18 @@ const styles = StyleSheet.create({
   },
   balanceExpensePaid: {
     fontSize: 12,
-    color: '#27b371',
+    color: theme.isDark ? theme.colors.success : '#27b371',
     fontWeight: '500',
   },
   balanceExpenseShare: {
     fontSize: 12,
-    color: '#8a909b',
+    color: theme.isDark ? theme.colors.textMeta : '#8a909b',
   },
   debtCard: {
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#eaedf2',
-    backgroundColor: '#fafbfc',
+    borderColor: theme.isDark ? theme.colors.borderPrimary : '#eaedf2',
+    backgroundColor: theme.isDark ? theme.colors.bgLightest : '#fafbfc',
     padding: 14,
     marginBottom: 8,
   },
@@ -1705,14 +1716,14 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: '#f0f2f5',
+    backgroundColor: theme.isDark ? theme.colors.bgLight : '#f0f2f5',
     alignItems: 'center',
     justifyContent: 'center',
   },
   debtAvatarText: {
     fontSize: 12,
     fontWeight: '800',
-    color: '#4a5068',
+    color: theme.isDark ? theme.colors.textSecondary : '#4a5068',
   },
   debtArrow: {
     marginHorizontal: 2,
@@ -1723,16 +1734,16 @@ const styles = StyleSheet.create({
   },
   debtText: {
     fontSize: 13,
-    color: '#4a5068',
+    color: theme.isDark ? theme.colors.textSecondary : '#4a5068',
   },
   debtName: {
     fontWeight: '800',
-    color: '#161821',
+    color: theme.isDark ? theme.colors.textPrimary : '#161821',
   },
   debtAmount: {
     fontSize: 16,
     fontWeight: '900',
-    color: '#ff4f74',
+    color: theme.colors.primary,
     marginTop: 2,
   },
   allSettledWrap: {
@@ -1743,20 +1754,20 @@ const styles = StyleSheet.create({
   allSettledText: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#27b371',
+    color: theme.isDark ? theme.colors.success : '#27b371',
   },
   allSettledTitle: {
     fontSize: 20,
     fontWeight: '900',
-    color: '#27b371',
+    color: theme.isDark ? theme.colors.success : '#27b371',
     marginTop: 8,
     letterSpacing: -0.4,
   },
   settleCard: {
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#eaedf2',
-    backgroundColor: '#fff',
+    borderColor: theme.isDark ? theme.colors.borderPrimary : '#eaedf2',
+    backgroundColor: theme.colors.surface,
     padding: 14,
     marginBottom: 12,
     gap: 12,
@@ -1771,7 +1782,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 7,
-    backgroundColor: '#ff4f74',
+    backgroundColor: theme.colors.primary,
     borderRadius: 12,
     paddingVertical: 10,
   },
@@ -1779,16 +1790,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     alignItems: 'flex-start',
-    backgroundColor: '#fff7e6',
+    backgroundColor: theme.isDark ? 'rgba(245,166,35,0.16)' : '#fff7e6',
     borderWidth: 1,
-    borderColor: '#ffd8a3',
+    borderColor: theme.isDark ? 'rgba(245,166,35,0.32)' : '#ffd8a3',
     borderRadius: 14,
     padding: 12,
     marginBottom: 10,
   },
   warningCardText: {
     flex: 1,
-    color: '#7a4d00',
+    color: theme.isDark ? theme.colors.warning : '#7a4d00',
     fontSize: 12.5,
     fontWeight: '600',
     lineHeight: 18,
@@ -1807,14 +1818,14 @@ const styles = StyleSheet.create({
     letterSpacing: -0.2,
   },
   breakdownWrap: {
-    backgroundColor: '#f7f8fa',
+    backgroundColor: theme.isDark ? theme.colors.bgLight : '#f7f8fa',
     borderRadius: 12,
     padding: 12,
     marginBottom: 10,
     gap: 10,
   },
   breakdownEmpty: {
-    color: '#7b828e',
+    color: theme.isDark ? theme.colors.textSecondary : '#7b828e',
     fontSize: 12.5,
     fontStyle: 'italic',
   },
@@ -1829,26 +1840,26 @@ const styles = StyleSheet.create({
   },
   breakdownDesc: {
     flex: 1,
-    color: '#161821',
+    color: theme.isDark ? theme.colors.textPrimary : '#161821',
     fontSize: 13.5,
     fontWeight: '700',
   },
   breakdownDate: {
-    color: '#9aa2ae',
+    color: theme.isDark ? theme.colors.textMeta : '#9aa2ae',
     fontSize: 11.5,
     fontWeight: '600',
   },
   breakdownLine: {
-    color: '#5a606e',
+    color: theme.isDark ? theme.colors.textSecondary : '#5a606e',
     fontSize: 12.5,
     lineHeight: 18,
   },
   breakdownName: {
-    color: '#161821',
+    color: theme.isDark ? theme.colors.textPrimary : '#161821',
     fontWeight: '700',
   },
   breakdownBold: {
-    color: '#161821',
+    color: theme.isDark ? theme.colors.textPrimary : '#161821',
     fontWeight: '800',
   },
   markSettledButtonText: {
@@ -1859,8 +1870,8 @@ const styles = StyleSheet.create({
   settlementHistoryCard: {
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#c3eed9',
-    backgroundColor: '#f2fdf7',
+    borderColor: theme.isDark ? theme.colors.successBorder : '#c3eed9',
+    backgroundColor: theme.isDark ? theme.colors.successLight : '#f2fdf7',
     padding: 12,
     marginBottom: 8,
   },
@@ -1873,7 +1884,7 @@ const styles = StyleSheet.create({
   settlementPaidText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#27b371',
+    color: theme.isDark ? theme.colors.success : '#27b371',
   },
   settlementHistoryRow: {
     flexDirection: 'row',
@@ -1884,16 +1895,16 @@ const styles = StyleSheet.create({
   },
   settlementHistoryText: {
     fontSize: 14,
-    color: '#4a5068',
+    color: theme.isDark ? theme.colors.textSecondary : '#4a5068',
   },
   settlementHistoryDate: {
     fontSize: 12,
-    color: '#8a909b',
+    color: theme.isDark ? theme.colors.textMeta : '#8a909b',
     marginTop: 2,
   },
   settlementHistoryNote: {
     fontSize: 12,
-    color: '#a0a8b5',
+    color: theme.isDark ? theme.colors.textMuted : '#a0a8b5',
     marginTop: 2,
     fontStyle: 'italic',
   },
@@ -1910,10 +1921,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#ff4f74',
+    backgroundColor: theme.colors.primary,
     borderRadius: 16,
     paddingVertical: 16,
-    shadowColor: '#ff4f74',
+    shadowColor: theme.colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35,
     shadowRadius: 12,
@@ -1927,11 +1938,11 @@ const styles = StyleSheet.create({
   },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: theme.isDark ? theme.colors.backdropModal : 'rgba(0,0,0,0.45)',
     justifyContent: 'flex-end',
   },
   modalCard: {
-    backgroundColor: '#fff',
+    backgroundColor: theme.colors.surfaceElevated,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     paddingTop: 12,
@@ -1942,7 +1953,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#dde1e8',
+    backgroundColor: theme.colors.sheetHandle,
     alignSelf: 'center',
     marginBottom: 16,
   },
@@ -1955,7 +1966,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 20,
     fontWeight: '900',
-    color: '#161821',
+    color: theme.isDark ? theme.colors.textPrimary : '#161821',
     letterSpacing: -0.5,
   },
   modalCloseButton: {
@@ -1964,31 +1975,31 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#f5f6f8',
+    backgroundColor: theme.isDark ? theme.colors.bgLight : '#f5f6f8',
   },
   fieldLabel: {
     fontSize: 12,
     fontWeight: '800',
-    color: '#8a909b',
+    color: theme.isDark ? theme.colors.textMeta : '#8a909b',
     letterSpacing: 0.8,
     marginBottom: 7,
     marginTop: 14,
   },
   fieldHint: {
     fontSize: 12,
-    color: '#a0a8b5',
+    color: theme.isDark ? theme.colors.textMuted : '#a0a8b5',
     marginBottom: 8,
     marginTop: -4,
   },
   fieldLabelOptional: {
     fontSize: 12,
     fontWeight: '500',
-    color: '#a0a8b5',
+    color: theme.isDark ? theme.colors.textMuted : '#a0a8b5',
     letterSpacing: 0,
     textTransform: 'none',
   },
   fieldLabelRequired: {
-    color: '#ff4f74',
+    color: theme.colors.primary,
   },
   dateSelectionCard: {
     flexDirection: 'row',
@@ -1996,25 +2007,25 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     minHeight: 50,
     borderWidth: 1,
-    borderColor: '#eaedf2',
+    borderColor: theme.isDark ? theme.colors.borderPrimary : '#eaedf2',
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    backgroundColor: '#fafbfc',
+    backgroundColor: theme.isDark ? theme.colors.bgLightest : '#fafbfc',
   },
   dateSelectionValue: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#161821',
+    color: theme.isDark ? theme.colors.textPrimary : '#161821',
   },
   dateInlinePickerWrap: {
     marginTop: 8,
     marginBottom: 14,
     padding: 10,
     borderRadius: 18,
-    backgroundColor: '#fafbfc',
+    backgroundColor: theme.isDark ? theme.colors.bgLightest : '#fafbfc',
     borderWidth: 1,
-    borderColor: '#eaedf2',
+    borderColor: theme.isDark ? theme.colors.borderPrimary : '#eaedf2',
   },
   datePickerDoneButton: {
     borderRadius: 14,
@@ -2037,31 +2048,31 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 7,
     borderWidth: 1,
-    borderColor: '#eaedf2',
+    borderColor: theme.isDark ? theme.colors.borderPrimary : '#eaedf2',
     borderRadius: 12,
     paddingVertical: 13,
-    backgroundColor: '#fafbfc',
+    backgroundColor: theme.isDark ? theme.colors.bgLightest : '#fafbfc',
   },
   receiptPickButtonText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#4a5068',
+    color: theme.isDark ? theme.colors.textSecondary : '#4a5068',
   },
   receiptPreviewWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     borderWidth: 1,
-    borderColor: '#eaedf2',
+    borderColor: theme.isDark ? theme.colors.borderPrimary : '#eaedf2',
     borderRadius: 14,
     padding: 10,
-    backgroundColor: '#fafbfc',
+    backgroundColor: theme.isDark ? theme.colors.bgLightest : '#fafbfc',
   },
   receiptPreviewImage: {
     width: 56,
     height: 56,
     borderRadius: 10,
-    backgroundColor: '#eef0f4',
+    backgroundColor: theme.isDark ? theme.colors.bgLight : '#eef0f4',
   },
   receiptPreviewActions: {
     flex: 1,
@@ -2077,27 +2088,27 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 10,
     borderRadius: 10,
-    backgroundColor: '#fff',
+    backgroundColor: theme.isDark ? theme.colors.bgLightest : '#fff',
     borderWidth: 1,
-    borderColor: '#eaedf2',
+    borderColor: theme.isDark ? theme.colors.borderPrimary : '#eaedf2',
   },
   receiptRemoveButton: {
-    borderColor: '#ffd9dc',
+    borderColor: theme.isDark ? 'rgba(217,95,106,0.32)' : '#ffd9dc',
   },
   receiptActionText: {
     fontSize: 12.5,
     fontWeight: '700',
-    color: '#4a5068',
+    color: theme.isDark ? theme.colors.textSecondary : '#4a5068',
   },
   textInput: {
     borderWidth: 1,
-    borderColor: '#eaedf2',
+    borderColor: theme.isDark ? theme.colors.borderPrimary : '#eaedf2',
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 15,
-    color: '#161821',
-    backgroundColor: '#fafbfc',
+    color: theme.isDark ? theme.colors.textPrimary : '#161821',
+    backgroundColor: theme.isDark ? theme.colors.bgLightest : '#fafbfc',
   },
   chipRow: {
     flexDirection: 'row',
@@ -2109,17 +2120,17 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#eaedf2',
-    backgroundColor: '#f5f6f8',
+    borderColor: theme.isDark ? theme.colors.borderPrimary : '#eaedf2',
+    backgroundColor: theme.isDark ? theme.colors.bgLight : '#f5f6f8',
   },
   modeChipActive: {
-    backgroundColor: '#ff4f74',
-    borderColor: '#ff4f74',
+    backgroundColor: theme.colors.primary,
+    borderColor: theme.colors.primary,
   },
   modeChipText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#8a909b',
+    color: theme.isDark ? theme.colors.textMeta : '#8a909b',
   },
   modeChipTextActive: {
     color: '#fff',
@@ -2135,46 +2146,46 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 6,
     borderWidth: 2,
-    borderColor: '#dde1e8',
+    borderColor: theme.isDark ? theme.colors.borderInput : '#dde1e8',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: theme.isDark ? theme.colors.bgLightest : '#fff',
   },
   memberCheckboxActive: {
-    backgroundColor: '#ff4f74',
-    borderColor: '#ff4f74',
+    backgroundColor: theme.colors.primary,
+    borderColor: theme.colors.primary,
   },
   memberName: {
     flex: 1,
     fontSize: 15,
     fontWeight: '600',
-    color: '#161821',
+    color: theme.isDark ? theme.colors.textPrimary : '#161821',
   },
   inlineAmountInput: {
     width: 90,
     borderWidth: 1,
-    borderColor: '#eaedf2',
+    borderColor: theme.isDark ? theme.colors.borderPrimary : '#eaedf2',
     borderRadius: 10,
     paddingHorizontal: 10,
     paddingVertical: 7,
     fontSize: 14,
-    color: '#161821',
-    backgroundColor: '#fafbfc',
+    color: theme.isDark ? theme.colors.textPrimary : '#161821',
+    backgroundColor: theme.isDark ? theme.colors.bgLightest : '#fafbfc',
     textAlign: 'right',
   },
   fullAmountLabel: {
     fontSize: 12,
-    color: '#a0a8b5',
+    color: theme.isDark ? theme.colors.textMuted : '#a0a8b5',
     fontStyle: 'italic',
   },
   submitError: {
-    color: '#d95f6a',
+    color: theme.isDark ? '#ef8391' : '#d95f6a',
     fontSize: 13,
     marginTop: 12,
     marginBottom: 4,
   },
   submitButton: {
-    backgroundColor: '#ff4f74',
+    backgroundColor: theme.colors.primary,
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
@@ -2192,13 +2203,13 @@ const styles = StyleSheet.create({
   },
   confirmBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: theme.isDark ? theme.colors.backdropModal : 'rgba(0,0,0,0.45)',
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 30,
   },
   confirmCard: {
-    backgroundColor: '#fff',
+    backgroundColor: theme.colors.surfaceElevated,
     borderRadius: 24,
     padding: 24,
     width: '100%',
@@ -2207,19 +2218,19 @@ const styles = StyleSheet.create({
   confirmTitle: {
     fontSize: 18,
     fontWeight: '900',
-    color: '#161821',
+    color: theme.isDark ? theme.colors.textPrimary : '#161821',
     marginBottom: 10,
     letterSpacing: -0.4,
   },
   confirmBody: {
     fontSize: 15,
-    color: '#4a5068',
+    color: theme.isDark ? theme.colors.textSecondary : '#4a5068',
     lineHeight: 22,
     marginBottom: 16,
   },
   confirmBold: {
     fontWeight: '800',
-    color: '#161821',
+    color: theme.isDark ? theme.colors.textPrimary : '#161821',
   },
   confirmButtons: {
     flexDirection: 'row',
@@ -2231,19 +2242,19 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#eaedf2',
+    borderColor: theme.isDark ? theme.colors.borderPrimary : '#eaedf2',
     alignItems: 'center',
   },
   confirmCancelText: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#8a909b',
+    color: theme.isDark ? theme.colors.textMeta : '#8a909b',
   },
   confirmOkButton: {
     flex: 1,
     paddingVertical: 13,
     borderRadius: 12,
-    backgroundColor: '#ff4f74',
+    backgroundColor: theme.colors.primary,
     alignItems: 'center',
   },
   confirmOkText: {

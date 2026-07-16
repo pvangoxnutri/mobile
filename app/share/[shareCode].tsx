@@ -6,12 +6,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getSharedTrip, copySharedTrip } from '@/lib/api';
 import { useAuth } from '@/components/auth-provider';
-import { PRIMARY_COLOR, SECONDARY_COLOR, PRIMARY_08, PRIMARY_20 } from '@/constants/colors';
+import { useTheme } from '@/components/theme-provider';
 
 export default function SharedAdventureScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const { theme } = useTheme();
   const { shareCode } = useLocalSearchParams<{ shareCode: string }>();
   const [trip, setTrip] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -84,21 +85,21 @@ export default function SharedAdventureScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.container, { backgroundColor: '#fff', paddingTop: insets.top }]}>
-        <ActivityIndicator size="large" color={PRIMARY_COLOR} />
+      <View style={[styles.container, { backgroundColor: theme.colors.bgPrimary, paddingTop: insets.top }]}>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
       </View>
     );
   }
 
   if (error || !trip) {
     return (
-      <View style={[styles.container, { backgroundColor: '#fff', paddingTop: insets.top }]}>
+      <View style={[styles.container, { backgroundColor: theme.colors.bgPrimary, paddingTop: insets.top }]}>
         <Pressable onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="chevron-back" size={24} color={'#14161d'} />
+          <Ionicons name="chevron-back" size={24} color={theme.colors.textPrimary} />
         </Pressable>
         <View style={styles.errorContainer}>
-          <Ionicons name="alert-circle-outline" size={64} color={'#14161d'} />
-          <Text style={[styles.errorText, { color: '#14161d' }]}>
+          <Ionicons name="alert-circle-outline" size={64} color={theme.colors.textPrimary} />
+          <Text style={[styles.errorText, { color: theme.colors.textPrimary }]}>
             {error || 'Adventure not found'}
           </Text>
         </View>
@@ -108,11 +109,11 @@ export default function SharedAdventureScreen() {
 
   return (
     <ScrollView
-      style={[styles.container, { backgroundColor: '#fff', paddingTop: insets.top }]}
+      style={[styles.container, { backgroundColor: theme.colors.bgPrimary, paddingTop: insets.top }]}
       contentContainerStyle={styles.contentContainer}
     >
       <Pressable onPress={() => router.back()} style={styles.backButton}>
-        <Ionicons name="chevron-back" size={24} color={'#14161d'} />
+        <Ionicons name="chevron-back" size={24} color={theme.colors.textPrimary} />
       </Pressable>
 
       {trip.imageUrl && (
@@ -124,32 +125,32 @@ export default function SharedAdventureScreen() {
       )}
 
       <View style={styles.content}>
-        <Text style={[styles.title, { color: '#14161d' }]}>{trip.title}</Text>
-        <Text style={[styles.owner, { color: '#14161d' }]}>
+        <Text style={[styles.title, { color: theme.colors.textPrimary }]}>{trip.title}</Text>
+        <Text style={[styles.owner, { color: theme.colors.textPrimary }]}>
           by {trip.ownerName}
         </Text>
 
         <View style={styles.infoRow}>
-          <Ionicons name="location-outline" size={16} color={PRIMARY_COLOR} />
-          <Text style={[styles.destination, { color: '#14161d' }]}>{trip.destination}</Text>
+          <Ionicons name="location-outline" size={16} color={theme.colors.primary} />
+          <Text style={[styles.destination, { color: theme.colors.textPrimary }]}>{trip.destination}</Text>
         </View>
 
         <View style={styles.infoRow}>
-          <Ionicons name="calendar-outline" size={16} color={PRIMARY_COLOR} />
-          <Text style={[styles.dates, { color: '#14161d' }]}>
+          <Ionicons name="calendar-outline" size={16} color={theme.colors.primary} />
+          <Text style={[styles.dates, { color: theme.colors.textPrimary }]}>
             {trip.startDate} – {trip.endDate}
           </Text>
         </View>
 
         {trip.description && (
-          <Text style={[styles.description, { color: '#14161d' }]}>
+          <Text style={[styles.description, { color: theme.colors.textPrimary }]}>
             {trip.description}
           </Text>
         )}
 
         {trip.spotifyUrl && (
           <Pressable
-            style={[styles.spotifyButton, { backgroundColor: PRIMARY_COLOR }]}
+            style={[styles.spotifyButton, { backgroundColor: theme.colors.primary }]}
             onPress={() => { /* Open Spotify URL */ }}
           >
             <Ionicons name="musical-notes" size={18} color={'#fff'} />
@@ -160,7 +161,7 @@ export default function SharedAdventureScreen() {
         )}
 
         <Pressable
-          style={[styles.copyButton, { backgroundColor: PRIMARY_COLOR }]}
+          style={[styles.copyButton, { backgroundColor: theme.colors.primary }]}
           onPress={handleCopy}
           disabled={copying}
         >
@@ -175,7 +176,7 @@ export default function SharedAdventureScreen() {
         </Pressable>
 
         <Pressable
-          style={[styles.shareButton, { backgroundColor: SECONDARY_COLOR }]}
+          style={[styles.shareButton, { backgroundColor: theme.colors.secondary }]}
           onPress={handleShare}
         >
           <Ionicons name="share-social" size={18} color={'#fff'} />

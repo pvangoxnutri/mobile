@@ -24,7 +24,9 @@ import { useKeyboardFocusScroll } from '@/hooks/useKeyboardFocusScroll';
 import Avatar from '@/components/avatar';
 import { apiFetch, apiJson } from '@/lib/api';
 import { splitPastedChecklistItems, stripNotesChecklistMarkers } from '@/lib/text-paste';
-import { COLORS } from '@/constants/design-tokens';
+import { useTheme } from '@/components/theme-provider';
+import { useThemedStyles } from '@/hooks/use-themed-styles';
+import type { AppTheme } from '@/constants/themes';
 
 type Member = { id: string; name: string; avatarUrl?: string | null; isOwner: boolean; isOnline?: boolean };
 
@@ -57,9 +59,13 @@ type Tab = 'shared' | 'private';
 
 type DraftRow = { key: string; text: string };
 
+// Deliberate private-scope accent (violet) — same in both themes; readable
+// on dark surfaces as-is.
 const PRIVATE_COLOR = '#8b5cf6';
 
 export default function PackingListScreen() {
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const { id: tripId } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuth();
   const { t } = useI18n();
@@ -408,7 +414,7 @@ export default function PackingListScreen() {
           style={styles.headerAddButton}
           activeOpacity={0.88}
           onPress={() => { setAddCategoryOpen(true); setTimeout(() => categoryInputRef.current?.focus(), 120); }}>
-          <Ionicons name="add" size={22} color={isPrivate ? PRIVATE_COLOR : COLORS.primary} />
+          <Ionicons name="add" size={22} color={isPrivate ? PRIVATE_COLOR : theme.colors.primary} />
         </TouchableOpacity>
       </View>
 
@@ -418,7 +424,7 @@ export default function PackingListScreen() {
           style={[styles.tab, !isPrivate && styles.tabActiveShared]}
           activeOpacity={0.85}
           onPress={() => setActiveTab('shared')}>
-          <Ionicons name="people-outline" size={14} color={!isPrivate ? COLORS.primary : '#8a909d'} />
+          <Ionicons name="people-outline" size={14} color={!isPrivate ? theme.colors.primary : '#8a909d'} />
           <Text style={[styles.tabLabel, !isPrivate && styles.tabLabelActiveShared]}>
             {t('trip.packingList.sharedTab')}
           </Text>
@@ -427,7 +433,7 @@ export default function PackingListScreen() {
           style={[styles.tab, isPrivate && styles.tabActivePrivate]}
           activeOpacity={0.85}
           onPress={() => setActiveTab('private')}>
-          <Ionicons name="lock-closed-outline" size={14} color={isPrivate ? PRIVATE_COLOR : '#8a909d'} />
+          <Ionicons name="lock-closed-outline" size={14} color={isPrivate ? PRIVATE_COLOR : theme.isDark ? theme.colors.textMeta : '#8a909d'} />
           <Text style={[styles.tabLabel, isPrivate && styles.tabLabelActivePrivate]}>
             {t('trip.packingList.privateTab')}
           </Text>
@@ -439,7 +445,7 @@ export default function PackingListScreen() {
         <Ionicons
           name={isPrivate ? 'lock-closed-outline' : 'people-outline'}
           size={13}
-          color={isPrivate ? PRIVATE_COLOR : COLORS.primary}
+          color={isPrivate ? PRIVATE_COLOR : theme.colors.primary}
         />
         <Text style={[styles.scopeHintText, isPrivate && styles.scopeHintTextPrivate]}>
           {isPrivate ? t('trip.packingList.privateHint') : t('trip.packingList.sharedHint')}
@@ -448,7 +454,7 @@ export default function PackingListScreen() {
 
       {loading ? (
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
+          <ActivityIndicator size="large" color={theme.colors.primary} />
         </View>
       ) : error ? (
         <View style={styles.centered}>
@@ -467,7 +473,7 @@ export default function PackingListScreen() {
             contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom, 20) + 32 }]}
             showsVerticalScrollIndicator={false}
             refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} tintColor={COLORS.primary} />
+              <RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} tintColor={theme.colors.primary} />
             }
             {...scrollViewProps}>
 
@@ -480,7 +486,8 @@ export default function PackingListScreen() {
                   onChangeText={setAddCategoryDraft}
                   onFocus={onFocusField(categoryInputRef)}
                   placeholder={t('trip.packingList.categoryPlaceholder')}
-                  placeholderTextColor="#a3a9b4"
+                  placeholderTextColor={theme.isDark ? theme.colors.placeholderText : '#a3a9b4'}
+                  keyboardAppearance={theme.keyboardAppearance}
                   style={styles.addCategoryInput}
                   returnKeyType="done"
                   onSubmitEditing={() => void handleAddCategory()}
@@ -512,7 +519,7 @@ export default function PackingListScreen() {
             {/* Empty state */}
             {categories.length === 0 && !addCategoryOpen ? (
               <View style={styles.emptyState}>
-                <Ionicons name={isPrivate ? 'lock-closed-outline' : 'bag-outline'} size={48} color="#c8cdd6" />
+                <Ionicons name={isPrivate ? 'lock-closed-outline' : 'bag-outline'} size={48} color={theme.isDark ? theme.colors.textMuted : '#c8cdd6'} />
                 <Text style={styles.emptyTitle}>
                   {isPrivate ? t('trip.packingList.privateEmptyTitle') : t('trip.packingList.sharedEmptyTitle')}
                 </Text>
@@ -542,7 +549,7 @@ export default function PackingListScreen() {
                     <Text style={styles.categoryCount}>{checkedCount}/{category.items.length}</Text>
                     {canDelete ? (
                       <TouchableOpacity hitSlop={8} onPress={() => void handleDeleteCategory(category.id)}>
-                        <Ionicons name="trash-outline" size={15} color="#c2c8d2" />
+                        <Ionicons name="trash-outline" size={15} color={theme.isDark ? theme.colors.textMuted : '#c2c8d2'} />
                       </TouchableOpacity>
                     ) : null}
                   </View>
@@ -566,6 +573,7 @@ export default function PackingListScreen() {
                           onChangeText={updateItemEdit}
                           style={[styles.itemText, styles.itemEditInput]}
                           autoFocus
+                          keyboardAppearance={theme.keyboardAppearance}
                           returnKeyType="done"
                           onSubmitEditing={() => void commitItemEdit(category.id, item)}
                           onBlur={() => void commitItemEdit(category.id, item)}
@@ -593,7 +601,7 @@ export default function PackingListScreen() {
                             </View>
                           ) : (
                             <View style={styles.assignEmpty}>
-                              <Ionicons name="person-add-outline" size={13} color="#b0b6c1" />
+                              <Ionicons name="person-add-outline" size={13} color={theme.isDark ? theme.colors.textMuted : '#b0b6c1'} />
                             </View>
                           )}
                         </TouchableOpacity>
@@ -601,7 +609,7 @@ export default function PackingListScreen() {
 
                       {item.createdByUserId === user?.id ? (
                         <TouchableOpacity hitSlop={8} onPress={() => void handleDeleteItem(category.id, item.id)}>
-                          <Ionicons name="close" size={15} color="#c2c8d2" />
+                          <Ionicons name="close" size={15} color={theme.isDark ? theme.colors.textMuted : '#c2c8d2'} />
                         </TouchableOpacity>
                       ) : null}
                     </View>
@@ -612,7 +620,7 @@ export default function PackingListScreen() {
                     <View key={draft.key} style={styles.itemRow}>
                       <View style={[styles.checkbox, styles.checkboxDraft]}>
                         {savingDraft === draft.key
-                          ? <ActivityIndicator size="small" color={COLORS.primary} />
+                          ? <ActivityIndicator size="small" color={theme.colors.primary} />
                           : null}
                       </View>
                       <TextInput
@@ -638,7 +646,8 @@ export default function PackingListScreen() {
                         }}
                         onFocus={() => onFocusField({ current: draftRefs.current[draft.key] })()}
                         placeholder={t('trip.packingList.addItemPlaceholder')}
-                        placeholderTextColor="#b8bec8"
+                        placeholderTextColor={theme.isDark ? theme.colors.placeholderText : '#b8bec8'}
+                        keyboardAppearance={theme.keyboardAppearance}
                         style={styles.draftInput}
                         returnKeyType="done"
                         blurOnSubmit={false}
@@ -659,7 +668,7 @@ export default function PackingListScreen() {
 
                   {/* Tap to start a new draft row */}
                   <TouchableOpacity style={styles.addItemTap} activeOpacity={0.7} onPress={() => ensureDraft(category.id)}>
-                    <Ionicons name="add" size={15} color={isPrivate ? PRIVATE_COLOR : COLORS.primary} />
+                    <Ionicons name="add" size={15} color={isPrivate ? PRIVATE_COLOR : theme.colors.primary} />
                     <Text style={[styles.addItemTapText, isPrivate && styles.addItemTapTextPrivate]}>
                       {t('trip.packingList.addItemPlaceholder')}
                     </Text>
@@ -674,7 +683,7 @@ export default function PackingListScreen() {
                 style={styles.addMoreCategoryButton}
                 activeOpacity={0.85}
                 onPress={() => { setAddCategoryOpen(true); setTimeout(() => categoryInputRef.current?.focus(), 120); }}>
-                <Ionicons name="add-circle-outline" size={18} color={isPrivate ? PRIVATE_COLOR : COLORS.primary} />
+                <Ionicons name="add-circle-outline" size={18} color={isPrivate ? PRIVATE_COLOR : theme.colors.primary} />
                 <Text style={[styles.addMoreCategoryText, isPrivate && styles.addMoreCategoryTextPrivate]}>
                   {t('trip.packingList.addCategory')}
                 </Text>
@@ -718,7 +727,7 @@ export default function PackingListScreen() {
                   onPress={() => void handleAssign(member.id)}>
                   <Avatar name={member.name} uri={member.avatarUrl} size={36} online={member.isOnline} />
                   <Text style={styles.memberPickerName}>{member.name}</Text>
-                  {isAssigned ? <Ionicons name="checkmark-circle" size={20} color={COLORS.primary} /> : null}
+                  {isAssigned ? <Ionicons name="checkmark-circle" size={20} color={theme.colors.primary} /> : null}
                 </TouchableOpacity>
               );
             }}
@@ -729,31 +738,31 @@ export default function PackingListScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#f7f8fa' },
+const createStyles = (theme: AppTheme) => StyleSheet.create({
+  screen: { flex: 1, backgroundColor: theme.isDark ? theme.colors.bgPrimary : '#f7f8fa' },
   flex: { flex: 1 },
 
   header: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 16, paddingBottom: 12,
-    backgroundColor: '#f7f8fa',
-    borderBottomWidth: 1, borderBottomColor: '#eceef2',
+    backgroundColor: theme.isDark ? theme.colors.bgPrimary : '#f7f8fa',
+    borderBottomWidth: 1, borderBottomColor: theme.isDark ? theme.colors.borderPrimary : '#eceef2',
   },
   backButton: {
     width: 40, height: 40, alignItems: 'center', justifyContent: 'center',
-    borderRadius: 12, backgroundColor: '#fff', borderWidth: 1, borderColor: '#eceef2',
+    borderRadius: 12, backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.isDark ? theme.colors.borderPrimary : '#eceef2',
   },
   headerCenter: { flex: 1, alignItems: 'center' },
-  headerTitle: { fontSize: 17, fontWeight: '800', color: '#11131a', letterSpacing: -0.4 },
-  headerSub: { fontSize: 11, color: '#8a909d', fontWeight: '600', marginTop: 1 },
+  headerTitle: { fontSize: 17, fontWeight: '800', color: theme.isDark ? theme.colors.textPrimary : '#11131a', letterSpacing: -0.4 },
+  headerSub: { fontSize: 11, color: theme.isDark ? theme.colors.textMeta : '#8a909d', fontWeight: '600', marginTop: 1 },
   headerAddButton: {
     width: 40, height: 40, alignItems: 'center', justifyContent: 'center',
-    borderRadius: 12, backgroundColor: '#fff', borderWidth: 1, borderColor: '#eceef2',
+    borderRadius: 12, backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.isDark ? theme.colors.borderPrimary : '#eceef2',
   },
 
   tabBar: {
-    flexDirection: 'row', backgroundColor: '#fff',
-    borderBottomWidth: 1, borderBottomColor: '#eceef2',
+    flexDirection: 'row', backgroundColor: theme.colors.surface,
+    borderBottomWidth: 1, borderBottomColor: theme.isDark ? theme.colors.borderPrimary : '#eceef2',
     paddingHorizontal: 16,
   },
   tab: {
@@ -761,105 +770,105 @@ const styles = StyleSheet.create({
     gap: 6, paddingVertical: 12,
     borderBottomWidth: 2.5, borderBottomColor: 'transparent',
   },
-  tabActiveShared: { borderBottomColor: COLORS.primary },
+  tabActiveShared: { borderBottomColor: theme.colors.primary },
   tabActivePrivate: { borderBottomColor: PRIVATE_COLOR },
-  tabLabel: { fontSize: 13, fontWeight: '700', color: '#8a909d' },
-  tabLabelActiveShared: { color: COLORS.primary },
+  tabLabel: { fontSize: 13, fontWeight: '700', color: theme.isDark ? theme.colors.textMeta : '#8a909d' },
+  tabLabelActiveShared: { color: theme.colors.primary },
   tabLabelActivePrivate: { color: PRIVATE_COLOR },
 
   scopeHint: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     paddingHorizontal: 16, paddingVertical: 8,
-    backgroundColor: '#eef4ff',
+    backgroundColor: theme.isDark ? 'rgba(59,130,246,0.14)' : '#eef4ff',
   },
-  scopeHintPrivate: { backgroundColor: '#f5f0ff' },
-  scopeHintText: { fontSize: 12, color: COLORS.primary, fontWeight: '600', flex: 1 },
+  scopeHintPrivate: { backgroundColor: theme.isDark ? 'rgba(139,92,246,0.16)' : '#f5f0ff' },
+  scopeHintText: { fontSize: 12, color: theme.colors.primary, fontWeight: '600', flex: 1 },
   scopeHintTextPrivate: { color: PRIVATE_COLOR },
 
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
-  errorText: { fontSize: 14, color: '#5c6370', textAlign: 'center' },
+  errorText: { fontSize: 14, color: theme.isDark ? theme.colors.textSecondary : '#5c6370', textAlign: 'center' },
   retryButton: {
     paddingHorizontal: 20, paddingVertical: 10,
-    borderRadius: 14, backgroundColor: COLORS.primary,
+    borderRadius: 14, backgroundColor: theme.colors.primary,
   },
   retryButtonText: { color: '#fff', fontWeight: '700', fontSize: 14 },
 
   scrollContent: { padding: 16, gap: 12 },
 
   addCategoryCard: {
-    backgroundColor: '#fff', borderRadius: 22,
-    borderWidth: 1.5, borderColor: COLORS.primary, padding: 16, gap: 12,
+    backgroundColor: theme.colors.surfaceElevated, borderRadius: 22,
+    borderWidth: 1.5, borderColor: theme.colors.primary, padding: 16, gap: 12,
   },
   addCategoryCardPrivate: { borderColor: PRIVATE_COLOR },
   addCategoryInput: {
-    height: 48, borderRadius: 14, borderWidth: 1, borderColor: '#eceef2',
-    backgroundColor: '#f7f8fa', paddingHorizontal: 14, fontSize: 15, color: '#14161d',
+    height: 48, borderRadius: 14, borderWidth: 1, borderColor: theme.isDark ? theme.colors.borderPrimary : '#eceef2',
+    backgroundColor: theme.isDark ? theme.colors.bgPrimary : '#f7f8fa', paddingHorizontal: 14, fontSize: 15, color: theme.isDark ? theme.colors.textPrimary : '#14161d',
   },
   addCategoryRow: { flexDirection: 'row', gap: 10 },
   addCategoryCancel: {
-    flex: 1, height: 44, borderRadius: 14, borderWidth: 1.5, borderColor: '#eceef2',
+    flex: 1, height: 44, borderRadius: 14, borderWidth: 1.5, borderColor: theme.isDark ? theme.colors.borderPrimary : '#eceef2',
     alignItems: 'center', justifyContent: 'center',
   },
-  addCategoryCancelText: { fontSize: 14, fontWeight: '700', color: '#7b828e' },
+  addCategoryCancelText: { fontSize: 14, fontWeight: '700', color: theme.isDark ? theme.colors.textSecondary : '#7b828e' },
   addCategoryConfirm: {
     flex: 2, height: 44, borderRadius: 14,
-    backgroundColor: COLORS.primary, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: theme.colors.primary, alignItems: 'center', justifyContent: 'center',
   },
   addCategoryConfirmPrivate: { backgroundColor: PRIVATE_COLOR },
   addCategoryConfirmDisabled: { opacity: 0.5 },
   addCategoryConfirmText: { fontSize: 14, fontWeight: '800', color: '#fff' },
 
   emptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60, gap: 10 },
-  emptyTitle: { fontSize: 17, fontWeight: '800', color: '#14161d', letterSpacing: -0.4, marginTop: 8 },
+  emptyTitle: { fontSize: 17, fontWeight: '800', color: theme.isDark ? theme.colors.textPrimary : '#14161d', letterSpacing: -0.4, marginTop: 8 },
   emptySubtitle: {
-    fontSize: 14, color: '#8a909d', textAlign: 'center',
+    fontSize: 14, color: theme.isDark ? theme.colors.textMeta : '#8a909d', textAlign: 'center',
     lineHeight: 20, paddingHorizontal: 24,
   },
   emptyAddButton: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     marginTop: 8, paddingHorizontal: 20, paddingVertical: 12,
-    borderRadius: 16, backgroundColor: COLORS.primary,
+    borderRadius: 16, backgroundColor: theme.colors.primary,
   },
   emptyAddButtonPrivate: { backgroundColor: PRIVATE_COLOR },
   emptyAddButtonText: { fontSize: 14, fontWeight: '800', color: '#fff' },
 
   categoryCard: {
-    backgroundColor: '#fff', borderRadius: 22,
-    borderWidth: 1, borderColor: '#eceef2', overflow: 'hidden',
+    backgroundColor: theme.colors.surfaceElevated, borderRadius: 22,
+    borderWidth: 1, borderColor: theme.isDark ? theme.colors.borderPrimary : '#eceef2', overflow: 'hidden',
   },
-  categoryCardPrivate: { borderColor: '#e4d9ff' },
+  categoryCardPrivate: { borderColor: theme.isDark ? 'rgba(139,92,246,0.35)' : '#e4d9ff' },
   categoryHeader: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     paddingHorizontal: 16, paddingVertical: 13,
-    borderBottomWidth: 1, borderBottomColor: '#f1f3f6',
+    borderBottomWidth: 1, borderBottomColor: theme.isDark ? theme.colors.borderPrimary : '#f1f3f6',
   },
   categoryName: {
-    flex: 1, fontSize: 12, fontWeight: '800', color: '#14161d',
+    flex: 1, fontSize: 12, fontWeight: '800', color: theme.isDark ? theme.colors.textPrimary : '#14161d',
     letterSpacing: 0.4, textTransform: 'uppercase',
   },
-  categoryCount: { fontSize: 11, color: '#a3a9b4', fontWeight: '600' },
+  categoryCount: { fontSize: 11, color: theme.isDark ? theme.colors.textMeta : '#a3a9b4', fontWeight: '600' },
 
   itemRow: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     paddingHorizontal: 14, paddingVertical: 10,
-    borderBottomWidth: 1, borderBottomColor: '#f5f6f8',
+    borderBottomWidth: 1, borderBottomColor: theme.isDark ? theme.colors.borderPrimary : '#f5f6f8',
   },
   checkbox: {
     width: 22, height: 22, borderRadius: 6, borderWidth: 2,
-    borderColor: '#d0d4dd', backgroundColor: '#fff',
+    borderColor: theme.isDark ? theme.colors.borderInput : '#d0d4dd', backgroundColor: theme.isDark ? theme.colors.bgLightest : '#fff',
     alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   },
-  checkboxChecked: { borderColor: COLORS.primary, backgroundColor: COLORS.primary },
+  checkboxChecked: { borderColor: theme.colors.primary, backgroundColor: theme.colors.primary },
   checkboxCheckedPrivate: { borderColor: PRIVATE_COLOR, backgroundColor: PRIVATE_COLOR },
-  checkboxDraft: { borderColor: '#e8eaf0', borderStyle: 'dashed' },
-  itemText: { flex: 1, fontSize: 14, color: '#14161d', fontWeight: '500' },
-  itemTextChecked: { color: '#a3a9b4', textDecorationLine: 'line-through' },
+  checkboxDraft: { borderColor: theme.isDark ? theme.colors.borderInput : '#e8eaf0', borderStyle: 'dashed' },
+  itemText: { flex: 1, fontSize: 14, color: theme.isDark ? theme.colors.textPrimary : '#14161d', fontWeight: '500' },
+  itemTextChecked: { color: theme.isDark ? theme.colors.textMeta : '#a3a9b4', textDecorationLine: 'line-through' },
   itemTextTap: { flex: 1 },
   // Match the Text row height exactly — TextInput brings its own platform
   // padding, which would otherwise make the row jump when editing starts.
   itemEditInput: { paddingVertical: 0, paddingHorizontal: 0 },
 
-  draftInput: { flex: 1, fontSize: 14, color: '#14161d', paddingVertical: 0, minHeight: 22 },
+  draftInput: { flex: 1, fontSize: 14, color: theme.isDark ? theme.colors.textPrimary : '#14161d', paddingVertical: 0, minHeight: 22 },
 
   assignButton: { marginLeft: 2 },
   assignedBadge: {
@@ -868,7 +877,7 @@ const styles = StyleSheet.create({
   },
   assignEmpty: {
     width: 26, height: 26, borderRadius: 13,
-    borderWidth: 1.5, borderColor: '#dde1e8', borderStyle: 'dashed',
+    borderWidth: 1.5, borderColor: theme.isDark ? theme.colors.borderInput : '#dde1e8', borderStyle: 'dashed',
     alignItems: 'center', justifyContent: 'center',
   },
 
@@ -876,41 +885,41 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 8,
     paddingHorizontal: 14, paddingVertical: 10,
   },
-  addItemTapText: { fontSize: 13, color: COLORS.primary, fontWeight: '600' },
+  addItemTapText: { fontSize: 13, color: theme.colors.primary, fontWeight: '600' },
   addItemTapTextPrivate: { color: PRIVATE_COLOR },
 
   addMoreCategoryButton: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     paddingVertical: 14, justifyContent: 'center',
   },
-  addMoreCategoryText: { fontSize: 14, fontWeight: '700', color: COLORS.primary },
+  addMoreCategoryText: { fontSize: 14, fontWeight: '700', color: theme.colors.primary },
   addMoreCategoryTextPrivate: { color: PRIVATE_COLOR },
 
-  assignBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.38)' },
+  assignBackdrop: { flex: 1, backgroundColor: theme.isDark ? theme.colors.backdropModal : 'rgba(0,0,0,0.38)' },
   assignSheet: {
-    backgroundColor: '#fff',
+    backgroundColor: theme.colors.surfaceElevated,
     borderTopLeftRadius: 24, borderTopRightRadius: 24,
     paddingHorizontal: 20, paddingTop: 12,
     maxHeight: '70%',
   },
   sheetHandle: {
     width: 40, height: 4, borderRadius: 2,
-    backgroundColor: '#dde1e8', alignSelf: 'center', marginBottom: 16,
+    backgroundColor: theme.colors.sheetHandle, alignSelf: 'center', marginBottom: 16,
   },
   assignSheetTitle: {
-    fontSize: 17, fontWeight: '800', color: '#14161d',
+    fontSize: 17, fontWeight: '800', color: theme.isDark ? theme.colors.textPrimary : '#14161d',
     letterSpacing: -0.4, marginBottom: 12,
   },
   unassignButton: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     paddingVertical: 12, marginBottom: 4,
-    borderBottomWidth: 1, borderBottomColor: '#f1f3f6',
+    borderBottomWidth: 1, borderBottomColor: theme.isDark ? theme.colors.borderPrimary : '#f1f3f6',
   },
-  unassignButtonText: { fontSize: 14, fontWeight: '700', color: '#d53d18' },
+  unassignButtonText: { fontSize: 14, fontWeight: '700', color: theme.colors.error },
   memberPickerRow: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
-    paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f5f6f8',
+    paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: theme.isDark ? theme.colors.borderPrimary : '#f5f6f8',
   },
-  memberPickerRowActive: { backgroundColor: '#f8f9ff' },
-  memberPickerName: { flex: 1, fontSize: 15, fontWeight: '600', color: '#14161d' },
+  memberPickerRowActive: { backgroundColor: theme.isDark ? theme.colors.primaryLight08 : '#f8f9ff' },
+  memberPickerName: { flex: 1, fontSize: 15, fontWeight: '600', color: theme.isDark ? theme.colors.textPrimary : '#14161d' },
 });

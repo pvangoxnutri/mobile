@@ -22,14 +22,20 @@ import { useI18n } from '@/components/i18n-provider';
 import { apiFetch, apiJson } from '@/lib/api';
 import { uploadImageIfNeeded } from '@/lib/uploads';
 import type { SupportTicketDetail, SupportMessage } from '@/lib/types';
-import { COLORS, RADIUS, SPACING } from '@/constants/design-tokens';
+import { RADIUS, SPACING } from '@/constants/design-tokens';
+import { useTheme } from '@/components/theme-provider';
+import { useThemedStyles } from '@/hooks/use-themed-styles';
+import type { AppTheme } from '@/constants/themes';
 
 function StatusBadge({ status, t }: { status: string; t: (k: string) => string }) {
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
+  // Same semantic status treatment as the support list screen.
   const color = status === 'closed'
-    ? { bg: COLORS.bgLight, text: COLORS.textSecondary }
+    ? { bg: theme.colors.bgLight, text: theme.colors.textSecondary }
     : status === 'waiting_for_reply'
-      ? { bg: '#fff7ed', text: '#d97706' }
-      : { bg: '#f0fdf4', text: '#16a34a' };
+      ? { bg: theme.isDark ? 'rgba(245,166,35,0.16)' : '#fff7ed', text: theme.isDark ? theme.colors.warning : '#d97706' }
+      : { bg: theme.isDark ? theme.colors.successLight : '#f0fdf4', text: theme.isDark ? theme.colors.success : '#16a34a' };
 
   return (
     <View style={[styles.badge, { backgroundColor: color.bg }]}>
@@ -42,6 +48,8 @@ function StatusBadge({ status, t }: { status: string; t: (k: string) => string }
 
 export default function SupportConversationScreen() {
   const { t } = useI18n();
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const insets = useSafeAreaInsets();
   const { ticketId } = useLocalSearchParams<{ ticketId: string }>();
   const [ticket, setTicket] = useState<SupportTicketDetail | null>(null);
@@ -129,7 +137,7 @@ export default function SupportConversationScreen() {
       {/* Header */}
       <View style={[styles.header, { paddingTop: Math.max(insets.top, 16) + 4 }]}>
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()} activeOpacity={0.8}>
-          <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
+          <Ionicons name="arrow-back" size={22} color={theme.colors.textPrimary} />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle} numberOfLines={1}>{t('support.conversationTitle')}</Text>
@@ -140,7 +148,7 @@ export default function SupportConversationScreen() {
 
       {loading ? (
         <View style={styles.center}>
-          <ActivityIndicator color={COLORS.primary} />
+          <ActivityIndicator color={theme.colors.primary} />
         </View>
       ) : error ? (
         <View style={styles.center}>
@@ -193,14 +201,15 @@ export default function SupportConversationScreen() {
               {sendError ? <Text style={styles.sendError}>{sendError}</Text> : null}
               <View style={styles.replyRow}>
                 <TouchableOpacity style={styles.imageBtn} onPress={handlePickImage} activeOpacity={0.7}>
-                  <Ionicons name="image-outline" size={20} color={COLORS.textSecondary} />
+                  <Ionicons name="image-outline" size={20} color={theme.colors.textSecondary} />
                 </TouchableOpacity>
                 <TextInput
                   style={styles.replyInput}
                   value={reply}
                   onChangeText={(v) => setReply(v.slice(0, 4000))}
                   placeholder={t('support.replyPlaceholder')}
-                  placeholderTextColor={COLORS.placeholderText}
+                  placeholderTextColor={theme.colors.placeholderText}
+                  keyboardAppearance={theme.keyboardAppearance}
                   multiline
                 />
                 <TouchableOpacity
@@ -222,13 +231,15 @@ export default function SupportConversationScreen() {
 }
 
 function MessageBubble({ message, t }: { message: SupportMessage; t: (k: string) => string }) {
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const isUser = message.senderType === 'user';
   return (
     <View style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleSupport]}>
       {!isUser && (
         <View style={styles.bubbleSenderRow}>
           <View style={styles.supportAvatar}>
-            <Ionicons name="headset" size={12} color={COLORS.secondary} />
+            <Ionicons name="headset" size={12} color={theme.colors.secondary} />
           </View>
           <Text style={styles.bubbleSenderName}>{t('support.supportTeam')}</Text>
         </View>
@@ -259,19 +270,19 @@ function formatTime(iso: string) {
   return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: COLORS.bgPrimary,
+    backgroundColor: theme.colors.bgPrimary,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: SPACING.xl,
     paddingBottom: 12,
-    backgroundColor: COLORS.bgPrimary,
+    backgroundColor: theme.colors.bgPrimary,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderPrimary,
+    borderBottomColor: theme.colors.borderPrimary,
     gap: 10,
   },
   backButton: {
@@ -280,7 +291,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: RADIUS.circle,
-    backgroundColor: COLORS.bgLight,
+    backgroundColor: theme.colors.bgLight,
     flexShrink: 0,
   },
   headerCenter: {
@@ -291,7 +302,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: COLORS.textPrimary,
+    color: theme.colors.textPrimary,
     letterSpacing: -0.3,
   },
   headerSpacer: {
@@ -311,14 +322,14 @@ const styles = StyleSheet.create({
   subjectBar: {
     paddingHorizontal: SPACING.xl,
     paddingVertical: 12,
-    backgroundColor: COLORS.bgLightest,
+    backgroundColor: theme.colors.bgLightest,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderPrimary,
+    borderBottomColor: theme.colors.borderPrimary,
   },
   subjectBarCategory: {
     fontSize: 10,
     fontWeight: '800',
-    color: COLORS.textMeta,
+    color: theme.colors.textMeta,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
     marginBottom: 2,
@@ -326,7 +337,7 @@ const styles = StyleSheet.create({
   subjectBarSubject: {
     fontSize: 14,
     fontWeight: '700',
-    color: COLORS.textPrimary,
+    color: theme.colors.textPrimary,
     lineHeight: 20,
   },
   center: {
@@ -337,7 +348,7 @@ const styles = StyleSheet.create({
     padding: SPACING.xl,
   },
   errorText: {
-    color: COLORS.error,
+    color: theme.colors.error,
     fontSize: 14,
     textAlign: 'center',
   },
@@ -345,12 +356,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: RADIUS.sm,
-    backgroundColor: COLORS.bgLight,
+    backgroundColor: theme.colors.bgLight,
   },
   retryBtnText: {
     fontSize: 14,
     fontWeight: '700',
-    color: COLORS.textPrimary,
+    color: theme.colors.textPrimary,
   },
   messageList: {
     padding: SPACING.lg,
@@ -358,7 +369,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 14,
-    color: COLORS.textMeta,
+    color: theme.colors.textMeta,
     textAlign: 'center',
     marginTop: 40,
   },
@@ -383,14 +394,14 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: '#e0f4f8',
+    backgroundColor: theme.isDark ? 'rgba(34,174,199,0.16)' : '#e0f4f8',
     justifyContent: 'center',
     alignItems: 'center',
   },
   bubbleSenderName: {
     fontSize: 12,
     fontWeight: '700',
-    color: COLORS.secondary,
+    color: theme.colors.secondary,
   },
   bubbleBg: {
     borderRadius: 18,
@@ -398,16 +409,18 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   bubbleBgUser: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: theme.colors.primary,
     borderBottomRightRadius: 4,
   },
   bubbleBgSupport: {
-    backgroundColor: COLORS.bgLight,
+    // Mirrors the trip chat: received bubbles sit on the avatarDark step
+    // in dark so they read against the page.
+    backgroundColor: theme.isDark ? theme.colors.avatarDark : theme.colors.bgLight,
     borderBottomLeftRadius: 4,
   },
   bubbleText: {
     fontSize: 14,
-    color: COLORS.textPrimary,
+    color: theme.colors.textPrimary,
     lineHeight: 20,
   },
   bubbleTextUser: {
@@ -415,7 +428,7 @@ const styles = StyleSheet.create({
   },
   bubbleTime: {
     fontSize: 10,
-    color: COLORS.textMeta,
+    color: theme.colors.textMeta,
     marginTop: 4,
     fontWeight: '500',
   },
@@ -436,23 +449,23 @@ const styles = StyleSheet.create({
     height: 140,
   },
   closedBar: {
-    backgroundColor: COLORS.bgLight,
+    backgroundColor: theme.colors.bgLight,
     paddingHorizontal: SPACING.xl,
     paddingTop: 14,
     borderTopWidth: 1,
-    borderTopColor: COLORS.borderPrimary,
+    borderTopColor: theme.colors.borderPrimary,
     alignItems: 'center',
   },
   closedBarText: {
     fontSize: 13,
-    color: COLORS.textSecondary,
+    color: theme.colors.textSecondary,
     fontWeight: '600',
     paddingBottom: 8,
   },
   replyArea: {
-    backgroundColor: COLORS.bgPrimary,
+    backgroundColor: theme.colors.bgPrimary,
     borderTopWidth: 1,
-    borderTopColor: COLORS.borderPrimary,
+    borderTopColor: theme.colors.borderPrimary,
     paddingHorizontal: SPACING.lg,
     paddingTop: 10,
   },
@@ -485,7 +498,7 @@ const styles = StyleSheet.create({
   },
   sendError: {
     fontSize: 12,
-    color: COLORS.error,
+    color: theme.colors.error,
     marginBottom: 6,
   },
   replyRow: {
@@ -499,21 +512,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: RADIUS.circle,
-    backgroundColor: COLORS.bgLight,
+    backgroundColor: theme.colors.bgLight,
     flexShrink: 0,
     marginBottom: 2,
   },
   replyInput: {
     flex: 1,
-    backgroundColor: COLORS.bgLightest,
+    backgroundColor: theme.colors.bgLightest,
     borderWidth: 1,
-    borderColor: COLORS.borderInput,
+    borderColor: theme.colors.borderInput,
     borderRadius: 20,
     paddingHorizontal: 14,
     paddingTop: 10,
     paddingBottom: 10,
     fontSize: 14,
-    color: COLORS.textPrimary,
+    color: theme.colors.textPrimary,
     maxHeight: 120,
     lineHeight: 20,
   },
@@ -521,7 +534,7 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: COLORS.primary,
+    backgroundColor: theme.colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
     flexShrink: 0,

@@ -24,17 +24,25 @@ import { useKeyboardFocusScroll } from '@/hooks/useKeyboardFocusScroll';
 import { apiFetch, apiJson } from '@/lib/api';
 import { uploadImageIfNeeded } from '@/lib/uploads';
 import type { SupportTicketSummary } from '@/lib/types';
-import { COLORS, RADIUS, SHADOWS, SPACING, TYPOGRAPHY } from '@/constants/design-tokens';
+import { RADIUS, SPACING } from '@/constants/design-tokens';
+import { useTheme } from '@/components/theme-provider';
+import { useThemedStyles } from '@/hooks/use-themed-styles';
+import type { AppTheme } from '@/constants/themes';
 
 const CATEGORIES = ['bug', 'feature', 'account', 'billing', 'report_user', 'other'] as const;
 type Category = typeof CATEGORIES[number];
 
 function StatusBadge({ status, t }: { status: string; t: (k: string) => string }) {
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
+  // Status hues keep their semantic identity in dark: closed = muted
+  // neutral, waiting = warning amber wash, open = success green wash —
+  // light keeps its exact pre-theming pastels.
   const color = status === 'closed'
-    ? { bg: COLORS.bgLight, text: COLORS.textSecondary }
+    ? { bg: theme.colors.bgLight, text: theme.colors.textSecondary }
     : status === 'waiting_for_reply'
-      ? { bg: '#fff7ed', text: '#d97706' }
-      : { bg: '#f0fdf4', text: '#16a34a' };
+      ? { bg: theme.isDark ? 'rgba(245,166,35,0.16)' : '#fff7ed', text: theme.isDark ? theme.colors.warning : '#d97706' }
+      : { bg: theme.isDark ? theme.colors.successLight : '#f0fdf4', text: theme.isDark ? theme.colors.success : '#16a34a' };
 
   return (
     <View style={[styles.badge, { backgroundColor: color.bg }]}>
@@ -47,6 +55,8 @@ function StatusBadge({ status, t }: { status: string; t: (k: string) => string }
 
 export default function SupportScreen() {
   const { t } = useI18n();
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const insets = useSafeAreaInsets();
   const { scrollRef, onFocusField, scrollViewProps } = useKeyboardFocusScroll();
   const subjectRef = useRef<TextInput>(null);
@@ -157,7 +167,7 @@ export default function SupportScreen() {
       {/* Header */}
       <View style={[styles.header, { paddingTop: Math.max(insets.top, 16) + 4 }]}>
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()} activeOpacity={0.8}>
-          <Ionicons name="arrow-back" size={22} color={COLORS.textPrimary} />
+          <Ionicons name="arrow-back" size={22} color={theme.colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{t('support.title')}</Text>
         <View style={styles.headerSpacer} />
@@ -176,7 +186,7 @@ export default function SupportScreen() {
           <Text style={styles.label}>{t('support.categoryLabel')}</Text>
           <TouchableOpacity style={styles.categoryPicker} onPress={() => setCategoryOpen(true)} activeOpacity={0.8}>
             <Text style={styles.categoryValue}>{t(`support.category.${category}`)}</Text>
-            <Ionicons name="chevron-down" size={16} color={COLORS.textSecondary} />
+            <Ionicons name="chevron-down" size={16} color={theme.colors.textSecondary} />
           </TouchableOpacity>
         </View>
 
@@ -190,7 +200,8 @@ export default function SupportScreen() {
             onChangeText={(v) => setSubject(v.slice(0, 200))}
             onFocus={onFocusField(subjectRef)}
             placeholder={t('support.subjectPlaceholder')}
-            placeholderTextColor={COLORS.placeholderText}
+            keyboardAppearance={theme.keyboardAppearance}
+            placeholderTextColor={theme.colors.placeholderText}
             returnKeyType="next"
             onSubmitEditing={() => descriptionRef.current?.focus()}
           />
@@ -206,7 +217,8 @@ export default function SupportScreen() {
             onChangeText={(v) => setDescription(v.slice(0, 4000))}
             onFocus={onFocusField(descriptionRef)}
             placeholder={t('support.descriptionPlaceholder')}
-            placeholderTextColor={COLORS.placeholderText}
+            keyboardAppearance={theme.keyboardAppearance}
+            placeholderTextColor={theme.colors.placeholderText}
             multiline
             textAlignVertical="top"
           />
@@ -228,7 +240,7 @@ export default function SupportScreen() {
             ))}
             {attachments.length < 5 && (
               <TouchableOpacity style={styles.addImageBtn} onPress={handlePickImage} activeOpacity={0.7}>
-                <Ionicons name="image-outline" size={20} color={COLORS.textSecondary} />
+                <Ionicons name="image-outline" size={20} color={theme.colors.textSecondary} />
                 <Text style={styles.addImageText}>{t('support.addImage')}</Text>
               </TouchableOpacity>
             )}
@@ -252,7 +264,7 @@ export default function SupportScreen() {
           <Text style={styles.ticketSectionTitle}>{t('support.myTickets')}</Text>
 
           {ticketsLoading ? (
-            <ActivityIndicator color={COLORS.primary} style={{ marginTop: 20 }} />
+            <ActivityIndicator color={theme.colors.primary} style={{ marginTop: 20 }} />
           ) : tickets.length === 0 ? (
             <Text style={styles.noTickets}>{t('support.noTickets')}</Text>
           ) : (
@@ -293,7 +305,7 @@ export default function SupportScreen() {
                 <Text style={[styles.categoryOptionText, c === category && styles.categoryOptionTextActive]}>
                   {t(`support.category.${c}`)}
                 </Text>
-                {c === category && <Ionicons name="checkmark" size={16} color={COLORS.primary} />}
+                {c === category && <Ionicons name="checkmark" size={16} color={theme.colors.primary} />}
               </TouchableOpacity>
             ))}
           </Pressable>
@@ -321,19 +333,19 @@ function formatDate(iso: string) {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: COLORS.bgPrimary,
+    backgroundColor: theme.colors.bgPrimary,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: SPACING.xl,
     paddingBottom: 12,
-    backgroundColor: COLORS.bgPrimary,
+    backgroundColor: theme.colors.bgPrimary,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderPrimary,
+    borderBottomColor: theme.colors.borderPrimary,
   },
   backButton: {
     width: 38,
@@ -341,14 +353,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: RADIUS.circle,
-    backgroundColor: COLORS.bgLight,
+    backgroundColor: theme.colors.bgLight,
   },
   headerTitle: {
     flex: 1,
     textAlign: 'center',
     fontSize: 17,
     fontWeight: '700',
-    color: COLORS.textPrimary,
+    color: theme.colors.textPrimary,
     letterSpacing: -0.3,
   },
   headerSpacer: {
@@ -360,7 +372,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 14,
-    color: COLORS.textSecondary,
+    color: theme.colors.textSecondary,
     lineHeight: 20,
     marginBottom: SPACING.xl,
   },
@@ -370,19 +382,19 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 13,
     fontWeight: '700',
-    color: COLORS.textPrimary,
+    color: theme.colors.textPrimary,
     marginBottom: 8,
     letterSpacing: -0.1,
   },
   input: {
-    backgroundColor: COLORS.bgLightest,
+    backgroundColor: theme.colors.bgLightest,
     borderWidth: 1,
-    borderColor: COLORS.borderInput,
+    borderColor: theme.colors.borderInput,
     borderRadius: RADIUS.sm,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 14,
-    color: COLORS.textPrimary,
+    color: theme.colors.textPrimary,
     lineHeight: 20,
   },
   inputMultiline: {
@@ -393,16 +405,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: COLORS.bgLightest,
+    backgroundColor: theme.colors.bgLightest,
     borderWidth: 1,
-    borderColor: COLORS.borderInput,
+    borderColor: theme.colors.borderInput,
     borderRadius: RADIUS.sm,
     paddingHorizontal: 14,
     paddingVertical: 13,
   },
   categoryValue: {
     fontSize: 14,
-    color: COLORS.textPrimary,
+    color: theme.colors.textPrimary,
     fontWeight: '500',
   },
   attachmentsRow: {
@@ -437,27 +449,27 @@ const styles = StyleSheet.create({
     height: 72,
     borderRadius: RADIUS.xs,
     borderWidth: 1.5,
-    borderColor: COLORS.borderInput,
+    borderColor: theme.colors.borderInput,
     borderStyle: 'dashed',
     justifyContent: 'center',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: COLORS.bgLightest,
+    backgroundColor: theme.colors.bgLightest,
   },
   addImageText: {
     fontSize: 10,
-    color: COLORS.textSecondary,
+    color: theme.colors.textSecondary,
     fontWeight: '600',
     textAlign: 'center',
   },
   errorText: {
-    color: COLORS.error,
+    color: theme.colors.error,
     fontSize: 13,
     marginBottom: 12,
     lineHeight: 18,
   },
   submitBtn: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: theme.colors.primary,
     borderRadius: RADIUS.sm,
     height: 52,
     justifyContent: 'center',
@@ -480,17 +492,17 @@ const styles = StyleSheet.create({
   ticketSectionTitle: {
     fontSize: 18,
     fontWeight: '900',
-    color: COLORS.textPrimary,
+    color: theme.colors.textPrimary,
     letterSpacing: -0.5,
     marginBottom: 14,
   },
   ticketRow: {
-    backgroundColor: COLORS.bgLightest,
+    backgroundColor: theme.colors.bgLightest,
     borderRadius: RADIUS.md,
     padding: 16,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: COLORS.borderPrimary,
+    borderColor: theme.colors.borderPrimary,
   },
   ticketRowTop: {
     flexDirection: 'row',
@@ -512,18 +524,18 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: COLORS.primary,
+    backgroundColor: theme.colors.primary,
   },
   ticketDate: {
     marginLeft: 'auto',
     fontSize: 11,
-    color: COLORS.textMeta,
+    color: theme.colors.textMeta,
     fontWeight: '500',
   },
   ticketCategory: {
     fontSize: 11,
     fontWeight: '700',
-    color: COLORS.textMeta,
+    color: theme.colors.textMeta,
     textTransform: 'uppercase',
     letterSpacing: 0.6,
     marginBottom: 3,
@@ -531,28 +543,31 @@ const styles = StyleSheet.create({
   ticketSubject: {
     fontSize: 14,
     fontWeight: '600',
-    color: COLORS.textPrimary,
+    color: theme.colors.textPrimary,
     lineHeight: 20,
   },
   newReplyLabel: {
     marginTop: 6,
     fontSize: 12,
     fontWeight: '700',
-    color: COLORS.primary,
+    color: theme.colors.primary,
   },
   noTickets: {
     fontSize: 14,
-    color: COLORS.textMeta,
+    color: theme.colors.textMeta,
     textAlign: 'center',
     paddingVertical: 24,
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: theme.isDark ? theme.colors.backdropModal : 'rgba(0,0,0,0.45)',
     justifyContent: 'flex-end',
   },
   categorySheet: {
-    backgroundColor: COLORS.bgPrimary,
+    backgroundColor: theme.colors.surfaceElevated,
+    borderWidth: theme.isDark ? StyleSheet.hairlineWidth : 0,
+    borderBottomWidth: 0,
+    borderColor: theme.colors.borderPrimary,
     borderTopLeftRadius: RADIUS.xl,
     borderTopRightRadius: RADIUS.xl,
     paddingTop: 16,
@@ -564,16 +579,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 15,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderPrimary,
+    borderBottomColor: theme.colors.borderPrimary,
   },
   categoryOptionActive: {},
   categoryOptionText: {
     fontSize: 15,
-    color: COLORS.textPrimary,
+    color: theme.colors.textPrimary,
     fontWeight: '500',
   },
   categoryOptionTextActive: {
-    color: COLORS.primary,
+    color: theme.colors.primary,
     fontWeight: '700',
   },
   successOverlay: {
@@ -584,7 +599,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.xl,
   },
   successCard: {
-    backgroundColor: COLORS.bgPrimary,
+    backgroundColor: theme.colors.surfaceElevated,
+    borderWidth: theme.isDark ? StyleSheet.hairlineWidth : 0,
+    borderColor: theme.colors.borderPrimary,
     borderRadius: RADIUS.xl,
     padding: 32,
     alignItems: 'center',
@@ -595,7 +612,7 @@ const styles = StyleSheet.create({
     width: 68,
     height: 68,
     borderRadius: 34,
-    backgroundColor: COLORS.success,
+    backgroundColor: theme.colors.success,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 20,
@@ -603,14 +620,14 @@ const styles = StyleSheet.create({
   successTitle: {
     fontSize: 22,
     fontWeight: '900',
-    color: COLORS.textPrimary,
+    color: theme.colors.textPrimary,
     letterSpacing: -0.6,
     marginBottom: 10,
     textAlign: 'center',
   },
   successBody: {
     fontSize: 14,
-    color: COLORS.textSecondary,
+    color: theme.colors.textSecondary,
     lineHeight: 21,
     textAlign: 'center',
   },

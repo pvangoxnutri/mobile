@@ -16,12 +16,16 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BrandMark from '@/components/brand-mark';
 import { useAuth } from '@/components/auth-provider';
 import { useI18n } from '@/components/i18n-provider';
+import { useTheme } from '@/components/theme-provider';
+import { useThemedStyles } from '@/hooks/use-themed-styles';
+import type { AppTheme } from '@/constants/themes';
 import { apiFetch } from '@/lib/api';
 import { setPendingInviteCode } from '@/lib/pending-invite';
-import { PRIMARY_COLOR, PRIMARY_12 } from '@/constants/colors';
 
 export default function InviteScreen() {
   const { t } = useI18n();
+  const { theme } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { code } = useLocalSearchParams<{ code: string }>();
@@ -79,11 +83,13 @@ export default function InviteScreen() {
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 24, paddingBottom: Math.max(insets.bottom, 24) }]}>
-      <BrandMark size="sm" />
+      {/* Host surface follows the theme → the wordmark needs its adaptive
+          (white-on-dark) rendition. */}
+      <BrandMark size="sm" tone="adaptive" />
 
       <View style={styles.card}>
         <View style={styles.iconCircle}>
-          <Ionicons name="mail-open-outline" size={34} color={PRIMARY_COLOR} />
+          <Ionicons name="mail-open-outline" size={34} color={theme.colors.primary} />
         </View>
         <Text style={styles.title}>{t('invite.title')}</Text>
         <Text style={styles.subtitle}>{t('invite.subtitle')}</Text>
@@ -95,7 +101,7 @@ export default function InviteScreen() {
           </View>
         ) : null}
 
-        {resultText ? <Text style={styles.resultText}>{resultText}</Text> : null}
+        {resultText ? <Text style={[styles.resultText, result !== 'already_member' ? styles.resultTextError : null]}>{resultText}</Text> : null}
 
         {user ? (
           result === 'already_member' || result === 'invalid' ? (
@@ -128,10 +134,12 @@ export default function InviteScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#F7F3EC',
+    // Warm parchment welcome surface in light (exact pre-theming value);
+    // the standard page background in dark.
+    backgroundColor: theme.isDark ? theme.colors.bgPrimary : '#F7F3EC',
     alignItems: 'center',
     paddingHorizontal: 24,
   },
@@ -139,21 +147,23 @@ const styles = StyleSheet.create({
     width: '100%',
     marginTop: 32,
     borderRadius: 28,
-    backgroundColor: '#fff',
+    backgroundColor: theme.colors.surfaceElevated,
+    borderWidth: theme.isDark ? StyleSheet.hairlineWidth : 0,
+    borderColor: theme.colors.borderPrimary,
     paddingHorizontal: 24,
     paddingVertical: 32,
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.08,
+    shadowOpacity: theme.isDark ? 0.4 : 0.08,
     shadowRadius: 22,
-    elevation: 5,
+    elevation: theme.isDark ? 0 : 5,
   },
   iconCircle: {
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: PRIMARY_12,
+    backgroundColor: theme.colors.primaryLight12,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 18,
@@ -161,14 +171,14 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 26,
     fontWeight: '900',
-    color: '#141720',
+    color: theme.isDark ? theme.colors.textPrimary : '#141720',
     letterSpacing: -0.6,
     marginBottom: 8,
     textAlign: 'center',
   },
   subtitle: {
     fontSize: 15,
-    color: '#6B7280',
+    color: theme.isDark ? theme.colors.textSecondary : '#6B7280',
     textAlign: 'center',
     lineHeight: 21,
     marginBottom: 20,
@@ -176,7 +186,7 @@ const styles = StyleSheet.create({
   codePill: {
     alignItems: 'center',
     borderRadius: 16,
-    backgroundColor: '#F5F6FA',
+    backgroundColor: theme.isDark ? theme.colors.bgLight : '#F5F6FA',
     paddingHorizontal: 22,
     paddingVertical: 12,
     marginBottom: 20,
@@ -184,7 +194,7 @@ const styles = StyleSheet.create({
   codeLabel: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#9AA2AE',
+    color: theme.isDark ? theme.colors.textMeta : '#9AA2AE',
     letterSpacing: 1.4,
     textTransform: 'uppercase',
     marginBottom: 2,
@@ -192,18 +202,24 @@ const styles = StyleSheet.create({
   codeValue: {
     fontSize: 22,
     fontWeight: '900',
-    color: '#141720',
+    color: theme.isDark ? theme.colors.textPrimary : '#141720',
     letterSpacing: 3,
   },
   resultText: {
     fontSize: 14,
-    color: '#6B7280',
+    color: theme.isDark ? theme.colors.textSecondary : '#6B7280',
     textAlign: 'center',
     marginBottom: 16,
   },
+  // Invalid/expired/error outcomes read as semantic errors in dark, where
+  // the neutral gray would understate them; light keeps its original quiet
+  // gray treatment.
+  resultTextError: {
+    color: theme.isDark ? theme.colors.error : '#6B7280',
+  },
   signInHint: {
     fontSize: 14,
-    color: '#6B7280',
+    color: theme.isDark ? theme.colors.textSecondary : '#6B7280',
     textAlign: 'center',
     marginBottom: 16,
   },
@@ -212,7 +228,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 24,
-    backgroundColor: PRIMARY_COLOR,
+    backgroundColor: theme.colors.primary,
     paddingVertical: 15,
     paddingHorizontal: 28,
   },
