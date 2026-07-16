@@ -46,7 +46,11 @@ export default function ModalSheet({ visible, children, onClose, height = screen
     // off-screen. In autoHeight mode the content height isn't known up
     // front, so start from the full screen height (always off-screen).
     initialTranslateY: autoHeight ? screenHeight : height,
-    entrySpring: slowEntry ? MOTION_SPRING.graceful : MOTION_SPRING.standard,
+    // Clamp the entry: an underdamped spring slides the sheet PAST its
+    // resting point and visibly settles back down — reads as a stutter, not
+    // weight. The sheet should glide up and stop, exactly like the exit
+    // animation below (which already clamps).
+    entrySpring: { ...(slowEntry ? MOTION_SPRING.graceful : MOTION_SPRING.standard), overshootClamping: true },
   });
 
   useEffect(() => {
