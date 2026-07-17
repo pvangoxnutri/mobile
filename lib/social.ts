@@ -62,7 +62,11 @@ export async function saveNotificationPreferences(preferences: NotificationPrefe
   await safeSetItem(NOTIFICATION_PREFS_KEY, JSON.stringify(preferences));
 }
 
-export async function loadNotifications(): Promise<AppNotification[]> {
+// throwOnError: the unread-count poller needs to DISTINGUISH "no
+// notifications" from "fetch failed" — a swallowed timeout would zero the
+// unread dot even though unread items exist. List consumers keep the
+// tolerant default (they have their own cache/empty states).
+export async function loadNotifications(options?: { throwOnError?: boolean }): Promise<AppNotification[]> {
   try {
     const rows = await apiJson<NotificationLogResponse[]>('/api/notifications');
     return rows.map((row) => ({
@@ -76,7 +80,8 @@ export async function loadNotifications(): Promise<AppNotification[]> {
       actorName: row.actorName ?? undefined,
       actorAvatarUrl: row.actorAvatarUrl ?? undefined,
     }));
-  } catch {
+  } catch (error) {
+    if (options?.throwOnError) throw error;
     return [];
   }
 }
@@ -103,7 +108,7 @@ export async function markNotificationsAsRead(): Promise<void> {
 
 export async function loadUnreadNotificationCount(): Promise<number> {
   const [items, lastSeen] = await Promise.all([
-    loadNotifications(),
+    loadNotifications({ throwOnError: true }),
     loadLastNotificationSeenAt(),
   ]);
   if (lastSeen === 0) return items.length;

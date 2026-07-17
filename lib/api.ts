@@ -106,12 +106,16 @@ export async function apiFetch(path: string, options: RequestInit = {}, timeoutM
     if (controller.signal.aborted) {
       const timeoutMessage = `TIMEOUT after ${timeoutMs}ms`;
       markStartup(`[API] fetch ${method} ${path} → TIMEOUT (${Date.now() - fetchStart}ms, getSession was ${sessionMs}ms)`);
-      console.error(`[API] ${method} ${path} → ${timeoutMessage} (auth: ${auth})`);
+      // console.log, not console.error/warn: timeouts and network drops are
+      // expected transient states (cold start contention, dead radio) — the
+      // thrown Error below is the callers' signal, and a dev LogBox toast
+      // for every hiccup reads as an app bug to whoever is testing.
+      console.log(`[API] ${method} ${path} → ${timeoutMessage} (auth: ${auth})`);
       throw new Error(`Request timed out after ${Math.round(timeoutMs / 1000)}s. Check your connection and try again.`);
     }
     const message = error instanceof Error ? error.message : String(error);
     markStartup(`[API] fetch ${method} ${path} → NETWORK_ERROR (${Date.now() - fetchStart}ms, getSession was ${sessionMs}ms)`, { message });
-    console.error(`[API] ${method} ${path} → NETWORK_ERROR (auth: ${auth}): ${message}`);
+    console.log(`[API] ${method} ${path} → NETWORK_ERROR (auth: ${auth}): ${message}`);
     throw error;
   } finally {
     clearTimeout(timeoutId);

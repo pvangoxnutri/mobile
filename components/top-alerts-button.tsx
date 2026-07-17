@@ -24,10 +24,25 @@ export default function TopAlertsButton({ inviteCount = 0 }: { inviteCount?: num
   useFocusEffect(
     useCallback(() => {
       let active = true;
+      // Single-flight: on a slow connection a 5s cadence would otherwise
+      // stack overlapping requests (each one re-hitting a queue-saturated
+      // connection pool during cold start). A failed poll keeps the last
+      // known count — never zero the dot on a timeout — and the next tick
+      // is the retry.
+      let inFlight = false;
       const refresh = () => {
-        void loadUnreadNotificationCount().then((count) => {
-          if (active) setUnreadCount(count);
-        });
+        if (inFlight) return;
+        inFlight = true;
+        loadUnreadNotificationCount()
+          .then((count) => {
+            if (active) setUnreadCount(count);
+          })
+          .catch((error) => {
+            if (__DEV__) console.log('[ALERTS] unread poll failed (keeping last count):', error instanceof Error ? error.message : error);
+          })
+          .finally(() => {
+            inFlight = false;
+          });
       };
       refresh();
       const interval = setInterval(refresh, 5000);
