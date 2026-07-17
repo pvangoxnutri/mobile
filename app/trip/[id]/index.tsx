@@ -1507,10 +1507,20 @@ export default function TripDetailsScreen() {
               onReorder={(rows, draggedId) => handleFeedReorder(rows, draggedId)}
               renderItem={(row) => {
                 if (row.kind === 'day') {
+                  // One continuous journey: the connector runs behind the day
+                  // headers too — the date label (opaque page-colored box)
+                  // simply overlays it. Only the very first header lets the
+                  // line begin at its own center instead of the top edge, so
+                  // the itinerary has a visual start.
+                  const isFirstFeedRow = feedRows[0] === row;
                   return (
-                    <View style={styles.dayGroup}>
+                    <View style={[styles.dayGroup, styles.connectorHost]}>
+                      <View
+                        pointerEvents="none"
+                        style={[styles.timelineConnector, isFirstFeedRow ? styles.timelineConnectorFromCenter : null]}
+                      />
                       <View style={styles.dayHeader}>
-                        <Text style={styles.dayHeaderText}>{formatDayHeaderDate(row.date, locale)}</Text>
+                        <Text style={[styles.dayHeaderText, styles.dayHeaderTextOverlay]}>{formatDayHeaderDate(row.date, locale)}</Text>
                         <Text style={styles.dayHeaderDay}>{t('trip.dayNumber', { day: dayNumberRelative(row.date, trip?.startDate) })}</Text>
                         <View style={styles.dayHeaderLine} />
                       </View>
@@ -4218,7 +4228,10 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     fontWeight: '700',
   },
   dayGroup: {
-    marginTop: SPACING.xl,
+    // paddingTop (not marginTop): visually identical for this transparent
+    // full-width container, but keeps the day gap INSIDE the connector host
+    // so the journey line runs unbroken through it.
+    paddingTop: SPACING.xl,
   },
   dayHeader: {
     flexDirection: 'row',
@@ -4366,6 +4379,16 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     width: 2,
     borderRadius: 1,
     backgroundColor: theme.colors.borderPrimary,
+  },
+  // The trip's very first row: the journey line begins at the header's own
+  // center rather than bleeding off the top of the feed.
+  timelineConnectorFromCenter: {
+    top: '50%',
+  },
+  // Day-header date label paints the page color behind itself so it overlays
+  // the connector cleanly (no layout change — same text box, opaque fill).
+  dayHeaderTextOverlay: {
+    backgroundColor: theme.colors.bgPrimary,
   },
   timelineIconWrap: {
     width: 42,
