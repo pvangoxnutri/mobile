@@ -19,4 +19,9 @@ export const ENABLE_GLUNO_ASSISTANT = false;
 // themed screen. Flip to true locally to develop/test Dark. Must stay false
 // in shipping builds until every phase of the theme migration is complete
 // and both themes have passed the full visual audit (Phase 6).
-export const ENABLE_THEME_SWITCHING = true; // TEMPORARILY ON for local dark-mode testing — flip back to false before any build/eas update until the theme migration completes (Phase 6).
+// SHIPPING since 1.0.4: the full Light/Dark theme migration is complete
+// (batches 0–6 + fixes). Appearance lives in Profile → Settings with exactly
+// two options (Light/Dark, no System); the preference persists locally.
+// Known leftover: the admin-only moderation screen and the flag-disabled
+// Gluno shell are not dark-migrated — neither is reachable by regular users.
+export const ENABLE_THEME_SWITCHING = true;
