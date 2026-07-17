@@ -1526,6 +1526,8 @@ export default function TripDetailsScreen() {
                         ? t('activity.stay.checkoutAt', { time: formatActivityTimeShort(stay.endTime) ?? stay.endTime })
                         : t('activity.stay.checkout');
                   return (
+                    <View style={styles.connectorHost}>
+                      <View pointerEvents="none" style={styles.timelineConnector} />
                     <TouchableOpacity
                       activeOpacity={0.75}
                       style={styles.stayRow}
@@ -1543,6 +1545,7 @@ export default function TripDetailsScreen() {
                       </Text>
                       <Text style={styles.stayRowLabel}>{label}</Text>
                     </TouchableOpacity>
+                    </View>
                   );
                 }
                 const activity = row.activity;
@@ -1551,24 +1554,32 @@ export default function TripDetailsScreen() {
 
                   if (hidden) {
                     return (
-                      <HiddenSidequestCard
-                        key={activity.id}
-                        id={activity.id}
-                        revealAt={activity.revealAt}
-                        imageUrl={activity.imageUrl}
-                        category={activity.category}
-                        description={activity.description}
-                        timeLabel={timeLabel}
-                        formatTimeUntilReveal={(revealAt) => formatTimeUntilReveal(revealAt, t)}
-                        onPress={() => router.push(`/trip/${id}/sidequest/${activity.id}`)}
-                      />
+                      <View key={activity.id} style={styles.connectorHost}>
+                        <View pointerEvents="none" style={styles.timelineConnector} />
+                        <HiddenSidequestCard
+                          id={activity.id}
+                          revealAt={activity.revealAt}
+                          imageUrl={activity.imageUrl}
+                          category={activity.category}
+                          description={activity.description}
+                          timeLabel={timeLabel}
+                          formatTimeUntilReveal={(revealAt) => formatTimeUntilReveal(revealAt, t)}
+                          onPress={() => router.push(`/trip/${id}/sidequest/${activity.id}`)}
+                        />
+                      </View>
                     );
                   }
 
                   const stayCard = isStay(activity);
                   return (
+                    // connectorHost carries the itinerary connector BEHIND the
+                    // row: transparent rows show it running through the icon
+                    // column, while opaque surfaces (hotel reservation cards)
+                    // sit on top of it — the line passes underneath without a
+                    // visual break since the host spans the card's margins too.
+                    <View key={activity.id} style={styles.connectorHost}>
+                      <View pointerEvents="none" style={styles.timelineConnector} />
                     <TouchableOpacity
-                      key={activity.id}
                       activeOpacity={0.86}
                       style={[styles.timelineRow, stayCard ? styles.stayAnchorSurface : null]}
                       onPress={() => router.push(`/trip/${id}/sidequest/${activity.id}`)}>
@@ -1611,6 +1622,7 @@ export default function TripDetailsScreen() {
                       </View>
                       {timeLabel ? <Text style={styles.timelineTime}>{timeLabel}</Text> : null}
                     </TouchableOpacity>
+                    </View>
                   );
               }}
             />
@@ -4335,6 +4347,25 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     ...TYPOGRAPHY.meta,
     color: theme.colors.textMeta,
     marginLeft: SPACING.sm,
+  },
+  // Continuous itinerary connector: one thin segment per feed row, absolute
+  // behind the row content and spanning the host's FULL height (including
+  // card margins), so consecutive rows' segments meet with no gaps. It runs
+  // down the center of the 42px icon column (x = 21); opaque surfaces —
+  // hotel reservation cards, night/checkout rows, dark sealed cards — simply
+  // sit on top of it, letting the line pass underneath. Semantic divider
+  // color in both themes.
+  connectorHost: {
+    position: 'relative',
+  },
+  timelineConnector: {
+    position: 'absolute',
+    left: 20,
+    top: 0,
+    bottom: 0,
+    width: 2,
+    borderRadius: 1,
+    backgroundColor: theme.colors.borderPrimary,
   },
   timelineIconWrap: {
     width: 42,
