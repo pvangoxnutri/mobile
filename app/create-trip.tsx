@@ -55,6 +55,13 @@ export default function CreateTripScreen() {
   const [destinationSuggestions, setDestinationSuggestions] = useState<PlaceAutocompleteSuggestion[]>([]);
   const [destinationPlace, setDestinationPlace] = useState<{ placeId: string | null; latitude: number; longitude: number } | null>(null);
   const pickedDestinationLabelRef = useRef<string | null>(null);
+  // Bumped on every pick AND every manual edit that clears a pick. The async
+  // coordinate lookup captures the token at start and only applies its
+  // result if the token is still current — so a fast re-type or a second
+  // pick started before the first one's network request lands can never
+  // clobber a newer selection with stale coordinates (or resurrect a
+  // cleared one).
+  const destinationSelectionTokenRef = useRef(0);
   // startDate / endDate hold internal defaults so the RangeDatePicker has an
   // initial range to render, but they are NOT displayed anywhere in the UI
   // until hasUserSelectedDates flips to true.
@@ -102,9 +109,12 @@ export default function CreateTripScreen() {
   function handleDestinationChange(value: string) {
     const next = value.slice(0, DESTINATION_MAX_LENGTH);
     setDestination(next);
-    // Re-typed text no longer describes the picked place — drop coordinates.
+    // Re-typed text no longer describes the picked place — drop coordinates
+    // AND invalidate any coordinate lookup still in flight for the pick
+    // being edited away from, so it can never apply late.
     if (pickedDestinationLabelRef.current && next.trim() !== pickedDestinationLabelRef.current) {
       pickedDestinationLabelRef.current = null;
+      destinationSelectionTokenRef.current += 1;
       setDestinationPlace(null);
     }
   }
@@ -112,6 +122,8 @@ export default function CreateTripScreen() {
   function handlePickDestination(suggestion: PlaceAutocompleteSuggestion) {
     const label = suggestion.primaryText.slice(0, DESTINATION_MAX_LENGTH).trim();
     pickedDestinationLabelRef.current = label;
+    destinationSelectionTokenRef.current += 1;
+    const token = destinationSelectionTokenRef.current;
     setDestination(label);
     setDestinationSuggestions([]);
     setDestinationPlace(null);
@@ -126,12 +138,16 @@ export default function CreateTripScreen() {
           latitude = details.latitude ?? null;
           longitude = details.longitude ?? null;
         }
-        // Only apply if the field still shows the pick (guards a fast re-type).
-        if (latitude != null && longitude != null && pickedDestinationLabelRef.current === label) {
+        // Only apply if nothing newer (a re-type or another pick) has
+        // superseded this lookup while it was in flight.
+        if (latitude != null && longitude != null && destinationSelectionTokenRef.current === token) {
           setDestinationPlace({ placeId: suggestion.placeId, latitude, longitude });
         }
       } catch {
-        // Coordinates are an optional bonus — the text destination stands alone.
+        // Coordinates are an optional bonus — the text destination stands
+        // alone. A failed lookup must never pretend to have succeeded, so
+        // destinationPlace simply stays null (the hint keeps reflecting
+        // reality); nothing to clean up here since we never set it.
       }
     })();
   }

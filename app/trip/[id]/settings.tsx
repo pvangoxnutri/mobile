@@ -63,6 +63,9 @@ export default function TripSettingsScreen() {
   const [destinationSuggestions, setDestinationSuggestions] = useState<PlaceAutocompleteSuggestion[]>([]);
   const [destinationPlace, setDestinationPlace] = useState<{ placeId: string | null; latitude: number; longitude: number } | null>(null);
   const pickedDestinationLabelRef = useRef<string | null>(null);
+  // Bumped on every pick AND every manual edit that clears a pick — see
+  // create-trip.tsx's identical guard for the full race it closes.
+  const destinationSelectionTokenRef = useRef(0);
   const [tripCountries, setTripCountries] = useState<string[]>([]);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -217,8 +220,12 @@ export default function TripSettingsScreen() {
 
   function handleDestinationChange(value: string) {
     setDestination(value);
+    // Re-typed text no longer describes the picked place — drop coordinates
+    // AND invalidate any coordinate lookup still in flight for the pick
+    // being edited away from, so it can never apply late.
     if (pickedDestinationLabelRef.current && value.trim() !== pickedDestinationLabelRef.current) {
       pickedDestinationLabelRef.current = null;
+      destinationSelectionTokenRef.current += 1;
       setDestinationPlace(null);
     }
   }
@@ -226,6 +233,8 @@ export default function TripSettingsScreen() {
   function handlePickDestination(suggestion: PlaceAutocompleteSuggestion) {
     const label = suggestion.primaryText.trim();
     pickedDestinationLabelRef.current = label;
+    destinationSelectionTokenRef.current += 1;
+    const token = destinationSelectionTokenRef.current;
     setDestination(label);
     setDestinationSuggestions([]);
     setDestinationPlace(null);
@@ -238,11 +247,15 @@ export default function TripSettingsScreen() {
           latitude = details.latitude ?? null;
           longitude = details.longitude ?? null;
         }
-        if (latitude != null && longitude != null && pickedDestinationLabelRef.current === label) {
+        // Only apply if nothing newer (a re-type or another pick) has
+        // superseded this lookup while it was in flight.
+        if (latitude != null && longitude != null && destinationSelectionTokenRef.current === token) {
           setDestinationPlace({ placeId: suggestion.placeId, latitude, longitude });
         }
       } catch {
-        // Coordinates are optional — the text destination stands alone.
+        // Coordinates are optional — the text destination stands alone. A
+        // failed lookup must never pretend to have succeeded, so
+        // destinationPlace simply stays null.
       }
     })();
   }
