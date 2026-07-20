@@ -185,10 +185,13 @@ const DEFAULT_SYMBOL: CategorySymbol = {
   labelKey: 'activity.category_other',
 };
 
-/** Ordered list for selectors (Create/Edit chips): the original five first
- * (familiar order), then transport, then places/activities, 'other' last. */
+/** Ordered list for selectors (Create/Edit chips): the categories with
+ * extra functionality first (flight route, hotel stay/check-out), then the
+ * rest in the familiar order — originals, transport, places/activities,
+ * 'other' last. */
 export const CATEGORY_VALUES: ActivityCategoryValue[] = [
   'flight',
+  'hotel',
   'sidequest',
   'food',
   'sight',
@@ -203,7 +206,6 @@ export const CATEGORY_VALUES: ActivityCategoryValue[] = [
   'museum',
   'city',
   'shopping',
-  'hotel',
   'spa',
   'drinks',
   'party',

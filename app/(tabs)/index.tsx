@@ -26,6 +26,9 @@ import { maybeRequestPushPermission } from '@/lib/push-notifications';
 import { formatRelativeTime } from '@/lib/format-time';
 import { markStartup, markStartupSync } from '@/lib/startup-timing'; // TEMPORARY — see lib/startup-timing.ts
 import { useScalePress } from '@/hooks/useMotion';
+import { PRESENCE_POLL_FAST_MS, useMembersPresencePoll } from '@/hooks/use-presence-poll';
+import { maybeShowAppUpdateDialog } from '@/lib/app-update';
+import { fetchTripWeather, getCachedTripWeather, summaryDay, type TripWeather } from '@/lib/weather-api';
 import type { PendingInvite, Quest, SideQuestActivity, TripEvent } from '@/lib/types';
 import { SPACING, RADIUS, TYPOGRAPHY } from '@/constants/design-tokens';
 import { useTheme } from '@/components/theme-provider';
@@ -103,6 +106,16 @@ export default function HomeScreen() {
     const timer = setInterval(() => setNow(new Date()), 30000);
     return () => clearInterval(timer);
   }, []);
+
+  // App-update nudge. Home only mounts post-login/post-onboarding, so this
+  // can never appear over auth/reset/deep-link/onboarding flows. The short
+  // delay keeps it clear of first paint (and of the contextual push
+  // prompt); the module itself guards session-once, AppState, dev builds
+  // and silent failure.
+  useEffect(() => {
+    const timer = setTimeout(() => void maybeShowAppUpdateDialog(t), 3500);
+    return () => clearTimeout(timer);
+  }, [t]);
 
   // Redeem an invite link that arrived while the user was signed out: the
   // invite screen stashes the code before sending them to login, and once
@@ -264,6 +277,49 @@ export default function HomeScreen() {
 
   const sortedTrips = useMemo(() => sortTripsByUpcomingEvent(quests, activities, now), [activities, now, quests]);
   const featuredTrip = sortedTrips[selectedTripIndex] ?? null;
+
+  // Weather for the visible upcoming/ongoing cards (sortedTrips is exactly
+  // that set — past trips never appear here). Fully independent of the trip
+  // load: cache renders instantly, background refresh per focus, failures
+  // are silent and simply leave the row hidden. Never blocks Home.
+  const [weatherByTripId, setWeatherByTripId] = useState<Record<string, TripWeather>>({});
+  const weatherTripIdsKey = useMemo(() => sortedTrips.map((entry) => entry.quest.id).join(','), [sortedTrips]);
+  useFocusEffect(
+    useCallback(() => {
+      if (!weatherTripIdsKey) return;
+      let active = true;
+      for (const tripId of weatherTripIdsKey.split(',')) {
+        const cached = getCachedTripWeather(tripId);
+        if (cached) setWeatherByTripId((prev) => (prev[tripId] === cached ? prev : { ...prev, [tripId]: cached }));
+        fetchTripWeather(tripId)
+          .then((data) => {
+            if (active) setWeatherByTripId((prev) => ({ ...prev, [tripId]: data }));
+          })
+          .catch(() => {});
+      }
+      return () => {
+        active = false;
+      };
+    }, [weatherTripIdsKey]),
+  );
+
+  // Live presence: loadQuests fetches every trip's members once per focus,
+  // but the online dots on the hero cards and in the members sheet would
+  // then freeze until the next focus. Re-poll while Home stays open — only
+  // the trips Home actually renders (sortedTrips drops fully-past trips),
+  // so old adventures never generate background requests. Fast cadence only
+  // while the members sheet is open; ambient 30s for the carousel dots.
+  useMembersPresencePoll<TripMember>(
+    sortedTrips.map((entry) => entry.quest.id),
+    (tripId, memberData) => {
+      setMembersByTripId((prev) => ({ ...prev, [tripId]: memberData }));
+      // The members sheet snapshots its list on open — keep it live too.
+      if (membersOpen && featuredTrip?.quest.id === tripId) {
+        setFeaturedMembers(memberData);
+      }
+    },
+    membersOpen ? PRESENCE_POLL_FAST_MS : undefined,
+  );
   const countdownParts = useMemo(() => getCountdownParts(featuredTrip?.nextEventDate, now, t), [featuredTrip?.nextEventDate, now, t]);
   const featuredEvent = featuredTrip?.upcomingEvents[featuredEventIndex] ?? null;
   const allowNativeDriver = Platform.OS !== 'web';
@@ -576,6 +632,10 @@ export default function HomeScreen() {
                   onAvatarError={(id) => setFailedMemberAvatars((prev) => new Set([...prev, id]))}
                   now={now}
                   t={t}
+                  weather={(() => {
+                    const day = summaryDay(weatherByTripId[entry.quest.id]);
+                    return day ? { condition: day.code, tempMaxC: day.tempMaxC } : null;
+                  })()}
                 />
               ))}
             </ScrollView>

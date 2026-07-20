@@ -196,16 +196,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     let interval: ReturnType<typeof setInterval> | null = null;
 
-    const beat = () => {
-      void apiFetch('/api/users/me/heartbeat', { method: 'PUT' }).catch(() => {
-        // Presence is best-effort — never surface heartbeat failures.
-      });
+    // Presence is best-effort — never surface heartbeat failures. The
+    // body-less beat is the cheap idle tick; { online } marks the two
+    // transitions the server's 60s write throttle can't see (see
+    // UsersController.Heartbeat).
+    const beat = (body?: { online: boolean }) => {
+      void apiFetch('/api/users/me/heartbeat', {
+        method: 'PUT',
+        ...(body
+          ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+          : {}),
+      }).catch(() => {});
     };
 
     const start = () => {
       if (interval) return;
-      beat();
-      interval = setInterval(beat, 60_000);
+      beat({ online: true });
+      interval = setInterval(() => beat(), 60_000);
     };
     const stop = () => {
       if (interval) {
@@ -217,7 +224,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (AppState.currentState === 'active') start();
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'active') start();
-      else stop();
+      else {
+        stop();
+        // Real backgrounding flips us offline for others within seconds
+        // instead of after the 2-minute window. Deliberately NOT sent on
+        // 'inactive' (control center, app-switcher peek) — those bounce
+        // back to 'active' too easily and would flicker the dot.
+        if (state === 'background') beat({ online: false });
+      }
     });
 
     return () => {

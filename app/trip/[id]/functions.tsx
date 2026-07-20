@@ -182,6 +182,24 @@ export default function FunctionsScreen() {
           <Ionicons name="chevron-forward" size={20} color={theme.isDark ? theme.colors.textMuted : '#b2b7c0'} />
         </TouchableOpacity>
 
+        {/* Weather card */}
+        <TouchableOpacity
+          style={styles.featureCard}
+          activeOpacity={0.86}
+          onPress={() => router.push(`/trip/${id}/weather`)}>
+          {/* Deliberate weather sky-blue accent (#0ea5e9) — same policy as the
+              packing-list blue: kept in both themes, light wash / dark tint. */}
+          <View style={[styles.featureIconCircle, { backgroundColor: theme.isDark ? 'rgba(14,165,233,0.16)' : '#e9f6fe' }]}>
+            <Ionicons name="partly-sunny-outline" size={20} color="#0ea5e9" />
+          </View>
+          <View style={styles.featureCardBody}>
+            <Text style={styles.featureCardTitle}>{t('weather.title')}</Text>
+            <Text style={styles.featureCardSubtitle}>{t('trip.functions.weatherSubtitle')}</Text>
+          </View>
+          {/* Light: exact pre-theming chevron gray (#b2b7c0, no matching token). */}
+          <Ionicons name="chevron-forward" size={20} color={theme.isDark ? theme.colors.textMuted : '#b2b7c0'} />
+        </TouchableOpacity>
+
       </ScrollView>
 
       {/* Spotify modal */}

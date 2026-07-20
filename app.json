@@ -17,6 +17,7 @@
     "ios": {
       "supportsTablet": false,
       "requiresFullScreen": true,
+      "userInterfaceStyle": "automatic",
       "bundleIdentifier": "app.sidequesttravel.mobile",
       "buildNumber": "2",
       "associatedDomains": [
@@ -77,7 +78,11 @@
           "image": "./assets/images/splash-blank.png",
           "imageWidth": 100,
           "resizeMode": "contain",
-          "backgroundColor": "#fff7f8"
+          "backgroundColor": "#fff7f8",
+          "dark": {
+            "image": "./assets/images/splash-blank.png",
+            "backgroundColor": "#0d0f14"
+          }
         }
       ],
       "@react-native-community/datetimepicker",

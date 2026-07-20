@@ -21,6 +21,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/components/auth-provider';
 import { useI18n } from '@/components/i18n-provider';
 import { useKeyboardFocusScroll } from '@/hooks/useKeyboardFocusScroll';
+import { useMembersPresencePoll } from '@/hooks/use-presence-poll';
 import Avatar from '@/components/avatar';
 import { apiFetch, apiJson } from '@/lib/api';
 import { splitPastedChecklistItems, stripNotesChecklistMarkers } from '@/lib/text-paste';
@@ -114,6 +115,13 @@ export default function PackingListScreen() {
   }, [tripId, t]);
 
   useFocusEffect(useCallback(() => { void load(); }, [load]));
+
+  // Live presence: load() fetches members once per focus — re-poll so the
+  // online dots on assignee avatars stay current. Only members are touched;
+  // the packing list itself must never be replaced mid-edit by a poll.
+  useMembersPresencePoll<Member>(tripId ? [tripId] : [], (_tripId, memberData) => {
+    setMembers(memberData);
+  });
 
   const categories = activeTab === 'shared' ? data.shared : data.private;
 

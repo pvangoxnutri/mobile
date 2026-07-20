@@ -89,7 +89,7 @@ const NON_SIDEQUEST_CATEGORY_VALUES = CATEGORY_VALUES.filter((value) => value !=
 
 // Shown by default; the rest (transport, places, Custom) sit behind a
 // "Show more" toggle so the category row stays short and scannable.
-const COLLAPSED_CATEGORY_VALUES: ActivityCategoryValue[] = ['flight', 'food', 'sight'];
+const COLLAPSED_CATEGORY_VALUES: ActivityCategoryValue[] = ['flight', 'hotel', 'food'];
 
 // What the activity-time spinner shows when no time is chosen yet. The same
 // value MUST be committed to form state when the picker opens: the native

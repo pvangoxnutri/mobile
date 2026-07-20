@@ -3,7 +3,7 @@ import { Stack, router, useLocalSearchParams } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect } from '@react-navigation/native';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -28,6 +28,7 @@ import { UnsavedChangesModal, useUnsavedChanges } from '@/components/unsaved-cha
 import { useKeyboardFocusScroll } from '@/hooks/useKeyboardFocusScroll';
 import { apiFetch, apiJson } from '@/lib/api';
 import { getCached, setCached, invalidateTripCache } from '@/lib/cache';
+import { fetchPlaceDetails, fetchPlaceSuggestions, type PlaceAutocompleteSuggestion } from '@/lib/maps-api';
 import type { Quest, TripInvite } from '@/lib/types';
 import { uploadImageIfNeeded } from '@/lib/uploads';
 import { useTheme } from '@/components/theme-provider';
@@ -57,6 +58,11 @@ export default function TripSettingsScreen() {
   const [invites, setInvites] = useState<TripInvite[]>([]);
   const [title, setTitle] = useState('');
   const [destination, setDestination] = useState('');
+  // Coordinates ride along only for a picked place suggestion; re-typed
+  // free text clears them (server gets clearDestinationCoordinates).
+  const [destinationSuggestions, setDestinationSuggestions] = useState<PlaceAutocompleteSuggestion[]>([]);
+  const [destinationPlace, setDestinationPlace] = useState<{ placeId: string | null; latitude: number; longitude: number } | null>(null);
+  const pickedDestinationLabelRef = useRef<string | null>(null);
   const [tripCountries, setTripCountries] = useState<string[]>([]);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -105,6 +111,18 @@ export default function TripSettingsScreen() {
     formSeededForIdRef.current = id;
     setTitle(tripData.title ?? '');
     setDestination(tripData.destination ?? '');
+    // An untouched destination keeps its stored coordinates on save.
+    if (tripData.destinationLatitude != null && tripData.destinationLongitude != null) {
+      pickedDestinationLabelRef.current = (tripData.destination ?? '').trim();
+      setDestinationPlace({
+        placeId: tripData.destinationPlaceId ?? null,
+        latitude: tripData.destinationLatitude,
+        longitude: tripData.destinationLongitude,
+      });
+    } else {
+      pickedDestinationLabelRef.current = null;
+      setDestinationPlace(null);
+    }
     setTripCountries(tripData.countries ?? []);
     setStartDate(tripData.startDate);
     setEndDate(tripData.endDate);
@@ -181,6 +199,54 @@ export default function TripSettingsScreen() {
     }
   }
 
+  // Destination autocomplete — same backend proxy and debounce pattern as
+  // create-trip; never re-opens for the exact label the user just picked.
+  useEffect(() => {
+    const query = destination.trim();
+    if (query.length < 2 || query === pickedDestinationLabelRef.current) {
+      setDestinationSuggestions([]);
+      return;
+    }
+    const handle = setTimeout(() => {
+      void fetchPlaceSuggestions(query)
+        .then((items) => setDestinationSuggestions(items.slice(0, 5)))
+        .catch(() => setDestinationSuggestions([]));
+    }, 350);
+    return () => clearTimeout(handle);
+  }, [destination]);
+
+  function handleDestinationChange(value: string) {
+    setDestination(value);
+    if (pickedDestinationLabelRef.current && value.trim() !== pickedDestinationLabelRef.current) {
+      pickedDestinationLabelRef.current = null;
+      setDestinationPlace(null);
+    }
+  }
+
+  function handlePickDestination(suggestion: PlaceAutocompleteSuggestion) {
+    const label = suggestion.primaryText.trim();
+    pickedDestinationLabelRef.current = label;
+    setDestination(label);
+    setDestinationSuggestions([]);
+    setDestinationPlace(null);
+    void (async () => {
+      try {
+        let latitude = suggestion.latitude ?? null;
+        let longitude = suggestion.longitude ?? null;
+        if ((latitude == null || longitude == null) && !suggestion.placeId.startsWith('osm:')) {
+          const details = await fetchPlaceDetails(suggestion.placeId);
+          latitude = details.latitude ?? null;
+          longitude = details.longitude ?? null;
+        }
+        if (latitude != null && longitude != null && pickedDestinationLabelRef.current === label) {
+          setDestinationPlace({ placeId: suggestion.placeId, latitude, longitude });
+        }
+      } catch {
+        // Coordinates are optional — the text destination stands alone.
+      }
+    })();
+  }
+
   async function handleSave(): Promise<boolean> {
     if (!trip) return false;
 
@@ -195,6 +261,15 @@ export default function TripSettingsScreen() {
         body: JSON.stringify({
           title: title.trim(),
           destination: destination.trim(),
+          // Picked place → send its coordinates; free text → clear stored
+          // ones so weather never uses coordinates for the wrong place.
+          ...(destinationPlace
+            ? {
+                destinationLatitude: destinationPlace.latitude,
+                destinationLongitude: destinationPlace.longitude,
+                destinationPlaceId: destinationPlace.placeId,
+              }
+            : { clearDestinationCoordinates: true }),
           countries: tripCountries,
           startDate,
           endDate,
@@ -422,7 +497,7 @@ export default function TripSettingsScreen() {
                 <TextInput
                   ref={destinationRef}
                   value={destination}
-                  onChangeText={setDestination}
+                  onChangeText={handleDestinationChange}
                   keyboardAppearance={theme.keyboardAppearance}
                   placeholder="Destination"
                   style={styles.input}
@@ -430,6 +505,30 @@ export default function TripSettingsScreen() {
                   returnKeyType="done"
                   onSubmitEditing={() => Keyboard.dismiss()}
                 />
+                {destinationSuggestions.length > 0 ? (
+                  <View style={styles.destinationSuggestions}>
+                    {destinationSuggestions.map((item) => (
+                      <TouchableOpacity
+                        key={item.placeId}
+                        activeOpacity={0.9}
+                        style={styles.destinationSuggestionRow}
+                        onPress={() => handlePickDestination(item)}>
+                        <Ionicons name="location-outline" size={16} color={theme.colors.primary} />
+                        <View style={styles.destinationSuggestionCopy}>
+                          <Text style={styles.destinationSuggestionTitle} numberOfLines={1}>{item.primaryText}</Text>
+                          {item.secondaryText ? (
+                            <Text style={styles.destinationSuggestionSubtitle} numberOfLines={1}>{item.secondaryText}</Text>
+                          ) : null}
+                        </View>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                ) : null}
+                {/* Free text saves fine — the hint just explains what a
+                    picked suggestion unlocks. Gone once a place is chosen. */}
+                {destination.trim() && !destinationPlace ? (
+                  <Text style={styles.destinationHint}>{t('trip.destinationWeatherHint')}</Text>
+                ) : null}
                 <Text style={styles.label}>Countries</Text>
                 <CountryPicker value={tripCountries} onChange={setTripCountries} label="Select countries" />
                 <Text style={styles.label}>Dates</Text>
@@ -734,6 +833,42 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     marginBottom: 10,
     color: theme.isDark ? theme.colors.textPrimary : '#161821',
     fontSize: 16,
+  },
+  destinationSuggestions: {
+    marginTop: -4,
+    marginBottom: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: theme.isDark ? theme.colors.borderInput : '#e6e9ef',
+    backgroundColor: theme.isDark ? theme.colors.bgLightest : '#f9fafc',
+    overflow: 'hidden',
+  },
+  destinationSuggestionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  destinationSuggestionCopy: {
+    flex: 1,
+  },
+  destinationSuggestionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.isDark ? theme.colors.textPrimary : '#161821',
+  },
+  destinationSuggestionSubtitle: {
+    fontSize: 12,
+    color: theme.colors.textMeta,
+    marginTop: 1,
+  },
+  destinationHint: {
+    marginTop: -4,
+    marginBottom: 10,
+    fontSize: 12,
+    lineHeight: 16,
+    color: theme.colors.textMeta,
   },
   dateRangeCard: {
     marginTop: 4,

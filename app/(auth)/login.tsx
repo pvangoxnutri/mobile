@@ -19,6 +19,7 @@ import { useAuth } from '@/components/auth-provider';
 import { useI18n, type AppLanguage } from '@/components/i18n-provider';
 import LanguagePicker from '@/components/language-picker';
 import PasswordStrengthMeter from '@/components/password-strength-meter';
+import { PasswordInput } from '@/components/ui/password-input';
 import { supabase } from '@/lib/supabase';
 import { useTheme } from '@/components/theme-provider';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
@@ -209,12 +210,11 @@ export default function LoginScreen() {
         </View>
         <View style={styles.fieldBlock}>
           <Text style={styles.fieldLabel}>{t('auth.password')}</Text>
-          <TextInput
+          <PasswordInput
             keyboardAppearance={theme.keyboardAppearance}
             ref={passwordRef}
             style={styles.input}
             placeholder={mode === 'signin' ? t('auth.password_signin_placeholder') : t('auth.password_signup_placeholder')}
-            secureTextEntry
             autoCapitalize="none"
             autoCorrect={false}
             // Explicit content types prevent the iOS QuickType "Use strong
@@ -235,12 +235,11 @@ export default function LoginScreen() {
         {mode === 'signup' ? (
           <View style={styles.fieldBlock}>
             <Text style={styles.fieldLabel}>{t('auth.password_confirm')}</Text>
-            <TextInput
+            <PasswordInput
               keyboardAppearance={theme.keyboardAppearance}
               ref={confirmPasswordRef}
               style={styles.input}
               placeholder={t('auth.password_confirm_placeholder')}
-              secureTextEntry
               autoCapitalize="none"
               autoCorrect={false}
               textContentType="newPassword"

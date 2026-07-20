@@ -13,6 +13,7 @@ import { useAuth } from '@/components/auth-provider';
 import { useI18n, type AppLanguage } from '@/components/i18n-provider';
 import LanguagePicker from '@/components/language-picker';
 import TabHeader from '@/components/tab-header';
+import { PasswordInput } from '@/components/ui/password-input';
 import { useTheme, type ThemePreference } from '@/components/theme-provider';
 import { ENABLE_THEME_SWITCHING } from '@/constants/feature-flags';
 import { apiFetch, apiJson } from '@/lib/api';
@@ -860,13 +861,12 @@ export default function ProfileScreen() {
           <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setEditingPassword(false)} />
           <View style={styles.confirmCard}>
             <Text style={styles.confirmTitle}>{t('profile.modals.changePassword')}</Text>
-            <TextInput
+            <PasswordInput
               value={newPassword}
               onChangeText={setNewPassword}
               placeholder={t('profile.password.newPasswordPlaceholder')}
               placeholderTextColor={theme.colors.placeholderText}
               keyboardAppearance={theme.keyboardAppearance}
-              secureTextEntry
               style={[styles.input, { marginTop: 16 }]}
               returnKeyType="done"
               onSubmitEditing={() => Keyboard.dismiss()}

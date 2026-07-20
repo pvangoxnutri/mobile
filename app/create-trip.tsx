@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Keyboard,
   KeyboardAvoidingView,
@@ -22,6 +22,7 @@ import { useAuth } from '@/components/auth-provider';
 import { BigHeroCard, type TripMember, type TripWithEvent } from '@/components/big-hero-card';
 import { apiFetch, apiJson } from '@/lib/api';
 import { invalidateCache } from '@/lib/cache';
+import { fetchPlaceDetails, fetchPlaceSuggestions, type PlaceAutocompleteSuggestion } from '@/lib/maps-api';
 import type { Quest } from '@/lib/types';
 import { SPACING, TYPOGRAPHY, RADIUS } from '@/constants/design-tokens';
 import { useKeyboardFocusScroll } from '@/hooks/useKeyboardFocusScroll';
@@ -49,6 +50,11 @@ export default function CreateTripScreen() {
   const [now] = useState(() => new Date());
   const [title, setTitle] = useState('');
   const [destination, setDestination] = useState('');
+  // Coordinates ride along only when the user picked a place suggestion —
+  // free text stays coordinate-less (weather then reports no_coordinates).
+  const [destinationSuggestions, setDestinationSuggestions] = useState<PlaceAutocompleteSuggestion[]>([]);
+  const [destinationPlace, setDestinationPlace] = useState<{ placeId: string | null; latitude: number; longitude: number } | null>(null);
+  const pickedDestinationLabelRef = useRef<string | null>(null);
   // startDate / endDate hold internal defaults so the RangeDatePicker has an
   // initial range to render, but they are NOT displayed anywhere in the UI
   // until hasUserSelectedDates flips to true.
@@ -76,6 +82,59 @@ export default function CreateTripScreen() {
     coverImage ||
     hasUserSelectedDates
   );
+
+  // Destination autocomplete (same backend proxy as activity locations).
+  // Debounced; never re-opens for the exact label the user just picked.
+  useEffect(() => {
+    const query = destination.trim();
+    if (query.length < 2 || query === pickedDestinationLabelRef.current) {
+      setDestinationSuggestions([]);
+      return;
+    }
+    const handle = setTimeout(() => {
+      void fetchPlaceSuggestions(query)
+        .then((items) => setDestinationSuggestions(items.slice(0, 5)))
+        .catch(() => setDestinationSuggestions([]));
+    }, 350);
+    return () => clearTimeout(handle);
+  }, [destination]);
+
+  function handleDestinationChange(value: string) {
+    const next = value.slice(0, DESTINATION_MAX_LENGTH);
+    setDestination(next);
+    // Re-typed text no longer describes the picked place — drop coordinates.
+    if (pickedDestinationLabelRef.current && next.trim() !== pickedDestinationLabelRef.current) {
+      pickedDestinationLabelRef.current = null;
+      setDestinationPlace(null);
+    }
+  }
+
+  function handlePickDestination(suggestion: PlaceAutocompleteSuggestion) {
+    const label = suggestion.primaryText.slice(0, DESTINATION_MAX_LENGTH).trim();
+    pickedDestinationLabelRef.current = label;
+    setDestination(label);
+    setDestinationSuggestions([]);
+    setDestinationPlace(null);
+    void (async () => {
+      try {
+        // OSM-fallback suggestions carry coordinates; Google ones need one
+        // details lookup via the backend proxy.
+        let latitude = suggestion.latitude ?? null;
+        let longitude = suggestion.longitude ?? null;
+        if ((latitude == null || longitude == null) && !suggestion.placeId.startsWith('osm:')) {
+          const details = await fetchPlaceDetails(suggestion.placeId);
+          latitude = details.latitude ?? null;
+          longitude = details.longitude ?? null;
+        }
+        // Only apply if the field still shows the pick (guards a fast re-type).
+        if (latitude != null && longitude != null && pickedDestinationLabelRef.current === label) {
+          setDestinationPlace({ placeId: suggestion.placeId, latitude, longitude });
+        }
+      } catch {
+        // Coordinates are an optional bonus — the text destination stands alone.
+      }
+    })();
+  }
 
   async function handlePickCover() {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -137,6 +196,9 @@ export default function CreateTripScreen() {
         body: JSON.stringify({
           title: normalizedTitle,
           destination: normalizedDestination,
+          destinationLatitude: destinationPlace?.latitude ?? null,
+          destinationLongitude: destinationPlace?.longitude ?? null,
+          destinationPlaceId: destinationPlace?.placeId ?? null,
           description: null,
           imageUrl: uploadedImageUrl,
           startDate,
@@ -304,7 +366,7 @@ export default function CreateTripScreen() {
         <TextInput
           ref={destinationRef}
           value={destination}
-          onChangeText={(v) => setDestination(v.slice(0, DESTINATION_MAX_LENGTH))}
+          onChangeText={handleDestinationChange}
           placeholder={t('trip.destination_placeholder')}
           placeholderTextColor={theme.colors.placeholderText}
           keyboardAppearance={theme.keyboardAppearance}
@@ -314,6 +376,30 @@ export default function CreateTripScreen() {
           onSubmitEditing={() => Keyboard.dismiss()}
         />
         <Text style={styles.charCounter}>{destination.length}/{DESTINATION_MAX_LENGTH}</Text>
+        {destinationSuggestions.length > 0 ? (
+          <View style={styles.destinationSuggestions}>
+            {destinationSuggestions.map((item) => (
+              <TouchableOpacity
+                key={item.placeId}
+                activeOpacity={0.9}
+                style={styles.destinationSuggestionRow}
+                onPress={() => handlePickDestination(item)}>
+                <Ionicons name="location-outline" size={16} color={theme.colors.primary} />
+                <View style={styles.destinationSuggestionCopy}>
+                  <Text style={styles.destinationSuggestionTitle} numberOfLines={1}>{item.primaryText}</Text>
+                  {item.secondaryText ? (
+                    <Text style={styles.destinationSuggestionSubtitle} numberOfLines={1}>{item.secondaryText}</Text>
+                  ) : null}
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        ) : null}
+        {/* Free text saves fine — the hint just explains what a picked
+            suggestion unlocks. Gone as soon as a place is chosen. */}
+        {destination.trim() && !destinationPlace ? (
+          <Text style={styles.destinationHint}>{t('trip.destinationWeatherHint')}</Text>
+        ) : null}
 
         {/* Optional date chip. Small pill, centered, secondary affordance. */}
         <View style={styles.dateChipWrap}>
@@ -615,6 +701,40 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     fontWeight: '500',
     letterSpacing: -0.2,
     paddingVertical: SPACING.xs,
+  },
+  destinationSuggestions: {
+    marginTop: SPACING.xs,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: theme.colors.borderPrimary,
+    backgroundColor: theme.colors.bgLight,
+    overflow: 'hidden',
+  },
+  destinationSuggestionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 10,
+  },
+  destinationSuggestionCopy: {
+    flex: 1,
+  },
+  destinationSuggestionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.colors.textPrimary,
+  },
+  destinationSuggestionSubtitle: {
+    fontSize: 12,
+    color: theme.colors.textMeta,
+    marginTop: 1,
+  },
+  destinationHint: {
+    marginTop: 4,
+    fontSize: 12,
+    lineHeight: 16,
+    color: theme.colors.textMeta,
   },
   // Small pill (optional, secondary affordance). Not full-width, not a row.
   // Sits below the captions, visually subordinate.

@@ -26,6 +26,9 @@ export interface Quest {
   title?: string | null;
   description?: string | null;
   destination?: string | null;
+  destinationLatitude?: number | null;
+  destinationLongitude?: number | null;
+  destinationPlaceId?: string | null;
   startDate: string;
   endDate: string;
   imageUrl?: string | null;

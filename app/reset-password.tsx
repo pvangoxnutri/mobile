@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BrandMark from '@/components/brand-mark';
 import { useI18n } from '@/components/i18n-provider';
 import PasswordStrengthMeter from '@/components/password-strength-meter';
+import { PasswordInput } from '@/components/ui/password-input';
 import { supabase } from '@/lib/supabase';
 import { useTheme } from '@/components/theme-provider';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
@@ -193,12 +194,11 @@ export default function ResetPasswordScreen() {
           {message ? <Text style={styles.success}>{message}</Text> : null}
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
-          <TextInput
+          <PasswordInput
             keyboardAppearance={theme.keyboardAppearance}
             ref={passwordRef}
             style={styles.input}
             placeholder={t('auth.reset_password_new_password_placeholder')}
-            secureTextEntry
             autoCapitalize="none"
             autoCorrect={false}
             value={password}
@@ -209,12 +209,11 @@ export default function ResetPasswordScreen() {
           />
           <PasswordStrengthMeter password={password} />
 
-          <TextInput
+          <PasswordInput
             keyboardAppearance={theme.keyboardAppearance}
             ref={confirmPasswordRef}
             style={styles.input}
             placeholder={t('auth.password_confirm_placeholder')}
-            secureTextEntry
             autoCapitalize="none"
             autoCorrect={false}
             value={confirmPassword}

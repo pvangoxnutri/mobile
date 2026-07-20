@@ -41,8 +41,11 @@ import HeroShell from '@/components/hero-shell';
 import ModalSheet from '@/components/modal-sheet';
 import { EmptyState } from '@/components/ui/empty-state';
 import { useKeyboardFocusScroll } from '@/hooks/useKeyboardFocusScroll';
+import { PRESENCE_POLL_FAST_MS, useMembersPresencePoll } from '@/hooks/use-presence-poll';
 import { apiFetch, apiJson } from '@/lib/api';
 import { getCurrentPermissionStatus, maybeRequestPushPermission } from '@/lib/push-notifications';
+import WeatherIcon from '@/components/weather-icon';
+import { conditionLabelKey, fetchTripWeather, getCachedTripWeather, summaryDay, type TripWeather } from '@/lib/weather-api';
 import { loadNotificationPreferences, saveNotificationPreferences } from '@/lib/social';
 import { addDaysIso, formatNights, isStay, stayNightDates, stayNights } from '@/lib/stay';
 import { getCached, setCached, invalidateCache, invalidateTripCache } from '@/lib/cache';
@@ -139,10 +142,18 @@ function renderSystemMessage(message: ChatMsg, t: (key: string, vars?: Record<st
 // treated as "reading history" and left alone.
 const CHAT_NEAR_BOTTOM_THRESHOLD = 80;
 
+// Typing indicator cadence: the first keystroke marks typing immediately,
+// continued typing refreshes the server stamp at most every 2.5 s (well
+// inside the server's 8 s typing expiry) and 3.5 s without a keystroke
+// sends an explicit stop — so it's never one request per keystroke.
+const TYPING_REFRESH_MS = 2500;
+const TYPING_IDLE_STOP_MS = 3500;
+
 type ChatPresenceUser = {
   userId: string;
   userName: string;
   avatarUrl?: string | null;
+  isTyping?: boolean;
 };
 
 type TripMember = {
@@ -173,6 +184,7 @@ export default function TripDetailsScreen() {
   const styles = useThemedStyles(createStyles);
   const locale = language === 'sv' ? 'sv-SE' : 'en-US';
   const [trip, setTrip] = useState<Quest | null>(null);
+  const [tripWeather, setTripWeather] = useState<TripWeather | null>(() => (id ? getCachedTripWeather(id) : null));
   const [members, setMembers] = useState<TripMember[]>([]);
   const [invites, setInvites] = useState<TripInvite[]>([]);
   const [activities, setActivities] = useState<SideQuestActivity[]>([]);
@@ -247,6 +259,11 @@ export default function TripDetailsScreen() {
   const lastReadAtRef = useRef<string>(new Date(Date.now() - 24 * 3600 * 1000).toISOString());
   const chatScrollRef = useRef<FlatList<ChatMsg> | null>(null);
   const chatInputRef = useRef<TextInput | null>(null);
+  // Typing indicator (see TYPING_* constants): last state sent to the
+  // server, when `true` was last sent, and the inactivity-stop timer.
+  const typingSentRef = useRef(false);
+  const typingLastSentAtRef = useRef(0);
+  const typingIdleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Whether the user is currently scrolled near the bottom of the chat —
   // drives whether an incoming message should auto-scroll into view or
   // leave them undisturbed while reading older history.
@@ -359,6 +376,40 @@ export default function TripDetailsScreen() {
         active = false;
       };
     }, [id]),
+  );
+
+  // Weather summary — fully independent of the trip load: fires after the
+  // screen is focused, renders from cache instantly, fails silently. A
+  // weather problem can never delay or break the trip itself.
+  useFocusEffect(
+    useCallback(() => {
+      if (!id) return;
+      let active = true;
+      const cached = getCachedTripWeather(id);
+      if (cached) setTripWeather(cached);
+      fetchTripWeather(id)
+        .then((data) => {
+          if (active) setTripWeather(data);
+        })
+        .catch(() => {
+          // Keep whatever we had — the strip simply doesn't update.
+        });
+      return () => {
+        active = false;
+      };
+    }, [id]),
+  );
+
+  // Live presence: the focus load above fetches members once, but the online
+  // dots (members sheet + chat avatars) would then freeze until the next
+  // focus. Re-poll members while this screen stays open — fast only while a
+  // view that actually shows the dots is open, ambient 30s otherwise.
+  useMembersPresencePoll<TripMember>(
+    id ? [id] : [],
+    (_tripId, memberData) => {
+      setMembers(memberData);
+    },
+    peopleSheetOpen || chatOpen ? PRESENCE_POLL_FAST_MS : undefined,
   );
 
   const sortedActivities = useMemo(
@@ -481,6 +532,19 @@ export default function TripDetailsScreen() {
     return map;
   }, [members]);
 
+  // Who to show as "typing" — never yourself, never blocked users. Name
+  // fallback mirrors the rest of the chat UI.
+  const typingLabel = useMemo(() => {
+    const typers = chatPresence.filter(
+      (u) => u.isTyping && u.userId !== user?.id && !blockedUserIds.has(u.userId),
+    );
+    if (typers.length === 0) return null;
+    const nameOf = (typer: ChatPresenceUser) => typer.userName?.trim() || t('trip.chat.someoneFallback');
+    if (typers.length === 1) return t('trip.chat.typingOne', { name: nameOf(typers[0]) });
+    if (typers.length === 2) return t('trip.chat.typingTwo', { name1: nameOf(typers[0]), name2: nameOf(typers[1]) });
+    return t('trip.chat.typingMany');
+  }, [chatPresence, user?.id, blockedUserIds, t]);
+
   const memberOnlineMap = useMemo(() => {
     const map = new Map<string, boolean>();
     for (const m of members) map.set(m.id, m.isOnline ?? false);
@@ -594,6 +658,11 @@ export default function TripDetailsScreen() {
       clearInterval(presencePollId);
       if (chatErrorTimeoutRef.current) clearTimeout(chatErrorTimeoutRef.current);
       keyboardSub.remove();
+      // No explicit `false` needed — the DELETE below clears the typing
+      // stamp server-side; just stop the timer and reset local refs.
+      clearTypingIdleTimer();
+      typingSentRef.current = false;
+      typingLastSentAtRef.current = 0;
       void apiFetch(`/api/trips/${id}/chat/presence`, { method: 'DELETE' }).catch(() => {});
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -788,6 +857,49 @@ export default function TripDetailsScreen() {
     await apiFetch(`/api/trips/${id}/chat/presence`, { method: 'PUT' }).catch(() => {});
   }
 
+  // Best-effort — typing must never surface errors, and a lost `false` is
+  // cleaned up by the server's typing expiry anyway.
+  function sendTypingState(isTyping: boolean) {
+    typingSentRef.current = isTyping;
+    if (isTyping) typingLastSentAtRef.current = Date.now();
+    void apiFetch(`/api/trips/${id}/chat/presence`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isTyping }),
+    }).catch(() => {});
+  }
+
+  function clearTypingIdleTimer() {
+    if (typingIdleTimerRef.current) {
+      clearTimeout(typingIdleTimerRef.current);
+      typingIdleTimerRef.current = null;
+    }
+  }
+
+  function stopTyping() {
+    clearTypingIdleTimer();
+    if (typingSentRef.current) sendTypingState(false);
+  }
+
+  function handleChatDraftChange(text: string) {
+    setChatDraft(text);
+    // Emptied input (backspace-to-empty, select-all + delete) stops
+    // immediately — no lingering "skriver..." on a blank field.
+    if (!text.trim()) {
+      stopTyping();
+      return;
+    }
+    const now = Date.now();
+    if (!typingSentRef.current || now - typingLastSentAtRef.current >= TYPING_REFRESH_MS) {
+      sendTypingState(true);
+    }
+    clearTypingIdleTimer();
+    typingIdleTimerRef.current = setTimeout(() => {
+      typingIdleTimerRef.current = null;
+      if (typingSentRef.current) sendTypingState(false);
+    }, TYPING_IDLE_STOP_MS);
+  }
+
   async function loadChatPresence() {
     try {
       const data = await apiJson<ChatPresenceUser[]>(`/api/trips/${id}/chat/presence`);
@@ -881,6 +993,7 @@ export default function TripDetailsScreen() {
     ]);
     setChatDraft('');
     chatInputRef.current?.clear();
+    stopTyping();
     setChatPendingImage(null);
     setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: false }), 700);
 
@@ -1470,6 +1583,32 @@ export default function TripDetailsScreen() {
               </View>
             </View>
           </HeroShell>
+
+          {/* Compact weather strip: start-day (or today's) forecast, or the
+              closer-to-departure note. Hidden entirely when weather is
+              unavailable or the destination has no coordinates — never fake
+              weather. Tap opens the full Weather page. */}
+          {tripWeather && (tripWeather.status === 'available' || tripWeather.status === 'too_early') ? (
+            <TouchableOpacity
+              style={styles.weatherStrip}
+              activeOpacity={0.85}
+              onPress={() => router.push(`/trip/${id}/weather`)}>
+              {summaryDay(tripWeather) ? (
+                <>
+                  <WeatherIcon condition={summaryDay(tripWeather)!.code} size={18} />
+                  <Text style={styles.weatherStripText} numberOfLines={1}>
+                    {Math.round(summaryDay(tripWeather)!.tempMaxC)}° · {t(conditionLabelKey(summaryDay(tripWeather)!.code))}
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <Ionicons name="partly-sunny-outline" size={16} color={theme.colors.textSecondary} />
+                  <Text style={styles.weatherStripText} numberOfLines={1}>{t('weather.tooEarly')}</Text>
+                </>
+              )}
+              <Ionicons name="chevron-forward" size={16} color={theme.isDark ? theme.colors.textMuted : '#b2b7c0'} />
+            </TouchableOpacity>
+          ) : null}
 
           {/* Trip tools moved out of the feed — the floating launcher next
               to the chat bubble opens them in a bottom sheet instead, so the
@@ -2108,6 +2247,14 @@ export default function TripDetailsScreen() {
                 </View>
               ) : null}
 
+              {/* Fixed-height row so the indicator appearing/disappearing
+                  never shifts the composer or covers the last message. */}
+              <View style={styles.chatTypingRow}>
+                {typingLabel ? (
+                  <Text style={styles.chatTypingText} numberOfLines={1}>{typingLabel}</Text>
+                ) : null}
+              </View>
+
               <View style={styles.chatComposer}>
                 <TouchableOpacity
                   activeOpacity={0.85}
@@ -2120,7 +2267,7 @@ export default function TripDetailsScreen() {
                   <TextInput
                     ref={chatInputRef}
                     value={chatDraft}
-                    onChangeText={setChatDraft}
+                    onChangeText={handleChatDraftChange}
                     onFocus={() => {
                       Animated.timing(chatInputOpacityRef, {
                         toValue: 1,
@@ -3832,6 +3979,34 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     color: theme.colors.textSecondary,
     fontWeight: '600',
     marginLeft: 2,
+  },
+  chatTypingRow: {
+    height: 18,
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  chatTypingText: {
+    ...TYPOGRAPHY.meta,
+    fontStyle: 'italic',
+    color: theme.isDark ? theme.colors.textMeta : '#8a919d',
+  },
+  weatherStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: theme.isDark ? theme.colors.borderPrimary : '#eef1f5',
+    backgroundColor: theme.isDark ? theme.colors.bgLightest : '#fff',
+  },
+  weatherStripText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.colors.textPrimary,
   },
   chatPanelEyebrow: {
     ...TYPOGRAPHY.eyebrow,

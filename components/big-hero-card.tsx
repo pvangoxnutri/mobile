@@ -3,9 +3,11 @@ import { router } from 'expo-router';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import Avatar from '@/components/avatar';
+import WeatherIcon from '@/components/weather-icon';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import type { AppTheme } from '@/constants/themes';
 import type { Quest } from '@/lib/types';
+import type { WeatherCondition } from '@/lib/weather-api';
 
 // ── Public types ────────────────────────────────────────────────────────────
 
@@ -83,6 +85,9 @@ export type BigHeroCardProps = {
   onPress?: () => void;
   /** Forces the Enter pill to be hidden — useful when previewing a draft. */
   hideEnterButton?: boolean;
+  /** Subtle start-day (or today's, when ongoing) forecast. Null/absent hides
+   *  the row entirely — the card never shows fake weather. */
+  weather?: { condition: WeatherCondition; tempMaxC: number } | null;
 };
 
 export function BigHeroCard({
@@ -97,6 +102,7 @@ export function BigHeroCard({
   t,
   onPress,
   hideEnterButton = false,
+  weather = null,
 }: BigHeroCardProps) {
   const styles = useThemedStyles(createStyles);
   const quest = trip.quest;
@@ -200,6 +206,13 @@ export function BigHeroCard({
             <View style={styles.bigHeroSealed}>
               <Ionicons name="lock-closed" size={12} color="rgba(255,255,255,0.92)" />
               <Text style={styles.bigHeroSealedText}>{sealedCount} sealed</Text>
+            </View>
+          ) : null}
+
+          {weather ? (
+            <View style={styles.bigHeroWeather}>
+              <WeatherIcon condition={weather.condition} size={13} color="rgba(255,255,255,0.92)" />
+              <Text style={styles.bigHeroWeatherText}>{Math.round(weather.tempMaxC)}°</Text>
             </View>
           ) : null}
 
@@ -386,6 +399,20 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
+  },
+  bigHeroWeather: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: 'rgba(0,0,0,0.28)',
+  },
+  bigHeroWeatherText: {
+    color: 'rgba(255,255,255,0.92)',
+    fontSize: 12,
+    fontWeight: '700',
   },
   bigHeroSealedText: {
     color: 'rgba(255,255,255,0.92)',
