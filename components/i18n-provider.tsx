@@ -683,7 +683,7 @@ const dictionaries: Record<AppLanguage, Record<string, string>> = {
     'weather.uv.high': 'High',
     'weather.uv.veryHigh': 'Very high',
     'weather.uv.extreme': 'Extreme',
-    'weather.laterDaysNote': 'Later trip days appear here as they enter the forecast window.',
+    'weather.dayUnavailable': 'Forecast not available yet',
 
     'activity.category': 'Category',
     'activity.category_flight': '✈️ Flight',
@@ -1516,7 +1516,7 @@ const dictionaries: Record<AppLanguage, Record<string, string>> = {
     'weather.uv.high': 'Hög',
     'weather.uv.veryHigh': 'Mycket hög',
     'weather.uv.extreme': 'Extrem',
-    'weather.laterDaysNote': 'Resans senare dagar dyker upp här när de kommer in i prognosfönstret.',
+    'weather.dayUnavailable': 'Prognosen är inte tillgänglig ännu',
 
     'activity.category': 'Kategori',
     'activity.category_flight': '✈️ Flyg',

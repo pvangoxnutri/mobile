@@ -107,11 +107,6 @@ export default function WeatherScreen() {
       return new Date().toISOString().slice(0, 10);
     }
   })();
-  // Trip days beyond the provider's real window exist but can't be shown
-  // yet — say so instead of silently truncating.
-  const hasLaterDays = Boolean(
-    weather?.status === 'available' && cachedTrip?.endDate && weather.forecastEnd && cachedTrip.endDate > weather.forecastEnd,
-  );
 
   function renderStatusMessage(icon: string, text: string) {
     return (
@@ -156,49 +151,80 @@ export default function WeatherScreen() {
           <Text style={styles.featuredDayLabel}>
             {featured.date === todayIso ? t('weather.today') : formatDay(featured.date, { weekday: 'long', day: 'numeric', month: 'long' })}
           </Text>
-          <View style={styles.featuredMain}>
-            <WeatherIcon condition={featured.code} size={54} />
-            <View style={styles.featuredTemps}>
-              <Text style={styles.featuredTemp}>{Math.round(featured.tempMaxC)}°</Text>
-              <Text style={styles.featuredTempMin}>{Math.round(featured.tempMinC)}°</Text>
+          {featured.locationLabel && featured.locationLabel !== (weather?.destinationName ?? '') ? (
+            <View style={styles.featuredLocationRow}>
+              <Ionicons name="location-outline" size={13} color={theme.colors.textSecondary} />
+              <Text style={styles.featuredLocationText} numberOfLines={1}>{featured.locationLabel}</Text>
             </View>
-          </View>
-          <Text style={styles.featuredCondition}>{t(conditionLabelKey(featured.code))}</Text>
-          <View style={styles.featuredMetaRow}>
-            <View style={styles.featuredMetaItem}>
-              <Ionicons name="water-outline" size={15} color={theme.colors.textSecondary} />
-              <Text style={styles.featuredMetaText}>{featured.precipitationProbability}%</Text>
-            </View>
-            <View style={styles.featuredMetaItem}>
-              <Ionicons name="sunny-outline" size={15} color={theme.colors.textSecondary} />
-              <Text style={styles.featuredMetaText}>
-                {t('weather.uvShort')} {featured.uvIndexMax} · {t(uvCategoryKey(featured.uvIndexMax))}
-              </Text>
-            </View>
-          </View>
+          ) : null}
+          {featured.isForecastAvailable ? (
+            <>
+              <View style={styles.featuredMain}>
+                <WeatherIcon condition={featured.code} size={54} />
+                <View style={styles.featuredTemps}>
+                  <Text style={styles.featuredTemp}>{Math.round(featured.tempMaxC)}°</Text>
+                  <Text style={styles.featuredTempMin}>{Math.round(featured.tempMinC)}°</Text>
+                </View>
+              </View>
+              <Text style={styles.featuredCondition}>{t(conditionLabelKey(featured.code))}</Text>
+              <View style={styles.featuredMetaRow}>
+                <View style={styles.featuredMetaItem}>
+                  <Ionicons name="water-outline" size={15} color={theme.colors.textSecondary} />
+                  <Text style={styles.featuredMetaText}>{featured.precipitationProbability}%</Text>
+                </View>
+                <View style={styles.featuredMetaItem}>
+                  <Ionicons name="sunny-outline" size={15} color={theme.colors.textSecondary} />
+                  <Text style={styles.featuredMetaText}>
+                    {t('weather.uvShort')} {featured.uvIndexMax} · {t(uvCategoryKey(featured.uvIndexMax))}
+                  </Text>
+                </View>
+              </View>
+            </>
+          ) : (
+            <Text style={styles.featuredUnavailableText}>{t('weather.dayUnavailable')}</Text>
+          )}
         </View>
 
-        {/* Remaining trip days inside the forecast window. */}
-        {restDays.map((day) => (
-          <View key={day.date} style={styles.dayRow}>
-            <View style={styles.dayRowDate}>
-              <Text style={styles.dayRowWeekday}>{formatDay(day.date, { weekday: 'short' })}</Text>
-              <Text style={styles.dayRowDay}>{formatDay(day.date, { day: 'numeric', month: 'short' })}</Text>
+        {/* Remaining trip days inside the forecast window, grouped by
+            consecutive location — a new pin only appears where the resolved
+            location actually changes from the previous day. */}
+        {restDays.map((day, index) => {
+          const previousLocation = index === 0 ? featured?.locationLabel : restDays[index - 1].locationLabel;
+          const showLocationLabel = Boolean(day.locationLabel) && day.locationLabel !== previousLocation;
+          return (
+            <View key={day.date}>
+              {showLocationLabel ? (
+                <View style={styles.locationGroupRow}>
+                  <Ionicons name="location-outline" size={12} color={theme.colors.textMeta} />
+                  <Text style={styles.locationGroupText} numberOfLines={1}>{day.locationLabel}</Text>
+                </View>
+              ) : null}
+              <View style={styles.dayRow}>
+                <View style={styles.dayRowDate}>
+                  <Text style={styles.dayRowWeekday}>{formatDay(day.date, { weekday: 'short' })}</Text>
+                  <Text style={styles.dayRowDay}>{formatDay(day.date, { day: 'numeric', month: 'short' })}</Text>
+                </View>
+                {day.isForecastAvailable ? (
+                  <>
+                    <WeatherIcon condition={day.code} size={22} />
+                    <View style={styles.dayRowCondition}>
+                      <Text style={styles.dayRowConditionText} numberOfLines={1}>{t(conditionLabelKey(day.code))}</Text>
+                      <Text style={styles.dayRowMeta}>
+                        <Ionicons name="water-outline" size={11} color={theme.colors.textMeta} /> {day.precipitationProbability}% · {t('weather.uvShort')} {t(uvCategoryKey(day.uvIndexMax))}
+                      </Text>
+                    </View>
+                    <Text style={styles.dayRowTemps}>
+                      {Math.round(day.tempMaxC)}° <Text style={styles.dayRowTempMin}>{Math.round(day.tempMinC)}°</Text>
+                    </Text>
+                  </>
+                ) : (
+                  <Text style={styles.dayRowUnavailableText}>{t('weather.dayUnavailable')}</Text>
+                )}
+              </View>
             </View>
-            <WeatherIcon condition={day.code} size={22} />
-            <View style={styles.dayRowCondition}>
-              <Text style={styles.dayRowConditionText} numberOfLines={1}>{t(conditionLabelKey(day.code))}</Text>
-              <Text style={styles.dayRowMeta}>
-                <Ionicons name="water-outline" size={11} color={theme.colors.textMeta} /> {day.precipitationProbability}% · {t('weather.uvShort')} {t(uvCategoryKey(day.uvIndexMax))}
-              </Text>
-            </View>
-            <Text style={styles.dayRowTemps}>
-              {Math.round(day.tempMaxC)}° <Text style={styles.dayRowTempMin}>{Math.round(day.tempMinC)}°</Text>
-            </Text>
-          </View>
-        ))}
+          );
+        })}
 
-        {hasLaterDays ? <Text style={styles.laterDaysNote}>{t('weather.laterDaysNote')}</Text> : null}
         {weather.attribution ? <Text style={styles.attribution}>{weather.attribution}</Text> : null}
       </>
     );
@@ -319,6 +345,29 @@ const createStyles = (theme: AppTheme) =>
       textTransform: 'capitalize',
       color: theme.colors.textSecondary,
     },
+    featuredLocationRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      marginTop: 4,
+    },
+    featuredLocationText: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: theme.colors.textSecondary,
+    },
+    locationGroupRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      marginTop: 14,
+      marginBottom: 2,
+    },
+    locationGroupText: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: theme.colors.textMeta,
+    },
     featuredMain: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -363,6 +412,18 @@ const createStyles = (theme: AppTheme) =>
       fontWeight: '600',
       color: theme.colors.textSecondary,
     },
+    featuredUnavailableText: {
+      marginTop: 10,
+      fontSize: 14,
+      fontWeight: '600',
+      color: theme.colors.textMeta,
+    },
+    dayRowUnavailableText: {
+      flex: 1,
+      fontSize: 13,
+      fontWeight: '600',
+      color: theme.colors.textMeta,
+    },
     dayRow: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -405,12 +466,6 @@ const createStyles = (theme: AppTheme) =>
     dayRowTempMin: {
       fontSize: 14,
       fontWeight: '600',
-      color: theme.colors.textMeta,
-    },
-    laterDaysNote: {
-      marginTop: 14,
-      fontSize: 12,
-      lineHeight: 17,
       color: theme.colors.textMeta,
     },
     attribution: {

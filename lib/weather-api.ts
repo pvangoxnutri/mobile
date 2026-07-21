@@ -17,14 +17,36 @@ export type WeatherCondition =
   | 'thunderstorm'
   | 'snow';
 
-export type TripWeatherDay = {
-  date: string; // YYYY-MM-DD in the destination's timezone
-  code: WeatherCondition;
-  tempMinC: number;
-  tempMaxC: number;
-  precipitationProbability: number; // 0–100
-  uvIndexMax: number;
-};
+// Discriminated on isForecastAvailable so the compiler — not a runtime
+// null-check the render code might forget — enforces that temperature/code
+// fields are only ever read when the backend actually had a real forecast
+// for this date. False means the provider had no data yet (e.g. the last
+// day of its window); never a fabricated zero.
+export type TripWeatherDay =
+  | {
+      date: string; // YYYY-MM-DD in the destination's timezone
+      isForecastAvailable: true;
+      code: WeatherCondition;
+      tempMinC: number;
+      tempMaxC: number;
+      precipitationProbability: number; // 0–100
+      uvIndexMax: number;
+      // Which resolved location this day's forecast came from — a
+      // TripDayLocation anchor (explicit or carried forward), or the trip
+      // destination fallback. Lets consecutive same-location days be
+      // grouped without the client re-deriving anything.
+      locationLabel: string;
+    }
+  | {
+      date: string;
+      isForecastAvailable: false;
+      code: null;
+      tempMinC: null;
+      tempMaxC: null;
+      precipitationProbability: null;
+      uvIndexMax: null;
+      locationLabel: string;
+    };
 
 export type TripWeatherStatus = 'available' | 'too_early' | 'no_coordinates' | 'unavailable';
 
@@ -68,7 +90,11 @@ export function uvCategoryKey(uvIndexMax: number): string {
 
 // The one day a compact summary shows: days[] is already clipped to the
 // trip, so day 0 is the trip start — or today when the trip is ongoing.
-export function summaryDay(weather: TripWeather | null | undefined): TripWeatherDay | null {
+// Returns null (hides the summary entirely) rather than an unavailable day —
+// a compact pill has no room to explain "forecast not available yet", and
+// must never show a fabricated 0° instead.
+export function summaryDay(weather: TripWeather | null | undefined): Extract<TripWeatherDay, { isForecastAvailable: true }> | null {
   if (!weather || weather.status !== 'available') return null;
-  return weather.days[0] ?? null;
+  const day = weather.days[0];
+  return day?.isForecastAvailable ? day : null;
 }
