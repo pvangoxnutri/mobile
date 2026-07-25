@@ -8,6 +8,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -74,6 +75,8 @@ export default function CreateTripScreen() {
   const [coverPanScale, setCoverPanScale] = useState(1);
   const [positioningCover, setPositioningCover] = useState(false);
   const [inviteCode] = useState(() => createInviteCode());
+  // Slideshow cover — on by default for new adventures.
+  const [slideshowEnabled, setSlideshowEnabled] = useState(true);
   const [rangePickerOpen, setRangePickerOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<MessageState>(null);
@@ -221,6 +224,7 @@ export default function CreateTripScreen() {
           endDate,
           inviteCode,
           countries: [],
+          slideshowEnabled,
         }),
       });
 
@@ -425,6 +429,21 @@ export default function CreateTripScreen() {
               {hasUserSelectedDates ? formatRangeDisplay(startDate, endDate) : t('trip.add_dates')}
             </Text>
           </Pressable>
+        </View>
+
+        {/* Slideshow cover toggle — enabled by default for new adventures. */}
+        <View style={styles.slideshowRow}>
+          <View style={styles.slideshowCopy}>
+            <Text style={styles.slideshowTitle}>{t('trip.slideshow_label')}</Text>
+            <Text style={styles.slideshowSubtitle}>{t('trip.slideshow_hint')}</Text>
+          </View>
+          <Switch
+            value={slideshowEnabled}
+            onValueChange={setSlideshowEnabled}
+            trackColor={{ false: theme.isDark ? theme.colors.textMuted : '#dfe3e8', true: theme.isDark ? theme.colors.primaryLight20 : theme.colors.primary }}
+            thumbColor="#fff"
+            ios_backgroundColor={theme.isDark ? theme.colors.textMuted : '#dfe3e8'}
+          />
         </View>
 
         {message ? (
@@ -774,6 +793,32 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     letterSpacing: -0.1,
+  },
+  slideshowRow: {
+    marginTop: SPACING.xl,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: SPACING.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.md,
+    borderRadius: RADIUS.sm,
+    backgroundColor: theme.colors.bgLight,
+    borderWidth: 1,
+    borderColor: theme.colors.borderPrimary,
+  },
+  slideshowCopy: { flex: 1 },
+  slideshowTitle: {
+    color: theme.colors.textPrimary,
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: -0.1,
+  },
+  slideshowSubtitle: {
+    marginTop: 3,
+    color: theme.colors.textMeta,
+    fontSize: 12.5,
+    lineHeight: 18,
   },
   messageBanner: {
     marginTop: SPACING.xl,

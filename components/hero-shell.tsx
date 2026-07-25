@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { Image, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import SlideshowCover, { type SlideshowItem } from '@/components/slideshow-cover';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import type { AppTheme } from '@/constants/themes';
 
@@ -22,6 +23,12 @@ import type { AppTheme } from '@/constants/themes';
 
 type Props = {
   imageUrl?: string | null;
+  // Slideshow cover: when set with ≥1 slide these replace imageUrl as the
+  // image surface (crossfading when there are 2+). imageUrl stays the
+  // fallback when the list is absent/empty. onSlideChange bubbles the
+  // current slide so the consumer's location pill follows the image.
+  slideshowItems?: SlideshowItem[];
+  onSlideChange?: (item: SlideshowItem, index: number) => void;
   // Optional custom fallback rendered when imageUrl is empty. If omitted, the
   // shell renders its default dark solid background.
   fallback?: ReactNode;
@@ -34,11 +41,15 @@ type Props = {
   children?: ReactNode;
 };
 
-export default function HeroShell({ imageUrl, fallback, imageBlurRadius, style, children }: Props) {
+export default function HeroShell({ imageUrl, slideshowItems, onSlideChange, fallback, imageBlurRadius, style, children }: Props) {
   const styles = useThemedStyles(createStyles);
+  const hasSlideshow = !!slideshowItems && slideshowItems.length > 0;
+  const hasAnyImage = hasSlideshow || !!imageUrl;
   return (
     <View style={[styles.shell, style]}>
-      {imageUrl ? (
+      {hasSlideshow ? (
+        <SlideshowCover items={slideshowItems!} blurRadius={imageBlurRadius} onSlideChange={onSlideChange} />
+      ) : imageUrl ? (
         <Image
           source={{ uri: imageUrl }}
           style={styles.image}
@@ -55,7 +66,7 @@ export default function HeroShell({ imageUrl, fallback, imageBlurRadius, style, 
           for legibility — only over the dark fallback. Skipped entirely when
           there's a real photo, per product decision (accepts that text/
           buttons may be harder to read on a bright or busy photo). */}
-      {!imageUrl ? (
+      {!hasAnyImage ? (
         <>
           <View pointerEvents="none" style={styles.gradient1} />
           <View pointerEvents="none" style={styles.gradient2} />

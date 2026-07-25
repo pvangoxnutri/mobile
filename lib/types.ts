@@ -43,6 +43,9 @@ export interface Quest {
   countries?: string[];
   shareCode?: string | null;
   membersCanEdit?: boolean;
+  // Slideshow cover preference. Optional because older backends omit it —
+  // missing must be treated as ENABLED (backward compatibility rule).
+  slideshowEnabled?: boolean;
 }
 
 export interface TripInvite {
@@ -209,4 +212,16 @@ export interface SupportTicketDetail {
   status: 'open' | 'waiting_for_reply' | 'closed';
   createdAt: string;
   messages: SupportMessage[];
+}
+
+// "From this day onwards, the travellers are here." One entry per trip day,
+// already resolved server-side (explicit pick, carried forward, or the trip
+// destination fallback) — the app never carries forward locations itself.
+export interface TripDayLocation {
+  date: string; // YYYY-MM-DD
+  locationLabel: string;
+  latitude: number;
+  longitude: number;
+  placeId?: string | null;
+  isExplicit: boolean;
 }

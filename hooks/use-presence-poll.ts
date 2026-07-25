@@ -75,9 +75,21 @@ export function useMembersPresencePoll<T>(
       // slow-mode entry is already covered by the screens' own focus loads.
       if (intervalMs < PRESENCE_POLL_INTERVAL_MS) void tick();
       const interval = setInterval(() => void tick(), intervalMs);
+
+      // Coming back from the app switcher / lock screen is not a focus
+      // change, so without this the dots could stay up to a full interval
+      // stale. One immediate tick on re-activation makes member status
+      // (including our own dot, revived by the auth-provider's instant
+      // online beat) refresh right away. Backgrounding needs no handler —
+      // the tick's own AppState guard already skips while not active.
+      const appStateSub = AppState.addEventListener('change', (state) => {
+        if (state === 'active') void tick();
+      });
+
       return () => {
         focused = false;
         clearInterval(interval);
+        appStateSub.remove();
       };
     }, [intervalMs]),
   );

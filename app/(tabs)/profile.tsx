@@ -1,4 +1,3 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
@@ -13,6 +12,8 @@ import { useAuth } from '@/components/auth-provider';
 import { useI18n, type AppLanguage } from '@/components/i18n-provider';
 import LanguagePicker from '@/components/language-picker';
 import TabHeader from '@/components/tab-header';
+import TravelStatsSummary from '@/components/travel-tracker/travel-stats-summary';
+import { useOwnTravelStats } from '@/hooks/use-own-travel-stats';
 import { PasswordInput } from '@/components/ui/password-input';
 import { useTheme, type ThemePreference } from '@/components/theme-provider';
 import { ENABLE_THEME_SWITCHING } from '@/constants/feature-flags';
@@ -35,11 +36,7 @@ export default function ProfileScreen() {
   const [headerHeight, setHeaderHeight] = useState(0);
   const headerTop = Math.max(insets.top, 16) + 8;
   const headerClearance = headerTop + (headerHeight || 76) + 14;
-  const [joinedTrips, setJoinedTrips] = useState(0);
-  const [createdQuests, setCreatedQuests] = useState(0);
-  const [tripDerivedVisited, setTripDerivedVisited] = useState<Record<string, string>>({});
   const [trips, setTrips] = useState<Quest[]>([]);
-  const [manualStatusMap, setManualStatusMap] = useState<Record<string, string>>({});
   const [name, setName] = useState(user?.name ?? '');
   const [bio, setBio] = useState(user?.bio ?? '');
   const [selectedLanguage, setSelectedLanguage] = useState<AppLanguage>(language);
@@ -79,8 +76,7 @@ export default function ProfileScreen() {
     let active = true;
 
     if (!user?.id) {
-      setJoinedTrips(0);
-      setCreatedQuests(0);
+      setTrips([]);
       return () => {
         active = false;
       };
@@ -92,27 +88,10 @@ export default function ProfileScreen() {
 
         const safeQuests = Array.isArray(quests) ? quests : [];
         setTrips(safeQuests);
-        setJoinedTrips(safeQuests.length);
-        setCreatedQuests(safeQuests.filter((quest) => quest.ownerId === user?.id).length);
-
-        const today = new Date().toISOString().slice(0, 10);
-        const derived: Record<string, string> = {};
-        for (const quest of safeQuests) {
-          if (!quest.countries?.length) continue;
-          const status = quest.endDate < today ? 'visited' : 'planned';
-          for (const code of quest.countries) {
-            if (!derived[code] || (derived[code] === 'planned' && status === 'visited')) {
-              derived[code] = status;
-            }
-          }
-        }
-        setTripDerivedVisited(derived);
       })
       .catch((err: unknown) => {
         if (!active) return;
-        console.warn('[PROFILE] Failed to load trips for stats:', err instanceof Error ? err.message : err);
-        setJoinedTrips(0);
-        setCreatedQuests(0);
+        console.warn('[PROFILE] Failed to load trips:', err instanceof Error ? err.message : err);
       });
 
     return () => {
@@ -120,21 +99,7 @@ export default function ProfileScreen() {
     };
   }, [user?.id]);
 
-  useEffect(() => {
-    void AsyncStorage.getItem('travel_tracker_status_map')
-      .then((raw) => { if (raw) setManualStatusMap(JSON.parse(raw) as Record<string, string>); })
-      .catch((err: unknown) => {
-        console.warn('[PROFILE] Failed to load travel status from storage:', err instanceof Error ? err.message : err);
-      });
-  }, []);
-
-  const visitedCountries = useMemo(() => {
-    const merged = { ...tripDerivedVisited, ...manualStatusMap };
-    // 'living' counts as visited — same rule as the travel tracker's hero
-    // stat, so the two screens always show the same number.
-    return Object.values(merged).filter((s) => s === 'visited' || s === 'living').length;
-  }, [tripDerivedVisited, manualStatusMap]);
-
+  const ownTravelStats = useOwnTravelStats();
   const previousTrips = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10);
     return trips
@@ -572,29 +537,6 @@ export default function ProfileScreen() {
         <Text style={styles.name}>{user?.name ?? t('profile.defaultName')}</Text>
         <Text style={styles.email}>{user?.email ?? 'user@sidequest.app'}</Text>
         {user?.bio ? <Text style={styles.bioText}>{user.bio}</Text> : null}
-        <View style={styles.statsBadgeRow}>
-          <View style={styles.statsBadge}>
-            <View style={[styles.statsBadgeIcon, { backgroundColor: theme.colors.secondary }]}>
-              <Ionicons name="airplane" size={11} color={theme.colors.white} />
-            </View>
-            <Text style={styles.statsBadgeValue}>{joinedTrips}</Text>
-            <Text style={styles.statsBadgeLabel}>{t('profile.statsBadge.trips')}</Text>
-          </View>
-          <View style={styles.statsBadge}>
-            <View style={[styles.statsBadgeIcon, { backgroundColor: theme.colors.primary }]}>
-              <Ionicons name="sparkles" size={11} color={theme.colors.white} />
-            </View>
-            <Text style={styles.statsBadgeValue}>{createdQuests}</Text>
-            <Text style={styles.statsBadgeLabel}>{t('profile.statsBadge.sidequests')}</Text>
-          </View>
-          <View style={styles.statsBadge}>
-            <View style={[styles.statsBadgeIcon, { backgroundColor: theme.colors.secondary }]}>
-              <Ionicons name="earth" size={11} color={theme.colors.white} />
-            </View>
-            <Text style={styles.statsBadgeValue}>{visitedCountries}</Text>
-            <Text style={styles.statsBadgeLabel}>{t('profile.statsBadge.countries')}</Text>
-          </View>
-        </View>
         {message ? (
           <View style={[styles.messageBanner, message.type === 'success' ? styles.messageBannerSuccess : styles.messageBannerError]}>
             <Ionicons
@@ -607,6 +549,33 @@ export default function ProfileScreen() {
             </Text>
           </View>
         ) : null}
+      </View>
+
+      {/* TRAVEL SUMMARY — the same shared stats band as the Travel Tracker
+          screen, computed from the same local sources so the numbers always
+          match; refreshed on every focus. The tracker entry point sits
+          directly beneath it (replaces the old Explore section row). */}
+      <View style={styles.travelStatsWrap}>
+        {/* Never fake zeros: skeleton while loading, band hidden on the
+            (rare) local read failure — a real 0 after load renders as 0. */}
+        {ownTravelStats.loading || ownTravelStats.stats ? (
+          <TravelStatsSummary
+            countriesVisited={ownTravelStats.stats?.countriesVisited ?? 0}
+            worldExploredPercent={ownTravelStats.stats?.worldExploredPercent ?? 0}
+            continentsReached={ownTravelStats.stats?.continentsReached ?? 0}
+            totalContinents={ownTravelStats.stats?.totalContinents ?? 7}
+            rankingAvailable={false}
+            loading={ownTravelStats.loading}
+          />
+        ) : null}
+        <TouchableOpacity
+          style={styles.travelTrackerButton}
+          activeOpacity={0.85}
+          onPress={() => router.push('/travel-tracker')}>
+          <Ionicons name="earth-outline" size={16} color={theme.colors.secondary} />
+          <Text style={styles.travelTrackerButtonText}>{t('profile.explore.travelTracker')}</Text>
+          <Ionicons name="chevron-forward" size={15} color={theme.colors.textMeta} />
+        </TouchableOpacity>
       </View>
 
       {/* PREVIOUS ADVENTURES — Home Up Next-style content carousel */}
@@ -657,13 +626,6 @@ export default function ProfileScreen() {
           ))}
         </ScrollView>
       )}
-
-      <SectionCard
-        title={t('profile.sections.explore')}
-        items={[
-          { icon: 'earth-outline', label: t('profile.explore.travelTracker'), accent: theme.colors.secondary, onPress: () => router.push('/travel-tracker') },
-        ]}
-      />
 
       <SectionCard
         title={t('profile.sections.preferences')}
@@ -1071,16 +1033,6 @@ function NotificationSettingRow({
   );
 }
 
-function StatCard({ value, label, accent }: { value: string; label: string; accent: string }) {
-  const styles = useThemedStyles(createStyles);
-  return (
-    <View style={styles.statCard}>
-      <Text style={[styles.statValue, { color: accent }]}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-    </View>
-  );
-}
-
 function SectionCard({
   title,
   items,
@@ -1156,6 +1108,28 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     paddingHorizontal: SPACING.xl,
     paddingTop: 20,
     paddingBottom: 132,
+  },
+  travelStatsWrap: {
+    marginTop: SPACING.xl,
+    paddingHorizontal: SPACING.lg,
+    gap: SPACING.sm,
+  },
+  travelTrackerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    paddingVertical: 11,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: theme.colors.borderPrimary,
+    backgroundColor: theme.colors.surface,
+  },
+  travelTrackerButtonText: {
+    color: theme.colors.textPrimary,
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: -0.2,
   },
   avatarSection: {
     marginTop: SPACING.xl,
@@ -1233,48 +1207,6 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     lineHeight: 22,
     textAlign: 'center',
     paddingHorizontal: SPACING.xl,
-  },
-  // Stats badges — pill row near avatar hero (matches Home infoBadge pattern)
-  statsBadgeRow: {
-    marginTop: SPACING.lg,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexWrap: 'wrap',
-    gap: SPACING.sm,
-    paddingHorizontal: SPACING.lg,
-  },
-  statsBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderRadius: RADIUS.circle,
-    // Dark: elevated surface + hairline instead of a light gray fill — the
-    // stat pills must never read as bright blocks around the avatar.
-    backgroundColor: theme.isDark ? theme.colors.surfaceElevated : theme.colors.bgLight,
-    borderWidth: theme.isDark ? StyleSheet.hairlineWidth : 1,
-    borderColor: theme.colors.borderPrimary,
-  },
-  statsBadgeIcon: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  statsBadgeValue: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: theme.colors.textPrimary,
-    letterSpacing: -0.2,
-  },
-  statsBadgeLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: theme.colors.textSecondary,
-    letterSpacing: 0.2,
   },
   // Previous Adventures carousel (Home Up Next-style cards)
   adventureHeader: {
@@ -1402,34 +1334,6 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
   },
   messageTextError: {
     color: theme.colors.error,
-  },
-  statsRow: {
-    marginTop: 28,
-    flexDirection: 'row',
-    gap: 14,
-  },
-  statCard: {
-    flex: 1,
-    borderRadius: RADIUS.lg,
-    borderWidth: theme.isDark ? StyleSheet.hairlineWidth : 1,
-    borderColor: theme.colors.borderPrimary,
-    backgroundColor: theme.colors.surfaceElevated,
-    alignItems: 'center',
-    paddingVertical: SPACING.xxl,
-    ...theme.shadows.medium,
-  },
-  statValue: {
-    fontSize: 36,
-    fontWeight: '900',
-    letterSpacing: -1.4,
-  },
-  statLabel: {
-    marginTop: 10,
-    color: theme.colors.textMeta,
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 1.8,
-    textAlign: 'center',
   },
   sectionCard: {
     marginTop: SPACING.lg,

@@ -40,11 +40,13 @@ export function useUnsavedChanges({ isDirty, onSave }: UseUnsavedChangesArgs) {
   // native-stack doesn't fully support).
   usePreventRemove(isDirty, ({ data }) => {
     if (savedRef.current) {
-      // Just saved — let navigation through. preventDefault has already
-      // intercepted the original action; re-dispatching it works because
-      // navigation tracks the dispatched action and won't re-intercept it.
+      // Just saved — let navigation through. Re-dispatch on the next tick:
+      // dispatching synchronously inside the prevent callback is unreliable
+      // on Android native-stack (the action can be swallowed and the screen
+      // stays), the same quirk the Discard path already works around with
+      // its delayed leaveNow().
       savedRef.current = false;
-      navigation.dispatch(data.action);
+      setTimeout(() => navigation.dispatch(data.action), 0);
       return;
     }
     pendingActionRef.current = () => navigation.dispatch(data.action);

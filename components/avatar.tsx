@@ -39,6 +39,11 @@ type AvatarProps = {
   // server-computed isOnline flag; undefined/false renders nothing so call
   // sites without presence data are unaffected.
   online?: boolean;
+  // Photo-cover variant of the presence dot (hero cards): smaller dot with
+  // a very thin translucent-white separation ring, instead of the default
+  // larger dot ringed in the surface color (which reads black on photos).
+  // Everywhere else keeps the default.
+  onlineDotOnPhoto?: boolean;
   style?: StyleProp<ViewStyle>;
   // Fallback-circle colors — call sites with their own existing dark/light
   // convention can override these instead of taking the default pink theme.
@@ -54,6 +59,7 @@ export default function Avatar({
   onError,
   size = 36,
   online,
+  onlineDotOnPhoto = false,
   style,
   fallbackBackgroundColor,
   fallbackTextColor,
@@ -72,7 +78,9 @@ export default function Avatar({
 
   // The presence dot must not be clipped by the circle, so the image/fallback
   // clips inside its own inner view while the outer container stays unclipped.
-  const dotSize = Math.max(10, Math.round(size * 0.3));
+  const dotSize = onlineDotOnPhoto
+    ? Math.max(8, Math.round(size * 0.26))
+    : Math.max(10, Math.round(size * 0.3));
 
   return (
     <View style={[dimension, style]}>
@@ -109,6 +117,7 @@ export default function Avatar({
           style={[
             styles.onlineDot,
             { width: dotSize, height: dotSize, borderRadius: dotSize / 2 },
+            onlineDotOnPhoto && { borderWidth: 1, borderColor: 'rgba(255,255,255,0.9)' },
           ]}
         />
       ) : null}

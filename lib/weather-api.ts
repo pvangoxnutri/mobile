@@ -98,3 +98,40 @@ export function summaryDay(weather: TripWeather | null | undefined): Extract<Tri
   const day = weather.days[0];
   return day?.isForecastAvailable ? day : null;
 }
+
+/**
+ * The day a "right now"-flavored preview (trip hero chip/strip) should show:
+ * today's forecast when today is inside the trip, else the nearest upcoming
+ * trip day, else the latest known day. Every day already carries its own
+ * feed-resolved location (TripDayLocation → carried forward → destination),
+ * so following the DATE automatically follows the itinerary's PLACES.
+ * Returns null instead of a day without forecast — never fabricate weather.
+ */
+export function currentRelevantDay(
+  weather: TripWeather | null | undefined,
+): Extract<TripWeatherDay, { isForecastAvailable: true }> | null {
+  if (!weather || weather.status !== 'available') return null;
+  const available = weather.days.filter(
+    (day): day is Extract<TripWeatherDay, { isForecastAvailable: true }> => day.isForecastAvailable,
+  );
+  if (available.length === 0) return null;
+
+  // Today in the forecast's own timezone (en-CA → YYYY-MM-DD), falling back
+  // to the device timezone if the zone string is missing/invalid.
+  let todayIso: string;
+  try {
+    todayIso = new Intl.DateTimeFormat(
+      'en-CA',
+      weather.timezone ? { timeZone: weather.timezone } : undefined,
+    ).format(new Date());
+  } catch {
+    todayIso = new Intl.DateTimeFormat('en-CA').format(new Date());
+  }
+
+  // days[] is sorted ascending by date (backend builds it start → end).
+  return (
+    available.find((day) => day.date === todayIso)
+    ?? available.find((day) => day.date > todayIso)
+    ?? available[available.length - 1]
+  );
+}

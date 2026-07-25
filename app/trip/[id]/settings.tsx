@@ -23,13 +23,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/components/auth-provider';
 import { useI18n } from '@/components/i18n-provider';
 import RangeDatePicker, { formatRangeDisplay } from '@/components/range-date-picker';
+import { pickStaticLocationLabel } from '@/components/slideshow-cover';
 import CountryPicker from '@/components/travel-tracker/country-picker';
 import { UnsavedChangesModal, useUnsavedChanges } from '@/components/unsaved-changes';
 import { useKeyboardFocusScroll } from '@/hooks/useKeyboardFocusScroll';
 import { apiFetch, apiJson } from '@/lib/api';
 import { getCached, setCached, invalidateTripCache } from '@/lib/cache';
 import { fetchPlaceDetails, fetchPlaceSuggestions, type PlaceAutocompleteSuggestion } from '@/lib/maps-api';
-import type { Quest, TripInvite } from '@/lib/types';
+import { fetchTripDayLocations, getCachedTripDayLocations } from '@/lib/day-location-api';
+import type { Quest, TripDayLocation, TripInvite } from '@/lib/types';
 import { uploadImageIfNeeded } from '@/lib/uploads';
 import { useTheme } from '@/components/theme-provider';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
@@ -71,6 +73,71 @@ export default function TripSettingsScreen() {
   const [endDate, setEndDate] = useState('');
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [membersCanEdit, setMembersCanEdit] = useState(true);
+  const [slideshowEnabled, setSlideshowEnabled] = useState(true);
+  // The trip's ACTUAL activity list decides whether the destination locks
+  // at all (see destinationLocked below) and which hint is shown. Cache-
+  // first, then fresh; null = still unknown → the safe defaults (locked,
+  // no hint) rather than flashing an editable field or the wrong copy.
+  const [tripActivityCount, setTripActivityCount] = useState<number | null>(() => {
+    const cached = getCached<unknown[]>(`/api/trips/${id}/activities`);
+    return cached ? cached.length : null;
+  });
+  useEffect(() => {
+    let activeLoad = true;
+    void apiJson<unknown[]>(`/api/trips/${id}/activities`)
+      .then((data) => {
+        if (activeLoad && Array.isArray(data)) setTripActivityCount(data.length);
+      })
+      .catch(() => {});
+    return () => {
+      activeLoad = false;
+    };
+  }, [id]);
+
+  // Destination is the immutable STARTING point only once the adventure
+  // has a feed to manage daily places in: with ZERO activities there is no
+  // feed yet, so the destination stays fully editable (the form is already
+  // seeded with it and saves via the normal PATCH path). While the count
+  // is unknown the field renders locked — the common with-activities trip
+  // must not flash an editable field before locking.
+  const storedDestination = (trip?.destination ?? '').trim();
+  const destinationLocked = Boolean(storedDestination) && tripActivityCount !== 0;
+
+  // The LOCKED row shows the feed's LIVING location, not the frozen
+  // starting point: the same resolved day-location timeline weather uses,
+  // via the same static rule as the hero pill (current day clamped into
+  // the trip → first day → stored destination as the last fallback).
+  // Cache-first so the value is usually there on first paint.
+  const [dayLocations, setDayLocations] = useState<TripDayLocation[]>(
+    () => getCachedTripDayLocations(id) ?? [],
+  );
+  useEffect(() => {
+    let activeLoad = true;
+    void fetchTripDayLocations(id)
+      .then((data) => {
+        if (activeLoad && Array.isArray(data)) setDayLocations(data);
+      })
+      .catch(() => {});
+    return () => {
+      activeLoad = false;
+    };
+  }, [id]);
+  const lockedDestinationLabel =
+    pickStaticLocationLabel(dayLocations, trip?.startDate, trip?.endDate, trip?.destination)
+    ?? trip?.destination;
+
+  // The single hint under the EDITABLE destination field (never stacked):
+  // a stored destination that is editable only because the adventure has
+  // no activities yet explains itself with the no-activities copy; edited
+  // free text without a picked suggestion keeps the weather hint exactly
+  // as before.
+  const editableDestinationHint =
+    storedDestination && tripActivityCount === 0 && destination.trim() === storedDestination
+      ? t('trip.settings.destinationLockedNoActivities')
+      : destination.trim() && !destinationPlace
+        ? t('trip.destinationWeatherHint')
+        : null;
+
   const [rangePickerOpen, setRangePickerOpen] = useState(false);
   const [message, setMessage] = useState<MessageState>(null);
   const [inviteEmail, setInviteEmail] = useState('');
@@ -102,7 +169,8 @@ export default function TripSettingsScreen() {
       endDate !== trip.endDate ||
       JSON.stringify(tripCountries) !== JSON.stringify(trip.countries ?? []) ||
       (imageUrl ?? null) !== (trip.imageUrl ?? null) ||
-      membersCanEdit !== (trip.membersCanEdit ?? true)
+      membersCanEdit !== (trip.membersCanEdit ?? true) ||
+      slideshowEnabled !== (trip.slideshowEnabled ?? true)
     )
   );
 
@@ -131,6 +199,8 @@ export default function TripSettingsScreen() {
     setEndDate(tripData.endDate);
     setImageUrl(tripData.imageUrl ?? null);
     setMembersCanEdit(tripData.membersCanEdit ?? true);
+    // Missing field (older backend) = slideshow enabled.
+    setSlideshowEnabled(tripData.slideshowEnabled ?? true);
   }
 
   const loadTrip = useCallback(() => {
@@ -289,6 +359,7 @@ export default function TripSettingsScreen() {
           imageUrl: uploadedImageUrl,
           clearImage: !uploadedImageUrl,
           membersCanEdit,
+          slideshowEnabled,
         }),
       });
 
@@ -297,6 +368,30 @@ export default function TripSettingsScreen() {
       }
 
       invalidateTripCache(id);
+      // Sync the local trip snapshot with what was just saved so isDirty
+      // flips false IMMEDIATELY. Without this the save-then-leave back
+      // navigation raced the background refetch: the guard still saw a
+      // dirty form and intercepted, and on Android the guard's re-dispatch
+      // can be swallowed — leaving the user stuck on settings with a bogus
+      // "unsaved changes" warning on the next back press.
+      setTrip((prev) =>
+        prev
+          ? {
+              ...prev,
+              title: title.trim(),
+              destination: destination.trim(),
+              destinationLatitude: destinationPlace?.latitude ?? null,
+              destinationLongitude: destinationPlace?.longitude ?? null,
+              destinationPlaceId: destinationPlace?.placeId ?? null,
+              countries: [...tripCountries],
+              startDate,
+              endDate,
+              imageUrl: uploadedImageUrl,
+              membersCanEdit,
+              slideshowEnabled,
+            }
+          : prev,
+      );
       setMessage({ type: 'success', text: 'Trip settings updated.' });
       loadTrip();
       return true;
@@ -507,6 +602,27 @@ export default function TripSettingsScreen() {
                   onSubmitEditing={() => destinationRef.current?.focus()}
                 />
                 <Text style={styles.label}>Destination</Text>
+                {destinationLocked ? (
+                  // The route lives in the FEED now: once an adventure has
+                  // activities to hang daily places on, the destination is
+                  // just the immutable starting point — settings only
+                  // displays it. (No destination yet, or no activities yet
+                  // → the editable input below instead.) The hint waits for
+                  // a CONFIRMED activity count so it can never flash while
+                  // the list is still loading.
+                  <>
+                    <View style={styles.destinationLockedRow}>
+                      <Ionicons name="location" size={16} color={theme.colors.primary} />
+                      <Text style={styles.destinationLockedText} numberOfLines={1}>
+                        {lockedDestinationLabel}
+                      </Text>
+                      <Ionicons name="lock-closed-outline" size={14} color={theme.colors.textMeta} />
+                    </View>
+                    {tripActivityCount !== null ? (
+                      <Text style={styles.destinationHint}>{t('trip.settings.destinationLocked')}</Text>
+                    ) : null}
+                  </>
+                ) : (
                 <TextInput
                   ref={destinationRef}
                   value={destination}
@@ -518,7 +634,11 @@ export default function TripSettingsScreen() {
                   returnKeyType="done"
                   onSubmitEditing={() => Keyboard.dismiss()}
                 />
-                {destinationSuggestions.length > 0 ? (
+                )}
+                {!destinationLocked && !destination.trim() ? (
+                  <Text style={styles.destinationHint}>{t('trip.settings.addDestinationHint')}</Text>
+                ) : null}
+                {!destinationLocked && destinationSuggestions.length > 0 ? (
                   <View style={styles.destinationSuggestions}>
                     {destinationSuggestions.map((item) => (
                       <TouchableOpacity
@@ -537,10 +657,8 @@ export default function TripSettingsScreen() {
                     ))}
                   </View>
                 ) : null}
-                {/* Free text saves fine — the hint just explains what a
-                    picked suggestion unlocks. Gone once a place is chosen. */}
-                {destination.trim() && !destinationPlace ? (
-                  <Text style={styles.destinationHint}>{t('trip.destinationWeatherHint')}</Text>
+                {!destinationLocked && editableDestinationHint ? (
+                  <Text style={styles.destinationHint}>{editableDestinationHint}</Text>
                 ) : null}
                 <Text style={styles.label}>Countries</Text>
                 <CountryPicker value={tripCountries} onChange={setTripCountries} label="Select countries" />
@@ -634,6 +752,19 @@ export default function TripSettingsScreen() {
                   <Switch
                     value={membersCanEdit}
                     onValueChange={setMembersCanEdit}
+                    trackColor={{ false: theme.isDark ? theme.colors.textMuted : '#dfe3e8', true: theme.isDark ? theme.colors.primaryLight20 : theme.colors.primary }}
+                    thumbColor="#fff"
+                    ios_backgroundColor={theme.isDark ? theme.colors.textMuted : '#dfe3e8'}
+                  />
+                </View>
+                <View style={styles.permissionRow}>
+                  <View style={styles.permissionCopy}>
+                    <Text style={styles.permissionTitle}>{t('trip.slideshow_label')}</Text>
+                    <Text style={styles.permissionSubtitle}>{t('trip.slideshow_hint')}</Text>
+                  </View>
+                  <Switch
+                    value={slideshowEnabled}
+                    onValueChange={setSlideshowEnabled}
                     trackColor={{ false: theme.isDark ? theme.colors.textMuted : '#dfe3e8', true: theme.isDark ? theme.colors.primaryLight20 : theme.colors.primary }}
                     thumbColor="#fff"
                     ios_backgroundColor={theme.isDark ? theme.colors.textMuted : '#dfe3e8'}
@@ -875,6 +1006,24 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     fontSize: 12,
     color: theme.colors.textMeta,
     marginTop: 1,
+  },
+  destinationLockedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: theme.colors.borderPrimary,
+    backgroundColor: theme.isDark ? theme.colors.bgLight : '#f6f7f9',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  destinationLockedText: {
+    flex: 1,
+    minWidth: 0,
+    color: theme.colors.textPrimary,
+    fontSize: 15,
+    fontWeight: '600',
   },
   destinationHint: {
     marginTop: -4,

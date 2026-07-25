@@ -1,10 +1,21 @@
-﻿import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useRef } from 'react';
-import { Animated, Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useLayoutEffect, useRef } from 'react';
+import {
+  Animated,
+  Dimensions,
+  Easing,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { getCountryFlag, type Country, type CountryStatus } from './country-data';
 import { getLocalizedContinentName, getLocalizedCountryName } from './country-i18n';
+import { getTravelTrackerLivingColors } from './status-colors';
 import { useI18n } from '@/components/i18n-provider';
 import { useTheme } from '@/components/theme-provider';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
@@ -26,35 +37,58 @@ interface Option {
   color: string;
 }
 
+const getClosedTranslateY = () => Math.max(Dimensions.get('window').height, 600);
+
 export default function StatusSheet({ country, currentStatus, visible, onSelect, onClose }: StatusSheetProps) {
   const { t, language } = useI18n();
   const { theme } = useTheme();
   const styles = useThemedStyles(createStyles);
   const insets = useSafeAreaInsets();
-  const slideAnim = useRef(new Animated.Value(300)).current;
+  const livingColors = getTravelTrackerLivingColors(theme);
+  const slideAnim = useRef(new Animated.Value(getClosedTranslateY())).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    let frameId: number | null = null;
+    let openingAnimation: Animated.CompositeAnimation | null = null;
+
+    slideAnim.stopAnimation();
+    fadeAnim.stopAnimation();
+    slideAnim.setValue(getClosedTranslateY());
+    fadeAnim.setValue(0);
+
     if (visible) {
-      Animated.parallel([
-        Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true, damping: 20, stiffness: 180 }),
-        Animated.timing(fadeAnim, { toValue: 1, duration: 180, useNativeDriver: true }),
-      ]).start();
-    } else {
-      Animated.parallel([
-        Animated.timing(slideAnim, { toValue: 300, duration: 200, useNativeDriver: true }),
-        Animated.timing(fadeAnim, { toValue: 0, duration: 180, useNativeDriver: true }),
-      ]).start();
+      // Modal hides its native content as soon as `visible` becomes false, so a
+      // closing animation cannot reliably leave these values at their closed
+      // positions. Reset first and wait one frame for the freshly presented
+      // modal to commit before starting every opening animation.
+      frameId = requestAnimationFrame(() => {
+        openingAnimation = Animated.parallel([
+          Animated.timing(slideAnim, {
+            toValue: 0,
+            duration: 320,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }),
+          Animated.timing(fadeAnim, { toValue: 1, duration: 180, useNativeDriver: true }),
+        ]);
+        openingAnimation.start();
+      });
     }
+
+    return () => {
+      if (frameId !== null) cancelAnimationFrame(frameId);
+      openingAnimation?.stop();
+    };
   }, [visible, slideAnim, fadeAnim]);
 
   // Status hues are semantic identity (visited = brand pink, planned = teal,
-  // living = amber): dark swaps each wash/ink for a readable variant of the
+  // living = yellow): dark swaps each wash/ink for a readable variant of the
   // SAME hue — matching the badge treatment on the Travel Tracker screen.
   const options: Option[] = [
     { status: 'visited', label: t('travel.status.visited'), icon: 'checkmark-circle', bg: theme.colors.primaryLight12, color: theme.colors.primary },
     { status: 'planned', label: t('travel.status.planning'), icon: 'bookmark', bg: theme.isDark ? 'rgba(34,174,199,0.16)' : 'rgba(13, 144, 168, 0.12)', color: theme.colors.secondary },
-    { status: 'living', label: t('travel.status.living'), icon: 'home', bg: theme.isDark ? 'rgba(232,164,74,0.16)' : '#FEF3C7', color: theme.isDark ? '#e8a44a' : '#D97706' },
+    { status: 'living', label: t('travel.status.living'), icon: 'home', bg: livingColors.surface, color: livingColors.accent },
     { status: 'none', label: t('travel.status.clear'), icon: 'close-circle-outline', bg: theme.isDark ? theme.colors.bgLight : '#F4F5F7', color: theme.isDark ? theme.colors.textMeta : '#8A909D' },
   ];
 

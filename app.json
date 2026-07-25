@@ -29,8 +29,8 @@
         "LSApplicationQueriesSchemes": [
           "spotify"
         ],
-        "NSCameraUsageDescription": "SideQuest uses your camera to take photos for your profile picture, trip and activity covers, and expense receipts.",
-        "NSPhotoLibraryUsageDescription": "SideQuest accesses your photo library so you can choose photos for your profile picture, trip and activity covers, and expense receipts."
+        "NSCameraUsageDescription": "SideQuest uses your camera to take photos for your profile picture, trip and activity covers, expense receipts, and travel documents.",
+        "NSPhotoLibraryUsageDescription": "SideQuest accesses your photo library so you can choose photos for your profile picture, trip and activity covers, expense receipts, and travel documents."
       }
     },
     "android": {
@@ -50,14 +50,46 @@
           "action": "VIEW",
           "autoVerify": true,
           "data": [
-            { "scheme": "https", "host": "sidequesttravel.app", "pathPrefix": "/invite" },
-            { "scheme": "https", "host": "sidequesttravel.app", "pathPrefix": "/share" },
-            { "scheme": "https", "host": "sidequesttravel.app", "pathPrefix": "/auth-callback" },
-            { "scheme": "https", "host": "sidequesttravel.app", "pathPrefix": "/reset-password" },
-            { "scheme": "https", "host": "www.sidequesttravel.app", "pathPrefix": "/invite" },
-            { "scheme": "https", "host": "www.sidequesttravel.app", "pathPrefix": "/share" },
-            { "scheme": "https", "host": "www.sidequesttravel.app", "pathPrefix": "/auth-callback" },
-            { "scheme": "https", "host": "www.sidequesttravel.app", "pathPrefix": "/reset-password" }
+            {
+              "scheme": "https",
+              "host": "sidequesttravel.app",
+              "pathPrefix": "/invite"
+            },
+            {
+              "scheme": "https",
+              "host": "sidequesttravel.app",
+              "pathPrefix": "/share"
+            },
+            {
+              "scheme": "https",
+              "host": "sidequesttravel.app",
+              "pathPrefix": "/auth-callback"
+            },
+            {
+              "scheme": "https",
+              "host": "sidequesttravel.app",
+              "pathPrefix": "/reset-password"
+            },
+            {
+              "scheme": "https",
+              "host": "www.sidequesttravel.app",
+              "pathPrefix": "/invite"
+            },
+            {
+              "scheme": "https",
+              "host": "www.sidequesttravel.app",
+              "pathPrefix": "/share"
+            },
+            {
+              "scheme": "https",
+              "host": "www.sidequesttravel.app",
+              "pathPrefix": "/auth-callback"
+            },
+            {
+              "scheme": "https",
+              "host": "www.sidequesttravel.app",
+              "pathPrefix": "/reset-password"
+            }
           ],
           "category": [
             "BROWSABLE",
@@ -90,8 +122,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "SideQuest accesses your photo library so you can choose photos for your profile picture, trip and activity covers, and expense receipts.",
-          "cameraPermission": "SideQuest uses your camera to take photos for your profile picture, trip and activity covers, and expense receipts."
+          "photosPermission": "SideQuest accesses your photo library so you can choose photos for your profile picture, trip and activity covers, expense receipts, and travel documents.",
+          "cameraPermission": "SideQuest uses your camera to take photos for your profile picture, trip and activity covers, expense receipts, and travel documents."
         }
       ]
     ],

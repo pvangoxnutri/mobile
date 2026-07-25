@@ -1,6 +1,13 @@
 export type CountryStatus = 'none' | 'visited' | 'planned' | 'living';
 
-export type Continent = 'Africa' | 'Asia' | 'Europe' | 'North America' | 'South America' | 'Oceania';
+export type Continent =
+  | 'Africa'
+  | 'Antarctica'
+  | 'Asia'
+  | 'Europe'
+  | 'North America'
+  | 'South America'
+  | 'Oceania';
 
 export interface Country {
   code: string;
@@ -143,7 +150,7 @@ export const COUNTRIES: Country[] = [
   { code: 'VN', name: 'Vietnam', continent: 'Asia' },
   { code: 'YE', name: 'Yemen', continent: 'Asia' },
 
-  // ── Europe (44) ───────────────────────────────────────────────────────────
+  // ── Europe (45) ───────────────────────────────────────────────────────────
   { code: 'AL', name: 'Albania', continent: 'Europe' },
   { code: 'AD', name: 'Andorra', continent: 'Europe' },
   { code: 'AT', name: 'Austria', continent: 'Europe' },
@@ -158,6 +165,9 @@ export const COUNTRIES: Country[] = [
   { code: 'FI', name: 'Finland', continent: 'Europe' },
   { code: 'FR', name: 'France', continent: 'Europe' },
   { code: 'DE', name: 'Germany', continent: 'Europe' },
+  // British Overseas Territory — its own ISO 3166-1 code, never lumped
+  // into Spain (or the UK) in the tracker.
+  { code: 'GI', name: 'Gibraltar', continent: 'Europe' },
   { code: 'GR', name: 'Greece', continent: 'Europe' },
   { code: 'HU', name: 'Hungary', continent: 'Europe' },
   { code: 'IS', name: 'Iceland', continent: 'Europe' },
@@ -247,6 +257,11 @@ export const COUNTRIES: Country[] = [
   { code: 'TO', name: 'Tonga', continent: 'Oceania' },
   { code: 'TV', name: 'Tuvalu', continent: 'Oceania' },
   { code: 'VU', name: 'Vanuatu', continent: 'Oceania' },
+
+  // ── Antarctica (1) ────────────────────────────────────────────────────────
+  // Antarctica has no sovereign countries, but AQ is its ISO 3166-1 territory
+  // code and makes the seventh continent explicitly selectable and countable.
+  { code: 'AQ', name: 'Antarctica', continent: 'Antarctica' },
 ];
 
 export const CONTINENT_ORDER: Continent[] = [
@@ -256,6 +271,7 @@ export const CONTINENT_ORDER: Continent[] = [
   'North America',
   'South America',
   'Oceania',
+  'Antarctica',
 ];
 
 export function buildEntries(statusMap: StatusMap): CountryEntry[] {

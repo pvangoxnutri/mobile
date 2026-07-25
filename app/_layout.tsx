@@ -83,6 +83,7 @@ function ThemedRoot() {
                 <Stack.Screen name="trip/[id]" options={{ headerShown: false }} />
                 <Stack.Screen name="trip/[id]/settings" options={{ headerShown: false }} />
                 <Stack.Screen name="trip/[id]/split" options={{ headerShown: false }} />
+                <Stack.Screen name="trip/[id]/documents" options={{ headerShown: false }} />
                 <Stack.Screen name="trip/[id]/sidequest/new" options={{ headerShown: false }} />
                 <Stack.Screen name="trip/[id]/sidequest/[sidequestId]" options={{ headerShown: false }} />
               </Stack>

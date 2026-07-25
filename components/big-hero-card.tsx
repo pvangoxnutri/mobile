@@ -1,8 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import Avatar from '@/components/avatar';
+import SlideshowCover, {
+  useActiveSlideLabel,
+  useActiveSlideLabelValue,
+  type ActiveSlideLabelChannel,
+  type SlideshowItem,
+} from '@/components/slideshow-cover';
 import WeatherIcon from '@/components/weather-icon';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import type { AppTheme } from '@/constants/themes';
@@ -87,7 +93,18 @@ export type BigHeroCardProps = {
   hideEnterButton?: boolean;
   /** Subtle start-day (or today's, when ongoing) forecast. Null/absent hides
    *  the row entirely — the card never shows fake weather. */
-  weather?: { condition: WeatherCondition; tempMaxC: number } | null;
+  weather?: { condition: WeatherCondition; tempMaxC: number; locationLabel?: string } | null;
+  /** Slideshow cover: structured slides (built by buildSlideshowItems) —
+   *  each carries its day's resolved feed location, and the pill follows
+   *  the slide on screen. Absent/empty → the classic static cover. */
+  slideshowItems?: SlideshowItem[];
+  /** Only the visible carousel card animates — off-screen cards render their
+   *  first image statically with no timer. */
+  slideshowActive?: boolean;
+  /** The single static location name (current day's resolved feed location
+   *  → first day → destination), shown when the slideshow has no label to
+   *  offer. Null/absent + no destination → the pill is hidden entirely. */
+  staticLocationLabel?: string | null;
 };
 
 export function BigHeroCard({
@@ -103,9 +120,17 @@ export function BigHeroCard({
   onPress,
   hideEnterButton = false,
   weather = null,
+  slideshowItems,
+  slideshowActive = false,
+  staticLocationLabel = null,
 }: BigHeroCardProps) {
   const styles = useThemedStyles(createStyles);
   const quest = trip.quest;
+  // Channel carrying the current slide's location — set by the slideshow
+  // at the exact moment a crossfade completes (same timer as the image).
+  // Only the tiny pill component subscribes: a slide flip must never
+  // re-render this whole card. Shared machinery with the trip header.
+  const activeSlide = useActiveSlideLabel();
   const isOngoing = trip.isOngoing;
   const dayInfo = getTripDayInfo(quest.startDate, quest.endDate, now);
   const timeLeft = isOngoing
@@ -115,13 +140,31 @@ export function BigHeroCard({
 
   const handlePress = onPress ?? (() => router.push(`/trip/${quest.id}`));
 
+  // Slideshow cover when the trip provides slides; otherwise the classic
+  // static cover. Same absolute-fill layout either way — overlays, radius
+  // and heights are untouched.
+  const coverItems: SlideshowItem[] =
+    slideshowItems && slideshowItems.length > 0
+      ? slideshowItems
+      : quest.imageUrl
+        ? [{ key: quest.imageUrl, imageUri: quest.imageUrl }]
+        : [];
+  const hasSlideshow = !!slideshowItems && slideshowItems.length > 0;
+  // ONE name on the pill, following the image when the slideshow runs:
+  // current slide's day location → static rule → destination → hidden.
+  const pillFallback = staticLocationLabel ?? (quest.destination?.trim() || null);
+
   return (
     <TouchableOpacity
       activeOpacity={0.94}
       onPress={handlePress}
       style={[styles.bigHeroCard, { width, height: cardHeight }]}>
-      {quest.imageUrl ? (
-        <Image source={{ uri: quest.imageUrl }} style={styles.bigHeroImage} resizeMode="cover" />
+      {coverItems.length > 0 ? (
+        <SlideshowCover
+          items={coverItems}
+          active={slideshowActive}
+          onSlideChange={activeSlide.onSlideChange}
+        />
       ) : (
         <View style={[styles.bigHeroImage, styles.bigHeroImageFallback]} />
       )}
@@ -130,7 +173,7 @@ export function BigHeroCard({
           for legibility — only over the dark fallback. Skipped entirely when
           there's a real photo, per product decision (accepts that text/
           buttons may be harder to read on a bright or busy photo). */}
-      {!quest.imageUrl ? (
+      {coverItems.length === 0 ? (
         <>
           <View pointerEvents="none" style={styles.bigHeroGradient1} />
           <View pointerEvents="none" style={styles.bigHeroGradient2} />
@@ -141,14 +184,17 @@ export function BigHeroCard({
         </>
       ) : null}
 
-      {/* Top row: location pill (left) + LIVE / UPCOMING pill (right) */}
+      {/* Top row: location pill (left) + LIVE / UPCOMING pill (right).
+          ONE name only — the slide's own day location while the slideshow
+          runs, else the static rule; hidden entirely when nothing real
+          exists (no empty pin, no "A · B" pairs). */}
       <View style={styles.bigHeroTopRow}>
-        {quest.destination ? (
-          <View style={styles.bigHeroLocPill}>
-            <Ionicons name="location" size={12} color="#fff" />
-            <Text style={styles.bigHeroLocText} numberOfLines={1}>{quest.destination}</Text>
-          </View>
-        ) : <View />}
+        <BigHeroLocationPill
+          channel={activeSlide}
+          hasSlideshow={hasSlideshow}
+          fallback={pillFallback}
+          styles={styles}
+        />
         {isOngoing ? (
           <View style={styles.bigHeroLivePill}>
             <View style={styles.bigHeroLiveDot} />
@@ -196,6 +242,7 @@ export function BigHeroCard({
                     onError={() => onAvatarError?.(member.id)}
                     size={28}
                     online={member.isOnline}
+                    onlineDotOnPhoto
                   />
                 </View>
               ))}
@@ -211,7 +258,10 @@ export function BigHeroCard({
 
           {weather ? (
             <View style={styles.bigHeroWeather}>
-              <WeatherIcon condition={weather.condition} size={13} color="rgba(255,255,255,0.92)" />
+              {/* No color override — the shared per-condition accents in
+                  WeatherIcon apply (amber sun etc.), identical to the trip
+                  header's chip. */}
+              <WeatherIcon condition={weather.condition} size={13} />
               <Text style={styles.bigHeroWeatherText}>{Math.round(weather.tempMaxC)}°</Text>
             </View>
           ) : null}
@@ -226,6 +276,36 @@ export function BigHeroCard({
         </View>
       </View>
     </TouchableOpacity>
+  );
+}
+
+// The ONLY part of the card that re-renders when the slideshow flips —
+// subscribing here (not in BigHeroCard) keeps the every-5-seconds update
+// away from the avatars/weather/footer tree, so a transition costs one
+// tiny pill render instead of a whole-card one (the whole-card version
+// was a visible hitch right as each crossfade settled).
+function BigHeroLocationPill({
+  channel,
+  hasSlideshow,
+  fallback,
+  styles,
+}: {
+  channel: ActiveSlideLabelChannel;
+  hasSlideshow: boolean;
+  fallback: string | null;
+  styles: ReturnType<typeof createStyles>;
+}) {
+  const slideLabel = useActiveSlideLabelValue(channel);
+  const label = (hasSlideshow ? slideLabel : null) ?? fallback;
+  // The empty view keeps the top row's space-between pushing LIVE right.
+  if (!label) return <View />;
+  return (
+    <View style={styles.bigHeroLocPill}>
+      <Ionicons name="location" size={12} color="#fff" />
+      <Text style={styles.bigHeroLocText} numberOfLines={1}>
+        {label}
+      </Text>
+    </View>
   );
 }
 
@@ -384,16 +464,23 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+  // A THIN translucent-white ring (1px, not the old heavy 2px solid) —
+  // just enough separation from any cover photo without looking like a
+  // sticker. The dot pairs with Avatar's onlineDotOnPhoto variant.
   bigHeroAvatar: {
-    width: 32, height: 32,
-    borderRadius: 16,
+    width: 30, height: 30,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.75)',
+    // Solid fill behind initials-fallbacks: Avatar's own fallback color is
+    // translucent in dark mode (rgba), which read see-through on cover
+    // photos — this is the same solid the wrapper had pre-redesign. Photo
+    // avatars cover it completely.
     backgroundColor: '#fff1f5',
-    borderWidth: 2,
-    borderColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
     // No overflow:hidden — Avatar clips its own image; the online dot needs
-    // to render on the circle's edge without being cut by the ring.
+    // to render on the circle's edge without being cut.
   },
   bigHeroSealed: {
     flexDirection: 'row',

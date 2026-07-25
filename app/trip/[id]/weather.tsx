@@ -141,7 +141,23 @@ export default function WeatherScreen() {
         from ? `${t('weather.tooEarly')} ${t('weather.tooEarlyFrom', { date: from })}` : t('weather.tooEarly'),
       );
     }
-    if (weather.status === 'no_coordinates') return renderStatusMessage('location-outline', t('weather.noCoordinates'));
+    if (weather.status === 'no_coordinates') {
+      // No usable place anywhere (no day locations, no destination coords)
+      // — offer the direct path to add the starting destination, which
+      // enables weather for every day at once via the resolved timeline.
+      return (
+        <View>
+          {renderStatusMessage('location-outline', t('weather.noCoordinates'))}
+          <TouchableOpacity
+            style={styles.addDestinationButton}
+            activeOpacity={0.88}
+            onPress={() => router.push(`/trip/${id}/settings`)}>
+            <Ionicons name="location" size={15} color="#fff" />
+            <Text style={styles.addDestinationButtonText}>{t('trip.addDestination')}</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
     if (weather.status !== 'available' || !featured) return renderStatusMessage('cloud-outline', t('weather.unavailable'));
 
     return (
@@ -151,7 +167,9 @@ export default function WeatherScreen() {
           <Text style={styles.featuredDayLabel}>
             {featured.date === todayIso ? t('weather.today') : formatDay(featured.date, { weekday: 'long', day: 'numeric', month: 'long' })}
           </Text>
-          {featured.locationLabel && featured.locationLabel !== (weather?.destinationName ?? '') ? (
+          {/* Always show WHERE this day's forecast applies — the page
+              header is generic now, so the location must live on the day. */}
+          {featured.locationLabel ? (
             <View style={styles.featuredLocationRow}>
               <Ionicons name="location-outline" size={13} color={theme.colors.textSecondary} />
               <Text style={styles.featuredLocationText} numberOfLines={1}>{featured.locationLabel}</Text>
@@ -243,10 +261,14 @@ export default function WeatherScreen() {
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, 20) + 24 }]}
         showsVerticalScrollIndicator={false}>
-        {/* Destination + trip dates + last updated. */}
+        {/* Header + trip dates + last updated. Deliberately NOT the trip
+            destination text — the forecast follows the feed's per-day
+            locations (TripDayLocation timeline), so a single destination
+            name would be misleading; each day card carries its own
+            location label instead. */}
         <View style={styles.destCard}>
-          <Text style={styles.destName} numberOfLines={1}>
-            {weather?.destinationName ?? cachedTrip?.destination ?? ''}
+          <Text style={styles.destName} numberOfLines={2}>
+            {t('weather.headerTitle')}
           </Text>
           {formatTripDates() ? <Text style={styles.destDates}>{formatTripDates()}</Text> : null}
           {formatUpdatedAt() ? <Text style={styles.destUpdated}>{formatUpdatedAt()}</Text> : null}
@@ -310,6 +332,22 @@ const createStyles = (theme: AppTheme) =>
       marginTop: 2,
       fontSize: 12,
       color: theme.colors.textMeta,
+    },
+    addDestinationButton: {
+      alignSelf: 'center',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 7,
+      marginTop: 4,
+      paddingHorizontal: 18,
+      paddingVertical: 11,
+      borderRadius: 999,
+      backgroundColor: theme.colors.primary,
+    },
+    addDestinationButtonText: {
+      color: '#fff',
+      fontSize: 13.5,
+      fontWeight: '800',
     },
     statusWrap: {
       alignItems: 'center',

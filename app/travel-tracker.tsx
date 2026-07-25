@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   InteractionManager,
@@ -18,8 +18,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useI18n } from '@/components/i18n-provider';
 import WorldOverview from '@/components/travel-tracker/map-section';
 import StatusSheet from '@/components/travel-tracker/status-sheet';
+import { getTravelTrackerLivingColors } from '@/components/travel-tracker/status-colors';
+import WorldGlobe from '@/components/travel-tracker/world-globe';
 import {
-  COUNTRIES,
+  compareCountriesByLocalizedName,
+  getLocalizedCountryName,
+} from '@/components/travel-tracker/country-i18n';
+import {
   getCountryFlag,
   inContinent,
   buildEntries,
@@ -28,6 +33,17 @@ import {
   type CountryStatus,
   type StatusMap,
 } from '@/components/travel-tracker/country-data';
+import {
+  computeTravelStats,
+  deriveTripStatusMap,
+  getPrimaryLivingCountryCode,
+  mergeStatusMaps,
+  sanitizeStatusMap,
+  setCountryStatus,
+  TRAVEL_TRACKER_STORAGE_KEY,
+} from '@/components/travel-tracker/travel-tracker-state';
+import TravelStatsSummary from '@/components/travel-tracker/travel-stats-summary';
+import { pushOwnTravelStats } from '@/lib/travel-stats-api';
 import { useKeyboardFocusScroll } from '@/hooks/useKeyboardFocusScroll';
 import { apiJson } from '@/lib/api';
 import type { Quest } from '@/lib/types';
@@ -37,8 +53,7 @@ import type { AppTheme } from '@/constants/themes';
 
 type Filter = 'all' | 'visited' | 'planned' | 'living';
 
-const STORAGE_KEY = 'travel_tracker_status_map';
-const TOTAL_CONTINENTS = 6;
+const STORAGE_KEY = TRAVEL_TRACKER_STORAGE_KEY;
 
 const FILTER_LABEL_KEY: Record<Filter, string> = {
   all: 'travel.filterAll',
@@ -49,9 +64,10 @@ const FILTER_LABEL_KEY: Record<Filter, string> = {
 
 
 export default function TravelTrackerScreen() {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const { theme } = useTheme();
   const styles = useThemedStyles(createStyles);
+  const livingColors = getTravelTrackerLivingColors(theme);
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
   const searchInputRef = useRef<TextInput>(null);
@@ -72,7 +88,7 @@ export default function TravelTrackerScreen() {
 
   useEffect(() => {
     void AsyncStorage.getItem(STORAGE_KEY)
-      .then((raw) => { if (raw) setStatusMap(JSON.parse(raw) as StatusMap); })
+      .then((raw) => { if (raw) setStatusMap(sanitizeStatusMap(JSON.parse(raw))); })
       .catch(() => {})
       .finally(() => setReady(true));
   }, []);
@@ -81,17 +97,7 @@ export default function TravelTrackerScreen() {
     void apiJson<Quest[]>('/api/trips')
       .then((trips) => {
         const today = new Date().toISOString().slice(0, 10);
-        const derived: StatusMap = {};
-        for (const trip of trips) {
-          if (!trip.countries?.length) continue;
-          const status: CountryStatus = trip.endDate < today ? 'visited' : 'planned';
-          for (const code of trip.countries) {
-            if (!derived[code] || (derived[code] === 'planned' && status === 'visited')) {
-              derived[code] = status;
-            }
-          }
-        }
-        setTripDerivedMap(derived);
+        setTripDerivedMap(deriveTripStatusMap(trips, today));
       })
       .catch((err: unknown) => {
         console.warn('[TRAVEL_TRACKER] Failed to load trip-derived countries:', err instanceof Error ? err.message : err);
@@ -103,28 +109,41 @@ export default function TravelTrackerScreen() {
     void AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(statusMap));
   }, [statusMap, ready]);
 
-  const mergedMap = useMemo<StatusMap>(() => ({ ...tripDerivedMap, ...statusMap }), [tripDerivedMap, statusMap]);
-  const entries = useMemo(() => buildEntries(mergedMap), [mergedMap]);
+  // Sync ONLY the aggregate numbers to the backend (debounced) so other
+  // members' profiles can show them — the country list itself never leaves
+  // the device. Derived from the same mergedMap the screen renders.
+  useEffect(() => {
+    if (!ready) return;
+    const merged = mergeStatusMaps(tripDerivedMap, statusMap);
+    const aggregate = computeTravelStats(merged);
+    const handle = setTimeout(() => {
+      pushOwnTravelStats({
+        countriesVisited: aggregate.countriesVisited,
+        continentsReached: aggregate.continentsReached,
+      });
+    }, 1500);
+    return () => clearTimeout(handle);
+  }, [statusMap, tripDerivedMap, ready]);
+
+  const mergedMap = useMemo<StatusMap>(
+    () => mergeStatusMaps(tripDerivedMap, statusMap),
+    [tripDerivedMap, statusMap],
+  );
+  const initialGlobeFocusCode = ready
+    ? getPrimaryLivingCountryCode(statusMap)
+    : undefined;
+  const entries = useMemo(
+    () => buildEntries(mergedMap).map((entry) => ({
+      ...entry,
+      name: getLocalizedCountryName(entry, language),
+    })),
+    [language, mergedMap],
+  );
 
   // 'living' counts as visited: a country holds ONE status, so marking your
   // home country as "living here" would otherwise silently drop it from the
   // visited tally.
-  const visitedCount = useMemo(
-    () => Object.values(mergedMap).filter((s) => s === 'visited' || s === 'living').length,
-    [mergedMap],
-  );
-
-  const continentsVisited = useMemo(() => {
-    const set = new Set<Continent>();
-    COUNTRIES.forEach((c) => {
-      const s = mergedMap[c.code];
-      if (s === 'visited' || s === 'living') {
-        set.add(c.continent);
-        if (c.continent2) set.add(c.continent2);
-      }
-    });
-    return set.size;
-  }, [mergedMap]);
+  const travelStats = useMemo(() => computeTravelStats(mergedMap), [mergedMap]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -135,8 +154,8 @@ export default function TravelTrackerScreen() {
         if (q && !e.name.toLowerCase().includes(q) && !e.code.toLowerCase().includes(q)) return false;
         return true;
       })
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [entries, filter, continentFilter, search]);
+      .sort((a, b) => compareCountriesByLocalizedName(a, b, language));
+  }, [entries, filter, continentFilter, language, search]);
 
   // Android mounts every country row synchronously on open, and rendering all
   // ~200 flag rows up front froze the screen for a beat ("tog jättelång tid att
@@ -151,27 +170,14 @@ export default function TravelTrackerScreen() {
   }, [showAllRows, filtered]);
   const visibleRows = showAllRows ? filtered : filtered.slice(0, 24);
 
-  function openSheet(country: Country) {
+  const openSheet = useCallback((country: Country) => {
     setSheetCountry(country);
     setSheetVisible(true);
-  }
+  }, []);
 
   function handleStatusSelect(status: CountryStatus) {
     if (!sheetCountry) return;
-    setStatusMap((prev) => {
-      const next = { ...prev };
-      if (status === 'living') {
-        Object.keys(next).forEach((code) => {
-          if (next[code] === 'living') delete next[code];
-        });
-      }
-      if (status === 'none') {
-        delete next[sheetCountry.code];
-      } else {
-        next[sheetCountry.code] = status;
-      }
-      return next;
-    });
+    setStatusMap((prev) => setCountryStatus(prev, sheetCountry.code, status));
     setSheetVisible(false);
   }
 
@@ -220,38 +226,26 @@ export default function TravelTrackerScreen() {
           <Text style={styles.backText}>{t('profile.title')}</Text>
         </TouchableOpacity>
 
-        {/* Title block */}
-        {/* "Resespårning" is one long word with no space to wrap at — unlike
-            "Travel Tracker" — so at this fontSize it could break mid-word.
-            Shrink to fit instead of wrapping. */}
-        <Text style={styles.bigTitle} numberOfLines={1} adjustsFontSizeToFit>
-          {t('travel.title')}
-        </Text>
+        <WorldGlobe
+          statusMap={mergedMap}
+          activeCode={sheetVisible ? (sheetCountry?.code ?? null) : null}
+          initialFocusCode={initialGlobeFocusCode}
+          onCountryPress={openSheet}
+        />
 
-        {/* Dark stats card */}
-        <View style={styles.heroCard}>
-          <View style={styles.heroStat}>
-            <Text style={styles.heroStatLabel} numberOfLines={1} adjustsFontSizeToFit>{t('travel.visitedStat')}</Text>
-            <View style={styles.heroStatValueRow}>
-              <Text style={styles.heroStatBig}>{visitedCount}</Text>
-              <Text style={styles.heroStatSmall}>{t('travel.countriesUnit')}</Text>
-            </View>
-          </View>
-
-          <View style={styles.heroDivider} />
-
-          <View style={styles.heroStat}>
-            <Text style={styles.heroStatLabel} numberOfLines={1} adjustsFontSizeToFit>{t('travel.continentsStat')}</Text>
-            <View style={styles.heroStatValueRow}>
-              <Text style={styles.heroStatBig}>{continentsVisited}</Text>
-              <Text style={styles.heroStatSmall}>{t('travel.ofTotal', { total: TOTAL_CONTINENTS })}</Text>
-            </View>
-          </View>
-
-          <TouchableOpacity style={styles.addButton} activeOpacity={0.85} onPress={handleAddPress}>
-            <Ionicons name="add" size={18} color={theme.colors.white} />
-            <Text style={styles.addButtonText}>{t('common.add')}</Text>
-          </TouchableOpacity>
+        {/* Travel summary — the shared TravelStatsSummary band (also used
+            on profiles), visually a different species from the continent
+            cards below. Ranking stays off until a real backend sample
+            exists (see the old device-local note); the component then
+            renders the product-specified continents fallback. */}
+        <View style={styles.summaryWrap}>
+          <TravelStatsSummary
+            countriesVisited={travelStats.countriesVisited}
+            worldExploredPercent={travelStats.worldExploredPercent}
+            continentsReached={travelStats.continentsReached}
+            totalContinents={travelStats.totalContinents}
+            rankingAvailable={false}
+          />
         </View>
 
         {/* By Continent grid */}
@@ -264,21 +258,41 @@ export default function TravelTrackerScreen() {
 
         {/* Countries section anchor */}
         <View onLayout={(e) => { listAnchorY.current = e.nativeEvent.layout.y; }}>
-          <Text style={[styles.sectionEyebrow, { marginTop: 28 }]}>{t('travel.countriesEyebrow')}</Text>
+          <View style={styles.countriesHeader}>
+            <Text style={[styles.sectionEyebrow, styles.countriesHeading]}>{t('travel.countriesEyebrow')}</Text>
+            <TouchableOpacity
+              style={styles.addButton}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel={t('travel.addCountryAccessibility')}
+              onPress={handleAddPress}>
+              <Ionicons name="add" size={17} color={theme.colors.white} />
+              <Text style={styles.addButtonText}>{t('common.add')}</Text>
+            </TouchableOpacity>
+          </View>
 
           <View style={styles.filterRow}>
             {(['all', 'visited', 'planned', 'living'] as Filter[]).map((f) => {
               const isActive = filter === f && !continentFilter;
+              const activeBackground = f === 'living'
+                ? livingColors.accent
+                : theme.colors.primary;
+              const activeTextColor = f === 'living'
+                ? livingColors.onAccent
+                : theme.colors.white;
               return (
                 <Animated.View key={f} style={{ transform: [{ scale: filterScaleAnims[f] }] }}>
                   <TouchableOpacity
                     style={[
                       styles.filterChip,
-                      isActive && { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
+                      isActive && {
+                        backgroundColor: activeBackground,
+                        borderColor: activeBackground,
+                      },
                     ]}
                     activeOpacity={0.8}
                     onPress={() => pressFilter(f)}>
-                    <Text style={[styles.filterChipText, isActive && { color: theme.colors.white }]}>
+                    <Text style={[styles.filterChipText, isActive && { color: activeTextColor }]}>
                       {t(FILTER_LABEL_KEY[f])}
                     </Text>
                   </TouchableOpacity>
@@ -353,7 +367,7 @@ export default function TravelTrackerScreen() {
 
       <StatusSheet
         country={sheetCountry}
-        currentStatus={sheetCountry ? (statusMap[sheetCountry.code] ?? 'none') : 'none'}
+        currentStatus={sheetCountry ? (mergedMap[sheetCountry.code] ?? 'none') : 'none'}
         visible={sheetVisible}
         onSelect={handleStatusSelect}
         onClose={() => setSheetVisible(false)}
@@ -366,10 +380,10 @@ function StatusBadge({ status }: { status: CountryStatus }) {
   const { t } = useI18n();
   const { theme } = useTheme();
   const styles = useThemedStyles(createStyles);
+  const livingColors = getTravelTrackerLivingColors(theme);
   // Status hues are semantic identity — visited stays brand pink, planned
-  // stays teal, living stays amber. Dark swaps each wash/ink for a readable
-  // variant of the SAME hue (matching the teal/amber treatments used across
-  // the migrated trip screens) — never grayed out.
+  // stays teal, and living uses the shared Travel Tracker yellow in both
+  // themes rather than borrowing an unrelated reservation/warning token.
   const config: Record<CountryStatus, { bg: string; color: string } | null> = {
     none:    null,
     visited: { bg: theme.colors.primaryLight12, color: theme.colors.primary },
@@ -378,8 +392,8 @@ function StatusBadge({ status }: { status: CountryStatus }) {
       color: theme.colors.secondary,
     },
     living:  {
-      bg: theme.isDark ? 'rgba(232,164,74,0.16)' : '#FEF3C7',
-      color: theme.isDark ? '#e8a44a' : '#D97706',
+      bg: livingColors.surface,
+      color: livingColors.accent,
     },
   };
   const labelKey: Record<CountryStatus, string> = {
@@ -430,83 +444,31 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     letterSpacing: 2.2,
     marginBottom: 8,
   },
-  bigTitle: {
-    fontSize: 44,
-    fontWeight: '900',
-    color: theme.isDark ? theme.colors.textPrimary : '#141720',
-    lineHeight: 50,
-    letterSpacing: -1.4,
-    marginBottom: 22,
+  summaryWrap: {
+    marginTop: 10,
+    marginBottom: 28,
   },
-
-  // Dark hero card. Light keeps its exact pre-theming ink surface; on dark
-  // it becomes an elevated surface with a hairline ring (Android elevation
-  // zeroed — dark separates via surface contrast, not muddy gray shadows).
-  heroCard: {
+  countriesHeader: {
+    marginTop: 28,
+    marginBottom: 14,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.isDark ? theme.colors.surfaceElevated : '#1B1E28',
-    borderRadius: 24,
-    paddingHorizontal: 22,
-    paddingVertical: 20,
-    marginBottom: 30,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: theme.isDark ? 0.3 : 0.18,
-    shadowRadius: 18,
-    elevation: theme.isDark ? 0 : 8,
-    borderWidth: theme.isDark ? StyleSheet.hairlineWidth : 0,
-    borderColor: theme.colors.borderPrimary,
-    overflow: 'hidden',
+    justifyContent: 'space-between',
   },
-  heroStat: {
-    flex: 1,
-  },
-  heroStatLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    // Light: exact pre-theming muted gray on the ink card. Dark: textMeta
-    // keeps the eyebrow one step dimmer than the unit text below it.
-    color: theme.isDark ? theme.colors.textMeta : '#9AA2AE',
-    letterSpacing: 1.0,
-    marginBottom: 6,
-  },
-  heroStatValueRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 6,
-  },
-  heroStatBig: {
-    fontSize: 30,
-    fontWeight: '900',
-    // White stat numbers read on the ink card (light) and on the elevated
-    // dark surface alike.
-    color: theme.colors.white,
-    letterSpacing: -1.2,
-  },
-  heroStatSmall: {
-    fontSize: 12,
-    color: theme.isDark ? theme.colors.textSecondary : '#C8CDD8',
-    fontWeight: '500',
-  },
-  heroDivider: {
-    width: 1,
-    height: 38,
-    backgroundColor: theme.isDark ? theme.colors.borderPrimary : '#2E323D',
-    marginHorizontal: 16,
+  countriesHeading: {
+    marginBottom: 0,
   },
   addButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     backgroundColor: theme.colors.primary,
-    borderRadius: 22,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    marginLeft: 14,
+    borderRadius: 18,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
   },
   addButtonText: {
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '700',
     // White on the pink button in both themes.
     color: theme.colors.white,

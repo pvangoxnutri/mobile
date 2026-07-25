@@ -48,6 +48,7 @@ const CONTINENT_META: Record<Continent, ContinentMeta> = {
   'North America': { icon: 'image-filter-hdr',   color: '#5A6472', lightBg: '#EEF0F4', darkColor: '#8f99a8', darkBg: 'rgba(143,153,168,0.16)', shortName: 'N. America' },
   'South America': { icon: 'palm-tree',          color: '#A57DC8', lightBg: '#F3ECF8', darkColor: '#b795d6', darkBg: 'rgba(183,149,214,0.16)', shortName: 'S. America' },
   Oceania:         { icon: 'waves',              color: '#5DA9D1', lightBg: '#E6F1F8', darkColor: '#74bde2', darkBg: 'rgba(116,189,226,0.16)', shortName: 'Oceania' },
+  Antarctica:      { icon: 'snowflake',          color: '#4E8FA6', lightBg: '#E8F3F6', darkColor: '#78B8CC', darkBg: 'rgba(120,184,204,0.16)', shortName: 'Antarctica' },
 };
 
 function buildStats(statusMap: StatusMap): ContinentStats[] {
@@ -69,7 +70,7 @@ export default function WorldOverview({ statusMap, onContinentPress, activeConti
   const stats = buildStats(statusMap);
   const cardWidth = (width - 40 - 2 * 10) / 3; // 3 columns, 20px side padding, 10px gaps — ~30% smaller than the old 2-column layout
 
-  const { language } = useI18n();
+  const { language, t } = useI18n();
 
   return (
     <View style={styles.grid}>
@@ -123,7 +124,7 @@ export default function WorldOverview({ statusMap, onContinentPress, activeConti
               <Text style={[styles.statsValue, hasVisited && { color: theme.colors.primary }]}>
                 {s.visited}
               </Text>
-              <Text style={styles.statsOf}> of {s.total}</Text>
+              <Text style={styles.statsOf}> {t('travel.ofTotal', { total: s.total })}</Text>
             </View>
 
             {/* Progress bar */}

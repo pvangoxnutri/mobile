@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
+  AppState,
   FlatList,
   Image,
   Keyboard,
@@ -23,11 +24,14 @@ import {
   Pressable,
   ScrollView,
   Share,
+  type StyleProp,
   StyleSheet,
   Text,
   TextInput,
+  type TextStyle,
   TouchableOpacity,
   View,
+  type ViewStyle,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/components/auth-provider';
@@ -38,20 +42,30 @@ import HiddenSidequestCard from '@/components/hidden-sidequest-card';
 import DraggableDayList from '@/components/draggable-day-list';
 import ActivityImageFallback from '@/components/activity-image-fallback';
 import HeroShell from '@/components/hero-shell';
+import {
+  buildSlideshowItems,
+  pickStaticLocationLabel,
+  useActiveSlideLabel,
+  useActiveSlideLabelValue,
+  type ActiveSlideLabelChannel,
+} from '@/components/slideshow-cover';
 import ModalSheet from '@/components/modal-sheet';
+import DayLocationEditor from '@/components/day-location-editor';
 import { EmptyState } from '@/components/ui/empty-state';
 import { useKeyboardFocusScroll } from '@/hooks/useKeyboardFocusScroll';
 import { PRESENCE_POLL_FAST_MS, useMembersPresencePoll } from '@/hooks/use-presence-poll';
 import { apiFetch, apiJson } from '@/lib/api';
 import { getCurrentPermissionStatus, maybeRequestPushPermission } from '@/lib/push-notifications';
 import WeatherIcon from '@/components/weather-icon';
-import { conditionLabelKey, fetchTripWeather, getCachedTripWeather, summaryDay, type TripWeather } from '@/lib/weather-api';
+import { conditionLabelKey, currentRelevantDay, fetchTripWeather, getCachedTripWeather, type TripWeather } from '@/lib/weather-api';
+import { fetchTripDayLocations, getCachedTripDayLocations } from '@/lib/day-location-api';
+import { extractStoredMapPlace, type StoredMapPlace } from '@/lib/sidequest-location';
 import { loadNotificationPreferences, saveNotificationPreferences } from '@/lib/social';
 import { addDaysIso, formatNights, isStay, stayNightDates, stayNights } from '@/lib/stay';
 import { getCached, setCached, invalidateCache, invalidateTripCache } from '@/lib/cache';
 import { uploadImageIfNeeded } from '@/lib/uploads';
 import { isSealedInLists } from '@/lib/activity-blur';
-import type { Quest, SideQuestActivity, TripInvite, LinkPreview } from '@/lib/types';
+import type { Quest, SideQuestActivity, TripInvite, LinkPreview, TripDayLocation } from '@/lib/types';
 import { SPACING, RADIUS, TYPOGRAPHY } from '@/constants/design-tokens';
 import { useTheme } from '@/components/theme-provider';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
@@ -143,11 +157,26 @@ function renderSystemMessage(message: ChatMsg, t: (key: string, vars?: Record<st
 const CHAT_NEAR_BOTTOM_THRESHOLD = 80;
 
 // Typing indicator cadence: the first keystroke marks typing immediately,
-// continued typing refreshes the server stamp at most every 2.5 s (well
-// inside the server's 8 s typing expiry) and 3.5 s without a keystroke
-// sends an explicit stop — so it's never one request per keystroke.
-const TYPING_REFRESH_MS = 2500;
-const TYPING_IDLE_STOP_MS = 3500;
+// continued typing refreshes the server stamp at most every 1.2 s (well
+// inside the server's typing expiry) and 1.8 s without a keystroke sends
+// an explicit stop — so it's never one request per keystroke, but stale
+// "is typing" never outlives real typing by more than ~2 s either.
+const TYPING_REFRESH_MS = 1200;
+const TYPING_IDLE_STOP_MS = 1800;
+
+// How often the open chat re-fetches the presence/typing list. This poll is
+// the receiver's typing latency floor, so it runs sub-second — but ONLY
+// while the chat modal is open AND the app is active (the chat lifecycle
+// effect owns the single timer and tears it down on close/background).
+const CHAT_PRESENCE_POLL_MS = 800;
+
+// Chat composer input: compact single line at rest, grows with the text up
+// to ~5 lines, then scrolls internally instead of growing further.
+const CHAT_INPUT_MIN_HEIGHT = 38;
+const CHAT_INPUT_MAX_HEIGHT = 118;
+// The input's paddingVertical (9 + 9). iOS reports contentSize WITHOUT the
+// padding while Android includes it — the growth math compensates on iOS.
+const CHAT_INPUT_VERTICAL_PADDING = 18;
 
 type ChatPresenceUser = {
   userId: string;
@@ -185,6 +214,11 @@ export default function TripDetailsScreen() {
   const locale = language === 'sv' ? 'sv-SE' : 'en-US';
   const [trip, setTrip] = useState<Quest | null>(null);
   const [tripWeather, setTripWeather] = useState<TripWeather | null>(() => (id ? getCachedTripWeather(id) : null));
+  // Resolved per-day location timeline — the backend's TripDayLocationService
+  // already carried anchors forward and applied the destination fallback, so
+  // this is just rendered as-is, never recomputed on the client.
+  const [dayLocations, setDayLocations] = useState<TripDayLocation[]>(() => (id ? getCachedTripDayLocations(id) ?? [] : []));
+  const [dayLocationEditorDate, setDayLocationEditorDate] = useState<string | null>(null);
   const [members, setMembers] = useState<TripMember[]>([]);
   const [invites, setInvites] = useState<TripInvite[]>([]);
   const [activities, setActivities] = useState<SideQuestActivity[]>([]);
@@ -242,8 +276,14 @@ export default function TripDetailsScreen() {
   }, []);
   const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
   const [chatDraft, setChatDraft] = useState('');
+  const [chatInputHeight, setChatInputHeight] = useState(CHAT_INPUT_MIN_HEIGHT);
   const [chatSending, setChatSending] = useState(false);
   const [chatPendingImage, setChatPendingImage] = useState<string | null>(null);
+  // One picker/camera flow at a time — double-taps and gallery+camera races
+  // are ignored while a native picker is already up.
+  const chatPickerBusyRef = useRef(false);
+  const chatPresenceInFlightRef = useRef(false);
+  const chatPresencePendingRef = useRef(false);
   const [chatImageUploading, setChatImageUploading] = useState(false);
   const [chatFullscreenImage, setChatFullscreenImage] = useState<string | null>(null);
   const [chatPresence, setChatPresence] = useState<ChatPresenceUser[]>([]);
@@ -400,6 +440,25 @@ export default function TripDetailsScreen() {
     }, [id]),
   );
 
+  // Same cached-then-refresh pattern for the day-location timeline that
+  // feeds the itinerary's day-header pins.
+  useFocusEffect(
+    useCallback(() => {
+      if (!id) return;
+      let active = true;
+      const cached = getCachedTripDayLocations(id);
+      if (cached) setDayLocations(cached);
+      fetchTripDayLocations(id)
+        .then((data) => {
+          if (active) setDayLocations(data);
+        })
+        .catch(() => {});
+      return () => {
+        active = false;
+      };
+    }, [id]),
+  );
+
   // Live presence: the focus load above fetches members once, but the online
   // dots (members sheet + chat avatars) would then freeze until the next
   // focus. Re-poll members while this screen stays open — fast only while a
@@ -409,7 +468,9 @@ export default function TripDetailsScreen() {
     (_tripId, memberData) => {
       setMembers(memberData);
     },
-    peopleSheetOpen || chatOpen ? PRESENCE_POLL_FAST_MS : undefined,
+    // The hero shows live online dots now — a single trip is cheap enough
+    // to always poll at the fast cadence while this screen is focused.
+    PRESENCE_POLL_FAST_MS,
   );
 
   const sortedActivities = useMemo(
@@ -526,6 +587,65 @@ export default function TripDetailsScreen() {
     return rows;
   }, [activityDayGroups, trip?.startDate, trip?.endDate]);
 
+  const dayLocationByDate = useMemo(() => new Map(dayLocations.map((d) => [d.date, d])), [dayLocations]);
+
+  // The hero pill's ONE location name. Current day = today clamped into the
+  // trip's dates (before the trip → the first day's plan; after the trip →
+  // no current day). The resolved day-location timeline wins, the typed
+  // destination is the fallback, and empty/whitespace values hide the pill
+  // entirely — never an empty pin, never "A · B" pairs.
+  const heroLocationLabel = useMemo(
+    () =>
+      pickStaticLocationLabel(dayLocations, trip?.startDate, trip?.endDate, trip?.destination)
+      ?? null,
+    [dayLocations, trip?.startDate, trip?.endDate, trip?.destination],
+  );
+
+  // Structured slides: image + the source day's resolved feed location.
+  // Rebuilt whenever activities OR day locations change (a feed edit
+  // invalidates the trip cache → both refetch → labels follow along).
+  const slideshowItems = useMemo(
+    () =>
+      trip
+      && trip.slideshowEnabled !== false
+      && !(trip.visibility === 'hidden' && !trip.isRevealed)
+        ? buildSlideshowItems(trip.imageUrl, activities, dayLocations, {
+            startDate: trip.startDate,
+            endDate: trip.endDate,
+            destination: trip.destination,
+          })
+        : undefined,
+    [trip, activities, dayLocations],
+  );
+  // Channel carrying the slide currently ON SCREEN — flipped by the
+  // slideshow itself at the exact moment a crossfade completes. Only the
+  // tiny HeroSlideLocationPill subscribes: a slide flip must never
+  // re-render this whole screen (that was a visible hitch on every
+  // transition). Shared machinery with the Home card.
+  const activeSlide = useActiveSlideLabel();
+  const heroHasSlideshow = !!slideshowItems && slideshowItems.length > 0;
+
+  // The hero weather chip and the compact strip both show the day that is
+  // relevant RIGHT NOW (today → nearest upcoming → latest known), not
+  // blindly days[0] (= the trip's first day, which is a past date once the
+  // trip is running). Same tripWeather data as the full Weather page.
+  const headerWeatherDay = currentRelevantDay(tripWeather);
+
+  // Exactly one distinct activity location on a day → offer to reuse it in
+  // the editor. Two or more → never guess, offer nothing.
+  const suggestedPlaceByDate = useMemo(() => {
+    const map = new Map<string, StoredMapPlace | null>();
+    for (const group of activityDayGroups) {
+      const places = new Map<string, StoredMapPlace>();
+      for (const activity of group.items) {
+        const place = extractStoredMapPlace(activity.description);
+        if (place?.placeId) places.set(place.placeId, place);
+      }
+      map.set(group.date, places.size === 1 ? [...places.values()][0] : null);
+    }
+    return map;
+  }, [activityDayGroups]);
+
   const memberAvatarMap = useMemo(() => {
     const map = new Map<string, string | null>();
     for (const m of members) map.set(m.id, m.avatarUrl ?? null);
@@ -542,7 +662,11 @@ export default function TripDetailsScreen() {
     const nameOf = (typer: ChatPresenceUser) => typer.userName?.trim() || t('trip.chat.someoneFallback');
     if (typers.length === 1) return t('trip.chat.typingOne', { name: nameOf(typers[0]) });
     if (typers.length === 2) return t('trip.chat.typingTwo', { name1: nameOf(typers[0]), name2: nameOf(typers[1]) });
-    return t('trip.chat.typingMany');
+    return t('trip.chat.typingMany', {
+      name1: nameOf(typers[0]),
+      name2: nameOf(typers[1]),
+      count: typers.length - 2,
+    });
   }, [chatPresence, user?.id, blockedUserIds, t]);
 
   const memberOnlineMap = useMemo(() => {
@@ -618,8 +742,24 @@ export default function TripDetailsScreen() {
 
   // ── Chat polling + presence ──────────────────────────────────────────────
 
+  // Foreground gate for the chat lifecycle. When the app leaves `active`
+  // (backgrounded, app switcher, locked screen, system dialog) the whole
+  // effect below tears down: heartbeat + polls stop and the presence DELETE
+  // tells the backend the chat is no longer on screen — so chat pushes are
+  // allowed immediately instead of being suppressed by a stale heartbeat.
+  // Returning to `active` re-runs the effect: instant heartbeat, fresh
+  // message/presence load, intervals restarted (never doubled — the effect
+  // is the only owner of these timers).
+  const [appActive, setAppActive] = useState(AppState.currentState === 'active');
   useEffect(() => {
-    if (!chatOpen) return;
+    const sub = AppState.addEventListener('change', (state) => {
+      setAppActive(state === 'active');
+    });
+    return () => sub.remove();
+  }, []);
+
+  useEffect(() => {
+    if (!chatOpen || !appActive) return;
 
     lastReadAtRef.current = new Date().toISOString();
     void AsyncStorage.setItem(chatLastReadKey(id), lastReadAtRef.current).catch(() => {});
@@ -645,7 +785,7 @@ export default function TripDetailsScreen() {
     void loadChatPresence();
 
     const heartbeatId = setInterval(() => void sendChatHeartbeat(), 15000);
-    const presencePollId = setInterval(() => void loadChatPresence(), 5000);
+    const presencePollId = setInterval(() => void loadChatPresence(), CHAT_PRESENCE_POLL_MS);
 
     const keyboardSub = Keyboard.addListener('keyboardDidShow', () => {
       if (chatNearBottomRef.current) chatScrollRef.current?.scrollToEnd({ animated: false });
@@ -666,7 +806,7 @@ export default function TripDetailsScreen() {
       void apiFetch(`/api/trips/${id}/chat/presence`, { method: 'DELETE' }).catch(() => {});
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chatOpen, id]);
+  }, [chatOpen, id, appActive]);
 
   // Auto-scroll chat to bottom when messages arrive — but only if the user
   // is already near the bottom (or this is the initial load / their own
@@ -866,7 +1006,12 @@ export default function TripDetailsScreen() {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ isTyping }),
-    }).catch(() => {});
+    }).catch(() => {
+      // A silently dropped `true` must not leave the flag set — the NEXT
+      // keystroke should retry immediately instead of sitting out the
+      // refresh throttle believing the server already knows.
+      if (isTyping) typingSentRef.current = false;
+    });
   }
 
   function clearTypingIdleTimer() {
@@ -901,10 +1046,28 @@ export default function TripDetailsScreen() {
   }
 
   async function loadChatPresence() {
+    // Single-flight WITH pending rerun: one request at a time (a slow
+    // network must never stack parallel requests — serialization also
+    // guarantees an older response can never overwrite a newer one), but a
+    // tick that lands mid-request marks pendingRefresh and re-fetches the
+    // moment the request finishes — a status change is never delayed by
+    // almost two full poll periods just because a tick was skipped.
+    if (chatPresenceInFlightRef.current) {
+      chatPresencePendingRef.current = true;
+      return;
+    }
+    chatPresenceInFlightRef.current = true;
     try {
-      const data = await apiJson<ChatPresenceUser[]>(`/api/trips/${id}/chat/presence`);
-      setChatPresence(data);
-    } catch {}
+      do {
+        chatPresencePendingRef.current = false;
+        try {
+          const data = await apiJson<ChatPresenceUser[]>(`/api/trips/${id}/chat/presence`);
+          setChatPresence(data);
+        } catch {}
+      } while (chatPresencePendingRef.current);
+    } finally {
+      chatPresenceInFlightRef.current = false;
+    }
   }
 
   function closeChat() {
@@ -919,7 +1082,8 @@ export default function TripDetailsScreen() {
   }
 
   async function handlePickChatImage() {
-    if (chatImageUploading || chatSending) return;
+    if (chatImageUploading || chatSending || chatPickerBusyRef.current) return;
+    chatPickerBusyRef.current = true;
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
@@ -934,6 +1098,43 @@ export default function TripDetailsScreen() {
       setChatPendingImage(result.assets[0].uri);
     } catch (err) {
       showChatError(err instanceof Error ? err.message : t('trip.error.photoLibraryOpenFailed'));
+    } finally {
+      chatPickerBusyRef.current = false;
+    }
+  }
+
+  // Camera twin of handlePickChatImage — the captured photo enters the exact
+  // same pending-image → send → uploadImageIfNeeded pipeline; nothing is
+  // uploaded or sent until the user explicitly hits send.
+  async function handleTakeChatPhoto() {
+    if (chatImageUploading || chatSending || chatPickerBusyRef.current) return;
+    chatPickerBusyRef.current = true;
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        showChatError(
+          permission.canAskAgain === false
+            ? t('trip.error.cameraAccessSettings')
+            : t('trip.error.cameraAccessRequired')
+        );
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.85,
+      });
+      if (result.canceled) return;
+      const uri = result.assets?.[0]?.uri;
+      if (!uri) {
+        showChatError(t('trip.error.photoProcessFailed'));
+        return;
+      }
+      setChatPendingImage(uri);
+    } catch {
+      // Deliberately no err.message here — never surface local file paths.
+      showChatError(t('trip.error.cameraOpenFailed'));
+    } finally {
+      chatPickerBusyRef.current = false;
     }
   }
 
@@ -993,6 +1194,9 @@ export default function TripDetailsScreen() {
     ]);
     setChatDraft('');
     chatInputRef.current?.clear();
+    // clear() does not reliably fire onContentSizeChange — snap the field
+    // back to its compact single-line height explicitly.
+    setChatInputHeight(CHAT_INPUT_MIN_HEIGHT);
     stopTyping();
     setChatPendingImage(null);
     setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: false }), 700);
@@ -1552,7 +1756,11 @@ export default function TripDetailsScreen() {
             </TouchableOpacity>
           </View>
 
-          <HeroShell imageUrl={trip?.imageUrl} style={styles.heroCardSize}>
+          <HeroShell
+            imageUrl={trip?.imageUrl}
+            slideshowItems={slideshowItems}
+            onSlideChange={activeSlide.onSlideChange}
+            style={styles.heroCardSize}>
             {!trip?.imageUrl ? (
               <View style={styles.heroPatternRow}>
                 {[0, 1, 2, 3, 4, 5].map((i) => (
@@ -1561,28 +1769,75 @@ export default function TripDetailsScreen() {
               </View>
             ) : null}
 
-            {/* Same top-left location pill as the Home carousel's preview
-                card (components/big-hero-card.tsx) — kept in sync by hand
-                since the two screens don't share this card as one
-                component, only the underlying HeroShell. */}
-            <View style={styles.heroTopRow}>
-              <View style={styles.heroLocPill}>
-                <Ionicons name="location" size={12} color="#fff" />
-                <Text style={styles.heroLocText} numberOfLines={1}>
-                  {trip?.destination ?? t('trip.upcomingAdventure')}
-                </Text>
-              </View>
-            </View>
+            {/* ONE location name, never a combined "A · B" pair. With the
+                slideshow on, the pill shows the CURRENT SLIDE's day
+                location and flips together with the image; with it off,
+                the static rule applies (current day → first day →
+                destination). No label → no pill, never an empty pin. */}
+            <HeroSlideLocationPill
+              channel={activeSlide}
+              hasSlideshow={heroHasSlideshow}
+              staticLabel={heroLocationLabel}
+              rowStyle={styles.heroTopRow}
+              pillStyle={styles.heroLocPill}
+              textStyle={styles.heroLocText}
+            />
 
             <View style={styles.heroBody}>
               <Text style={styles.heroTitle} numberOfLines={2}>{trip?.title ?? t('trip.loadingAdventure')}</Text>
               <Text style={styles.heroDate}>{formatTripDateRange(trip?.startDate, trip?.endDate, locale, t)}</Text>
-              <View style={styles.heroMetaRow}>
-                <TripMetaChip icon="people-outline" label={t('trip.travelersCount', { count: members.length || 1 })} onPress={() => setPeopleSheetOpen(true)} />
-                <TripMetaChip icon="mail-outline" label={t('trip.pendingCount', { count: invites.length })} onPress={() => setPeopleSheetOpen(true)} />
+              {/* Same members preview as the Home card: overlapping
+                  borderless avatars with live online dots, plus the compact
+                  weather chip — kept visually in sync with
+                  components/big-hero-card.tsx by hand. */}
+              <View style={styles.heroFooterRow}>
+                {members.length > 0 ? (
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    style={styles.heroAvatarRow}
+                    onPress={() => setPeopleSheetOpen(true)}>
+                    {members.slice(0, 3).map((member, idx) => (
+                      <View
+                        key={member.id}
+                        style={[
+                          styles.heroAvatarWrap,
+                          { marginLeft: idx === 0 ? 0 : -12, zIndex: 3 - idx },
+                        ]}>
+                        <Avatar
+                          uri={member.avatarUrl}
+                          name={member.name}
+                          fallbackText={getInitials(member.name)}
+                          size={28}
+                          online={member.isOnline}
+                          onlineDotOnPhoto
+                        />
+                      </View>
+                    ))}
+                  </TouchableOpacity>
+                ) : null}
+                {headerWeatherDay ? (
+                  <View style={styles.heroWeatherChip}>
+                    <WeatherIcon condition={headerWeatherDay.code} size={15} />
+                    <Text style={styles.heroWeatherChipText}>
+                      {Math.round(headerWeatherDay.tempMaxC)}°
+                    </Text>
+                  </View>
+                ) : null}
               </View>
             </View>
           </HeroShell>
+
+          {/* Travelers/pending line — moved out of the hero so it sits
+              between the cover and the weather section; still opens the
+              members sheet like the old chips did. */}
+          <TouchableOpacity
+            activeOpacity={0.8}
+            style={styles.travelersRow}
+            onPress={() => setPeopleSheetOpen(true)}>
+            <Text style={styles.travelersRowText} numberOfLines={1}>
+              {t('trip.travelersCount', { count: members.length || 1 })} · {t('trip.pendingCount', { count: invites.length })}
+            </Text>
+          </TouchableOpacity>
 
           {/* Compact weather strip: start-day (or today's) forecast, or the
               closer-to-departure note. Hidden entirely when weather is
@@ -1593,11 +1848,11 @@ export default function TripDetailsScreen() {
               style={styles.weatherStrip}
               activeOpacity={0.85}
               onPress={() => router.push(`/trip/${id}/weather`)}>
-              {summaryDay(tripWeather) ? (
+              {headerWeatherDay ? (
                 <>
-                  <WeatherIcon condition={summaryDay(tripWeather)!.code} size={18} />
+                  <WeatherIcon condition={headerWeatherDay.code} size={18} />
                   <Text style={styles.weatherStripText} numberOfLines={1}>
-                    {Math.round(summaryDay(tripWeather)!.tempMaxC)}° · {t(conditionLabelKey(summaryDay(tripWeather)!.code))}
+                    {Math.round(headerWeatherDay.tempMaxC)}° · {t(conditionLabelKey(headerWeatherDay.code))}
                   </Text>
                 </>
               ) : (
@@ -1663,6 +1918,20 @@ export default function TripDetailsScreen() {
                         <Text style={styles.dayHeaderDay}>{t('trip.dayNumber', { day: dayNumberRelative(row.date, trip?.startDate) })}</Text>
                         <View style={styles.dayHeaderLine} />
                       </View>
+                      <TouchableOpacity
+                        activeOpacity={0.7}
+                        style={styles.dayLocationRow}
+                        accessibilityRole="button"
+                        onPress={() => setDayLocationEditorDate(row.date)}>
+                        <Ionicons
+                          name={dayLocationByDate.get(row.date) ? 'location' : 'add'}
+                          size={12}
+                          color={theme.colors.textMeta}
+                        />
+                        <Text style={styles.dayLocationText} numberOfLines={1}>
+                          {dayLocationByDate.get(row.date)?.locationLabel ?? t('dayLocation.setLocation')}
+                        </Text>
+                      </TouchableOpacity>
                     </View>
                   );
                 }
@@ -1883,6 +2152,20 @@ export default function TripDetailsScreen() {
                 <Ionicons name="checkmark-done-outline" size={20} color={theme.isDark ? '#60a5fa' : '#3b82f6'} />
               </View>
               <Text style={styles.toolRowLabel}>{t('trip.packingList.title')}</Text>
+              <Ionicons name="chevron-forward" size={18} color={theme.isDark ? theme.colors.textMuted : '#b2b7c0'} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.toolRow}
+              activeOpacity={0.86}
+              onPress={() => {
+                setToolsSheetOpen(false);
+                router.push(`/trip/${id}/documents`);
+              }}>
+              <View style={[styles.toolRowIcon, { backgroundColor: theme.colors.primaryLight12 }]}>
+                <Ionicons name="documents-outline" size={20} color={theme.colors.primary} />
+              </View>
+              <Text style={styles.toolRowLabel}>{t('trip.documents.title')}</Text>
               <Ionicons name="chevron-forward" size={18} color={theme.isDark ? theme.colors.textMuted : '#b2b7c0'} />
             </TouchableOpacity>
 
@@ -2120,11 +2403,16 @@ export default function TripDetailsScreen() {
                 styles.chatKeyboardAvoider,
                 {
                   marginTop: chatKbOverlap !== null ? insets.top : insets.top + 12,
-                  marginBottom: chatKbOverlap !== null ? chatKbOverlap + 6 : insets.bottom + 12,
+                  // Keyboard closed: sit directly on the safe area — the old
+                  // extra +12 stacked on top of the inset AND the panel's own
+                  // bottom padding, leaving a dead band under the composer.
+                  // (8px floor keeps a hint of breathing room on devices
+                  // with no bottom inset, e.g. hardware-button Androids.)
+                  marginBottom: chatKbOverlap !== null ? chatKbOverlap + 6 : Math.max(insets.bottom, 8),
                 },
               ]}
               behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-            <View style={[styles.chatPanel, { paddingTop: 18, paddingBottom: 14 }]}>
+            <View style={[styles.chatPanel, { paddingTop: 18, paddingBottom: 10 }]}>
               <View style={styles.chatPanelHeader}>
                 <View style={styles.chatPanelHeaderLeft}>
                   <Text style={styles.chatPanelEyebrow}>{t('trip.groupChatEyebrow')}</Text>
@@ -2259,11 +2547,20 @@ export default function TripDetailsScreen() {
                 <TouchableOpacity
                   activeOpacity={0.85}
                   style={styles.chatAttachButton}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 6 }}
                   disabled={chatSending || chatImageUploading}
                   onPress={() => void handlePickChatImage()}>
-                  <Ionicons name="image-outline" size={22} color={chatSending || chatImageUploading ? (theme.isDark ? theme.colors.textMuted : '#c2c8d2') : theme.colors.textPrimary} />
+                  <Ionicons name="image-outline" size={17} color={chatSending || chatImageUploading ? (theme.isDark ? theme.colors.textMuted : '#c2c8d2') : theme.colors.textPrimary} />
                 </TouchableOpacity>
-                <Animated.View style={{ flex: 1, opacity: chatInputOpacityRef }}>
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  style={styles.chatAttachButton}
+                  hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                  disabled={chatSending || chatImageUploading}
+                  onPress={() => void handleTakeChatPhoto()}>
+                  <Ionicons name="camera-outline" size={17} color={chatSending || chatImageUploading ? (theme.isDark ? theme.colors.textMuted : '#c2c8d2') : theme.colors.textPrimary} />
+                </TouchableOpacity>
+                <Animated.View style={{ flex: 1, minWidth: 0, opacity: chatInputOpacityRef }}>
                   <TextInput
                     ref={chatInputRef}
                     value={chatDraft}
@@ -2285,8 +2582,37 @@ export default function TripDetailsScreen() {
                     placeholder={t('trip.chatPlaceholder')}
                     placeholderTextColor={theme.isDark ? theme.colors.placeholderText : '#afb5bf'}
                     keyboardAppearance={theme.keyboardAppearance}
-                    style={styles.chatInput}
+                    style={[
+                      styles.chatInput,
+                      {
+                        // Multi-line content anchors to the top (Android);
+                        // the single-line rest state stays padding-centered.
+                        // The HEIGHT itself is native: minHeight/maxHeight in
+                        // the base style + intrinsic multiline sizing — no
+                        // JS-driven height, so wrapping can never deadlock
+                        // on a measurement round-trip.
+                        textAlignVertical:
+                          chatInputHeight > CHAT_INPUT_MIN_HEIGHT ? 'top' : 'center',
+                      },
+                    ]}
                     multiline
+                    // Below max: scrolling off so the field grows with each
+                    // wrapped line. At max: scrolling on for longer text.
+                    // Gate is the MEASURED content height, not line width.
+                    scrollEnabled={chatInputHeight >= CHAT_INPUT_MAX_HEIGHT}
+                    onContentSizeChange={(e) => {
+                      // Measurement only feeds the scroll gate and the text
+                      // alignment — never the layout height. Equality guard
+                      // prevents re-render loops.
+                      const contentHeight =
+                        Math.ceil(e.nativeEvent.contentSize.height)
+                        + (Platform.OS === 'ios' ? CHAT_INPUT_VERTICAL_PADDING : 0);
+                      const next = Math.min(
+                        CHAT_INPUT_MAX_HEIGHT,
+                        Math.max(CHAT_INPUT_MIN_HEIGHT, contentHeight),
+                      );
+                      setChatInputHeight((prev) => (prev === next ? prev : next));
+                    }}
                   />
                 </Animated.View>
                 <TouchableOpacity
@@ -2296,9 +2622,10 @@ export default function TripDetailsScreen() {
                     { backgroundColor: theme.colors.primary },
                     (!chatDraft.trim() && !chatPendingImage) || chatSending || chatImageUploading ? styles.chatSendButtonDisabled : null,
                   ]}
+                  hitSlop={{ top: 8, bottom: 8, left: 6, right: 8 }}
                   disabled={(!chatDraft.trim() && !chatPendingImage) || chatSending || chatImageUploading}
                   onPress={() => void handleSendChat()}>
-                  <Ionicons name="send" size={16} color="#fff" />
+                  <Ionicons name="send" size={13} color="#fff" style={{ marginLeft: 1 }} />
                 </TouchableOpacity>
               </View>
             </View>
@@ -2658,6 +2985,21 @@ export default function TripDetailsScreen() {
               }
             : undefined}
         />
+
+        {id && dayLocationEditorDate ? (
+          <DayLocationEditor
+            visible={Boolean(dayLocationEditorDate)}
+            onClose={() => setDayLocationEditorDate(null)}
+            tripId={id}
+            date={dayLocationEditorDate}
+            current={dayLocationByDate.get(dayLocationEditorDate) ?? null}
+            suggestedPlace={suggestedPlaceByDate.get(dayLocationEditorDate) ?? null}
+            onChanged={() => {
+              void fetchTripDayLocations(id).then(setDayLocations).catch(() => {});
+              void fetchTripWeather(id).then(setTripWeather).catch(() => {});
+            }}
+          />
+        ) : null}
       </View>
     </>
   );
@@ -2675,6 +3017,43 @@ const URL_REGEX = /https?:\/\/[^\s]+/g;
 // Plain (non-animated, by design — keeps this dependency-free and cheap)
 // placeholder rows shown only on a true cold-start chat load, alternating
 // sides so it reads as "messages are coming" rather than a generic spinner.
+// The ONLY part of the screen that re-renders when the slideshow flips —
+// subscribing here (not in TripDetailsScreen) keeps the every-5-seconds
+// label update away from the feed/chat/hero tree, so a transition costs
+// one tiny pill render instead of a whole-screen one (the whole-screen
+// version was a visible hitch right as each crossfade settled). With the
+// slideshow on the pill follows the current slide; with it off it shows
+// the static rule's label. No label → no pill row at all.
+function HeroSlideLocationPill({
+  channel,
+  hasSlideshow,
+  staticLabel,
+  rowStyle,
+  pillStyle,
+  textStyle,
+}: {
+  channel: ActiveSlideLabelChannel;
+  hasSlideshow: boolean;
+  staticLabel: string | null;
+  rowStyle: StyleProp<ViewStyle>;
+  pillStyle: StyleProp<ViewStyle>;
+  textStyle: StyleProp<TextStyle>;
+}) {
+  const slideLabel = useActiveSlideLabelValue(channel);
+  const label = hasSlideshow ? slideLabel : staticLabel;
+  if (!label) return null;
+  return (
+    <View style={rowStyle}>
+      <View style={pillStyle}>
+        <Ionicons name="location" size={12} color="#fff" />
+        <Text style={textStyle} numberOfLines={1}>
+          {label}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
 function ChatLoadingSkeleton() {
   const styles = useThemedStyles(createStyles);
   const widths = [0.55, 0.4, 0.62];
@@ -2757,24 +3136,6 @@ function LinkPreviewCardInline({ preview, isOwn }: { preview: LinkPreview; isOwn
           {preview.url.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')}
         </Text>
       </View>
-    </TouchableOpacity>
-  );
-}
-
-function TripMetaChip({
-  icon,
-  label,
-  onPress,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  onPress?: () => void;
-}) {
-  const styles = useThemedStyles(createStyles);
-  return (
-    <TouchableOpacity activeOpacity={0.88} style={styles.heroChip} onPress={onPress}>
-      <Ionicons name={icon} size={15} color="#fff" />
-      <Text style={styles.heroChipText}>{label}</Text>
     </TouchableOpacity>
   );
 }
@@ -2999,6 +3360,58 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     flexWrap: 'wrap',
     gap: 10,
     marginTop: 18,
+  },
+  // Members preview + weather chip inside the hero — mirrors the Home
+  // card's footer (28px borderless avatars, -12 overlap, ring-free dots).
+  heroFooterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 14,
+  },
+  heroAvatarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  heroAvatarWrap: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.75)',
+    // Solid fill behind initials-fallbacks (Avatar's dark-mode fallback is
+    // translucent rgba) — same solid as pre-redesign; photos cover it.
+    backgroundColor: '#fff1f5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    // No overflow:hidden — Avatar clips its own image; the online dot sits
+    // on the circle's edge and must not be cut.
+  },
+  heroWeatherChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 100,
+    backgroundColor: 'rgba(0,0,0,0.32)',
+  },
+  heroWeatherChipText: {
+    color: '#fff',
+    fontSize: 12.5,
+    fontWeight: '700',
+  },
+  // The travelers/pending line between the hero and the weather strip —
+  // replaces the old in-hero chips, still opens the members sheet.
+  travelersRow: {
+    marginTop: 10,
+    alignSelf: 'flex-start',
+    paddingVertical: 2,
+  },
+  travelersRowText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.colors.textSecondary,
   },
   costSplitCard: {
     marginTop: 14,
@@ -4299,31 +4712,38 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
   },
   chatComposer: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginTop: 8,
+    // Bottom-anchored: when the input grows to multiple lines the buttons
+    // stay naturally next to the last text line instead of floating mid-air.
+    alignItems: 'flex-end',
+    gap: 7,
+    marginTop: 6,
   },
+  // NO `flex` and NO fixed height here: the input must keep its intrinsic
+  // content height so the multiline field wraps at the right edge and
+  // grows natively between minHeight and maxHeight. Width comes from the
+  // wrapper (flex: 1, minWidth: 0 in the composer row) via cross-axis
+  // stretch — a flex-basis on the input itself defeats intrinsic sizing.
   chatInput: {
-    flex: 1,
-    minHeight: 54,
-    borderRadius: 18,
+    minHeight: CHAT_INPUT_MIN_HEIGHT,
+    maxHeight: CHAT_INPUT_MAX_HEIGHT,
+    borderRadius: 13,
     borderWidth: 1,
     borderColor: theme.isDark ? theme.colors.borderInput : '#e6e9ef',
     backgroundColor: theme.isDark ? theme.colors.bgLightest : '#f9fafc',
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     // Multiline TextInput defaults to top-aligned text on both platforms —
-    // without this the placeholder/draft sits at the top of the 54px box
+    // without this the placeholder/draft sits at the top of the 38px box
     // instead of centered. textAlignVertical only affects Android; the
     // paddingVertical keeps a single line of text centered on iOS too.
-    paddingVertical: 15,
+    paddingVertical: 9,
     textAlignVertical: 'center',
     color: theme.colors.textPrimary,
-    fontSize: 15,
+    fontSize: 14,
   },
   chatSendButton: {
-    width: 54,
-    height: 54,
-    borderRadius: 18,
+    width: 38,
+    height: 38,
+    borderRadius: 13,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: theme.colors.primary,
@@ -4358,10 +4778,12 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // Visually compact (roughly half the old 44px footprint) — the hitSlop
+  // on the composer buttons keeps the effective touch target ~44px.
   chatAttachButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
+    width: 30,
+    height: 30,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: theme.isDark ? theme.colors.bgLight : '#f1f3f6',
@@ -4428,6 +4850,19 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     height: 1,
     backgroundColor: theme.colors.borderPrimary,
     marginLeft: SPACING.xs,
+  },
+  dayLocationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    alignSelf: 'flex-start',
+    marginTop: -4,
+    marginBottom: SPACING.sm,
+    paddingLeft: 2,
+  },
+  dayLocationText: {
+    ...TYPOGRAPHY.meta,
+    color: theme.colors.textMeta,
   },
   timelineRow: {
     flexDirection: 'row',
