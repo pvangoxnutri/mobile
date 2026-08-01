@@ -15,16 +15,26 @@ type ThemeContextValue = {
   theme: AppTheme;
   preference: ThemePreference;
   setPreference: (next: ThemePreference) => void;
+  /** True once the stored preference has been read. Until then `theme` is the
+   * light default, which is why the native splash must stay up — see
+   * app/_layout.tsx, the only place that should care about this. */
+  hydrated: boolean;
 };
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [preference, setPreferenceState] = useState<ThemePreference>('light');
-  // Children are held back until the stored preference is known — a one-time
-  // ~ms read that prevents a dark-preference user from seeing a light flash
-  // on every cold start.
-  const [ready, setReady] = useState(false);
+  // Children render IMMEDIATELY, before this read resolves, so that everything
+  // below (most importantly AuthProvider's session restore, which reaches the
+  // network) starts in parallel with it instead of queueing behind it. This
+  // used to `return null` until the read finished, which serialised the whole
+  // startup: storage read → mount → auth read → auth network.
+  //
+  // A dark-preference user still never sees a light flash, because the native
+  // splash is held up until `hydrated` flips (app/_layout.tsx). Nothing
+  // rendered during this window is ever visible.
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -43,7 +53,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         // Unreadable storage — fall through to the light default.
       })
       .finally(() => {
-        if (active) setReady(true);
+        if (active) setHydrated(true);
       });
     return () => {
       active = false;
@@ -63,11 +73,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const effectiveMode = ENABLE_THEME_SWITCHING ? preference : 'light';
 
   const value = useMemo<ThemeContextValue>(
-    () => ({ theme: themes[effectiveMode], preference, setPreference }),
-    [effectiveMode, preference, setPreference],
+    () => ({ theme: themes[effectiveMode], preference, setPreference, hydrated }),
+    [effectiveMode, preference, setPreference, hydrated],
   );
-
-  if (!ready) return null;
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
