@@ -14,7 +14,8 @@ import { useTheme } from '@/components/theme-provider';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import type { AppTheme } from '@/constants/themes';
 import { deleteTripDayLocation, setTripDayLocation } from '@/lib/day-location-api';
-import { fetchPlaceDetails, fetchPlaceSuggestions, type PlaceAutocompleteSuggestion } from '@/lib/maps-api';
+import { resolvePlace, usePlacesAutocomplete, type ResolvablePlace } from '@/hooks/use-places-autocomplete';
+import { type PlaceAutocompleteSuggestion } from '@/lib/maps-api';
 import type { StoredMapPlace } from '@/lib/sidequest-location';
 import type { TripDayLocation } from '@/lib/types';
 
@@ -32,54 +33,56 @@ type Props = {
   // several — the caller passes null whenever there's more than one.
   suggestedPlace?: StoredMapPlace | null;
   onChanged: (updated: TripDayLocation | null) => void;
+  /** Overrides where a picked place is saved. Absent = the day's MAIN location
+   * via PUT {date}, exactly as before. Supplied by the multi-location sheet so
+   * the same Places picker can append an additional stop or edit one specific
+   * place, without a second copy of the autocomplete/details flow.
+   *
+   * Throwing rejects the pick and the editor shows the save error. */
+  commitOverride?: (input: { locationLabel: string; latitude: number; longitude: number; placeId: string | null }) => Promise<void>;
+  /** Hides the remove button when the caller owns removal itself. */
+  hideRemove?: boolean;
+  /** Replaces the sheet heading when editing something other than the day's
+   * main location. */
+  titleOverride?: string;
 };
 
-export default function DayLocationEditor({ visible, onClose, tripId, date, current, suggestedPlace, onChanged }: Props) {
+export default function DayLocationEditor({ visible, onClose, tripId, date, current, suggestedPlace, onChanged, commitOverride, hideRemove, titleOverride }: Props) {
   const { t, language } = useI18n();
   const { theme } = useTheme();
   const styles = useThemedStyles(createStyles);
   const locale = language === 'sv' ? 'sv-SE' : 'en-US';
 
   const [query, setQuery] = useState('');
-  const [suggestions, setSuggestions] = useState<PlaceAutocompleteSuggestion[]>([]);
-  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [error, setError] = useState('');
-  const pickedLabelRef = useRef<string | null>(null);
+  // Kept in state (not a ref) because the shared hook needs it as an input:
+  // it suppresses re-searching for the label the user just picked.
+  const [pickedLabel, setPickedLabel] = useState<string | null>(null);
   const selectionTokenRef = useRef(0);
+
+  // Same search behaviour as before — minimum length, debounce and the
+  // five-result cap now come from the shared hook instead of being spelled out
+  // here. Errors stay silent on this screen, exactly as they were.
+  const {
+    suggestions,
+    loading: suggestionsLoading,
+    reset: resetSuggestions,
+  } = usePlacesAutocomplete(query, { enabled: visible, skipQuery: pickedLabel });
 
   useEffect(() => {
     if (!visible) return;
     setQuery(current?.locationLabel ?? '');
-    pickedLabelRef.current = current?.isExplicit ? (current?.locationLabel ?? null) : null;
+    setPickedLabel(current?.isExplicit ? (current?.locationLabel ?? null) : null);
     selectionTokenRef.current += 1;
-    setSuggestions([]);
     setError('');
   }, [visible, date, current]);
 
-  useEffect(() => {
-    if (!visible) return;
-    const trimmed = query.trim();
-    if (trimmed.length < 2 || trimmed === pickedLabelRef.current) {
-      setSuggestions([]);
-      setSuggestionsLoading(false);
-      return;
-    }
-    setSuggestionsLoading(true);
-    const handle = setTimeout(() => {
-      void fetchPlaceSuggestions(trimmed)
-        .then((items) => setSuggestions(items.slice(0, 5)))
-        .catch(() => setSuggestions([]))
-        .finally(() => setSuggestionsLoading(false));
-    }, 260);
-    return () => clearTimeout(handle);
-  }, [query, visible]);
-
   function handleQueryChange(value: string) {
     setQuery(value);
-    if (pickedLabelRef.current && value.trim() !== pickedLabelRef.current) {
-      pickedLabelRef.current = null;
+    if (pickedLabel && value.trim() !== pickedLabel) {
+      setPickedLabel(null);
       selectionTokenRef.current += 1;
     }
   }
@@ -88,8 +91,12 @@ export default function DayLocationEditor({ visible, onClose, tripId, date, curr
     setSaving(true);
     setError('');
     try {
-      const result = await setTripDayLocation(tripId, date, { locationLabel: label, latitude, longitude, placeId });
-      onChanged(result);
+      if (commitOverride) {
+        await commitOverride({ locationLabel: label, latitude, longitude, placeId });
+      } else {
+        const result = await setTripDayLocation(tripId, date, { locationLabel: label, latitude, longitude, placeId });
+        onChanged(result);
+      }
       onClose();
     } catch {
       setError(t('dayLocation.saveFailed'));
@@ -98,65 +105,49 @@ export default function DayLocationEditor({ visible, onClose, tripId, date, curr
     }
   }
 
-  function handlePickSuggestion(suggestion: PlaceAutocompleteSuggestion) {
-    const label = suggestion.primaryText.trim();
-    pickedLabelRef.current = label;
+  /** Shared by picking a search result and by reusing the day's activity
+   * location — both resolve coordinates the same way, and a day location is
+   * useless without them (it is what weather is fetched for), so a place that
+   * resolves to none is refused rather than saved half-empty. */
+  function selectPlace(place: ResolvablePlace) {
+    const label = place.primaryText.trim();
+    setPickedLabel(label);
     selectionTokenRef.current += 1;
     const token = selectionTokenRef.current;
     setQuery(label);
-    setSuggestions([]);
+    resetSuggestions();
     Keyboard.dismiss();
 
     void (async () => {
       try {
-        let latitude = suggestion.latitude ?? null;
-        let longitude = suggestion.longitude ?? null;
-        if ((latitude == null || longitude == null) && !suggestion.placeId.startsWith('osm:')) {
-          const details = await fetchPlaceDetails(suggestion.placeId);
-          latitude = details.latitude ?? null;
-          longitude = details.longitude ?? null;
-        }
-        if (selectionTokenRef.current !== token) return; // superseded by a newer pick/edit/close
-        if (latitude == null || longitude == null) {
+        const resolved = await resolvePlace(place);
+        // Superseded by a newer pick, an edit, or the sheet closing.
+        if (selectionTokenRef.current !== token) return;
+        if (resolved.latitude == null || resolved.longitude == null) {
           setError(t('dayLocation.saveFailed'));
           return;
         }
-        await commit(label, latitude, longitude, suggestion.placeId);
+        await commit(label, resolved.latitude, resolved.longitude, resolved.placeId);
       } catch {
         if (selectionTokenRef.current === token) setError(t('dayLocation.saveFailed'));
       }
     })();
   }
 
+  function handlePickSuggestion(suggestion: PlaceAutocompleteSuggestion) {
+    selectPlace(suggestion);
+  }
+
   function handleUseSuggestedPlace() {
     if (!suggestedPlace) return;
-    const label = suggestedPlace.name.trim();
-    pickedLabelRef.current = label;
-    selectionTokenRef.current += 1;
-    const token = selectionTokenRef.current;
-    setQuery(label);
-    setSuggestions([]);
-    Keyboard.dismiss();
-
-    void (async () => {
-      try {
-        let latitude = suggestedPlace.latitude ?? null;
-        let longitude = suggestedPlace.longitude ?? null;
-        if ((latitude == null || longitude == null) && !suggestedPlace.placeId.startsWith('osm:')) {
-          const details = await fetchPlaceDetails(suggestedPlace.placeId);
-          latitude = details.latitude ?? null;
-          longitude = details.longitude ?? null;
-        }
-        if (selectionTokenRef.current !== token) return;
-        if (latitude == null || longitude == null) {
-          setError(t('dayLocation.saveFailed'));
-          return;
-        }
-        await commit(label, latitude, longitude, suggestedPlace.placeId);
-      } catch {
-        if (selectionTokenRef.current === token) setError(t('dayLocation.saveFailed'));
-      }
-    })();
+    selectPlace({
+      placeId: suggestedPlace.placeId,
+      primaryText: suggestedPlace.name,
+      secondaryText: suggestedPlace.address,
+      latitude: suggestedPlace.latitude,
+      longitude: suggestedPlace.longitude,
+      googleMapsUri: suggestedPlace.googleMapsUri,
+    });
   }
 
   async function handleRemove() {
@@ -175,7 +166,7 @@ export default function DayLocationEditor({ visible, onClose, tripId, date, curr
 
   const dateLabel = new Intl.DateTimeFormat(locale, { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(`${date}T12:00:00`));
   const showSuggestedPlace = Boolean(
-    suggestedPlace && suggestedPlace.placeId !== current?.placeId && suggestedPlace.name.trim() !== pickedLabelRef.current,
+    suggestedPlace && suggestedPlace.placeId !== current?.placeId && suggestedPlace.name.trim() !== pickedLabel,
   );
   const busy = saving || removing;
 
@@ -185,7 +176,7 @@ export default function DayLocationEditor({ visible, onClose, tripId, date, curr
         <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           <View style={styles.header}>
             <View style={styles.headerCopy}>
-              <Text style={styles.title}>{t('dayLocation.title')}</Text>
+              <Text style={styles.title}>{titleOverride ?? t('dayLocation.title')}</Text>
               <Text style={styles.dateLabel}>{dateLabel}</Text>
             </View>
             <TouchableOpacity accessibilityRole="button" onPress={onClose} style={styles.closeButton}>

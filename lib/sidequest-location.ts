@@ -1,5 +1,11 @@
 const LOCATION_MARKER = '[map-location]:';
 const PLACE_MARKER = '[map-place]:';
+// LEGACY ONLY. Activities briefly had their own sub-location field, which wrote
+// this marker into the description. The field is gone — multiple locations are a
+// property of a FEED DAY, not of an activity — and nothing writes this any more.
+// It is still stripped so an activity saved during that window never shows the
+// raw marker text in its description.
+const SUB_LOCATION_MARKER = '[map-sublocation]:';
 
 export type StoredMapPlace = {
   placeId: string;
@@ -15,7 +21,12 @@ export function stripLocationMarker(description?: string | null): string | null 
   const lines = description
     .split('\n')
     .map((line) => line.trimEnd())
-    .filter((line) => !line.trim().startsWith(LOCATION_MARKER) && !line.trim().startsWith(PLACE_MARKER));
+    .filter(
+      (line) =>
+        !line.trim().startsWith(LOCATION_MARKER) &&
+        !line.trim().startsWith(PLACE_MARKER) &&
+        !line.trim().startsWith(SUB_LOCATION_MARKER),
+    );
   const cleaned = lines.join('\n').trim();
   return cleaned.length > 0 ? cleaned : null;
 }
@@ -64,7 +75,7 @@ export function withLocationMarker(
   }
 
   const encoded = encodeURIComponent(location);
-  var result = base ? `${base}\n\n${LOCATION_MARKER}${encoded}` : `${LOCATION_MARKER}${encoded}`;
+  let result = base ? `${base}\n\n${LOCATION_MARKER}${encoded}` : `${LOCATION_MARKER}${encoded}`;
   if (place?.placeId) {
     result = `${result}\n${PLACE_MARKER}${encodeURIComponent(JSON.stringify(place))}`;
   }
