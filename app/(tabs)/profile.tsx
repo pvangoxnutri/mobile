@@ -19,6 +19,7 @@ import { useTheme, type ThemePreference } from '@/components/theme-provider';
 import { ENABLE_THEME_SWITCHING } from '@/constants/feature-flags';
 import { apiFetch, apiJson } from '@/lib/api';
 import { getDefaultNotificationPreferences, loadNotificationPreferences, saveNotificationPreferences, type NotificationPreferences } from '@/lib/social';
+import { isTripPast } from '@/lib/trip-dates';
 import { disablePushNotifications, getCurrentPermissionStatus, maybeRequestPushPermission } from '@/lib/push-notifications';
 import { supabase } from '@/lib/supabase';
 import type { Quest } from '@/lib/types';
@@ -101,10 +102,12 @@ export default function ProfileScreen() {
 
   const ownTravelStats = useOwnTravelStats();
   const previousTrips = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10);
+    // isTripPast is false without an end date, so an open-ended adventure never
+    // drifts into "previous" on its own — only setting an end date or marking
+    // it completed moves it here.
     return trips
-      .filter((trip) => trip.endDate < today)
-      .sort((a, b) => b.endDate.localeCompare(a.endDate));
+      .filter((trip) => isTripPast(trip.startDate, trip.endDate))
+      .sort((a, b) => (b.endDate ?? b.startDate).localeCompare(a.endDate ?? a.startDate));
   }, [trips]);
 
   useEffect(() => {
@@ -391,11 +394,16 @@ export default function ProfileScreen() {
         } as any,
       );
 
-      const uploadResponse = await apiFetch('/api/images/upload', {
-        method: 'POST',
-        signal: createTimeoutSignal(20000),
-        body: formData,
-      });
+      const uploadResponse = await apiFetch(
+        '/api/images/upload',
+        {
+          method: 'POST',
+          signal: createTimeoutSignal(20000),
+          body: formData,
+        },
+        undefined,
+        { privateEndpointName: 'image_upload_avatar' },
+      );
 
       if (!uploadResponse.ok) {
         throw new Error((await uploadResponse.text()) || t('profile.errors.couldNotUploadImage'));
@@ -615,7 +623,11 @@ export default function ProfileScreen() {
               </View>
               <View style={styles.adventureBody}>
                 <Text style={styles.adventureCardDate} numberOfLines={1}>
-                  {formatAdventureDate(trip.endDate)}
+                  {/* Only past adventures reach this list, so an end date is
+                      the norm; falling back to the start date keeps one that
+                      was completed while still open-ended from rendering an
+                      empty line. */}
+                  {formatAdventureDate(trip.endDate ?? trip.startDate)}
                 </Text>
                 <Text style={styles.adventureCardTitle} numberOfLines={1}>{trip.title ?? 'Trip'}</Text>
                 {trip.destination ? (

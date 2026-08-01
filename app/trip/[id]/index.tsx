@@ -47,23 +47,31 @@ import {
   pickStaticLocationLabel,
   useActiveSlideLabel,
   useActiveSlideLabelValue,
+  useActiveSlideValue,
   type ActiveSlideLabelChannel,
 } from '@/components/slideshow-cover';
 import ModalSheet from '@/components/modal-sheet';
-import DayLocationEditor from '@/components/day-location-editor';
+import DayLocationsSheet from '@/components/day-locations-sheet';
+import { useDayLocationEntries } from '@/hooks/use-day-location-entries';
 import { EmptyState } from '@/components/ui/empty-state';
 import { useKeyboardFocusScroll } from '@/hooks/useKeyboardFocusScroll';
 import { PRESENCE_POLL_FAST_MS, useMembersPresencePoll } from '@/hooks/use-presence-poll';
 import { apiFetch, apiJson } from '@/lib/api';
 import { getCurrentPermissionStatus, maybeRequestPushPermission } from '@/lib/push-notifications';
 import WeatherIcon from '@/components/weather-icon';
+import { selectSlideWeather } from '@/lib/slide-weather';
 import { conditionLabelKey, currentRelevantDay, fetchTripWeather, getCachedTripWeather, type TripWeather } from '@/lib/weather-api';
 import { fetchTripDayLocations, getCachedTripDayLocations } from '@/lib/day-location-api';
 import { extractStoredMapPlace, type StoredMapPlace } from '@/lib/sidequest-location';
 import { loadNotificationPreferences, saveNotificationPreferences } from '@/lib/social';
 import { addDaysIso, formatNights, isStay, stayNightDates, stayNights } from '@/lib/stay';
 import { getCached, setCached, invalidateCache, invalidateTripCache } from '@/lib/cache';
-import { uploadImageIfNeeded } from '@/lib/uploads';
+import { sendChatImageMessage } from '@/lib/uploads';
+import { ChatImage } from '@/components/chat-image';
+import { clearTripChatImageAccess } from '@/lib/chat-image-access';
+import { effectiveEndDate, formatTripDateRange as formatTripRange } from '@/lib/trip-dates';
+import { normalizeTripMembers, pickVisibleMembers } from '@/lib/trip-members';
+import { MAX_HERO_AVATARS } from '@/components/big-hero-card';
 import { isSealedInLists } from '@/lib/activity-blur';
 import type { Quest, SideQuestActivity, TripInvite, LinkPreview, TripDayLocation } from '@/lib/types';
 import { SPACING, RADIUS, TYPOGRAPHY } from '@/constants/design-tokens';
@@ -98,7 +106,13 @@ type ChatMsg = {
   userId?: string | null;
   userName: string;
   text: string;
+  // Only ever a legacy public URL, from messages sent before chat images moved
+  // to private storage. Null for privately stored images — those are fetched
+  // per-message as a short-lived signed URL (see hasPrivateImage).
   imageUrl?: string | null;
+  // The image lives in the private chat bucket. The message id is the access
+  // key; ChatImage trades it for a signed URL.
+  hasPrivateImage?: boolean;
   isSystem: boolean;
   // Lets us render a localized string for known system events instead of
   // the English text the backend stores for old-client compatibility. Null
@@ -191,6 +205,9 @@ type TripMember = {
   avatarUrl?: string | null;
   isOwner: boolean;
   isOnline?: boolean;
+  // Ordering key — see lib/trip-members.ts. Absent on payloads cached before
+  // the server started sending it.
+  joinedAt?: string | null;
 };
 
 export default function TripDetailsScreen() {
@@ -219,6 +236,11 @@ export default function TripDetailsScreen() {
   // this is just rendered as-is, never recomputed on the client.
   const [dayLocations, setDayLocations] = useState<TripDayLocation[]>(() => (id ? getCachedTripDayLocations(id) ?? [] : []));
   const [dayLocationEditorDate, setDayLocationEditorDate] = useState<string | null>(null);
+  // The one owner of the day-by-day stored places: one fetch per adventure,
+  // grouped by date. Both the feed rows below and the sheet read from it, so an
+  // edit in the sheet shows up in the feed without leaving the screen.
+  const dayLocationEntries = useDayLocationEntries(id);
+  const dayLocationEntriesList = dayLocationEntries.all;
   const [members, setMembers] = useState<TripMember[]>([]);
   const [invites, setInvites] = useState<TripInvite[]>([]);
   const [activities, setActivities] = useState<SideQuestActivity[]>([]);
@@ -355,7 +377,10 @@ export default function TripDetailsScreen() {
           setTrip(cachedTrip);
           setSpotifyUrlDraft(cachedTrip.spotifyUrl ?? '');
         }
-        if (cachedMembers) setMembers(cachedMembers);
+        // Same normalization as the network path below, so the instantly-shown
+        // cached avatars are already in their final order — they must not
+        // rearrange a moment later when the refetch lands.
+        if (cachedMembers) setMembers(normalizeTripMembers(cachedMembers));
         if (cachedInvites) setInvites(cachedInvites);
         if (cachedActivities) setActivities(cachedActivities);
 
@@ -368,13 +393,16 @@ export default function TripDetailsScreen() {
           ]);
 
           if (!active) return;
+          const normalizedMembers = normalizeTripMembers(memberData);
           setTrip(tripData);
           setSpotifyUrlDraft(tripData.spotifyUrl ?? '');
-          setMembers(memberData);
+          setMembers(normalizedMembers);
           setInvites(inviteData);
           setActivities(activityData);
           setCached(`/api/trips/${id}`, tripData);
-          setCached(`/api/trips/${id}/members`, memberData);
+          // The cache stores the normalized list, so every later reader —
+          // this screen, Home, the presence poll — starts from the same order.
+          setCached(`/api/trips/${id}/members`, normalizedMembers);
           setCached(`/api/trips/${id}/invites`, inviteData);
           setCached(`/api/trips/${id}/activities`, activityData);
           // Check for unread chat messages
@@ -385,7 +413,12 @@ export default function TripDetailsScreen() {
             if (storedLastRead && storedLastRead > lastReadAtRef.current) {
               lastReadAtRef.current = storedLastRead;
             }
-            const latestMsgs = await apiJson<ChatMsg[]>(`/api/trips/${id}/chat?since=${encodeURIComponent(lastReadAtRef.current)}`);
+            const latestMsgs = await apiJson<ChatMsg[]>(
+              `/api/trips/${id}/chat?since=${encodeURIComponent(lastReadAtRef.current)}`,
+              {},
+              // Never log this response body: it carries message text.
+              { privateEndpointName: 'trip_chat_poll' },
+            );
             if (!active) return;
             // Only real messages from OTHERS count as unread: your own sends,
             // system rows ("X har gått med") and deletion tombstones (which
@@ -539,12 +572,24 @@ export default function TripDetailsScreen() {
   const feedRows = useMemo<FeedRow[]>(() => {
     const dates = new Set<string>(activityDayGroups.map((g) => g.date));
     const start = trip?.startDate?.slice(0, 10);
-    const end = trip?.endDate?.slice(0, 10);
+    // An adventure with no end date has no stored last day to walk to. The
+    // range is derived instead — up to today, extended to cover the furthest
+    // day that already has an activity or a day location. That is what lets a
+    // deliberately-scheduled future activity show its day WITHOUT every
+    // intervening day being created in the database: the dates set below is
+    // built in memory, per render, and nothing is persisted.
+    const latestContentDate = [
+      ...activityDayGroups.map((g) => g.date),
+      ...dayLocations.map((d) => d.date.slice(0, 10)),
+    ].reduce<string | null>((latest, date) => (!latest || date > latest ? date : latest), null);
+    const end = effectiveEndDate(start, trip?.endDate, latestContentDate);
+
     if (start && end && start <= end) {
       let cursor = new Date(`${start}T12:00:00`);
       const last = new Date(`${end}T12:00:00`);
       // Hard cap keeps a mis-dated trip (or year-long range) from exploding
-      // the feed with hundreds of empty headers.
+      // the feed with hundreds of empty headers. It also bounds the ongoing
+      // case, where `end` grows with today.
       for (let i = 0; cursor <= last && i < 62; i++) {
         dates.add(cursor.toISOString().slice(0, 10));
         cursor = new Date(cursor.getTime() + 24 * 60 * 60 * 1000);
@@ -585,7 +630,7 @@ export default function TripDetailsScreen() {
       for (const activity of byDate.get(date) ?? []) rows.push({ kind: 'activity', activity });
     }
     return rows;
-  }, [activityDayGroups, trip?.startDate, trip?.endDate]);
+  }, [activityDayGroups, dayLocations, trip?.startDate, trip?.endDate]);
 
   const dayLocationByDate = useMemo(() => new Map(dayLocations.map((d) => [d.date, d])), [dayLocations]);
 
@@ -609,13 +654,21 @@ export default function TripDetailsScreen() {
       trip
       && trip.slideshowEnabled !== false
       && !(trip.visibility === 'hidden' && !trip.isRevealed)
-        ? buildSlideshowItems(trip.imageUrl, activities, dayLocations, {
-            startDate: trip.startDate,
-            endDate: trip.endDate,
-            destination: trip.destination,
-          })
+        ? buildSlideshowItems(
+            trip.imageUrl,
+            activities,
+            dayLocations,
+            {
+              startDate: trip.startDate,
+              endDate: trip.endDate,
+              destination: trip.destination,
+            },
+            // Lets each slide name its day's MAIN location by id, which is the
+            // first thing the weather selector matches on.
+            dayLocationEntriesList,
+          )
         : undefined,
-    [trip, activities, dayLocations],
+    [trip, activities, dayLocations, dayLocationEntriesList],
   );
   // Channel carrying the slide currently ON SCREEN — flipped by the
   // slideshow itself at the exact moment a crossfade completes. Only the
@@ -651,6 +704,14 @@ export default function TripDetailsScreen() {
     for (const m of members) map.set(m.id, m.avatarUrl ?? null);
     return map;
   }, [members]);
+
+  // The header's avatar row. Recomputed only when the member list itself
+  // changes — an avatar image loading, failing, or falling back to initials
+  // never reaches this, so it can never move anyone.
+  const { visible: heroAvatars } = useMemo(
+    () => pickVisibleMembers(members, MAX_HERO_AVATARS),
+    [members],
+  );
 
   // Who to show as "typing" — never yourself, never blocked users. Name
   // fallback mirrors the rest of the chat UI.
@@ -757,6 +818,14 @@ export default function TripDetailsScreen() {
     });
     return () => sub.remove();
   }, []);
+
+  // Signed URLs for this adventure's private chat photos are minted against the
+  // membership the user had while the screen was open. Leaving drops them, so a
+  // still-valid URL cannot survive in memory past the point where membership
+  // might have been revoked — the next visit signs fresh ones.
+  useEffect(() => {
+    return () => clearTripChatImageAccess(id as string);
+  }, [id]);
 
   useEffect(() => {
     if (!chatOpen || !appActive) return;
@@ -930,7 +999,7 @@ export default function TripDetailsScreen() {
     try {
       const since = initial ? null : lastChatTimestampRef.current;
       const url = `/api/trips/${id}/chat${since ? `?since=${encodeURIComponent(since)}` : ''}`;
-      const msgs = await apiJson<ChatMsg[]>(url);
+      const msgs = await apiJson<ChatMsg[]>(url, {}, { privateEndpointName: 'trip_chat_list' });
       if (initial) {
         setChatMessages(msgs);
         lastChatTimestampRef.current = msgs.length > 0 ? msgs[msgs.length - 1].createdAt : null;
@@ -960,17 +1029,27 @@ export default function TripDetailsScreen() {
             // never the same — so match on what the message actually is:
             // same author, same text, same image-presence, created within
             // a few seconds of each other.
+            // "Has an image" now means either a legacy public URL or a private
+            // one — a privately stored image carries no imageUrl at all, so
+            // checking imageUrl alone would stop matching our own optimistic
+            // entry and render the photo twice.
+            const incomingHasImage = Boolean(incoming.imageUrl) || Boolean(incoming.hasPrivateImage);
             const pendingIndex = next.findIndex(
               (m) =>
                 (m.status === 'pending' || m.status === 'failed') &&
                 m.userId === incoming.userId &&
                 m.text === incoming.text &&
-                Boolean(m.localImageUri) === Boolean(incoming.imageUrl) &&
+                Boolean(m.localImageUri) === incomingHasImage &&
                 Math.abs(new Date(m.createdAt).getTime() - new Date(incoming.createdAt).getTime()) < 15000,
             );
 
             if (pendingIndex !== -1) {
-              next = next.map((m, i) => (i === pendingIndex ? incoming : m));
+              // Carry the local preview across, same reason as in
+              // performChatSend: no spinner over a photo already on screen.
+              const local = next[pendingIndex].localImageUri;
+              next = next.map((m, i) =>
+                i === pendingIndex ? (local ? { ...incoming, localImageUri: local } : incoming) : m,
+              );
             } else {
               trulyNew.push(incoming);
             }
@@ -1145,21 +1224,37 @@ export default function TripDetailsScreen() {
   async function performChatSend(tempId: string, text: string, localImageUri: string | null) {
     setChatSending(true);
     try {
-      let uploadedImageUrl: string | null = null;
+      let msg: ChatMsg;
       if (localImageUri) {
+        // One authorized request that uploads into the private chat bucket AND
+        // creates the message. Never the public /api/images/upload path: that
+        // stores chat photos behind a permanent unauthenticated URL, which is
+        // the whole thing private chat storage exists to stop. It also means a
+        // failed upload cannot leave a message claiming an image it never got.
         setChatImageUploading(true);
         try {
-          uploadedImageUrl = await uploadImageIfNeeded(localImageUri, 'chat');
+          msg = (await sendChatImageMessage(id as string, localImageUri, text)) as ChatMsg;
         } finally {
           setChatImageUploading(false);
         }
+      } else {
+        msg = await apiJson<ChatMsg>(
+          `/api/trips/${id}/chat`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text }),
+          },
+          // Never log this response body: it echoes the sent message.
+          { privateEndpointName: 'trip_chat_send' },
+        );
       }
-      const msg = await apiJson<ChatMsg>(`/api/trips/${id}/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, imageUrl: uploadedImageUrl }),
-      });
-      setChatMessages((prev) => prev.map((m) => (m.id === tempId ? msg : m)));
+      // Keep the local file on the replacement entry. The sender already has
+      // the photo on disk, so showing it costs no round-trip and avoids a
+      // spinner blinking over an image that was on screen a moment ago.
+      // ChatImage falls through to the signed URL if the local file is gone.
+      const replacement = localImageUri ? { ...msg, localImageUri } : msg;
+      setChatMessages((prev) => prev.map((m) => (m.id === tempId ? replacement : m)));
       lastChatTimestampRef.current = msg.createdAt;
     } catch (err) {
       setChatMessages((prev) => prev.map((m) => (m.id === tempId ? { ...m, status: 'failed' as const } : m)));
@@ -1446,7 +1541,10 @@ export default function TripDetailsScreen() {
       new Date(message.createdAt).getTime() - new Date(prevMessage.createdAt).getTime() >= 5 * 60 * 1000;
     const avatarUrl = message.userId ? (memberAvatarMap.get(message.userId) ?? null) : null;
     const senderOnline = !ownMessage && !!message.userId && (memberOnlineMap.get(message.userId) ?? false);
-    const imageSource = message.localImageUri ?? message.imageUrl;
+    // A local URI (in-flight send) or a legacy public URL renders straight
+    // away; a private image has neither and is resolved by ChatImage.
+    const directImageUri = message.localImageUri ?? message.imageUrl;
+    const hasImage = Boolean(directImageUri) || Boolean(message.hasPrivateImage);
     // The reacted message is lifted forward in the overlay (see the reaction
     // Modal); the in-list bubble stays put behind the blur.
     const isPending = message.status === 'pending';
@@ -1461,10 +1559,17 @@ export default function TripDetailsScreen() {
           <Text style={styles.chatSystemLabel}>{renderSystemMessage(message, t)}</Text>
         ) : ownMessage ? (
           <View style={styles.chatMessageWrapOwn}>
-            {imageSource ? (
-              <Pressable onPress={() => setChatFullscreenImage(imageSource)} disabled={isPending || isFailed}>
-                <Image source={{ uri: imageSource }} style={[styles.chatMessageImage, isPending && styles.chatMessagePending]} />
-              </Pressable>
+            {hasImage ? (
+              <ChatImage
+                tripId={id as string}
+                messageId={message.id}
+                directUri={directImageUri}
+                hasPrivateImage={message.hasPrivateImage}
+                style={[styles.chatMessageImage, isPending && styles.chatMessagePending]}
+                placeholderStyle={styles.chatMessageImagePlaceholder}
+                onPress={setChatFullscreenImage}
+                disabled={isPending || isFailed}
+              />
             ) : null}
             {/* The bubble is a single Pressable (measured for the reaction
                 overlay + long-press to react). It must be a DIRECT child of
@@ -1541,10 +1646,16 @@ export default function TripDetailsScreen() {
             </TouchableOpacity>
             <View style={styles.chatMessageContent}>
               <Text style={styles.chatAuthor}>{message.userName}</Text>
-              {imageSource ? (
-                <Pressable onPress={() => setChatFullscreenImage(imageSource)}>
-                  <Image source={{ uri: imageSource }} style={styles.chatMessageImage} />
-                </Pressable>
+              {hasImage ? (
+                <ChatImage
+                  tripId={id as string}
+                  messageId={message.id}
+                  directUri={directImageUri}
+                  hasPrivateImage={message.hasPrivateImage}
+                  style={styles.chatMessageImage}
+                  placeholderStyle={styles.chatMessageImagePlaceholder}
+                  onPress={setChatFullscreenImage}
+                />
               ) : null}
               <Pressable
                 collapsable={false}
@@ -1796,12 +1907,16 @@ export default function TripDetailsScreen() {
                     activeOpacity={0.85}
                     style={styles.heroAvatarRow}
                     onPress={() => setPeopleSheetOpen(true)}>
-                    {members.slice(0, 3).map((member, idx) => (
+                    {/* Same selector and same limit as the Home card, so the
+                        two surfaces show the same three people in the same
+                        order. Keyed by user id — never by index, which would
+                        let a membership change re-key every avatar after it. */}
+                    {heroAvatars.map((member, idx) => (
                       <View
                         key={member.id}
                         style={[
                           styles.heroAvatarWrap,
-                          { marginLeft: idx === 0 ? 0 : -12, zIndex: 3 - idx },
+                          { marginLeft: idx === 0 ? 0 : -12, zIndex: MAX_HERO_AVATARS - idx },
                         ]}>
                         <Avatar
                           uri={member.avatarUrl}
@@ -1815,14 +1930,13 @@ export default function TripDetailsScreen() {
                     ))}
                   </TouchableOpacity>
                 ) : null}
-                {headerWeatherDay ? (
-                  <View style={styles.heroWeatherChip}>
-                    <WeatherIcon condition={headerWeatherDay.code} size={15} />
-                    <Text style={styles.heroWeatherChipText}>
-                      {Math.round(headerWeatherDay.tempMaxC)}°
-                    </Text>
-                  </View>
-                ) : null}
+                <HeroSlideWeather
+                  channel={activeSlide}
+                  hasSlideshow={heroHasSlideshow}
+                  tripWeather={tripWeather}
+                  fallbackDay={headerWeatherDay}
+                  styles={styles}
+                />
               </View>
             </View>
           </HeroShell>
@@ -1918,20 +2032,52 @@ export default function TripDetailsScreen() {
                         <Text style={styles.dayHeaderDay}>{t('trip.dayNumber', { day: dayNumberRelative(row.date, trip?.startDate) })}</Text>
                         <View style={styles.dayHeaderLine} />
                       </View>
-                      <TouchableOpacity
-                        activeOpacity={0.7}
-                        style={styles.dayLocationRow}
-                        accessibilityRole="button"
-                        onPress={() => setDayLocationEditorDate(row.date)}>
-                        <Ionicons
-                          name={dayLocationByDate.get(row.date) ? 'location' : 'add'}
-                          size={12}
-                          color={theme.colors.textMeta}
-                        />
-                        <Text style={styles.dayLocationText} numberOfLines={1}>
-                          {dayLocationByDate.get(row.date)?.locationLabel ?? t('dayLocation.setLocation')}
-                        </Text>
-                      </TouchableOpacity>
+                      {/* The day's places, in visit order. `storedForDay` is
+                          the rows the user actually created — a carried-forward
+                          day has none, so its fallback label still renders
+                          through the single-row path below and never looks like
+                          an editable stored place. */}
+                      {(() => {
+                        const storedForDay = dayLocationEntries.forDate(row.date);
+                        if (storedForDay.length > 1) {
+                          return (
+                            <TouchableOpacity
+                              activeOpacity={0.7}
+                              style={styles.dayLocationStops}
+                              accessibilityRole="button"
+                              onPress={() => setDayLocationEditorDate(row.date)}>
+                              {storedForDay.map((entry, stopIndex) => (
+                                <View key={entry.id} style={[styles.dayLocationRow, styles.dayLocationStopRow]}>
+                                  <Ionicons
+                                    name={stopIndex === 0 ? 'location' : 'ellipse-outline'}
+                                    size={stopIndex === 0 ? 12 : 9}
+                                    color={theme.colors.textMeta}
+                                  />
+                                  <Text style={styles.dayLocationText} numberOfLines={1}>
+                                    {entry.locationLabel}
+                                  </Text>
+                                </View>
+                              ))}
+                            </TouchableOpacity>
+                          );
+                        }
+                        return (
+                          <TouchableOpacity
+                            activeOpacity={0.7}
+                            style={styles.dayLocationRow}
+                            accessibilityRole="button"
+                            onPress={() => setDayLocationEditorDate(row.date)}>
+                            <Ionicons
+                              name={dayLocationByDate.get(row.date) ? 'location' : 'add'}
+                              size={12}
+                              color={theme.colors.textMeta}
+                            />
+                            <Text style={styles.dayLocationText} numberOfLines={1}>
+                              {dayLocationByDate.get(row.date)?.locationLabel ?? t('dayLocation.setLocation')}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })()}
                     </View>
                   );
                 }
@@ -2987,14 +3133,18 @@ export default function TripDetailsScreen() {
         />
 
         {id && dayLocationEditorDate ? (
-          <DayLocationEditor
+          <DayLocationsSheet
             visible={Boolean(dayLocationEditorDate)}
             onClose={() => setDayLocationEditorDate(null)}
             tripId={id}
             date={dayLocationEditorDate}
-            current={dayLocationByDate.get(dayLocationEditorDate) ?? null}
+            resolved={dayLocationByDate.get(dayLocationEditorDate) ?? null}
             suggestedPlace={suggestedPlaceByDate.get(dayLocationEditorDate) ?? null}
+            controller={dayLocationEntries}
             onChanged={() => {
+              // The resolved timeline and the weather both derive from these
+              // rows, so refresh them here rather than making the sheet know
+              // about either.
               void fetchTripDayLocations(id).then(setDayLocations).catch(() => {});
               void fetchTripWeather(id).then(setTripWeather).catch(() => {});
             }}
@@ -3024,6 +3174,63 @@ const URL_REGEX = /https?:\/\/[^\s]+/g;
 // version was a visible hitch right as each crossfade settled). With the
 // slideshow on the pill follows the current slide; with it off it shows
 // the static rule's label. No label → no pill row at all.
+/**
+ * The hero's weather chip, following the slide on screen.
+ *
+ * Subscribes to the SAME channel the location pill uses, so image, location and
+ * weather flip together from one timer — automatic rotation and a manual swipe
+ * go through the identical path. Subscribes here rather than in the screen for
+ * the same reason the pill does: a slide flips every 5 s and must cost one tiny
+ * render, not a whole-screen one.
+ *
+ * The selection itself is `selectSlideWeather`, the exact function the Home
+ * card uses — the two surfaces share the logic and differ only in chrome.
+ */
+function HeroSlideWeather({
+  channel,
+  hasSlideshow,
+  tripWeather,
+  fallbackDay,
+  styles,
+}: {
+  channel: ActiveSlideLabelChannel;
+  hasSlideshow: boolean;
+  tripWeather: TripWeather | null;
+  /** The trip's current-relevant day — the chip's behaviour before this, and
+   * still what shows when the slideshow is off or a cover slide is up. */
+  fallbackDay: ReturnType<typeof currentRelevantDay>;
+  styles: ReturnType<typeof createStyles>;
+}) {
+  const slide = useActiveSlideValue(channel);
+
+  const tripFallback = fallbackDay
+    ? {
+        condition: fallbackDay.code,
+        tempMaxC: fallbackDay.tempMaxC,
+        locationLabel: fallbackDay.locationLabel,
+      }
+    : null;
+
+  const resolved = selectSlideWeather(
+    hasSlideshow
+      ? { dayLocationId: slide.dayLocationId, date: slide.date, locationLabel: slide.label }
+      : null,
+    tripWeather,
+    tripFallback,
+  );
+
+  // Null = nothing truthful for THIS slide's place. Hide the chip rather than
+  // show the previous place's numbers under the new one.
+  if (!resolved) return null;
+
+  return (
+    <View style={styles.heroWeatherChip}>
+      <WeatherIcon condition={resolved.condition} size={15} />
+      <Text style={styles.heroWeatherChipText}>{Math.round(resolved.tempMaxC)}°</Text>
+    </View>
+  );
+}
+
 function HeroSlideLocationPill({
   channel,
   hasSlideshow,
@@ -3140,10 +3347,11 @@ function LinkPreviewCardInline({ preview, isOwn }: { preview: LinkPreview; isOwn
   );
 }
 
-function formatTripDateRange(startDate: string | undefined, endDate: string | undefined, locale: string, t: (key: string, vars?: Record<string, string | number>) => string) {
-  if (!startDate || !endDate) return t('trip.datesComingSoon');
-  const formatter = new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric' });
-  return `${formatter.format(new Date(`${startDate}T12:00:00`))} - ${formatter.format(new Date(`${endDate}T12:00:00`))}`;
+function formatTripDateRange(startDate: string | undefined, endDate: string | undefined | null, locale: string, t: (key: string, vars?: Record<string, string | number>) => string) {
+  // No start date at all is the only "dates coming soon" case now — a start
+  // date with an unknown end reads as ongoing, which is a real state.
+  return formatTripRange(startDate, endDate, locale, t, t('trip.datesComingSoon'))
+    ?? t('trip.datesComingSoon');
 }
 
 function formatActivityDate(date: string, locale: string) {
@@ -4758,6 +4966,12 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     marginBottom: 6,
     backgroundColor: '#eef0f4',
   },
+  // Shown while a private image's signed URL is being fetched. Same box as the
+  // image itself, so the bubble does not jump when it lands.
+  chatMessageImagePlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   chatFullscreenBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.92)',
@@ -4863,6 +5077,22 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
   dayLocationText: {
     ...TYPOGRAPHY.meta,
     color: theme.colors.textMeta,
+  },
+  // Several places on one day: the rows stack tightly so they read as one
+  // group belonging to this date, not as separate day entries. Deliberately
+  // reuses dayLocationRow for each row, so a day with a single place looks
+  // exactly as it did before.
+  dayLocationStops: {
+    alignSelf: 'flex-start',
+    marginTop: -4,
+    marginBottom: SPACING.sm,
+    gap: 1,
+  },
+  // Inside the group the spacing comes from the group, so the row must not add
+  // its own on top.
+  dayLocationStopRow: {
+    marginTop: 0,
+    marginBottom: 0,
   },
   timelineRow: {
     flexDirection: 'row',

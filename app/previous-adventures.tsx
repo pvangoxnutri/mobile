@@ -6,6 +6,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
 import { getCompletedTrips, revokeTripShare, shareTrip } from '@/lib/api';
 import { useAuth } from '@/components/auth-provider';
+import { useI18n } from '@/components/i18n-provider';
 import { useTheme } from '@/components/theme-provider';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import type { AppTheme } from '@/constants/themes';
@@ -13,6 +14,7 @@ import type { Quest } from '@/lib/types';
 
 export default function PreviousAdventuresScreen() {
   const { user } = useAuth();
+  const { t } = useI18n();
   const { theme } = useTheme();
   const styles = useThemedStyles(createStyles);
   const insets = useSafeAreaInsets();
@@ -152,7 +154,8 @@ export default function PreviousAdventuresScreen() {
                   <Text style={styles.tripTitle}>{item.title}</Text>
                   <Text style={styles.destination}>{item.destination}</Text>
                   <Text style={styles.dates}>
-                    {item.startDate} – {item.endDate}
+                    {/* Completed while still open-ended: no end date to show. */}
+                    {item.endDate ? `${item.startDate} – ${item.endDate}` : `${item.startDate} · ${t('trip.ongoing')}`}
                   </Text>
                 </View>
                 <View style={styles.actionRow}>

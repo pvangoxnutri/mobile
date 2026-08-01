@@ -25,6 +25,7 @@ import { useMembersPresencePoll } from '@/hooks/use-presence-poll';
 import Avatar from '@/components/avatar';
 import { apiFetch, apiJson } from '@/lib/api';
 import { splitPastedChecklistItems, stripNotesChecklistMarkers } from '@/lib/text-paste';
+import { normalizeTripMembers } from '@/lib/trip-members';
 import { useTheme } from '@/components/theme-provider';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import type { AppTheme } from '@/constants/themes';
@@ -105,7 +106,9 @@ export default function PackingListScreen() {
         apiJson<Member[]>(`/api/trips/${tripId}/members`),
       ]);
       setData(listData);
-      setMembers(membersData);
+      // Shared ordering rule — see lib/trip-members.ts. The presence poll
+      // below already normalizes, so both paths agree.
+      setMembers(normalizeTripMembers(membersData));
     } catch {
       setError(t('trip.packingList.loadError'));
     } finally {

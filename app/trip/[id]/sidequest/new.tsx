@@ -115,6 +115,9 @@ export default function NewSideQuestScreen() {
         teaser: activity.teaser ?? '',
         teaserOffsetMinutes: activity.teaserOffsetMinutes ?? 120,
         imageUrl: activity.imageUrl ?? null,
+        // Absent on payloads from before this field existed — those activities
+        // are in the slideshow, which is what false means.
+        excludeFromSlideshow: activity.excludeFromSlideshow ?? false,
       };
     }
 
@@ -133,8 +136,11 @@ export default function NewSideQuestScreen() {
           <TouchableOpacity style={styles.backButton} activeOpacity={0.88} onPress={unsaved.requestBack}>
             <Ionicons name="arrow-back" size={24} color={theme.colors.textPrimary} />
           </TouchableOpacity>
-          <View>
+          <View style={styles.headerCopy}>
             <Text style={styles.title}>{isEditMode ? t('sidequest.form.editActivityTitle') : t('sidequest.form.addActivity')}</Text>
+            {/* No numberOfLines on either line: the subtitle explains what the
+                screen does, so a long translation must wrap rather than be
+                cut off with an ellipsis. */}
             <Text style={styles.subtitle}>
               {isEditMode ? t('sidequest.form.editActivitySubtitle') : t('sidequest.form.addActivitySubtitle')}
             </Text>
@@ -197,9 +203,25 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     alignItems: 'center',
     gap: SPACING.lg,
   },
+  // The title/subtitle column. Without this the column sized itself to its
+  // CONTENT and overflowed the row: React Native defaults flexShrink to 0
+  // (unlike CSS), so a subtitle longer than the space left beside the back
+  // button ran off the right edge instead of wrapping. Claiming the remaining
+  // width is what gives both lines a bound to wrap inside, and lets the header
+  // grow taller on its own rather than clipping.
+  headerCopy: {
+    flex: 1,
+    // Belt and braces for the flex-row + long-word case: without it a single
+    // unbreakable token (a long URL-ish word in a translation) can still push
+    // the column past its basis.
+    minWidth: 0,
+  },
   backButton: {
     width: 42,
     height: 42,
+    // Fixed 42×42 is intentional, but a shrinking row must never squash it
+    // into an oval once the title column claims its width.
+    flexShrink: 0,
     borderRadius: RADIUS.circle,
     alignItems: 'center',
     justifyContent: 'center',

@@ -30,6 +30,8 @@ import { useScalePress } from '@/hooks/useMotion';
 import { PRESENCE_POLL_FAST_MS, useMembersPresencePoll } from '@/hooks/use-presence-poll';
 import { maybeShowAppUpdateDialog } from '@/lib/app-update';
 import { fetchTripWeather, getCachedTripWeather, summaryDay, type TripWeather } from '@/lib/weather-api';
+import { isTripOngoing, isTripPast } from '@/lib/trip-dates';
+import { normalizeTripMembers } from '@/lib/trip-members';
 import type { PendingInvite, Quest, SideQuestActivity, TripDayLocation, TripEvent } from '@/lib/types';
 import { SPACING, RADIUS, TYPOGRAPHY } from '@/constants/design-tokens';
 import { useTheme } from '@/components/theme-provider';
@@ -188,7 +190,11 @@ export default function HomeScreen() {
         const members = getCached<TripMember[]>(
           homeUserCacheKey(membersPath, currentUserId),
         );
-        if (members) cachedMembersByTrip[trip.id] = members;
+        // Normalized on the way out of the cache too, so the instantly-rendered
+        // cached row is already in the order the network response will confirm
+        // — the avatars must not settle into a different arrangement a moment
+        // after the screen appears.
+        if (members) cachedMembersByTrip[trip.id] = normalizeTripMembers(members);
         const dayLocs = getCached<TripDayLocation[]>(
           homeUserCacheKey(dayLocationsPath, currentUserId),
         );
@@ -235,11 +241,11 @@ export default function HomeScreen() {
                   homeUserCacheKey(activitiesPath, currentUserId),
                 ) ?? [];
               }),
-              apiJson<TripMember[]>(membersPath).catch((err) => {
+              apiJson<TripMember[]>(membersPath).then(normalizeTripMembers).catch((err) => {
                 console.warn(`[HOME] loadMembers failed for trip ${trip.id}:`, err instanceof Error ? err.message : err);
-                return getCached<TripMember[]>(
+                return normalizeTripMembers(getCached<TripMember[]>(
                   homeUserCacheKey(membersPath, currentUserId),
-                ) ?? [];
+                ));
               }),
               // Resolved per-day feed locations — label source for the
               // slideshow slides and the card's location pill.
@@ -284,10 +290,20 @@ export default function HomeScreen() {
       .catch(async (err: Error) => {
         markStartup(`[HOME] GET /api/trips FAILED (${Date.now() - tripsFetchStart}ms)`, { message: err.message });
         if (!active) return;
-        setError(err.message || 'Unable to load quests.');
+        // A localized, human sentence — never the raw thrown message. The old
+        // behaviour surfaced "Request timed out after 15s. Check your
+        // connection and try again." straight from lib/api.ts as the only
+        // thing on an otherwise empty Home.
+        //
+        // Only an actual authentication failure signs anyone out. A timeout or
+        // an unreachable backend leaves the session — and whatever is cached —
+        // exactly where it is.
+        const isAuthFailure =
+          err.message.includes('401') || err.message.toLowerCase().includes('unauthorized');
+        setError(isAuthFailure ? '' : t('home.refreshFailed'));
         // Only wipe state if we don't have a cached snapshot still on screen
         if (!cachedTrips) setActivities([]);
-        if (err.message.includes('401') || err.message.toLowerCase().includes('unauthorized')) {
+        if (isAuthFailure) {
           await signOut();
           router.replace('/(auth)/login');
         }
@@ -301,7 +317,7 @@ export default function HomeScreen() {
     return () => {
       active = false;
     };
-  }, [signOut, user?.id]);
+  }, [signOut, user?.id, t]);
 
   const loadInvites = useCallback(() => {
     markStartup('[HOME] loadInvites → start');
@@ -574,14 +590,14 @@ export default function HomeScreen() {
     const cacheKey = homeUserCacheKey(url, user.id);
     const cached = getCached<TripMember[]>(cacheKey);
     if (cached) {
-      setFeaturedMembers(cached);
+      setFeaturedMembers(normalizeTripMembers(cached));
       setMembersLoading(false);
       return;
     }
 
     setMembersLoading(true);
     try {
-      const data = await apiJson<TripMember[]>(url);
+      const data = normalizeTripMembers(await apiJson<TripMember[]>(url));
       setCached(cacheKey, data);
       setFeaturedMembers(data);
     } catch (err) {
@@ -745,6 +761,9 @@ export default function HomeScreen() {
                     const day = summaryDay(weatherByTripId[entry.quest.id]);
                     return day ? { condition: day.code, tempMaxC: day.tempMaxC, locationLabel: day.locationLabel } : null;
                   })()}
+                  // The same already-fetched forecast, per day, so the row can
+                  // follow the slideshow without a second request.
+                  tripWeather={weatherByTripId[entry.quest.id] ?? null}
                   slideshowItems={
                     // Slideshow cover: off when the owner disabled it (missing
                     // field = enabled) and never for a sealed hidden trip.
@@ -825,7 +844,24 @@ export default function HomeScreen() {
             />
           </>
         )}
-        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+        {/* Scoped to its own row at the end of the list — Home's layout,
+            cached adventures included, stays on screen and usable. A single
+            explicit retry, never an automatic one: auto-retrying a 15s request
+            would stack several in flight at once. */}
+        {error ? (
+          <View style={styles.refreshErrorRow}>
+            <Text style={styles.errorText}>{error}</Text>
+            <TouchableOpacity
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              onPress={() => {
+                setError('');
+                loadQuests();
+              }}>
+              <Text style={styles.refreshRetryText}>{t('common.tryAgain')}</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
       </ScrollView>
 
       <View
@@ -1566,12 +1602,15 @@ function getTripWithEvent(quest: Quest, activities: SideQuestActivity[], now: Da
   today.setHours(0, 0, 0, 0);
 
   const tripStart = new Date(`${quest.startDate}T12:00:00`);
-  const tripEnd = new Date(`${quest.endDate}T12:00:00`);
   // Whether the trip is currently happening — independent of whether the
   // trip has individual activities scheduled. Previously this was only set
   // in the "no activities" branch, which made the LIVE badge missing on
   // any ongoing trip that had upcoming sidequests.
-  const isOngoing = tripStart.getTime() <= today.getTime() && tripEnd.getTime() >= today.getTime();
+  //
+  // An adventure with no end date is ongoing from its start day onwards and
+  // never ages out on its own — only setting an end date or completing it
+  // moves it to previous adventures.
+  const isOngoing = isTripOngoing(quest.startDate, quest.endDate, now);
 
   const tripActivities = activities
     .filter((activity) => activity.tripId === quest.id)
@@ -1603,8 +1642,9 @@ function getTripWithEvent(quest: Quest, activities: SideQuestActivity[], now: Da
     };
   }
 
-  // Trip fully in the past — skip
-  if (tripEnd.getTime() < today.getTime()) {
+  // Trip fully in the past — skip. isTripPast is always false without an end
+  // date, so an open-ended adventure can never disappear from Home this way.
+  if (isTripPast(quest.startDate, quest.endDate, now)) {
     return null;
   }
 
@@ -2413,6 +2453,16 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     marginTop: 22,
     color: theme.colors.error,
     textAlign: 'center',
+  },
+  refreshErrorRow: {
+    alignItems: 'center',
+    gap: 6,
+    paddingBottom: 8,
+  },
+  refreshRetryText: {
+    color: theme.colors.primary,
+    fontSize: 14,
+    fontWeight: '700',
   },
   fabBackdrop: {
     ...StyleSheet.absoluteFillObject,

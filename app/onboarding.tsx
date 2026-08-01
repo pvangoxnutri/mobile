@@ -128,7 +128,12 @@ export default function OnboardingScreen() {
         type: asset.mimeType ?? 'image/jpeg',
       } as unknown as Blob);
 
-      const uploadRes = await apiFetch('/api/images/upload', { method: 'POST', body: formData });
+      const uploadRes = await apiFetch(
+        '/api/images/upload',
+        { method: 'POST', body: formData },
+        undefined,
+        { privateEndpointName: 'image_upload_avatar' },
+      );
       if (!uploadRes.ok) return;
 
       const { url } = (await uploadRes.json()) as { url: string };

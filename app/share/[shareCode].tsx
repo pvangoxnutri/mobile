@@ -7,12 +7,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getSharedTrip, copySharedTrip } from '@/lib/api';
 import { useAuth } from '@/components/auth-provider';
 import { useTheme } from '@/components/theme-provider';
+import { useI18n } from '@/components/i18n-provider';
 
 export default function SharedAdventureScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { theme } = useTheme();
+  const { t } = useI18n();
   const { shareCode } = useLocalSearchParams<{ shareCode: string }>();
   const [trip, setTrip] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -138,7 +140,9 @@ export default function SharedAdventureScreen() {
         <View style={styles.infoRow}>
           <Ionicons name="calendar-outline" size={16} color={theme.colors.primary} />
           <Text style={[styles.dates, { color: theme.colors.textPrimary }]}>
-            {trip.startDate} – {trip.endDate}
+            {/* An adventure completed while still open-ended has no end date —
+                naming the state beats a dash trailing into nothing. */}
+            {trip.endDate ? `${trip.startDate} – ${trip.endDate}` : `${trip.startDate} · ${t('trip.ongoing')}`}
           </Text>
         </View>
 

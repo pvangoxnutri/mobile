@@ -30,7 +30,11 @@ export interface Quest {
   destinationLongitude?: number | null;
   destinationPlaceId?: string | null;
   startDate: string;
-  endDate: string;
+  // Null/absent = the adventure has no known end date yet ("I don't know yet").
+  // It stays active until an end date is set or it is marked completed. Render
+  // it as "Ongoing" — never as a placeholder date, an empty dash, or
+  // "Invalid date".
+  endDate?: string | null;
   imageUrl?: string | null;
   spotifyUrl?: string | null;
   ownerId: string;
@@ -82,6 +86,10 @@ export interface SideQuestActivity {
   // `category`). Null for built-in categories and older activities.
   customCategoryLabel?: string | null;
   imageUrl?: string | null;
+  // True when this activity's photo must not appear as a slideshow slide. The
+  // image still renders on the activity itself — this only removes it from the
+  // trip's cover rotation. Absent on older payloads, which means "included".
+  excludeFromSlideshow?: boolean;
   spotifyUrl?: string | null;
   visibility: 'public' | 'hidden';
   revealAt?: string | null;
@@ -217,6 +225,10 @@ export interface SupportTicketDetail {
 // "From this day onwards, the travellers are here." One entry per trip day,
 // already resolved server-side (explicit pick, carried forward, or the trip
 // destination fallback) — the app never carries forward locations itself.
+/** The RESOLVED timeline: one entry per trip day, describing that day's MAIN
+ * location — explicitly set, carried forward from an earlier day, or the trip
+ * destination fallback. Unchanged shape; a day's additional places are not part
+ * of it, since a carried-forward day has no stored rows to expose. */
 export interface TripDayLocation {
   date: string; // YYYY-MM-DD
   locationLabel: string;
@@ -224,4 +236,19 @@ export interface TripDayLocation {
   longitude: number;
   placeId?: string | null;
   isExplicit: boolean;
+}
+
+/** A single STORED place. A date can hold several, ordered by sortIndex, where
+ * 0 is the day's main location and the only one that carries forward. Unlike
+ * the resolved timeline these are addressable, so they can be edited, deleted
+ * and reordered individually. */
+export interface TripDayLocationEntry {
+  id: string;
+  tripId: string;
+  startDate: string; // YYYY-MM-DD — matches the backend column name
+  sortIndex: number;
+  locationLabel: string;
+  latitude: number;
+  longitude: number;
+  placeId?: string | null;
 }

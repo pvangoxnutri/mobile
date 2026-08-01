@@ -11,6 +11,7 @@ import { apiJson } from '@/lib/api';
 import { getCategorySymbol } from '@/lib/category-symbol';
 import type { Quest, SideQuestActivity } from '@/lib/types';
 import { isStay, stayNightDates, stayNights } from '@/lib/stay';
+import { isTripOngoing } from '@/lib/trip-dates';
 import { DEFAULT_BLUR, extractBlur, isSealedInLists } from '@/lib/activity-blur';
 import { SPACING, TYPOGRAPHY, RADIUS } from '@/constants/design-tokens';
 import { Card } from '@/components/ui/card';
@@ -159,10 +160,11 @@ export default function CalendarScreen() {
     [visibleDates, dayItemsMap],
   );
 
-  const activeTrip = useMemo(() => {
-    const today = toDateKey(new Date());
-    return quests.find((q) => q.startDate <= today && q.endDate >= today) ?? null;
-  }, [quests]);
+  const activeTrip = useMemo(
+    // An open-ended adventure counts as active from its start day onwards.
+    () => quests.find((q) => isTripOngoing(q.startDate, q.endDate)) ?? null,
+    [quests],
+  );
 
   const activeTripDay = useMemo(() => {
     if (!activeTrip) return null;
@@ -210,7 +212,11 @@ export default function CalendarScreen() {
 
   function handleAddPress() {
     const trip =
-      quests.find((q) => q.startDate <= selectedDate && q.endDate >= selectedDate) ??
+      // An open-ended adventure covers every date from its start onwards, so a
+      // future day the user tapped still resolves to it.
+      quests.find(
+        (q) => q.startDate <= selectedDate && (!q.endDate || q.endDate >= selectedDate),
+      ) ??
       activeTrip ??
       quests[0];
     if (trip) {
@@ -246,7 +252,7 @@ export default function CalendarScreen() {
             <View style={{ flex: 1 }}>
               <Text style={styles.activeLabel}>{t('calendar.activeTrip')}</Text>
               <Text style={styles.activeTitle} numberOfLines={1}>
-                {activeTrip.title ?? t('home.defaultTripName')} · {formatTripRange(activeTrip.startDate, activeTrip.endDate, locale)}
+                {activeTrip.title ?? t('home.defaultTripName')} · {formatTripRange(activeTrip.startDate, activeTrip.endDate, locale, t('trip.ongoing'))}
               </Text>
             </View>
             {activeTripDay ? (
@@ -579,11 +585,11 @@ function formatUpcomingDate(value: string, now: Date, t: (key: string) => string
   return new Intl.DateTimeFormat(locale, { weekday: 'short', day: 'numeric' }).format(parseDateKey(value));
 }
 
-function formatTripRange(start: string, end: string, locale: string) {
-  const s = parseDateKey(start);
-  const e = parseDateKey(end);
-  const startStr = new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric' }).format(s);
-  const endStr = new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric' }).format(e);
+function formatTripRange(start: string, end: string | null | undefined, locale: string, ongoingLabel: string) {
+  const startStr = new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric' }).format(parseDateKey(start));
+  // Open-ended adventure: name the state instead of dashing to nowhere.
+  if (!end) return `${startStr} · ${ongoingLabel}`;
+  const endStr = new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric' }).format(parseDateKey(end));
   return `${startStr} — ${endStr}`;
 }
 

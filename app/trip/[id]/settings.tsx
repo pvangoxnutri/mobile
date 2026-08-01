@@ -3,7 +3,7 @@ import { Stack, router, useLocalSearchParams } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect } from '@react-navigation/native';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -25,16 +25,23 @@ import { useI18n } from '@/components/i18n-provider';
 import RangeDatePicker, { formatRangeDisplay } from '@/components/range-date-picker';
 import { pickStaticLocationLabel } from '@/components/slideshow-cover';
 import CountryPicker from '@/components/travel-tracker/country-picker';
+import RescheduleActivitiesModal, {
+  fallsOutsideRange,
+  type RescheduleAssignment,
+} from '@/components/reschedule-activities-modal';
 import { UnsavedChangesModal, useUnsavedChanges } from '@/components/unsaved-changes';
 import { useKeyboardFocusScroll } from '@/hooks/useKeyboardFocusScroll';
 import { apiFetch, apiJson } from '@/lib/api';
-import { getCached, setCached, invalidateTripCache } from '@/lib/cache';
-import { fetchPlaceDetails, fetchPlaceSuggestions, type PlaceAutocompleteSuggestion } from '@/lib/maps-api';
+import { getCached, setCached, invalidateCache, invalidateTripCache } from '@/lib/cache';
+import { type PlaceAutocompleteSuggestion } from '@/lib/maps-api';
+import { resolvePlace, usePlacesAutocomplete } from '@/hooks/use-places-autocomplete';
+import { normalizeTripMembers } from '@/lib/trip-members';
 import { fetchTripDayLocations, getCachedTripDayLocations } from '@/lib/day-location-api';
-import type { Quest, TripDayLocation, TripInvite } from '@/lib/types';
+import type { Quest, SideQuestActivity, TripDayLocation, TripInvite } from '@/lib/types';
 import { uploadImageIfNeeded } from '@/lib/uploads';
 import { useTheme } from '@/components/theme-provider';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
+import { RADIUS, SPACING } from '@/constants/design-tokens';
 import type { AppTheme } from '@/constants/themes';
 
 type TripMember = {
@@ -62,15 +69,18 @@ export default function TripSettingsScreen() {
   const [destination, setDestination] = useState('');
   // Coordinates ride along only for a picked place suggestion; re-typed
   // free text clears them (server gets clearDestinationCoordinates).
-  const [destinationSuggestions, setDestinationSuggestions] = useState<PlaceAutocompleteSuggestion[]>([]);
   const [destinationPlace, setDestinationPlace] = useState<{ placeId: string | null; latitude: number; longitude: number } | null>(null);
-  const pickedDestinationLabelRef = useRef<string | null>(null);
+  // State rather than a ref: the shared hook takes it as an input to suppress
+  // re-searching for the label the user just picked.
+  const [pickedDestinationLabel, setPickedDestinationLabel] = useState<string | null>(null);
   // Bumped on every pick AND every manual edit that clears a pick — see
   // create-trip.tsx's identical guard for the full race it closes.
   const destinationSelectionTokenRef = useRef(0);
   const [tripCountries, setTripCountries] = useState<string[]>([]);
   const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  // Null = the adventure has (or is being given) no known end date. Distinct
+  // from '' which only means "not loaded yet".
+  const [endDate, setEndDate] = useState<string | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [membersCanEdit, setMembersCanEdit] = useState(true);
   const [slideshowEnabled, setSlideshowEnabled] = useState(true);
@@ -78,21 +88,44 @@ export default function TripSettingsScreen() {
   // at all (see destinationLocked below) and which hint is shown. Cache-
   // first, then fresh; null = still unknown → the safe defaults (locked,
   // no hint) rather than flashing an editable field or the wrong copy.
-  const [tripActivityCount, setTripActivityCount] = useState<number | null>(() => {
-    const cached = getCached<unknown[]>(`/api/trips/${id}/activities`);
-    return cached ? cached.length : null;
-  });
+  // Kept as the full list rather than just a count: the same fetch now also
+  // feeds the reschedule step, which needs each activity's dates and title.
+  const [tripActivities, setTripActivities] = useState<SideQuestActivity[] | null>(
+    () => getCached<SideQuestActivity[]>(`/api/trips/${id}/activities`) ?? null,
+  );
+  const tripActivityCount = tripActivities?.length ?? null;
   useEffect(() => {
     let activeLoad = true;
-    void apiJson<unknown[]>(`/api/trips/${id}/activities`)
+    void apiJson<SideQuestActivity[]>(`/api/trips/${id}/activities`)
       .then((data) => {
-        if (activeLoad && Array.isArray(data)) setTripActivityCount(data.length);
+        if (activeLoad && Array.isArray(data)) setTripActivities(data);
       })
       .catch(() => {});
     return () => {
       activeLoad = false;
     };
   }, [id]);
+
+  /* ── Reschedule step (activities pushed outside the new range) ────── */
+
+  const [rescheduleOpen, setRescheduleOpen] = useState(false);
+  const [rescheduleSaving, setRescheduleSaving] = useState(false);
+  const [rescheduleError, setRescheduleError] = useState<string | null>(null);
+
+  // Which activities the pending date change would strand. Empty whenever the
+  // dates are unchanged, so an edit that only touches the title never routes
+  // through the reschedule step.
+  // A null endDate is a real, complete answer here (open-ended), so it must
+  // NOT short-circuit the way an unloaded '' does. It simply removes the upper
+  // bound, which can only widen the range — fallsOutsideRange handles that, and
+  // the result is naturally empty, so removing an end date never shows the
+  // reschedule step.
+  const strandedActivities = useMemo(() => {
+    if (!trip || !startDate) return [];
+    const storedEnd = trip.endDate ?? null;
+    if (startDate === trip.startDate && endDate === storedEnd) return [];
+    return (tripActivities ?? []).filter((a) => fallsOutsideRange(a, startDate, endDate));
+  }, [trip, tripActivities, startDate, endDate]);
 
   // Destination is the immutable STARTING point only once the adventure
   // has a feed to manage daily places in: with ZERO activities there is no
@@ -166,7 +199,7 @@ export default function TripSettingsScreen() {
       title.trim() !== (trip.title ?? '').trim() ||
       destination.trim() !== (trip.destination ?? '').trim() ||
       startDate !== trip.startDate ||
-      endDate !== trip.endDate ||
+      endDate !== (trip.endDate ?? null) ||
       JSON.stringify(tripCountries) !== JSON.stringify(trip.countries ?? []) ||
       (imageUrl ?? null) !== (trip.imageUrl ?? null) ||
       membersCanEdit !== (trip.membersCanEdit ?? true) ||
@@ -184,19 +217,19 @@ export default function TripSettingsScreen() {
     setDestination(tripData.destination ?? '');
     // An untouched destination keeps its stored coordinates on save.
     if (tripData.destinationLatitude != null && tripData.destinationLongitude != null) {
-      pickedDestinationLabelRef.current = (tripData.destination ?? '').trim();
+      setPickedDestinationLabel((tripData.destination ?? '').trim());
       setDestinationPlace({
         placeId: tripData.destinationPlaceId ?? null,
         latitude: tripData.destinationLatitude,
         longitude: tripData.destinationLongitude,
       });
     } else {
-      pickedDestinationLabelRef.current = null;
+      setPickedDestinationLabel(null);
       setDestinationPlace(null);
     }
     setTripCountries(tripData.countries ?? []);
     setStartDate(tripData.startDate);
-    setEndDate(tripData.endDate);
+    setEndDate(tripData.endDate ?? null);
     setImageUrl(tripData.imageUrl ?? null);
     setMembersCanEdit(tripData.membersCanEdit ?? true);
     // Missing field (older backend) = slideshow enabled.
@@ -224,7 +257,9 @@ export default function TripSettingsScreen() {
     } else {
       setLoading(true);
     }
-    if (cachedMembers) setMembers(cachedMembers);
+    // Same ordering rule as the Home card and the adventure header, so the
+    // member list here matches the avatars the user just tapped through.
+    if (cachedMembers) setMembers(normalizeTripMembers(cachedMembers));
     if (cachedInvites) setInvites(cachedInvites);
 
     void Promise.all([
@@ -232,8 +267,9 @@ export default function TripSettingsScreen() {
       apiJson<TripMember[]>(membersUrl),
       apiJson<TripInvite[]>(invitesUrl),
     ])
-      .then(([tripData, memberData, inviteData]) => {
+      .then(([tripData, rawMemberData, inviteData]) => {
         if (!active) return;
+        const memberData = normalizeTripMembers(rawMemberData);
         setTrip(tripData);
         setMembers(memberData);
         setInvites(inviteData);
@@ -272,29 +308,20 @@ export default function TripSettingsScreen() {
     }
   }
 
-  // Destination autocomplete — same backend proxy and debounce pattern as
-  // create-trip; never re-opens for the exact label the user just picked.
-  useEffect(() => {
-    const query = destination.trim();
-    if (query.length < 2 || query === pickedDestinationLabelRef.current) {
-      setDestinationSuggestions([]);
-      return;
-    }
-    const handle = setTimeout(() => {
-      void fetchPlaceSuggestions(query)
-        .then((items) => setDestinationSuggestions(items.slice(0, 5)))
-        .catch(() => setDestinationSuggestions([]));
-    }, 350);
-    return () => clearTimeout(handle);
-  }, [destination]);
+  // Destination autocomplete — the shared implementation, identical to
+  // create-trip and to the activity location field. Errors stay silent here as
+  // they always have: coordinates are a bonus, the typed destination stands
+  // alone.
+  const { suggestions: destinationSuggestions, reset: resetDestinationSuggestions } =
+    usePlacesAutocomplete(destination, { skipQuery: pickedDestinationLabel });
 
   function handleDestinationChange(value: string) {
     setDestination(value);
     // Re-typed text no longer describes the picked place — drop coordinates
     // AND invalidate any coordinate lookup still in flight for the pick
     // being edited away from, so it can never apply late.
-    if (pickedDestinationLabelRef.current && value.trim() !== pickedDestinationLabelRef.current) {
-      pickedDestinationLabelRef.current = null;
+    if (pickedDestinationLabel && value.trim() !== pickedDestinationLabel) {
+      setPickedDestinationLabel(null);
       destinationSelectionTokenRef.current += 1;
       setDestinationPlace(null);
     }
@@ -302,36 +329,37 @@ export default function TripSettingsScreen() {
 
   function handlePickDestination(suggestion: PlaceAutocompleteSuggestion) {
     const label = suggestion.primaryText.trim();
-    pickedDestinationLabelRef.current = label;
+    setPickedDestinationLabel(label);
     destinationSelectionTokenRef.current += 1;
     const token = destinationSelectionTokenRef.current;
     setDestination(label);
-    setDestinationSuggestions([]);
+    resetDestinationSuggestions();
     setDestinationPlace(null);
     void (async () => {
-      try {
-        let latitude = suggestion.latitude ?? null;
-        let longitude = suggestion.longitude ?? null;
-        if ((latitude == null || longitude == null) && !suggestion.placeId.startsWith('osm:')) {
-          const details = await fetchPlaceDetails(suggestion.placeId);
-          latitude = details.latitude ?? null;
-          longitude = details.longitude ?? null;
-        }
-        // Only apply if nothing newer (a re-type or another pick) has
-        // superseded this lookup while it was in flight.
-        if (latitude != null && longitude != null && destinationSelectionTokenRef.current === token) {
-          setDestinationPlace({ placeId: suggestion.placeId, latitude, longitude });
-        }
-      } catch {
-        // Coordinates are optional — the text destination stands alone. A
-        // failed lookup must never pretend to have succeeded, so
-        // destinationPlace simply stays null.
-      }
+      const resolved = await resolvePlace(suggestion);
+      // Only apply if nothing newer (a re-type or another pick) has
+      // superseded this lookup while it was in flight.
+      if (resolved.latitude == null || resolved.longitude == null) return;
+      if (destinationSelectionTokenRef.current !== token) return;
+      setDestinationPlace({
+        placeId: resolved.placeId,
+        latitude: resolved.latitude,
+        longitude: resolved.longitude,
+      });
     })();
   }
 
   async function handleSave(): Promise<boolean> {
     if (!trip) return false;
+
+    // Date change that would strand activities: route through the reschedule
+    // step instead of saving. Nothing is written until the user confirms a
+    // plan there, so cancelling leaves the trip and its activities untouched.
+    if (strandedActivities.length > 0 && !rescheduleOpen) {
+      setRescheduleError(null);
+      setRescheduleOpen(true);
+      return false;
+    }
 
     setSaving(true);
     setMessage(null);
@@ -355,7 +383,9 @@ export default function TripSettingsScreen() {
             : { clearDestinationCoordinates: true }),
           countries: tripCountries,
           startDate,
-          endDate,
+          // On this endpoint a null endDate means "leave untouched" — removing
+          // it needs the explicit flag, same convention as clearImage.
+          ...(endDate ? { endDate } : { clearEndDate: true }),
           imageUrl: uploadedImageUrl,
           clearImage: !uploadedImageUrl,
           membersCanEdit,
@@ -400,6 +430,91 @@ export default function TripSettingsScreen() {
       return false;
     } finally {
       setSaving(false);
+    }
+  }
+
+  /**
+   * Confirmed reschedule: save the adventure dates, then move each activity.
+   *
+   * The order is forced by the API — the move endpoint validates a target date
+   * against the trip's CURRENT range, so the widened/shifted range has to land
+   * first or every move would be rejected. There is no endpoint that does both
+   * in one transaction, so this is as close to atomic as the API allows: if the
+   * trip PATCH fails nothing else is attempted, and if individual moves fail
+   * the user is told exactly how many, never that it all worked.
+   */
+  async function handleRescheduleConfirm(assignments: RescheduleAssignment[]) {
+    if (!trip) return;
+    setRescheduleSaving(true);
+    setRescheduleError(null);
+
+    const tripSaved = await handleSave();
+    if (!tripSaved) {
+      setRescheduleError(t('reschedule.tripSaveFailed'));
+      setRescheduleSaving(false);
+      return;
+    }
+
+    // Group by target date so each day is moved with its full id order — the
+    // same payload shape the feed's own drag-to-move uses.
+    const byDate = new Map<string, RescheduleAssignment[]>();
+    for (const assignment of assignments) {
+      const bucket = byDate.get(assignment.date) ?? [];
+      bucket.push(assignment);
+      byDate.set(assignment.date, bucket);
+    }
+
+    let failed = 0;
+    for (const [date, group] of byDate) {
+      // Activities already sitting on this date keep their place ahead of the
+      // arrivals, so an untouched day is not reshuffled by the move.
+      const existing = (tripActivities ?? [])
+        .filter((a) => a.date.slice(0, 10) === date && !group.some((g) => g.activity.id === a.id))
+        .sort((a, b) => a.sortIndex - b.sortIndex)
+        .map((a) => a.id);
+      const activityIds = [...existing, ...group.map((g) => g.activity.id)];
+
+      for (const assignment of group) {
+        try {
+          const response = await apiFetch(`/api/trips/${id}/activities/${assignment.activity.id}/move`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              date: assignment.date,
+              activityIds,
+              // Stays carry their shifted check-out so the server never sees a
+              // check-in past its own check-out.
+              ...(assignment.endDate ? { endDate: assignment.endDate } : {}),
+            }),
+          });
+          if (!response.ok) failed += 1;
+        } catch {
+          failed += 1;
+        }
+      }
+    }
+
+    invalidateCache(`/api/trips/${id}/activities`);
+    invalidateTripCache(id);
+    try {
+      const fresh = await apiJson<SideQuestActivity[]>(`/api/trips/${id}/activities`);
+      if (Array.isArray(fresh)) setTripActivities(fresh);
+    } catch {
+      // Non-fatal: the next focus refetch picks it up.
+    }
+
+    setRescheduleSaving(false);
+    setRescheduleOpen(false);
+
+    if (failed > 0) {
+      setMessage({
+        type: 'error',
+        text: t('reschedule.partialFailureBody', { count: failed, total: assignments.length }),
+      });
+      Alert.alert(
+        t('reschedule.partialFailureTitle'),
+        t('reschedule.partialFailureBody', { count: failed, total: assignments.length }),
+      );
     }
   }
 
@@ -666,8 +781,12 @@ export default function TripSettingsScreen() {
                 <TouchableOpacity style={styles.dateRangeCard} activeOpacity={0.9} onPress={() => setRangePickerOpen(true)}>
                   <View style={styles.dateRangeCopy}>
                     <Text style={styles.dateRangeEyebrow}>TRIP DATES</Text>
-                    <Text style={styles.dateRangeValue}>{formatRangeDisplay(startDate, endDate)}</Text>
-                    <Text style={styles.dateRangeHint}>Tap once and adjust the whole range in one calendar.</Text>
+                    <Text style={styles.dateRangeValue}>{formatRangeDisplay(startDate, endDate, t('trip.ongoing'))}</Text>
+                    <Text style={styles.dateRangeHint}>
+                      {endDate
+                        ? 'Tap once and adjust the whole range in one calendar.'
+                        : t('trip.endDateUnknownHint')}
+                    </Text>
                   </View>
                   <View style={[styles.dateRangeIcon, { backgroundColor: theme.colors.primaryLight08 }]}>
                     <Ionicons name="calendar-outline" size={20} color={theme.colors.primary} />
@@ -797,6 +916,39 @@ export default function TripSettingsScreen() {
                 </View>
               ) : null}
 
+              {/* The blocking action, right above Save so it cannot be missed:
+                  the new dates cannot be saved until these activities have a
+                  place inside them. Styled as a real call to action rather
+                  than helper text, because it is one. */}
+              {strandedActivities.length > 0 ? (
+                <View style={styles.rescheduleCallout}>
+                  <View style={styles.rescheduleCalloutHead}>
+                    <Ionicons name="alert-circle" size={20} color={theme.colors.primary} />
+                    <Text style={styles.rescheduleCalloutTitle}>
+                      {t(
+                        strandedActivities.length === 1
+                          ? 'reschedule.calloutTitle_one'
+                          : 'reschedule.calloutTitle_other',
+                        { count: strandedActivities.length },
+                      )}
+                    </Text>
+                  </View>
+                  <Text style={styles.rescheduleCalloutBody}>{t('reschedule.calloutBody')}</Text>
+                  <TouchableOpacity
+                    activeOpacity={0.9}
+                    style={styles.rescheduleCalloutButton}
+                    accessibilityRole="button"
+                    onPress={() => {
+                      setRescheduleError(null);
+                      setRescheduleOpen(true);
+                    }}>
+                    <Text style={styles.rescheduleCalloutButtonText} numberOfLines={2}>
+                      {t('reschedule.openAction')}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+
               <TouchableOpacity activeOpacity={0.92} style={[styles.primaryButton, { backgroundColor: theme.colors.primary }, saving ? styles.primaryButtonDisabled : null]} disabled={saving} onPress={() => void handleSaveAndExit()}>
                 <Text style={styles.primaryButtonText}>{saving ? 'Saving...' : 'Save trip settings'}</Text>
               </TouchableOpacity>
@@ -848,7 +1000,7 @@ export default function TripSettingsScreen() {
                 <Text style={styles.readOnlyValue}>{trip?.destination ?? '—'}</Text>
                 <View style={styles.readOnlyDivider} />
                 <Text style={styles.readOnlyLabel}>Dates</Text>
-                <Text style={styles.readOnlyValue}>{formatRangeDisplay(startDate, endDate)}</Text>
+                <Text style={styles.readOnlyValue}>{formatRangeDisplay(startDate, endDate, t('trip.ongoing'))}</Text>
               </View>
 
               <View style={styles.card}>
@@ -907,12 +1059,39 @@ export default function TripSettingsScreen() {
           startDate={startDate}
           endDate={endDate}
           confirmLabel="Save date range"
+          allowUnknownEndDate
+          unknownEndDateLabel={t('trip.endDateUnknown')}
+          unknownEndDateHint={t('trip.endDateUnknownHint')}
+          ongoingLabel={t('trip.ongoing')}
           onChange={(nextStartDate, nextEndDate) => {
             setStartDate(nextStartDate);
             setEndDate(nextEndDate);
           }}
           onClose={() => setRangePickerOpen(false)}
         />
+
+        {/* Mounted INSIDE the full-screen container, next to RangeDatePicker.
+            ModalSheet is an absoluteFillObject overlay, not an RN <Modal>, so
+            it fills its nearest laid-out parent — as a sibling of this
+            container (outside it, next to UnsavedChangesModal, which is a real
+            <Modal> and portals regardless) it had nothing to fill and never
+            became visible even though `visible` was true. */}
+        {trip ? (
+          <RescheduleActivitiesModal
+            visible={rescheduleOpen}
+            activities={tripActivities ?? []}
+            previousStartDate={trip.startDate}
+            newStartDate={startDate}
+            newEndDate={endDate}
+            saving={rescheduleSaving}
+            errorText={rescheduleError}
+            onCancel={() => {
+              setRescheduleOpen(false);
+              setRescheduleError(null);
+            }}
+            onConfirm={(assignments) => void handleRescheduleConfirm(assignments)}
+          />
+        ) : null}
       </KeyboardAvoidingView>
 
       <UnsavedChangesModal
@@ -1225,6 +1404,52 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
   readOnlyLabel: { color: theme.isDark ? theme.colors.textMeta : '#868d99', fontSize: 12, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', marginTop: 4 },
   readOnlyValue: { color: theme.isDark ? theme.colors.textPrimary : '#161821', fontSize: 16, fontWeight: '700', marginTop: 4, marginBottom: 4 },
   readOnlyDivider: { height: 1, backgroundColor: theme.isDark ? theme.colors.bgLight : '#f0f2f5', marginVertical: 10 },
+  // Deliberately a call-to-action card, not helper text: this is the one
+  // thing standing between the user and saving.
+  rescheduleCallout: {
+    marginTop: SPACING.lg,
+    padding: SPACING.lg,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1.5,
+    borderColor: theme.colors.primary,
+    backgroundColor: theme.isDark ? theme.colors.primaryLight08 : '#fff0f3',
+    gap: SPACING.sm,
+  },
+  rescheduleCalloutHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  rescheduleCalloutTitle: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 15,
+    fontWeight: '800',
+    color: theme.colors.textPrimary,
+  },
+  rescheduleCalloutBody: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: theme.colors.textSecondary,
+  },
+  // No fixed height: a wrapped two-line label must grow the button, never be
+  // clipped by it.
+  rescheduleCalloutButton: {
+    minHeight: 46,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.lg,
+    borderRadius: RADIUS.circle,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.primary,
+  },
+  rescheduleCalloutButtonText: {
+    flexShrink: 1,
+    textAlign: 'center',
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#fff',
+  },
   dangerCard: {
     marginTop: 16,
     marginBottom: 20,

@@ -19,6 +19,7 @@ import {
   Platform,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -31,7 +32,8 @@ import { apiFetch, apiJson } from '@/lib/api';
 import { useKeyboardFocusScroll } from '@/hooks/useKeyboardFocusScroll';
 import { invalidateCache } from '@/lib/cache';
 import { CATEGORY_VALUES, CUSTOM_SYMBOL_VALUES, getCategorySymbol, type ActivityCategoryValue } from '@/lib/category-symbol';
-import { fetchPlaceSuggestions, type PlaceAutocompleteSuggestion } from '@/lib/maps-api';
+import { type PlaceAutocompleteSuggestion } from '@/lib/maps-api';
+import { resolvePlace, usePlacesAutocomplete } from '@/hooks/use-places-autocomplete';
 import { type StoredMapPlace, withLocationMarker } from '@/lib/sidequest-location';
 import { addDaysIso, formatNights, stayNights } from '@/lib/stay';
 import { withFlightMarkers } from '@/lib/flight-route';
@@ -71,6 +73,9 @@ export type SideQuestFormValues = {
   teaser: string;
   teaserOffsetMinutes: number | null;
   imageUrl: string | null;
+  // Keeps this activity's photo out of the trip slideshow. Only meaningful
+  // while imageUrl is set; with no image there is nothing to exclude.
+  excludeFromSlideshow: boolean;
   blurAmount: number;
 };
 
@@ -172,6 +177,10 @@ function SideQuestFormInner({
   const [isCustomCategory, setIsCustomCategory] = useState(
     !!(initialValues?.customCategoryLabel && initialValues.customCategoryLabel.trim()),
   );
+  // A real stay, i.e. the built-in Hotel category — a custom category that
+  // merely borrows the hotel symbol is not one. Same rule the stay fields and
+  // the check-out validation already use; keep them in step.
+  const isStayCategory = category === 'hotel' && !isCustomCategory;
   // Category row starts collapsed (Flyg/Mat/Sevärdighet only). Auto-expand
   // when the current selection lives behind the toggle — a custom category,
   // or a built-in that isn't one of the three collapsed ones — so editing an
@@ -185,9 +194,27 @@ function SideQuestFormInner({
   const [locationPlace, setLocationPlace] = useState<StoredMapPlace | null>(initialValues?.locationPlace ?? null);
   const [flightFrom, setFlightFrom] = useState(initialValues?.flightFrom ?? '');
   const [flightTo, setFlightTo] = useState(initialValues?.flightTo ?? '');
-  const [locationSuggestions, setLocationSuggestions] = useState<PlaceAutocompleteSuggestion[]>([]);
-  const [locationLoading, setLocationLoading] = useState(false);
-  const [locationError, setLocationError] = useState('');
+  // Suppresses a re-search for the label already in the field — otherwise
+  // selecting a result immediately reopens the list showing that same result,
+  // and opening Edit Activity pops a dropdown over the form before the user has
+  // typed anything. Seeded from whatever the field starts with, so the first
+  // search happens when the user actually edits it — the same rule the
+  // adventure destination follows.
+  const [pickedLocationLabel, setPickedLocationLabel] = useState<string | null>(
+    initialValues?.locationPlace
+      ? buildPlaceDisplay(initialValues.locationPlace)
+      : (initialValues?.locationQuery?.trim() || null),
+  );
+  // Search, debounce, race protection, dedupe and coordinate resolution all
+  // come from the shared hook — the same one the adventure destination and the
+  // day-location picker use, so this field cannot drift from them again.
+  const {
+    suggestions: locationSuggestions,
+    loading: locationLoading,
+    error: locationErrorCode,
+    reset: resetLocationSuggestions,
+  } = usePlacesAutocomplete(locationQuery, { skipQuery: pickedLocationLabel });
+  const [locationSaveError, setLocationSaveError] = useState('');
   // Default the activity date INTO the trip range. Previously it defaulted to
   // "today", which let you create an activity before the trip even starts
   // (e.g. trip starts the 29th but the activity landed on today's date).
@@ -202,6 +229,11 @@ function SideQuestFormInner({
   const [teaser, setTeaser] = useState(initialValues?.teaser ?? '');
   const [teaserOffsetMinutes, setTeaserOffsetMinutes] = useState<number | null>(initialValues?.teaserOffsetMinutes ?? 120);
   const [imageUrl, setImageUrl] = useState<string | null>(initialValues?.imageUrl ?? initialImageUrl ?? null);
+  // Default false — new and existing activities are in the slideshow unless
+  // the user says otherwise.
+  const [excludeFromSlideshow, setExcludeFromSlideshow] = useState<boolean>(
+    initialValues?.excludeFromSlideshow ?? false,
+  );
   const [imageSize, setImageSize] = useState<{ width: number; height: number } | null>(null);
   const [imagePanOffset, setImagePanOffset] = useState({ x: 0, y: 0 });
   const [imagePanScale, setImagePanScale] = useState(1);
@@ -348,12 +380,22 @@ function SideQuestFormInner({
   // bottom.
   const bottomPadding = useMemo(() => Math.max(insets.bottom, 18) + 32, [insets.bottom]);
   const revealAtPreview = visibility === 'hidden' ? formatRevealPreview(revealDate, revealTime, locale, t) : t('sidequest.form.revealsNow');
-  const tripRangeText =
-    tripStartDate && tripEndDate ? `${formatShortDate(tripStartDate, locale)} – ${formatShortDate(tripEndDate, locale)}` : t('sidequest.form.loadingTripDates');
+  // An open-ended adventure has a start date but no end — that is a known
+  // range, not an unloaded one, so it must not read as "loading trip dates".
+  const tripRangeText = !tripStartDate
+    ? t('sidequest.form.loadingTripDates')
+    : tripEndDate
+      ? `${formatShortDate(tripStartDate, locale)} – ${formatShortDate(tripEndDate, locale)}`
+      : `${formatShortDate(tripStartDate, locale)} · ${t('trip.ongoing')}`;
   const today = getDefaultDate();
   const selectedDateBeforeToday = isDateInputValid(date) && date < today;
-  const selectedDateOutOfRange =
-    tripStartDate && tripEndDate ? !isWithinRange(date, tripStartDate, tripEndDate) : false;
+  // With no end date there is no upper bound to fall outside of; a date before
+  // the start still is one.
+  const selectedDateOutOfRange = tripStartDate
+    ? tripEndDate
+      ? !isWithinRange(date, tripStartDate, tripEndDate)
+      : date < tripStartDate
+    : false;
   const revealRange = useMemo(() => getRevealRange(tripStartDate, tripEndDate, date), [date, tripEndDate, tripStartDate]);
   const revealDateOutOfRange =
     visibility === 'hidden' ? !isWithinRange(revealDate, revealRange.min, revealRange.max) : false;
@@ -366,8 +408,14 @@ function SideQuestFormInner({
   // (already-clamped) day fires no onChange and the stale out-of-range date
   // gets saved. Clamping state to match what's shown fixes that desync.
   useEffect(() => {
-    if (!tripStartDate || !tripEndDate) return;
-    if (!isWithinRange(date, tripStartDate, tripEndDate)) {
+    if (!tripStartDate) return;
+    // Open-ended: only a date BEFORE the start needs clamping. Clamping a
+    // future date would fight the user deliberately planning ahead, which is
+    // exactly what an unknown end date is for.
+    const outside = tripEndDate
+      ? !isWithinRange(date, tripStartDate, tripEndDate)
+      : date < tripStartDate;
+    if (outside) {
       setDate(defaultActivityDate(tripStartDate, tripEndDate));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -397,39 +445,6 @@ function SideQuestFormInner({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visibility, revealRange.min, revealRange.max]);
-
-  useEffect(() => {
-    const query = locationQuery.trim();
-    if (query.length < 2) {
-      setLocationSuggestions([]);
-      setLocationLoading(false);
-      setLocationError('');
-      return;
-    }
-
-    if (locationPlace && buildPlaceDisplay(locationPlace) === query) {
-      setLocationSuggestions([]);
-      setLocationLoading(false);
-      setLocationError('');
-      return;
-    }
-
-    setLocationLoading(true);
-    const handle = setTimeout(() => {
-      void fetchPlaceSuggestions(query)
-        .then((items) => {
-          setLocationSuggestions(items);
-          setLocationError('');
-        })
-        .catch((err) => {
-          setLocationSuggestions([]);
-          setLocationError(err instanceof Error ? err.message : t('sidequest.form.placeSuggestionsFailed'));
-        })
-        .finally(() => setLocationLoading(false));
-    }, 260);
-
-    return () => clearTimeout(handle);
-  }, [locationPlace, locationQuery, t]);
 
   async function handlePickImage() {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -463,25 +478,48 @@ function SideQuestFormInner({
     }
   }
 
-  async function handlePickPlace(suggestion: PlaceAutocompleteSuggestion) {
-    try {
-      const place: StoredMapPlace = {
-        placeId: suggestion.placeId,
-        name: suggestion.primaryText,
-        address: suggestion.secondaryText ?? null,
-        latitude: suggestion.latitude ?? null,
-        longitude: suggestion.longitude ?? null,
-        googleMapsUri: suggestion.googleMapsUri ?? null,
-      };
-      const label = buildPlaceDisplay(place);
-      setLocationPlace(place);
-      setLocationQuery(label);
-      setLocationSuggestions([]);
-      setLocationError('');
-      setMessage(null);
-    } catch {
-      setLocationError(t('sidequest.form.placeDetailsFailed'));
-    }
+  // Guards against a slow coordinate lookup landing after the user has moved
+  // on — picked a different result, or typed the place away entirely.
+  const locationSelectionTokenRef = useRef(0);
+
+  function handlePickPlace(suggestion: PlaceAutocompleteSuggestion) {
+    const label = suggestion.primaryText.trim();
+    locationSelectionTokenRef.current += 1;
+    const token = locationSelectionTokenRef.current;
+
+    // The label and the list update immediately; coordinates catch up. Waiting
+    // for the network before showing the choice made the field feel broken.
+    setPickedLocationLabel(label);
+    setLocationQuery(label);
+    resetLocationSuggestions();
+    setLocationSaveError('');
+    setMessage(null);
+    Keyboard.dismiss();
+
+    void (async () => {
+      // Google suggestions carry no coordinates — this is the lookup the field
+      // never used to do, which is why picking a place here stored latitude and
+      // longitude as null.
+      const place = await resolvePlace(suggestion);
+      if (locationSelectionTokenRef.current !== token) return;
+      setLocationPlace({
+        placeId: place.placeId,
+        name: place.name,
+        address: place.address,
+        latitude: place.latitude,
+        longitude: place.longitude,
+        googleMapsUri: place.googleMapsUri,
+      });
+    })();
+  }
+
+  /** Typing (or copying the title in) means the text no longer describes the
+   * picked place. Coordinates and placeId go with it — free text must never
+   * keep a previous result's structured data. */
+  function clearPickedLocation() {
+    locationSelectionTokenRef.current += 1;
+    setPickedLocationLabel(null);
+    setLocationPlace(null);
   }
 
   function handleDateChange(event: DateTimePickerEvent, selectedDate?: Date) {
@@ -571,9 +609,15 @@ function SideQuestFormInner({
     }
 
     // The activity must fall inside the trip's date range — otherwise it
-    // shows up on the calendar before the trip even starts.
-    if (tripStartDate && tripEndDate && !isWithinRange(date, tripStartDate, tripEndDate)) {
-      setMessage({ type: 'error', text: t('sidequest.form.outsideTripRange', { range: `${formatShortDate(tripStartDate, locale)} – ${formatShortDate(tripEndDate, locale)}` }) });
+    // shows up on the calendar before the trip even starts. An open-ended
+    // adventure only has a lower bound.
+    const outsideTripRange = tripStartDate
+      ? tripEndDate
+        ? !isWithinRange(date, tripStartDate, tripEndDate)
+        : date < tripStartDate
+      : false;
+    if (outsideTripRange) {
+      setMessage({ type: 'error', text: t('sidequest.form.outsideTripRange', { range: tripRangeText }) });
       return null;
     }
 
@@ -647,6 +691,9 @@ function SideQuestFormInner({
         teaser: visibility === 'hidden' ? teaser.trim() || null : null,
         teaserOffsetMinutes: visibility === 'hidden' && teaser.trim() ? teaserOffsetMinutes : null,
         imageUrl: uploadedImageUrl,
+        // Only ever true alongside an image; the server enforces the same rule,
+        // so an activity without a photo can never carry a stale flag.
+        excludeFromSlideshow: !!uploadedImageUrl && excludeFromSlideshow,
       };
 
       if (mode === 'edit' && sideQuestId) {
@@ -737,6 +784,7 @@ function SideQuestFormInner({
   const initialFlightFromForDirty = initialValues?.flightFrom ?? '';
   const initialFlightToForDirty = initialValues?.flightTo ?? '';
   const initialBlurForDirty = initialValues?.blurAmount ?? DEFAULT_BLUR;
+  const initialExcludeForDirty = initialValues?.excludeFromSlideshow ?? false;
 
   const dirty = mode === 'edit'
     ? (
@@ -747,6 +795,10 @@ function SideQuestFormInner({
         visibility !== initialVisibilityForDirty ||
         teaser.trim() !== initialTeaserForDirty.trim() ||
         (imageUrl ?? null) !== (initialImageForDirty ?? null) ||
+        // Only counts while an image exists — matching what actually gets sent,
+        // so toggling it off after removing the photo cannot leave the form
+        // permanently "dirty" with nothing to save.
+        (!!imageUrl && excludeFromSlideshow !== initialExcludeForDirty) ||
         locationQuery.trim() !== initialLocationQueryForDirty.trim() ||
         flightFrom.trim() !== initialFlightFromForDirty.trim() ||
         flightTo.trim() !== initialFlightToForDirty.trim() ||
@@ -762,6 +814,7 @@ function SideQuestFormInner({
         customLabel.trim() !== '' ||
         teaser.trim() !== '' ||
         imageUrl !== null ||
+        (!!imageUrl && excludeFromSlideshow) ||
         locationQuery.trim() !== '' ||
         flightFrom.trim() !== '' ||
         flightTo.trim() !== '' ||
@@ -868,13 +921,42 @@ function SideQuestFormInner({
             <TouchableOpacity
               activeOpacity={0.88}
               style={[styles.coverBadge, styles.coverBadgeGhost]}
-              onPress={() => { setImageUrl(null); setImageSize(null); }}>
+              onPress={() => {
+                setImageUrl(null);
+                setImageSize(null);
+                // Nothing left to exclude — and leaving the flag on would
+                // silently hide whatever photo is picked next.
+                setExcludeFromSlideshow(false);
+              }}>
               <Ionicons name="trash-outline" size={14} color="#fff" />
               <Text style={styles.coverBadgeText}>{t('common.remove')}</Text>
             </TouchableOpacity>
           </View>
         )}
       </TouchableOpacity>
+
+      {/* Sits directly under the image it governs, not among the activity's
+          general settings — the toggle only makes sense next to the photo.
+          Hidden entirely when there is no image, since there would be nothing
+          for it to act on. A sealed SideQuest's photo never reaches the
+          slideshow anyway (buildSlideshowItems drops hidden activities), so
+          the choice is offered on the same terms and simply applies once the
+          activity is revealed. */}
+      {imageUrl ? (
+        <View style={styles.slideshowRow}>
+          <View style={styles.slideshowCopy}>
+            <Text style={styles.slideshowTitle}>{t('sidequest.form.excludeFromSlideshow')}</Text>
+            <Text style={styles.slideshowSubtitle}>{t('sidequest.form.excludeFromSlideshowHint')}</Text>
+          </View>
+          <Switch
+            value={excludeFromSlideshow}
+            onValueChange={setExcludeFromSlideshow}
+            trackColor={{ false: theme.isDark ? theme.colors.textMuted : '#dfe3e8', true: theme.isDark ? theme.colors.primaryLight20 : theme.colors.primary }}
+            thumbColor="#fff"
+            ios_backgroundColor={theme.isDark ? theme.colors.textMuted : '#dfe3e8'}
+          />
+        </View>
+      ) : null}
 
       <View style={styles.block}>
         <Text style={styles.label}>{t('sidequest.form.titleLabel')} <Text style={styles.labelRequired}>*</Text></Text>
@@ -1117,8 +1199,9 @@ function SideQuestFormInner({
           value={locationQuery}
           onChangeText={(value) => {
             setLocationQuery(value);
-            if (locationPlace && buildPlaceDisplay(locationPlace) !== value.trim()) {
-              setLocationPlace(null);
+            // Edited away from the picked label → this is free text again.
+            if (pickedLocationLabel !== null && value.trim() !== pickedLocationLabel) {
+              clearPickedLocation();
             }
           }}
           placeholder={t('sidequest.form.locationPlaceholder')}
@@ -1129,9 +1212,40 @@ function SideQuestFormInner({
           returnKeyType="done"
           onSubmitEditing={() => Keyboard.dismiss()}
         />
+        {/* One-shot copy of the title into location. Deliberately a button and
+            not a live binding: after this the two fields are independent, so
+            renaming the activity later never rewrites a location the user has
+            since adjusted. */}
+        <TouchableOpacity
+          activeOpacity={0.8}
+          style={[styles.sameLocationChip, !title.trim() ? styles.sameLocationChipDisabled : null]}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: !title.trim() }}
+          disabled={!title.trim()}
+          onPress={() => {
+            setLocationQuery(title.trim());
+            // The text no longer describes the picked place, so drop it — the
+            // same thing typing into the field by hand does above. Nothing is
+            // searched or selected automatically: this only copies text, and
+            // the user can still pick a real result afterwards, which then
+            // stores coordinates normally.
+            clearPickedLocation();
+          }}>
+          <Ionicons
+            name="copy-outline"
+            size={15}
+            color={theme.colors.primary}
+            style={{ marginRight: 6 }}
+          />
+          <Text style={styles.sameLocationText}>{t('sidequest.form.sameLocationAsTitle')}</Text>
+        </TouchableOpacity>
         <Text style={styles.helperText}>{t('sidequest.form.locationHelper')}</Text>
         {locationLoading ? <Text style={styles.locationStatus}>{t('sidequest.form.searchingPlaces')}</Text> : null}
-        {locationError ? <Text style={styles.locationError}>{locationError}</Text> : null}
+        {locationErrorCode || locationSaveError ? (
+          <Text style={styles.locationError}>
+            {locationSaveError || t('sidequest.form.placeSuggestionsFailed')}
+          </Text>
+        ) : null}
         {locationSuggestions.length > 0 ? (
           <View style={styles.locationSuggestions}>
             {locationSuggestions.map((item) => (
@@ -1139,16 +1253,29 @@ function SideQuestFormInner({
                 key={item.placeId}
                 activeOpacity={0.9}
                 style={styles.locationSuggestionRow}
-                onPress={() => void handlePickPlace(item)}>
+                onPress={() => handlePickPlace(item)}>
                 <Ionicons name="location-outline" size={16} color={theme.colors.secondary} />
                 <View style={styles.locationSuggestionCopy}>
-                  <Text style={styles.locationSuggestionTitle}>{item.primaryText}</Text>
-                  {item.secondaryText ? <Text style={styles.locationSuggestionSubtitle}>{item.secondaryText}</Text> : null}
+                  {/* Single-line + ellipsis, matching every other place list in
+                      the app — a long venue name must not stretch the row. */}
+                  <Text style={styles.locationSuggestionTitle} numberOfLines={1}>{item.primaryText}</Text>
+                  {item.secondaryText ? <Text style={styles.locationSuggestionSubtitle} numberOfLines={1}>{item.secondaryText}</Text> : null}
                 </View>
               </TouchableOpacity>
             ))}
           </View>
         ) : null}
+        {/* Quiet confirmation that a real place is attached (not just text),
+            shown only once the list is closed so it never competes with it. */}
+        {locationPlace && locationSuggestions.length === 0 ? (
+          <View style={styles.locationPickedRow}>
+            <Ionicons name="checkmark-circle" size={14} color={theme.colors.primary} />
+            <Text style={styles.locationPickedText} numberOfLines={1}>
+              {locationPlace.address?.trim() || locationPlace.name}
+            </Text>
+          </View>
+        ) : null}
+
       </View>
 
       <View style={styles.block}>
@@ -1157,7 +1284,7 @@ function SideQuestFormInner({
           {Platform.OS === 'web' ? (
             <View style={[styles.selectionCard, styles.revealCard, selectedDateOutOfRange || selectedDateBeforeToday ? styles.selectionCardError : null]}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.selectionEyebrow}>{t('sidequest.form.activityDateEyebrow')}</Text>
+                <Text style={styles.selectionEyebrow}>{t(isStayCategory ? 'sidequest.form.checkinDateEyebrow' : 'sidequest.form.activityDateEyebrow')}</Text>
                 <TextInput
                   value={date}
                   onChangeText={handleActivityDateInput}
@@ -1183,7 +1310,7 @@ function SideQuestFormInner({
               ]}
               onPress={() => setPickerTarget('date')}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.selectionEyebrow}>{t('sidequest.form.activityDateEyebrow')}</Text>
+                <Text style={styles.selectionEyebrow}>{t(isStayCategory ? 'sidequest.form.checkinDateEyebrow' : 'sidequest.form.activityDateEyebrow')}</Text>
                 <Text style={styles.selectionValue} numberOfLines={1}>{formatLongDate(date, locale)}</Text>
                 <Text style={styles.selectionHint}>{t('sidequest.form.withinRange', { range: tripRangeText })}</Text>
               </View>
@@ -2106,8 +2233,11 @@ function defaultActivityDate(tripStartDate?: string | null, tripEndDate?: string
   const today = getDefaultDate();
   const start = tripStartDate && isDateInputValid(tripStartDate) ? tripStartDate : null;
   const end = tripEndDate && isDateInputValid(tripEndDate) ? tripEndDate : null;
-  if (!start || !end) return today;
+  if (!start) return today;
   if (today < start) return start;
+  // No end date: today is always inside an open-ended adventure, so there is
+  // nothing to clamp down to.
+  if (!end) return today;
   if (today > end) return end;
   return today;
 }
@@ -2279,6 +2409,29 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     color: theme.colors.primary,
     fontWeight: '700',
   },
+  // Mirrors categoryMoreChip so the two secondary affordances in this form
+  // read as the same control, just smaller and left-aligned under the input.
+  sameLocationChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    marginTop: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: theme.isDark ? theme.colors.primaryLight20 : '#ff9cb0',
+    backgroundColor: theme.isDark ? theme.colors.primaryLight08 : '#fff0f3',
+  },
+  sameLocationChipDisabled: {
+    opacity: 0.45,
+  },
+  sameLocationText: {
+    fontSize: 13,
+    color: theme.colors.primary,
+    fontWeight: '700',
+  },
   customCategoryBlock: {
     marginTop: 14,
     gap: 12,
@@ -2418,6 +2571,36 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     color: '#fff',
     fontSize: 13,
     fontWeight: '700',
+  },
+  // Same shape as the adventure's own "Slideshow cover" toggle, so the two
+  // slideshow controls read as one idea. flex:1 on the copy column is what
+  // lets both the label and the subtitle wrap on a narrow phone instead of
+  // being squeezed by the switch.
+  slideshowRow: {
+    marginTop: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: theme.isDark ? theme.colors.borderPrimary : '#eceff4',
+    backgroundColor: theme.isDark ? theme.colors.bgLightest : '#f8fafc',
+  },
+  slideshowCopy: { flex: 1 },
+  slideshowTitle: {
+    color: theme.colors.textPrimary,
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: -0.1,
+  },
+  slideshowSubtitle: {
+    marginTop: 3,
+    color: theme.colors.textMeta,
+    fontSize: 12.5,
+    lineHeight: 18,
   },
   sideQuestCoverBadge: {
     position: 'absolute',
@@ -2801,6 +2984,17 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
   locationSuggestionSubtitle: {
     marginTop: 2,
     color: theme.isDark ? theme.colors.textMeta : '#7f8793',
+    fontSize: 12,
+  },
+  locationPickedRow: {
+    marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  locationPickedText: {
+    flex: 1,
+    color: theme.colors.textMeta,
     fontSize: 12,
   },
   messageBanner: {

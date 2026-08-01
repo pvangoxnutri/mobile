@@ -24,6 +24,7 @@ import { useI18n } from '@/components/i18n-provider';
 import { useKeyboardFocusScroll } from '@/hooks/useKeyboardFocusScroll';
 import { apiFetch, apiJson } from '@/lib/api';
 import { getCached, setCached } from '@/lib/cache';
+import { normalizeTripMembers } from '@/lib/trip-members';
 import { uploadImageIfNeeded } from '@/lib/uploads';
 import type { BalancesResponse, Debt, Expense, Settlement } from '@/lib/types';
 import { useTheme } from '@/components/theme-provider';
@@ -160,7 +161,9 @@ export default function CostSplitScreen() {
     // data is worse than a brief spinner.
     const membersUrl = `/api/trips/${id}/members`;
     const cachedMembers = getCached<TripMember[]>(membersUrl);
-    if (cachedMembers) setMembers(cachedMembers);
+    // Shared ordering rule — see lib/trip-members.ts. Keeps this screen's
+    // member list in the same order as the avatars everywhere else.
+    if (cachedMembers) setMembers(normalizeTripMembers(cachedMembers));
 
     setLoading(true);
     setError('');
@@ -171,11 +174,12 @@ export default function CostSplitScreen() {
         apiJson<Settlement[]>(`/api/trips/${id}/expenses/settlements`),
         apiJson<TripMember[]>(membersUrl),
       ]);
+      const normalizedMembers = normalizeTripMembers(mem);
       setExpenses(exp);
       setBalancesData(bal);
       setSettlements(sett);
-      setMembers(mem);
-      setCached(membersUrl, mem);
+      setMembers(normalizedMembers);
+      setCached(membersUrl, normalizedMembers);
     } catch (err) {
       setError(err instanceof Error ? err.message : t('trip.split.error.loadFailed'));
     } finally {
