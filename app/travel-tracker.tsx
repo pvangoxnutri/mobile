@@ -22,6 +22,7 @@ import { getTravelTrackerLivingColors } from '@/components/travel-tracker/status
 import WorldGlobe from '@/components/travel-tracker/world-globe';
 import {
   compareCountriesByLocalizedName,
+  countryMatchesQuery,
   getLocalizedCountryName,
 } from '@/components/travel-tracker/country-i18n';
 import {
@@ -151,7 +152,10 @@ export default function TravelTrackerScreen() {
       .filter((e) => {
         if (filter !== 'all' && e.status !== filter) return false;
         if (continentFilter && !inContinent(e, continentFilter)) return false;
-        if (q && !e.name.toLowerCase().includes(q) && !e.code.toLowerCase().includes(q)) return false;
+        // Shared matcher rather than the localized name alone: a Swedish user
+          // typing "Turkey" (or an English one typing "Turkiet") must still find
+          // the country.
+          if (q && !countryMatchesQuery(e, q, language)) return false;
         return true;
       })
       .sort((a, b) => compareCountriesByLocalizedName(a, b, language));

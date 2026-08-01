@@ -26,6 +26,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COUNTRIES, getCountryFlag } from './country-data';
 import {
   compareCountriesByLocalizedName,
+  countryMatchesQuery,
   getLocalizedContinentName,
   getLocalizedCountryName,
 } from './country-i18n';
@@ -53,11 +54,9 @@ export default function CountryPicker({ value, onChange, label = 'Countries' }: 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return COUNTRIES;
-    return COUNTRIES.filter((c) =>
-      getLocalizedCountryName(c, language).toLowerCase().includes(q) ||
-      c.name.toLowerCase().includes(q) ||
-      c.code.toLowerCase().includes(q),
-    );
+    // Shared matcher: localized name + English + Swedish + ISO code, so the
+    // country is findable whichever of those the user types.
+    return COUNTRIES.filter((c) => countryMatchesQuery(c, q, language));
   }, [search, language]);
 
   // Sort: selected first, then alphabetical by the localized name (so

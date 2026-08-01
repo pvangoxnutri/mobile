@@ -6,7 +6,11 @@ import enLocale from 'i18n-iso-countries/langs/en.json';
 import svLocale from 'i18n-iso-countries/langs/sv.json';
 
 import type { AppLanguage } from '@/components/i18n-provider';
-import type { Continent, Country } from './country-data';
+import { COUNTRIES, type Continent, type Country } from './country-data';
+
+/** Every ISO code this app knows, for the pass-through path in
+ * normalizeCountryValue. */
+const KNOWN_CODES = new Set(COUNTRIES.map((country) => country.code.toUpperCase()));
 
 // The JSON files have shape: { locale: "en", countries: { "SE": "Sweden", "US": ["United States of America", "USA", ...] } }
 // Some entries are an array of alternative names; we pick the first.
@@ -74,6 +78,98 @@ const CONTINENT_SHORT_NAMES: Record<AppLanguage, Record<Continent, string>> = {
     Oceania: 'Oceanien',
   },
 };
+
+/** A country's name in a SPECIFIC language, regardless of the app language.
+ * Used by search, so a Swedish user can still find a country by typing its
+ * English name and vice versa. */
+export function getCountryNameInLanguage(code: string, language: AppLanguage): string | undefined {
+  if (code.includes('-')) {
+    return language === 'sv' ? SUBDIVISION_NAMES_SV[code] : undefined;
+  }
+  return lookupCountryName(code, language);
+}
+
+function normalizeKey(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+/**
+ * Every name any country is known by → its ISO code. Built once from BOTH
+ * locale dictionaries (including the libraries' alternate spellings, which is
+ * where "USA", "Great Britain" and similar come from for free) plus the short
+ * English names in country-data.
+ *
+ * This exists because trips saved before country selection moved to ISO codes
+ * stored the NAME. deriveTripStatusMap skips anything that isn't a known code,
+ * so those trips silently vanished from the tracker and from the visited
+ * count — the data was fine, the read was not.
+ */
+const NAME_TO_CODE: Map<string, string> = (() => {
+  const map = new Map<string, string>();
+  const add = (name: string | undefined, code: string) => {
+    if (!name) return;
+    const key = normalizeKey(name);
+    // First writer wins: a real country must never be shadowed by another's
+    // alternate spelling.
+    if (!map.has(key)) map.set(key, code);
+  };
+
+  for (const country of COUNTRIES) {
+    add(country.code, country.code);
+    add(country.name, country.code);
+  }
+  for (const language of ['en', 'sv'] as const) {
+    const dict = LOCALE_DICTS[language]?.countries ?? {};
+    for (const [code, entry] of Object.entries(dict)) {
+      const names = Array.isArray(entry) ? entry : [entry];
+      for (const name of names) add(name, code);
+    }
+  }
+  for (const [code, name] of Object.entries(SUBDIVISION_NAMES_SV)) add(name, code);
+  return map;
+})();
+
+/**
+ * Resolves a stored country value to its ISO code. Already-valid codes pass
+ * through untouched, so nothing saved is rewritten — this only makes old
+ * name-based values readable. Trim-safe and case-insensitive, English and
+ * Swedish. Returns null when the value matches nothing, so callers keep their
+ * existing "skip unknown" behaviour.
+ */
+export function normalizeCountryValue(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  const upper = trimmed.toUpperCase();
+  if (KNOWN_CODES.has(upper)) return upper;
+
+  return NAME_TO_CODE.get(normalizeKey(trimmed)) ?? null;
+}
+
+/**
+ * THE country search predicate. Matches the localized name, the English name,
+ * the Swedish name and the ISO code — so a country is findable whichever of
+ * those the user happens to type. Trim-safe and case-insensitive.
+ */
+export function countryMatchesQuery(
+  country: Pick<Country, 'code' | 'name'>,
+  query: string,
+  language: AppLanguage,
+): boolean {
+  const q = normalizeKey(query);
+  if (!q) return true;
+
+  const candidates = [
+    country.code,
+    country.name,
+    getCountryNameInLanguage(country.code, language),
+    getCountryNameInLanguage(country.code, 'en'),
+    getCountryNameInLanguage(country.code, 'sv'),
+  ];
+
+  return candidates.some((candidate) => candidate && normalizeKey(candidate).includes(q));
+}
 
 export function getLocalizedCountryName(country: Country, language: AppLanguage): string {
   if (country.code.includes('-')) {

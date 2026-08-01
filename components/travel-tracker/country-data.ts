@@ -143,7 +143,8 @@ export const COUNTRIES: Country[] = [
   { code: 'TJ', name: 'Tajikistan', continent: 'Asia' },
   { code: 'TH', name: 'Thailand', continent: 'Asia' },
   { code: 'TL', name: 'Timor-Leste', continent: 'Asia' },
-  { code: 'TR', name: 'Turkey', continent: 'Asia', continent2: 'Europe' },
+  // Türkiye, not Turkey: the country's own ISO 3166 English name since 2022.
+  { code: 'TR', name: 'Türkiye', continent: 'Asia', continent2: 'Europe' },
   { code: 'TM', name: 'Turkmenistan', continent: 'Asia' },
   { code: 'AE', name: 'United Arab Emirates', continent: 'Asia' },
   { code: 'UZ', name: 'Uzbekistan', continent: 'Asia' },

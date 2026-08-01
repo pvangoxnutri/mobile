@@ -6,6 +6,7 @@ import {
   type CountryStatus,
   type StatusMap,
 } from './country-data';
+import { normalizeCountryValue } from './country-i18n';
 
 // The tracker's AsyncStorage key — shared so other screens (own profile)
 // can read the same source of truth without importing the whole screen.
@@ -32,10 +33,14 @@ export function sanitizeStatusMap(value: unknown): StatusMap {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
 
   const clean: StatusMap = {};
-  for (const [code, status] of Object.entries(value)) {
-    if (!isKnownCountryCode(code)) {
+  for (const [storedKey, status] of Object.entries(value)) {
+    // Same read-tolerance as deriveTripStatusMap: a map persisted with country
+    // NAMES as keys would otherwise lose every status it holds. Already-valid
+    // codes pass through unchanged, so nothing stored is rewritten.
+    const code = normalizeCountryValue(storedKey);
+    if (!code || !isKnownCountryCode(code)) {
       if (typeof __DEV__ !== 'undefined' && __DEV__) {
-        console.warn(`[TRAVEL_TRACKER] Ignoring unknown country code: ${code}`);
+        console.warn(`[TRAVEL_TRACKER] Ignoring unknown country code: ${storedKey}`);
       }
       continue;
     }
@@ -94,15 +99,25 @@ export function getVisitedContinents(statusMap: StatusMap): Set<Continent> {
  * screen and the profile stats hook so the numbers always agree.
  */
 export function deriveTripStatusMap(
-  trips: readonly { countries?: string[]; endDate: string }[],
+  trips: readonly { countries?: string[]; endDate?: string | null }[],
   todayIso: string,
 ): StatusMap {
   const derived: StatusMap = {};
   for (const trip of trips) {
     if (!trip.countries?.length) continue;
-    const status: CountryStatus = trip.endDate < todayIso ? 'visited' : 'planned';
-    for (const code of trip.countries) {
-      if (!isKnownCountryCode(code)) continue;
+    // An adventure with no end date has not finished, so its countries are
+    // still "planned" — counting them as visited would claim a trip is over
+    // when the traveller has said the opposite.
+    const status: CountryStatus =
+      trip.endDate && trip.endDate < todayIso ? 'visited' : 'planned';
+    for (const stored of trip.countries) {
+      // Trips saved before country selection used ISO codes stored the NAME.
+      // Without this they failed the known-code check and were dropped
+      // silently — the trip still listed the country, but the tracker and the
+      // visited count acted as if it had none. Nothing is rewritten; only the
+      // read is made tolerant.
+      const code = normalizeCountryValue(stored);
+      if (!code || !isKnownCountryCode(code)) continue;
       if (!derived[code] || (derived[code] === 'planned' && status === 'visited')) {
         derived[code] = status;
       }
