@@ -6,6 +6,7 @@ import Avatar from '@/components/avatar';
 import SlideshowCover, {
   useActiveSlideLabel,
   useActiveSlideLabelValue,
+  useActiveSlideValue,
   type ActiveSlideLabelChannel,
   type SlideshowItem,
 } from '@/components/slideshow-cover';
@@ -13,7 +14,10 @@ import WeatherIcon from '@/components/weather-icon';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import type { AppTheme } from '@/constants/themes';
 import type { Quest } from '@/lib/types';
-import type { WeatherCondition } from '@/lib/weather-api';
+import { getTripDayProgress, isOpenEnded } from '@/lib/trip-dates';
+import { pickVisibleMembers } from '@/lib/trip-members';
+import { selectSlideWeather } from '@/lib/slide-weather';
+import type { TripWeather, WeatherCondition } from '@/lib/weather-api';
 
 // ── Public types ────────────────────────────────────────────────────────────
 
@@ -23,6 +27,9 @@ export type TripMember = {
   avatarUrl?: string | null;
   isOwner: boolean;
   isOnline?: boolean;
+  // Ordering key — see lib/trip-members.ts. Absent on payloads cached before
+  // the server started sending it.
+  joinedAt?: string | null;
 };
 
 export type TripWithEvent = {
@@ -33,18 +40,24 @@ export type TripWithEvent = {
   isOngoing?: boolean;
 };
 
+// How many member avatars the hero row shows. The adventure header uses the
+// same number, from the same shared selector, so the two surfaces cannot show
+// different people.
+export const MAX_HERO_AVATARS = 3;
+
 // ── Helpers used by hero and consumers ──────────────────────────────────────
 
-export function getTripDayInfo(startDateStr?: string, endDateStr?: string, now: Date = new Date()) {
-  if (!startDateStr || !endDateStr) return null;
-  const start = new Date(startDateStr);
-  const end = new Date(endDateStr);
-  const ms = 24 * 60 * 60 * 1000;
-  const totalDays = Math.max(1, Math.round((end.getTime() - start.getTime()) / ms) + 1);
-  const todayMid = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const startMid = new Date(start.getFullYear(), start.getMonth(), start.getDate());
-  const dayOfTrip = Math.floor((todayMid.getTime() - startMid.getTime()) / ms) + 1;
-  return { dayOfTrip, totalDays };
+/**
+ * Day-of-trip progress. `totalDays` is null for an open-ended adventure —
+ * there is no total to count towards, so callers render "Day 4" rather than
+ * inventing a denominator.
+ */
+export function getTripDayInfo(
+  startDateStr?: string | null,
+  endDateStr?: string | null,
+  now: Date = new Date(),
+) {
+  return getTripDayProgress(startDateStr, endDateStr, now);
 }
 
 export function formatTimeLeft(
@@ -68,10 +81,18 @@ export function getInitials(name?: string | null) {
   return parts.map((part) => part[0]?.toUpperCase()).join('') || 'SQ';
 }
 
-function formatCardDateRange(startDate?: string, endDate?: string): string | null {
-  if (!startDate || !endDate) return null;
+function formatCardDateRange(
+  startDate: string | undefined | null,
+  endDate: string | undefined | null,
+  t: (key: string, vars?: Record<string, string | number>) => string,
+): string | null {
+  if (!startDate) return null;
   const fmt = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' });
-  return `${fmt.format(new Date(`${startDate}T12:00:00`))} – ${fmt.format(new Date(`${endDate}T12:00:00`))}`;
+  const startLabel = fmt.format(new Date(`${startDate}T12:00:00`));
+  // Open-ended: name the state rather than leaving a start date that reads as
+  // a one-day adventure, or a dash pointing at nothing.
+  if (!endDate) return `${startLabel} · ${t('trip.ongoing')}`;
+  return `${startLabel} – ${fmt.format(new Date(`${endDate}T12:00:00`))}`;
 }
 
 // ── Component ───────────────────────────────────────────────────────────────
@@ -94,6 +115,11 @@ export type BigHeroCardProps = {
   /** Subtle start-day (or today's, when ongoing) forecast. Null/absent hides
    *  the row entirely — the card never shows fake weather. */
   weather?: { condition: WeatherCondition; tempMaxC: number; locationLabel?: string } | null;
+  /** The trip's whole forecast. The weather row picks from it through the
+   *  shared selector, so it follows the slide's PLACE and not just its date —
+   *  no second fetch, no request to race. Absent → the row stays on `weather`
+   *  as before. */
+  tripWeather?: TripWeather | null;
   /** Slideshow cover: structured slides (built by buildSlideshowItems) —
    *  each carries its day's resolved feed location, and the pill follows
    *  the slide on screen. Absent/empty → the classic static cover. */
@@ -120,6 +146,7 @@ export function BigHeroCard({
   onPress,
   hideEnterButton = false,
   weather = null,
+  tripWeather = null,
   slideshowItems,
   slideshowActive = false,
   staticLocationLabel = null,
@@ -133,10 +160,15 @@ export function BigHeroCard({
   const activeSlide = useActiveSlideLabel();
   const isOngoing = trip.isOngoing;
   const dayInfo = getTripDayInfo(quest.startDate, quest.endDate, now);
+  // An ongoing adventure with no end date has no countdown to show — there is
+  // nothing to count down TO. The LIVE pill still carries the state.
   const timeLeft = isOngoing
-    ? formatTimeLeft(quest.endDate, now, t)
+    ? (isOpenEnded(quest.endDate) ? null : formatTimeLeft(quest.endDate ?? undefined, now, t))
     : formatTimeLeft(quest.startDate, now, t);
-  const visibleAvatars = members.slice(0, 3);
+  // Deduped and ordered here as well as by the caller, so this card shows the
+  // same three people in the same order as the adventure header no matter which
+  // screen passed the list in.
+  const { visible: visibleAvatars } = pickVisibleMembers(members, MAX_HERO_AVATARS);
 
   const handlePress = onPress ?? (() => router.push(`/trip/${quest.id}`));
 
@@ -211,16 +243,20 @@ export function BigHeroCard({
       <View style={styles.bigHeroBottom}>
         {dayInfo && isOngoing ? (
           <Text style={styles.bigHeroDayLine}>
-            {t('home.day_of_trip', { day: dayInfo.dayOfTrip, total: dayInfo.totalDays })}
+            {/* No total for an open-ended adventure — "Day 4 of 4" would be a
+                lie that changes every midnight. */}
+            {dayInfo.totalDays === null
+              ? t('home.day_of_trip_open', { day: dayInfo.dayOfTrip })
+              : t('home.day_of_trip', { day: dayInfo.dayOfTrip, total: dayInfo.totalDays })}
             {timeLeft ? ` · ${timeLeft}` : ''}
           </Text>
         ) : null}
         <Text style={styles.bigHeroTitle} numberOfLines={2}>
           {quest.title?.trim() || t('home.defaultTripName')}
         </Text>
-        {formatCardDateRange(quest.startDate, quest.endDate) ? (
+        {formatCardDateRange(quest.startDate, quest.endDate, t) ? (
           <Text style={styles.bigHeroDateLine} numberOfLines={1}>
-            {formatCardDateRange(quest.startDate, quest.endDate)}
+            {formatCardDateRange(quest.startDate, quest.endDate, t)}
           </Text>
         ) : null}
 
@@ -256,15 +292,13 @@ export function BigHeroCard({
             </View>
           ) : null}
 
-          {weather ? (
-            <View style={styles.bigHeroWeather}>
-              {/* No color override — the shared per-condition accents in
-                  WeatherIcon apply (amber sun etc.), identical to the trip
-                  header's chip. */}
-              <WeatherIcon condition={weather.condition} size={13} />
-              <Text style={styles.bigHeroWeatherText}>{Math.round(weather.tempMaxC)}°</Text>
-            </View>
-          ) : null}
+          <BigHeroWeather
+            channel={activeSlide}
+            hasSlideshow={hasSlideshow}
+            fallback={weather}
+            tripWeather={tripWeather}
+            styles={styles}
+          />
 
           <View style={{ flex: 1 }} />
           {!hideEnterButton ? (
@@ -276,6 +310,67 @@ export function BigHeroCard({
         </View>
       </View>
     </TouchableOpacity>
+  );
+}
+
+/**
+ * The weather row, following the slideshow.
+ *
+ * Subscribes to the same channel the location pill uses — the one the
+ * slideshow updates when a crossfade completes — so the row and the image can
+ * never disagree about which day is on screen. It subscribes HERE rather than
+ * in BigHeroCard for the same reason the pill does: a slide flips every 5 s
+ * and must cost one tiny render, not a whole card (or Home) re-render.
+ *
+ * No fetching happens here, and none is needed: the trip's forecast already
+ * arrives as a per-day array where each day carries the location the backend
+ * resolved it from, so following the slideshow is a lookup. That also means
+ * there is no request to race — a fast swipe changes which day is READ, never
+ * which response wins.
+ */
+function BigHeroWeather({
+  channel,
+  hasSlideshow,
+  fallback,
+  tripWeather,
+  styles,
+}: {
+  channel: ActiveSlideLabelChannel;
+  hasSlideshow: boolean;
+  fallback: { condition: WeatherCondition; tempMaxC: number; locationLabel?: string } | null;
+  tripWeather: TripWeather | null;
+  styles: ReturnType<typeof createStyles>;
+}) {
+  const slide = useActiveSlideValue(channel);
+
+  const tripFallback = fallback
+    ? {
+        condition: fallback.condition,
+        tempMaxC: fallback.tempMaxC,
+        locationLabel: fallback.locationLabel ?? '',
+      }
+    : null;
+
+  // The SAME selector the adventure header uses. Slideshow off, or a cover
+  // slide belonging to no day, resolves to the trip fallback the card has
+  // always shown.
+  const resolved = selectSlideWeather(
+    hasSlideshow ? { dayLocationId: slide.dayLocationId, date: slide.date, locationLabel: slide.label } : null,
+    tripWeather,
+    tripFallback,
+  );
+
+  // Null means nothing truthful is available for THIS slide's place — hide the
+  // row rather than show the previous place's numbers under the new one.
+  if (!resolved) return null;
+
+  return (
+    <View style={styles.bigHeroWeather}>
+      {/* No color override — the shared per-condition accents in WeatherIcon
+          apply (amber sun etc.), identical to the trip header's chip. */}
+      <WeatherIcon condition={resolved.condition} size={13} />
+      <Text style={styles.bigHeroWeatherText}>{Math.round(resolved.tempMaxC)}°</Text>
+    </View>
   );
 }
 
