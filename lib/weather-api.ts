@@ -60,8 +60,42 @@ export type TripWeather = {
   updatedAt?: string | null;
   stale: boolean;
   attribution?: string | null;
+  /** Per-day forecast from each day's MAIN location. Unchanged. */
   days: TripWeatherDay[];
+  /** One forecast per STORED day-location, additional stops included. Absent
+   * on an older backend, and empty for a trip whose days all carry forward —
+   * both cases fall back to `days` and behave exactly as before. */
+  locationForecasts?: TripWeatherLocationForecast[];
 };
+
+/** A forecast tied to one specific stored place. Carries coordinates, placeId
+ * and label next to the id so a slide with no id yet can still be matched. */
+export type TripWeatherLocationForecast = {
+  dayLocationId: string;
+  date: string; // YYYY-MM-DD
+  sortIndex: number;
+  locationLabel: string;
+  latitude: number;
+  longitude: number;
+  placeId?: string | null;
+} & (
+  | {
+      isForecastAvailable: true;
+      code: WeatherCondition;
+      tempMinC: number;
+      tempMaxC: number;
+      precipitationProbability: number;
+      uvIndexMax: number;
+    }
+  | {
+      isForecastAvailable: false;
+      code: null;
+      tempMinC: null;
+      tempMaxC: null;
+      precipitationProbability: null;
+      uvIndexMax: null;
+    }
+);
 
 const weatherUrl = (tripId: string) => `/api/trips/${tripId}/weather`;
 

@@ -71,6 +71,9 @@ export default function WeatherScreen() {
 
   const formatTripDates = () => {
     const start = cachedTrip?.startDate ?? weather?.forecastStart;
+    // An open-ended adventure has no end date, but the forecast still covers a
+    // real window — show that rather than nothing, since this screen is about
+    // the forecast period, not the adventure's length.
     const end = cachedTrip?.endDate ?? weather?.forecastEnd;
     if (!start || !end) return null;
     return `${formatDay(start, { day: 'numeric', month: 'short' })} – ${formatDay(end, { day: 'numeric', month: 'short' })}`;
