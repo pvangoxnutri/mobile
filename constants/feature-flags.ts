@@ -7,11 +7,22 @@
 // before shipping.
 // ──────────────────────────────────────────────────────────────────────────
 
-// EXPERIMENTAL — Gluno AI assistant (components/gluno/). Everything behind
-// this flag is a UI shell with mocked responses; there is no backend AI
-// connection yet (see components/gluno/gluno.constants.ts). Must stay
-// false in any build that ships to real users until that's ready.
-export const ENABLE_GLUNO_ASSISTANT = false;
+// IN DEVELOPMENT — Gluno AI assistant (components/gluno/, lib/gluno.ts).
+// Now talks to a real backend (backend/Services/Gluno/) instead of the old
+// mocked replies, but is still being built out, so it must not appear to real
+// users yet.
+//
+// `__DEV__` rather than a hardcoded false: Expo sets it true in Expo Go and
+// dev builds and false in every production/release build, so Gluno is
+// developable without editing this file and cannot ship by someone forgetting
+// to flip it back. Flip to a literal `true` only for a deliberate internal
+// build, and never commit that.
+//
+// This is only the client half. The backend gates Gluno independently
+// (Gluno:Enabled, defaulting to Development-only) and reports it via
+// GET /api/gluno/status, which the panel checks on open — so a production app
+// pointed at a production API stays dark even if this flag were forced on.
+export const ENABLE_GLUNO_ASSISTANT = __DEV__;
 
 // IN MIGRATION — Light/Dark appearance system (constants/themes.ts,
 // components/theme-provider.tsx). While false the app is forced to Light and

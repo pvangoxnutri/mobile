@@ -1,14 +1,13 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
 import { Animated, Image, StyleSheet, Text, TouchableOpacity, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useAuth } from '@/components/auth-provider';
 import BrandMark from '@/components/brand-mark';
 import TopAlertsButton from '@/components/top-alerts-button';
-// EXPERIMENTAL — Gluno AI assistant. GlunoButton renders null unless
+// IN DEVELOPMENT — Gluno AI assistant. GlunoButton renders null unless
 // ENABLE_GLUNO_ASSISTANT is true (constants/feature-flags.ts), so this
 // import is always safe even when the feature is hidden.
 import GlunoButton from '@/components/gluno/GlunoButton';
-import GlunoAssistant from '@/components/gluno/GlunoAssistant';
+import { GLUNO_SCREENS, type GlunoScreen } from '@/lib/gluno-navigation';
 import { SPACING } from '@/constants/design-tokens';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import type { AppTheme } from '@/constants/themes';
@@ -24,6 +23,14 @@ type Props = {
   // behave exactly as before.
   bellAnimatedStyle?: AnimatedStyle;
   avatarAnimatedStyle?: AnimatedStyle;
+  // IN DEVELOPMENT — scopes the Gluno conversation to an Adventure. The tabs
+  // that use this header have no single trip in view, so it stays undefined
+  // there and Gluno answers globally; a trip screen can pass one to give it
+  // the Adventure's plan.
+  glunoTripId?: string | null;
+  // Which screen this header sits on, as a stable Gluno screen id. Passed
+  // through so app-help can answer for where the user already is.
+  glunoScreen?: GlunoScreen;
 };
 
 export default function TabHeader({
@@ -31,21 +38,32 @@ export default function TabHeader({
   onAvatarPress,
   bellAnimatedStyle,
   avatarAnimatedStyle,
+  glunoTripId = null,
+  glunoScreen = GLUNO_SCREENS.home,
 }: Props) {
   const styles = useThemedStyles(createStyles);
   const { user } = useAuth();
   const handleAvatarPress = onAvatarPress ?? (() => router.push('/(tabs)/profile'));
-  // EXPERIMENTAL — see GlunoButton.tsx / constants/feature-flags.ts. This
-  // state (and the panel below) only ever does anything once a user can
-  // actually press the button, which only renders when the flag is on.
-  const [glunoOpen, setGlunoOpen] = useState(false);
+
+  // IN DEVELOPMENT — see GlunoButton.tsx / constants/feature-flags.ts.
+  // Gluno is a pushed screen rather than a sheet: it needs its own back
+  // navigation and a conversation that survives leaving it (app/gluno.tsx).
+  // The button only renders when the flag is on, so this handler is
+  // unreachable in a shipping build.
+  const openGluno = () => {
+    // The screen carries through so app-help answers can be shorter — Gluno
+    // should not explain how to reach a screen the user is already on.
+    const query = new URLSearchParams({ screen: glunoScreen });
+    if (glunoTripId) query.set('tripId', glunoTripId);
+    router.push(`/gluno?${query.toString()}`);
+  };
 
   return (
     <>
       <View style={styles.topRow}>
         <BrandMark size="sm" tone="adaptive" />
         <View style={styles.rightCluster}>
-          <GlunoButton onPress={() => setGlunoOpen(true)} />
+          <GlunoButton onPress={openGluno} />
           <Animated.View style={bellAnimatedStyle}>
             <TopAlertsButton inviteCount={inviteCount} />
           </Animated.View>
@@ -62,7 +80,6 @@ export default function TabHeader({
           </Animated.View>
         </View>
       </View>
-      <GlunoAssistant visible={glunoOpen} onClose={() => setGlunoOpen(false)} />
     </>
   );
 }

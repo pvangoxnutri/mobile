@@ -14,14 +14,15 @@ import Animated, {
 import { COLORS } from '@/constants/design-tokens';
 
 // ──────────────────────────────────────────────────────────────────────────
-// EXPERIMENTAL — Gluno mascot (gated by ENABLE_GLUNO_ASSISTANT, see
+// IN DEVELOPMENT — Gluno mascot (gated by ENABLE_GLUNO_ASSISTANT, see
 // constants/feature-flags.ts — this component itself has no flag check;
-// callers like GlunoButton/GlunoAssistant are what's gated).
+// callers like GlunoButton are what's gated).
 //
 // Gluno is NOT a static icon. This is the one place that knows how to
-// render "Gluno" as a character, so every call site (header button,
-// assistant panel) can stay simple — <GlunoMascot state="..." /> — no
-// matter what's actually driving the visual underneath.
+// render "Gluno" as a character, so every call site (header button, chat
+// header, empty state, each answer) can stay simple —
+// <GlunoMascot state="..." /> — no matter what's actually driving the
+// visual underneath.
 //
 // RENDER STRATEGY (today vs. later):
 //   1. Rive    — not installed. TODO(gluno-assets): once available, render

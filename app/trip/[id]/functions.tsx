@@ -20,6 +20,8 @@ import { useI18n } from '@/components/i18n-provider';
 import { useTheme } from '@/components/theme-provider';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import type { AppTheme } from '@/constants/themes';
+import { ENABLE_GLUNO_ASSISTANT } from '@/constants/feature-flags';
+import { GLUNO_SCREENS } from '@/lib/gluno-navigation';
 import { apiFetch, apiJson } from '@/lib/api';
 
 // Spotify's brand green — a deliberate third-party brand accent, identical in
@@ -199,6 +201,28 @@ export default function FunctionsScreen() {
           {/* Light: exact pre-theming chevron gray (#b2b7c0, no matching token). */}
           <Ionicons name="chevron-forward" size={20} color={theme.isDark ? theme.colors.textMuted : '#b2b7c0'} />
         </TouchableOpacity>
+
+        {/* IN DEVELOPMENT — Gluno, scoped to this Adventure. The header entry
+            point opens Gluno globally; this is what carries a tripId in, so
+            the conversation gets this trip's plan as context. Hidden entirely
+            unless ENABLE_GLUNO_ASSISTANT is on (constants/feature-flags.ts). */}
+        {ENABLE_GLUNO_ASSISTANT && (
+          <TouchableOpacity
+            style={styles.featureCard}
+            activeOpacity={0.86}
+            onPress={() => router.push(
+              `/gluno?tripId=${encodeURIComponent(String(id))}&screen=${GLUNO_SCREENS.adventureFunctions}`,
+            )}>
+            <View style={[styles.featureIconCircle, { backgroundColor: theme.isDark ? theme.colors.primaryLight12 : '#fff0f4' }]}>
+              <Ionicons name="sparkles-outline" size={20} color={theme.colors.primary} />
+            </View>
+            <View style={styles.featureCardBody}>
+              <Text style={styles.featureCardTitle}>{t('gluno.open')}</Text>
+              <Text style={styles.featureCardSubtitle}>{t('gluno.functionsSubtitle')}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={theme.isDark ? theme.colors.textMuted : '#b2b7c0'} />
+          </TouchableOpacity>
+        )}
 
       </ScrollView>
 

@@ -5,7 +5,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import * as Linking from 'expo-linking';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -24,11 +24,17 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import GlunoDocumentAnalysisSheet from '@/components/gluno/GlunoDocumentAnalysisSheet';
 import ModalSheet from '@/components/modal-sheet';
 import { useI18n } from '@/components/i18n-provider';
 import { useTheme } from '@/components/theme-provider';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { apiJson } from '@/lib/api';
+import {
+  getGlunoDocumentStatus,
+  isAnalysableDocument,
+  type GlunoDocumentStatus,
+} from '@/lib/gluno-documents';
 import {
   createTripDocument,
   deleteTripDocument,
@@ -130,6 +136,9 @@ export default function TripDocumentsScreen() {
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [activityPickerOpen, setActivityPickerOpen] = useState(false);
   const [openingId, setOpeningId] = useState<string | null>(null);
+  /** Whether Gluno can read documents here at all. Asked once, on open. */
+  const [glunoDocuments, setGlunoDocuments] = useState<GlunoDocumentStatus | null>(null);
+  const [analyzingDocumentId, setAnalyzingDocumentId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const pickerBusyRef = useRef(false);
   const loadGenerationRef = useRef(0);
@@ -173,6 +182,22 @@ export default function TripDocumentsScreen() {
       }
     }
   }, [hasResolvedRouteParam, tripId]);
+
+  // Asked once per screen, not per document. A failure just leaves the action
+  // hidden — the document screen works exactly as it did before without it.
+  useEffect(() => {
+    let cancelled = false;
+    getGlunoDocumentStatus()
+      .then((status) => {
+        if (!cancelled) setGlunoDocuments(status);
+      })
+      .catch(() => {
+        if (!cancelled) setGlunoDocuments(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -585,6 +610,12 @@ export default function TripDocumentsScreen() {
                   onOpen={() => void openDocument(document)}
                   onEdit={() => openEditEditor(document)}
                   onDelete={() => confirmDelete(document)}
+                  onAnalyze={
+                    glunoDocuments?.available
+                      && isAnalysableDocument(document.fileType, glunoDocuments.supportedFormats)
+                      ? () => setAnalyzingDocumentId(document.id)
+                      : null
+                  }
                 />
               ))}
             </View>
@@ -892,6 +923,14 @@ export default function TripDocumentsScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Opt-in, per document, and closing it stops the polling. Nothing is
+          analysed on upload or in the background. */}
+      <GlunoDocumentAnalysisSheet
+        documentId={analyzingDocumentId}
+        visible={analyzingDocumentId != null}
+        onClose={() => setAnalyzingDocumentId(null)}
+      />
     </View>
   );
 }
@@ -904,6 +943,7 @@ function DocumentCard({
   onOpen,
   onEdit,
   onDelete,
+  onAnalyze,
 }: {
   document: TripDocument;
   language: 'en' | 'sv';
@@ -912,6 +952,11 @@ function DocumentCard({
   onOpen: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  /**
+   * Null when Gluno analysis is off, unconfigured, or this format cannot be
+   * read. A button that always fails is worse than no button.
+   */
+  onAnalyze?: (() => void) | null;
 }) {
   const { t } = useI18n();
   const { theme } = useTheme();
@@ -967,6 +1012,16 @@ function DocumentCard({
       </TouchableOpacity>
 
       <View style={styles.documentActions}>
+        {onAnalyze ? (
+          <TouchableOpacity
+            style={styles.iconAction}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={t('gluno.documents.action')}
+            onPress={onAnalyze}>
+            <Ionicons name="sparkles-outline" size={17} color={theme.colors.primary} />
+          </TouchableOpacity>
+        ) : null}
         <TouchableOpacity
           style={styles.openButton}
           activeOpacity={0.84}

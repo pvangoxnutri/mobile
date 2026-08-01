@@ -24,11 +24,17 @@ export const unstable_settings = {
 markStartup('[LAYOUT] _layout.tsx module evaluated');
 
 // Keep the native splash (a plain brand-colored surface — see app.json) up
-// until auth has restored and the in-app SideQuest splash can take over, so
-// launch reads as ONE continuous splash instead of square-logo → white
-// spinner → wordmark. AuthGate hides it when loading finishes; the timer is
-// a safety net so a hung startup can never strand the user on the splash.
+// only until the THEME is known, which is a single AsyncStorage read. At that
+// point StartupScreen can paint the identical surface in the correct
+// appearance, so the hand-off is invisible.
+//
+// This used to wait for auth to finish, which meant the native splash covered
+// the entire session restore + /api/auth/sync round trip — seconds on a cold
+// backend, with no way to show anything branded underneath. Auth now resolves
+// behind StartupScreen instead of in front of a frozen native image.
 void SplashScreen.preventAutoHideAsync().catch(() => {});
+// Safety net: if the theme read somehow never settles, the user must not be
+// stranded on a native splash with no JS underneath it.
 setTimeout(() => void SplashScreen.hideAsync().catch(() => {}), 10_000);
 
 export default function RootLayout() {
@@ -48,7 +54,7 @@ export default function RootLayout() {
 }
 
 function ThemedRoot() {
-  const { theme } = useTheme();
+  const { theme, hydrated } = useTheme();
 
   // Keep the native chrome in sync with the explicit theme: the root view
   // color (shows behind transitions and edge-to-edge system bars) and the
@@ -59,6 +65,15 @@ function ThemedRoot() {
       void NavigationBar.setButtonStyleAsync(theme.isDark ? 'light' : 'dark').catch(() => {});
     }
   }, [theme]);
+
+  // The hand-off. Ordered after the effect above on purpose: the root view is
+  // already the right colour before the native splash lifts, so there is no
+  // frame where a dark user could see the light default underneath.
+  useEffect(() => {
+    if (!hydrated) return;
+    markStartup('[LAYOUT] theme hydrated → hiding native splash');
+    void SplashScreen.hideAsync().catch(() => {});
+  }, [hydrated]);
 
   return (
       <NavigationThemeProvider value={theme.navTheme}>
@@ -77,6 +92,10 @@ function ThemedRoot() {
                 <Stack.Screen name="reset-password" options={{ headerShown: false }} />
                 <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false }} />
                 <Stack.Screen name="travel-tracker" options={{ headerShown: false }} />
+                {/* IN DEVELOPMENT — Gluno. Reachable only from entry points
+                    gated by ENABLE_GLUNO_ASSISTANT; registering the route
+                    itself is inert without one. */}
+                <Stack.Screen name="gluno" options={{ headerShown: false }} />
                 <Stack.Screen name="previous-adventures" options={{ headerShown: false }} />
                 <Stack.Screen name="share/[shareCode]" options={{ headerShown: false }} />
                 <Stack.Screen name="invite/[code]" options={{ headerShown: false }} />
