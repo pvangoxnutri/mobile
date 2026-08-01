@@ -3,7 +3,8 @@ import { useCallback, useRef } from 'react';
 import { AppState } from 'react-native';
 
 import { apiJson } from '@/lib/api';
-import { setCached } from '@/lib/cache';
+import { getCached, setCached } from '@/lib/cache';
+import { normalizeTripMembers, type TripMemberLike } from '@/lib/trip-members';
 
 // How often member presence is re-fetched while a screen is focused. The
 // server counts a user as online for 2 minutes after their last request and
@@ -28,7 +29,7 @@ export const PRESENCE_POLL_FAST_MS = 5_000;
 //
 // tripIds and onMembers are read through refs — callers can pass inline
 // values without restarting the poll.
-export function useMembersPresencePoll<T>(
+export function useMembersPresencePoll<T extends TripMemberLike>(
   tripIds: readonly string[],
   onMembers: (tripId: string, members: T[]) => void,
   intervalMs: number = PRESENCE_POLL_INTERVAL_MS,
@@ -53,7 +54,13 @@ export function useMembersPresencePoll<T>(
           const results = await Promise.all(
             ids.map(async (tripId) => {
               try {
-                return { tripId, members: await apiJson<T[]>(`/api/trips/${tripId}/members`) };
+                // Normalized before it reaches state OR cache. This poll runs
+                // every few seconds purely to refresh online dots — without
+                // this, each tick rewrote the list in whatever order the
+                // response arrived in, and the avatars visibly rearranged
+                // themselves while the user was doing nothing at all.
+                const members = normalizeTripMembers(await apiJson<T[]>(`/api/trips/${tripId}/members`));
+                return { tripId, members };
               } catch {
                 return null;
               }
@@ -62,7 +69,13 @@ export function useMembersPresencePoll<T>(
           if (!focused) return;
           for (const result of results) {
             if (!result) continue;
-            setCached(`/api/trips/${result.tripId}/members`, result.members);
+            // A presence tick reports online status, not membership. Dropping
+            // a complete list for a shorter one here would blank avatars on a
+            // partial response; the screens' own loads own that transition.
+            const cacheKey = `/api/trips/${result.tripId}/members`;
+            const known = normalizeTripMembers(getCached<T[]>(cacheKey));
+            if (known.length > 0 && result.members.length < known.length) continue;
+            setCached(cacheKey, result.members);
             onMembersRef.current(result.tripId, result.members);
           }
         } finally {
