@@ -304,7 +304,12 @@ export default function GlunoScreen() {
                 failureCode: failure.code,
                 // Whether retry is honest comes from the SERVER. Only it knows
                 // if a missing key (never) or a timeout (often) caused this.
-                retryable: failure.retryable ?? true,
+                //
+                // Left UNDEFINED when the server said nothing, rather than
+                // defaulted to true. Defaulting here overwrote the absence
+                // before the row could see it, so the row's own knowledge of
+                // which codes are terminal never got a chance to apply.
+                retryable: failure.retryable,
               }
             : message,
         ),

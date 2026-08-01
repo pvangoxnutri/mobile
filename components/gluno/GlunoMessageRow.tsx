@@ -80,6 +80,15 @@ const FAILURE_COPY: Record<string, string> = {
   tripadvisor_unavailable: 'gluno.error.providerUnavailable',
   routing_unavailable: 'gluno.error.providerUnavailable',
   weather_unavailable: 'gluno.error.providerUnavailable',
+  // Turn-level refusals from the endpoint itself, not from the model. These
+  // were the remaining hole: every one of them rendered as the generic line,
+  // and `gluno_unavailable` is exactly what an environment with Gluno
+  // switched off or unconfigured returns.
+  gluno_unavailable: 'gluno.error.notConfigured',
+  conversation_not_found: 'gluno.error.conversationGone',
+  conversation_archived: 'gluno.error.conversationArchived',
+  duplicate_in_flight: 'gluno.error.alreadySending',
+  empty_message: 'gluno.error.emptyMessage',
 };
 
 /**
@@ -102,6 +111,11 @@ const NEVER_RETRYABLE = new Set([
   'ai_refusal',
   'authorization_changed',
   'cancelled',
+  'gluno_unavailable',
+  'conversation_not_found',
+  'conversation_archived',
+  'empty_message',
+  'duplicate_in_flight',
 ]);
 
 function GlunoMessageRow({
