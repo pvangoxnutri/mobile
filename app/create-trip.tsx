@@ -23,7 +23,8 @@ import { useAuth } from '@/components/auth-provider';
 import { BigHeroCard, type TripMember, type TripWithEvent } from '@/components/big-hero-card';
 import { apiFetch, apiJson } from '@/lib/api';
 import { invalidateCache } from '@/lib/cache';
-import { fetchPlaceDetails, fetchPlaceSuggestions, type PlaceAutocompleteSuggestion } from '@/lib/maps-api';
+import { type PlaceAutocompleteSuggestion } from '@/lib/maps-api';
+import { resolvePlace, usePlacesAutocomplete } from '@/hooks/use-places-autocomplete';
 import type { Quest } from '@/lib/types';
 import { SPACING, TYPOGRAPHY, RADIUS } from '@/constants/design-tokens';
 import { useKeyboardFocusScroll } from '@/hooks/useKeyboardFocusScroll';
@@ -53,9 +54,10 @@ export default function CreateTripScreen() {
   const [destination, setDestination] = useState('');
   // Coordinates ride along only when the user picked a place suggestion —
   // free text stays coordinate-less (weather then reports no_coordinates).
-  const [destinationSuggestions, setDestinationSuggestions] = useState<PlaceAutocompleteSuggestion[]>([]);
   const [destinationPlace, setDestinationPlace] = useState<{ placeId: string | null; latitude: number; longitude: number } | null>(null);
-  const pickedDestinationLabelRef = useRef<string | null>(null);
+  // State rather than a ref: the shared hook takes it as an input to suppress
+  // re-searching for the label the user just picked.
+  const [pickedDestinationLabel, setPickedDestinationLabel] = useState<string | null>(null);
   // Bumped on every pick AND every manual edit that clears a pick. The async
   // coordinate lookup captures the token at start and only applies its
   // result if the token is still current — so a fast re-type or a second
@@ -67,7 +69,9 @@ export default function CreateTripScreen() {
   // initial range to render, but they are NOT displayed anywhere in the UI
   // until hasUserSelectedDates flips to true.
   const [startDate, setStartDate] = useState(getDefaultStartDate());
-  const [endDate, setEndDate] = useState(getDefaultEndDate());
+  // Null once the user has picked "I don't know yet" — the adventure is
+  // created open-ended and no end date is sent at all.
+  const [endDate, setEndDate] = useState<string | null>(getDefaultEndDate());
   const [hasUserSelectedDates, setHasUserSelectedDates] = useState(false);
   const [coverImage, setCoverImage] = useState<string | null>(null);
   const [coverImageSize, setCoverImageSize] = useState<{ width: number; height: number } | null>(null);
@@ -93,21 +97,12 @@ export default function CreateTripScreen() {
     hasUserSelectedDates
   );
 
-  // Destination autocomplete (same backend proxy as activity locations).
-  // Debounced; never re-opens for the exact label the user just picked.
-  useEffect(() => {
-    const query = destination.trim();
-    if (query.length < 2 || query === pickedDestinationLabelRef.current) {
-      setDestinationSuggestions([]);
-      return;
-    }
-    const handle = setTimeout(() => {
-      void fetchPlaceSuggestions(query)
-        .then((items) => setDestinationSuggestions(items.slice(0, 5)))
-        .catch(() => setDestinationSuggestions([]));
-    }, 350);
-    return () => clearTimeout(handle);
-  }, [destination]);
+  // Destination autocomplete — the shared implementation, same as the
+  // activity location field and the day-location picker. Errors stay silent
+  // here as they always have: coordinates are a bonus, and the typed
+  // destination stands on its own.
+  const { suggestions: destinationSuggestions, reset: resetDestinationSuggestions } =
+    usePlacesAutocomplete(destination, { skipQuery: pickedDestinationLabel });
 
   function handleDestinationChange(value: string) {
     const next = value.slice(0, DESTINATION_MAX_LENGTH);
@@ -115,8 +110,8 @@ export default function CreateTripScreen() {
     // Re-typed text no longer describes the picked place — drop coordinates
     // AND invalidate any coordinate lookup still in flight for the pick
     // being edited away from, so it can never apply late.
-    if (pickedDestinationLabelRef.current && next.trim() !== pickedDestinationLabelRef.current) {
-      pickedDestinationLabelRef.current = null;
+    if (pickedDestinationLabel && next.trim() !== pickedDestinationLabel) {
+      setPickedDestinationLabel(null);
       destinationSelectionTokenRef.current += 1;
       setDestinationPlace(null);
     }
@@ -124,34 +119,26 @@ export default function CreateTripScreen() {
 
   function handlePickDestination(suggestion: PlaceAutocompleteSuggestion) {
     const label = suggestion.primaryText.slice(0, DESTINATION_MAX_LENGTH).trim();
-    pickedDestinationLabelRef.current = label;
+    setPickedDestinationLabel(label);
     destinationSelectionTokenRef.current += 1;
     const token = destinationSelectionTokenRef.current;
     setDestination(label);
-    setDestinationSuggestions([]);
+    resetDestinationSuggestions();
     setDestinationPlace(null);
     void (async () => {
-      try {
-        // OSM-fallback suggestions carry coordinates; Google ones need one
-        // details lookup via the backend proxy.
-        let latitude = suggestion.latitude ?? null;
-        let longitude = suggestion.longitude ?? null;
-        if ((latitude == null || longitude == null) && !suggestion.placeId.startsWith('osm:')) {
-          const details = await fetchPlaceDetails(suggestion.placeId);
-          latitude = details.latitude ?? null;
-          longitude = details.longitude ?? null;
-        }
-        // Only apply if nothing newer (a re-type or another pick) has
-        // superseded this lookup while it was in flight.
-        if (latitude != null && longitude != null && destinationSelectionTokenRef.current === token) {
-          setDestinationPlace({ placeId: suggestion.placeId, latitude, longitude });
-        }
-      } catch {
-        // Coordinates are an optional bonus — the text destination stands
-        // alone. A failed lookup must never pretend to have succeeded, so
-        // destinationPlace simply stays null (the hint keeps reflecting
-        // reality); nothing to clean up here since we never set it.
-      }
+      // resolvePlace does the OSM-vs-Google branch and never throws; a failed
+      // lookup returns null coordinates, which we simply do not store — the
+      // hint keeps reflecting reality.
+      const resolved = await resolvePlace(suggestion);
+      // Only apply if nothing newer (a re-type or another pick) has
+      // superseded this lookup while it was in flight.
+      if (resolved.latitude == null || resolved.longitude == null) return;
+      if (destinationSelectionTokenRef.current !== token) return;
+      setDestinationPlace({
+        placeId: resolved.placeId,
+        latitude: resolved.latitude,
+        longitude: resolved.longitude,
+      });
     })();
   }
 
@@ -221,6 +208,8 @@ export default function CreateTripScreen() {
           description: null,
           imageUrl: uploadedImageUrl,
           startDate,
+          // Explicitly null for an open-ended adventure. The backend stores
+          // null as null — no placeholder date is ever invented.
           endDate,
           inviteCode,
           countries: [],
@@ -276,6 +265,8 @@ export default function CreateTripScreen() {
   // which makes the LIVE / UPCOMING pill and "Day X of Y" line render
   // nothing — exactly the "no date" hero look we want.
   const previewStartDate = hasUserSelectedDates ? startDate : '';
+  // Null (not '') once dates are chosen but the end is unknown — that is what
+  // makes the hero render the ongoing state instead of a range.
   const previewEndDate = hasUserSelectedDates ? endDate : '';
 
   const previewTrip: TripWithEvent = useMemo(() => ({
@@ -426,9 +417,14 @@ export default function CreateTripScreen() {
           <Pressable style={styles.dateChip} onPress={() => setRangePickerOpen(true)}>
             <Ionicons name="calendar-outline" size={15} color={theme.colors.primary} />
             <Text style={styles.dateChipValue} numberOfLines={1}>
-              {hasUserSelectedDates ? formatRangeDisplay(startDate, endDate) : t('trip.add_dates')}
+              {hasUserSelectedDates
+                ? formatRangeDisplay(startDate, endDate, t('trip.ongoing'))
+                : t('trip.add_dates')}
             </Text>
           </Pressable>
+          {hasUserSelectedDates && !endDate ? (
+            <Text style={styles.dateChipHint}>{t('trip.endDateUnknownHint')}</Text>
+          ) : null}
         </View>
 
         {/* Slideshow cover toggle — enabled by default for new adventures. */}
@@ -475,6 +471,10 @@ export default function CreateTripScreen() {
         endDate={endDate}
         minDate={getDefaultStartDate()}
         confirmLabel={t('trip.datePicker.confirmLabel')}
+        allowUnknownEndDate
+        unknownEndDateLabel={t('trip.endDateUnknown')}
+        unknownEndDateHint={t('trip.endDateUnknownHint')}
+        ongoingLabel={t('trip.ongoing')}
         onChange={(nextStartDate, nextEndDate) => {
           setStartDate(nextStartDate);
           setEndDate(nextEndDate);
@@ -531,10 +531,12 @@ async function uploadImageIfNeeded(uri: string) {
     type: 'image/jpeg',
   } as never);
 
-  const response = await apiFetch('/api/images/upload', {
-    method: 'POST',
-    body: formData,
-  });
+  const response = await apiFetch(
+    '/api/images/upload',
+    { method: 'POST', body: formData },
+    undefined,
+    { privateEndpointName: 'image_upload_cover' },
+  );
 
   if (!response.ok) {
     throw new Error((await response.text()) || 'Could not upload the cover image.');
@@ -793,6 +795,12 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     letterSpacing: -0.1,
+  },
+  dateChipHint: {
+    marginTop: SPACING.xs,
+    color: theme.colors.textMeta,
+    fontSize: 12,
+    textAlign: 'center',
   },
   slideshowRow: {
     marginTop: SPACING.xl,

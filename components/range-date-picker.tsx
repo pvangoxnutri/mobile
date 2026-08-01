@@ -26,8 +26,15 @@ type Props = {
   minDate?: string | null;
   maxDate?: string | null;
   confirmLabel?: string;
-  onChange: (startDate: string, endDate: string) => void;
+  /** Emits null as the end date when the user chose "I don't know yet". */
+  onChange: (startDate: string, endDate: string | null) => void;
   onClose: () => void;
+  /** Shows the "I don't know yet" option. Off by default so date pickers that
+   *  genuinely need a closed range (activity stays) are unaffected. */
+  allowUnknownEndDate?: boolean;
+  unknownEndDateLabel?: string;
+  unknownEndDateHint?: string;
+  ongoingLabel?: string;
 };
 
 type MonthItem = {
@@ -49,6 +56,10 @@ export default function RangeDatePicker({
   confirmLabel = 'Apply dates',
   onChange,
   onClose,
+  allowUnknownEndDate = false,
+  unknownEndDateLabel = "I don't know yet",
+  unknownEndDateHint = 'End date can be added later',
+  ongoingLabel = 'Ongoing',
 }: Props) {  const { width } = useWindowDimensions();
   const { theme } = useTheme();
   const styles = useThemedStyles(createStyles);
@@ -57,6 +68,9 @@ export default function RangeDatePicker({
   const months = useMemo(() => buildMonthItems(startDate ?? minDate ?? null, maxDate ?? null), [maxDate, minDate, startDate]);
   const [draftStartDate, setDraftStartDate] = useState<string | null>(startDate ?? null);
   const [draftEndDate, setDraftEndDate] = useState<string | null>(endDate ?? null);
+  // Distinct from "no end date picked yet": this is the user having said the
+  // end date is unknown, which is a complete, confirmable answer.
+  const [endDateUnknown, setEndDateUnknown] = useState(false);
   const [visibleMonthIndex, setVisibleMonthIndex] = useState(0);
 
   useEffect(() => {
@@ -67,12 +81,15 @@ export default function RangeDatePicker({
     const nextIndex = findMonthIndex(months, startDate ?? endDate ?? minDate ?? toDateInput(new Date()));
     setDraftStartDate(startDate ?? null);
     setDraftEndDate(endDate ?? null);
+    // Reopening an adventure that is already open-ended has to come back with
+    // the option ON, or confirming would silently give it an end date.
+    setEndDateUnknown(allowUnknownEndDate && Boolean(startDate) && !endDate);
     setVisibleMonthIndex(nextIndex);
 
     requestAnimationFrame(() => {
       flatListRef.current?.scrollToIndex({ index: nextIndex, animated: false });
     });
-  }, [visible, startDate, endDate, minDate, months]);
+  }, [visible, startDate, endDate, minDate, months, allowUnknownEndDate]);
 
   const monthLabel = months[visibleMonthIndex]
     ? new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(
@@ -80,14 +97,30 @@ export default function RangeDatePicker({
       )
     : '';
 
+  // With the end date declared unknown, a start date alone is a complete
+  // selection — the "now pick an end date" nudge would be misleading.
+  const canConfirm = Boolean(draftStartDate) && (endDateUnknown || Boolean(draftEndDate));
+
   const helperText = !draftStartDate
     ? 'Pick a start date'
-    : !draftEndDate
-      ? 'Now pick an end date'
-      : 'Range selected';
+    : endDateUnknown
+      ? unknownEndDateHint
+      : !draftEndDate
+        ? 'Now pick an end date'
+        : 'Range selected';
 
   function handleDayPress(day: string) {
     if (isDateDisabled(day, minDate, maxDate)) {
+      return;
+    }
+
+    // Tapping a day while the end date is "unknown" is the user changing their
+    // mind — the calendar goes back to picking a range rather than quietly
+    // ignoring the tap.
+    if (endDateUnknown) {
+      setEndDateUnknown(false);
+      setDraftStartDate(day);
+      setDraftEndDate(null);
       return;
     }
 
@@ -115,17 +148,30 @@ export default function RangeDatePicker({
   }
 
   function handleConfirm() {
-    if (!draftStartDate || !draftEndDate) {
-      return;
-    }
+    if (!draftStartDate) return;
+    if (!endDateUnknown && !draftEndDate) return;
 
-    onChange(draftStartDate, draftEndDate);
+    // Null, not a stand-in date: the caller stores "unknown" as unknown.
+    onChange(draftStartDate, endDateUnknown ? null : draftEndDate);
     onClose();
+  }
+
+  function handleToggleUnknownEndDate() {
+    setEndDateUnknown((prev) => {
+      const next = !prev;
+      // Turning it on drops any end date already picked, so an earlier choice
+      // cannot be saved behind the user's back. Turning it off leaves the end
+      // date empty and the calendar waiting for one, per the requirement that
+      // unchecking asks for a valid date again.
+      if (next) setDraftEndDate(null);
+      return next;
+    });
   }
 
   function handleClear() {
     setDraftStartDate(null);
     setDraftEndDate(null);
+    setEndDateUnknown(false);
   }
 
   function goToMonth(direction: -1 | 1) {
@@ -158,16 +204,51 @@ export default function RangeDatePicker({
           </View>
 
           <View style={styles.summaryRow}>
-            <DateSummaryCard label="Start" value={draftStartDate} active={!draftStartDate || !draftEndDate} />
+            <DateSummaryCard label="Start" value={draftStartDate} active={!draftStartDate || (!draftEndDate && !endDateUnknown)} />
             <View style={styles.summaryArrow}>
               <Ionicons name="arrow-forward" size={16} color={theme.colors.textMuted} />
             </View>
-            <DateSummaryCard label="End" value={draftEndDate} active={Boolean(draftStartDate && !draftEndDate)} />
+            {/* The end card is disabled — not removed — while the end date is
+                unknown, so the row keeps its shape and the "Ongoing" state is
+                visibly where a date would otherwise go. */}
+            <DateSummaryCard
+              label="End"
+              value={endDateUnknown ? null : draftEndDate}
+              placeholder={endDateUnknown ? ongoingLabel : undefined}
+              active={Boolean(draftStartDate && !draftEndDate && !endDateUnknown)}
+              disabled={endDateUnknown}
+            />
           </View>
+
+          {allowUnknownEndDate ? (
+            <TouchableOpacity
+              activeOpacity={0.85}
+              style={[styles.unknownRow, endDateUnknown ? styles.unknownRowActive : null]}
+              onPress={handleToggleUnknownEndDate}>
+              <View
+                style={[
+                  styles.unknownCheckbox,
+                  endDateUnknown ? { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary } : null,
+                ]}>
+                {endDateUnknown ? <Ionicons name="checkmark" size={14} color="#fff" /> : null}
+              </View>
+              <Text style={[styles.unknownLabel, endDateUnknown ? { color: theme.colors.primary } : null]}>
+                {unknownEndDateLabel}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
 
           <View style={styles.helperPill}>
             <Ionicons
-              name={!draftStartDate ? 'calendar-outline' : !draftEndDate ? 'ellipse-outline' : 'checkmark-circle'}
+              name={
+                !draftStartDate
+                  ? 'calendar-outline'
+                  : endDateUnknown
+                    ? 'infinite-outline'
+                    : !draftEndDate
+                      ? 'ellipse-outline'
+                      : 'checkmark-circle'
+              }
               size={16}
               color={theme.colors.primary}
             />
@@ -229,15 +310,15 @@ export default function RangeDatePicker({
           <View style={styles.footer}>
             <TouchableOpacity
               activeOpacity={0.9}
-              style={[styles.secondaryButton, !draftStartDate && !draftEndDate ? styles.secondaryButtonDisabled : null]}
-              disabled={!draftStartDate && !draftEndDate}
+              style={[styles.secondaryButton, !draftStartDate && !draftEndDate && !endDateUnknown ? styles.secondaryButtonDisabled : null]}
+              disabled={!draftStartDate && !draftEndDate && !endDateUnknown}
               onPress={handleClear}>
               <Text style={styles.secondaryButtonText}>Reset</Text>
             </TouchableOpacity>
             <TouchableOpacity
               activeOpacity={0.92}
-              style={[styles.primaryButton, { backgroundColor: theme.colors.primary }, !(draftStartDate && draftEndDate) ? styles.primaryButtonDisabled : null]}
-              disabled={!(draftStartDate && draftEndDate)}
+              style={[styles.primaryButton, { backgroundColor: theme.colors.primary }, !canConfirm ? styles.primaryButtonDisabled : null]}
+              disabled={!canConfirm}
               onPress={handleConfirm}>
               <Text style={styles.primaryButtonText}>{confirmLabel}</Text>
             </TouchableOpacity>
@@ -316,16 +397,20 @@ function DateSummaryCard({
   label,
   value,
   active,
+  disabled,
+  placeholder,
 }: {
   label: string;
   value: string | null;
   active?: boolean;
+  disabled?: boolean;
+  placeholder?: string;
 }) {
   const styles = useThemedStyles(createStyles);
   return (
-    <View style={[styles.summaryCard, active ? styles.summaryCardActive : null]}>
+    <View style={[styles.summaryCard, active ? styles.summaryCardActive : null, disabled ? styles.summaryCardDisabled : null]}>
       <Text style={styles.summaryLabel}>{label}</Text>
-      <Text style={styles.summaryValue}>{value ? formatDisplayDate(value) : 'Select'}</Text>
+      <Text style={styles.summaryValue}>{value ? formatDisplayDate(value) : (placeholder ?? 'Select')}</Text>
     </View>
   );
 }
@@ -403,8 +488,16 @@ export function formatDisplayDate(value: string) {
   return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(parseDate(value));
 }
 
-export function formatRangeDisplay(startDate?: string | null, endDate?: string | null) {
-  if (!startDate || !endDate) return 'Select dates';
+export function formatRangeDisplay(
+  startDate?: string | null,
+  endDate?: string | null,
+  // Passed by callers that support open-ended adventures. Without it, a start
+  // date and no end date still reads as "Select dates", which is right for the
+  // pickers that require a closed range.
+  ongoingLabel?: string,
+) {
+  if (!startDate) return 'Select dates';
+  if (!endDate) return ongoingLabel ? `${formatDisplayDate(startDate)} -> ${ongoingLabel}` : 'Select dates';
   // One-day adventure — a "Jul 5 -> Jul 5" arrow reads like a mistake.
   if (startDate === endDate) return formatDisplayDate(startDate);
   return `${formatDisplayDate(startDate)} -> ${formatDisplayDate(endDate)}`;
@@ -480,6 +573,40 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
   summaryCardActive: {
     borderColor: theme.isDark ? theme.colors.primaryLight20 : '#ffc6d3',
     backgroundColor: theme.isDark ? theme.colors.primaryLight08 : '#fff5f8',
+  },
+  summaryCardDisabled: {
+    opacity: 0.55,
+  },
+  unknownRow: {
+    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: theme.isDark ? theme.colors.borderPrimary : '#e7eaf0',
+    backgroundColor: theme.isDark ? theme.colors.bgLightest : '#f8fafc',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  unknownRowActive: {
+    borderColor: theme.isDark ? theme.colors.primaryLight20 : '#ffc6d3',
+    backgroundColor: theme.isDark ? theme.colors.primaryLight08 : '#fff5f8',
+  },
+  unknownCheckbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 7,
+    borderWidth: 1.5,
+    borderColor: theme.isDark ? theme.colors.borderPrimary : '#cfd5de',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  unknownLabel: {
+    flex: 1,
+    color: theme.colors.textPrimary,
+    fontSize: 14,
+    fontWeight: '700',
   },
   summaryLabel: {
     color: theme.colors.textMeta,
