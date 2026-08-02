@@ -1214,7 +1214,6 @@ const dictionaries: Record<AppLanguage, Record<string, string>> = {
     'gluno.feedback.forget': 'Forget this',
 
     // ── What Gluno knows about me ──────────────────────────────────────────
-    'gluno.knows.entry': 'What Gluno knows about me',
     'gluno.knows.title': 'What Gluno knows about me',
     'gluno.knows.privacy':
       'Gluno only uses confirmed preferences to adapt planning. Private preferences are not shared with other members.',
@@ -2510,7 +2509,6 @@ const dictionaries: Record<AppLanguage, Record<string, string>> = {
     'gluno.feedback.forget': 'Glöm det här',
 
     // ── Vad Gluno vet om mig ───────────────────────────────────────────────
-    'gluno.knows.entry': 'Vad Gluno vet om mig',
     'gluno.knows.title': 'Vad Gluno vet om mig',
     'gluno.knows.privacy':
       'Gluno använder bara bekräftade preferences för att anpassa planeringen. Privata preferences delas inte med andra medlemmar.',

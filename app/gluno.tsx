@@ -778,28 +778,9 @@ export default function GlunoScreen() {
           }}
         />
 
-        {/* Quiet on purpose. This is a settings door, not a feature to
-            advertise — the data behind it was always being used, and dressing
-            the entry point up would imply otherwise. */}
-        <TouchableOpacity
-          style={styles.headerButton}
-          activeOpacity={0.86}
-          accessibilityRole="button"
-          accessibilityLabel={t('gluno.knows.entry')}
-          onPress={() =>
-            // `as never`, matching lib/gluno-navigation.ts: expo-router's
-            // typed-route union is generated from the file tree by Metro, so a
-            // route added without running it is not in the union yet.
-            router.push({
-              pathname: '/gluno-preferences',
-              params: {
-                ...(tripId ? { tripId } : {}),
-                ...(conversationId ? { conversationId } : {}),
-              },
-            } as never)
-          }>
-          <Ionicons name="options-outline" size={20} color={theme.colors.textSecondary} />
-        </TouchableOpacity>
+        {/* The header ends at the scope picker. The preferences door that used
+            to sit here is gone; the screen and the backend behind it are
+            untouched, and nothing in the chat links to it any more. */}
       </View>
 
       {/* Three distinct states, and conflating any two of them is the bug this

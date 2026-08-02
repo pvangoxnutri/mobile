@@ -27,6 +27,13 @@ import type { AppTheme } from '@/constants/themes';
 // conversation where it was. The header is deliberate; the card is contextual.
 // ──────────────────────────────────────────────────────────────────────────
 
+/**
+ * Tall enough for several Adventures without becoming a full-screen takeover.
+ *
+ * Fixed rather than content-sized: see the ModalSheet call below.
+ */
+const SHEET_HEIGHT = 460;
+
 export type GlunoScopeChoice = {
   /** Null means all Adventures — the global conversation. */
   tripId: string | null;
@@ -144,10 +151,25 @@ function GlunoScopePicker({ tripId, tripTitle, checking = false, onChange }: Pro
         />
       </TouchableOpacity>
 
-      <ModalSheet visible={open} onClose={() => setOpen(false)} autoHeight>
+      {/* ── Height, and why it is fixed ──────────────────────────────────
+          NOT autoHeight. That sizes the sheet to its content, and a
+          ScrollView inside a content-sized parent collapses to nothing: the
+          parent asks the child how tall it wants to be, and a ScrollView
+          answers "however much you give me" — which is zero. The sheet
+          opened, the title rendered, and the entire list was invisible.
+
+          A fixed height gives the ScrollView something to fill, so the list
+          scrolls inside it instead of dictating it. */}
+      <ModalSheet visible={open} onClose={() => setOpen(false)} height={SHEET_HEIGHT}>
         <Text style={styles.sheetTitle}>{t('gluno.scope.pick')}</Text>
 
-        <ScrollView style={styles.sheetList} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          style={styles.sheetList}
+          contentContainerStyle={styles.sheetContent}
+          showsVerticalScrollIndicator={false}
+          // The sheet's own backdrop must not swallow a scroll gesture that
+          // starts on a row.
+          keyboardShouldPersistTaps="handled">
           {/* Always first, always present. "All Adventures" is a real choice
               rather than the absence of one, and somebody who scoped into a
               trip needs a way back out. */}
@@ -161,6 +183,9 @@ function GlunoScopePicker({ tripId, tripTitle, checking = false, onChange }: Pro
             theme={theme}
           />
 
+          {/* Loading is its own state, distinct from empty. An empty list
+              shown while the fetch is still running reads as "you have no
+              Adventures", which is a different and alarming claim. */}
           {trips === null && !failed ? (
             <View style={styles.loading}>
               <ActivityIndicator size="small" color={theme.colors.textMuted} />
@@ -180,11 +205,27 @@ function GlunoScopePicker({ tripId, tripTitle, checking = false, onChange }: Pro
             />
           ))}
 
+          {/* Only when the API actually returned nothing. */}
           {trips !== null && ordered.length === 0 ? (
             <Text style={styles.empty}>{t('gluno.scope.empty')}</Text>
           ) : null}
 
-          {failed ? <Text style={styles.empty}>{t('gluno.error.generic')}</Text> : null}
+          {/* A failed fetch gets a retry rather than an empty list — the
+              difference between "you have none" and "I couldn't ask" matters
+              to somebody who knows they have four. */}
+          {failed ? (
+            <TouchableOpacity
+              style={styles.retry}
+              activeOpacity={0.75}
+              accessibilityRole="button"
+              onPress={() => {
+                setFailed(false);
+                setTrips(null);
+              }}>
+              <Ionicons name="refresh" size={15} color={theme.colors.primary} />
+              <Text style={styles.retryText}>{t('gluno.error.retry')}</Text>
+            </TouchableOpacity>
+          ) : null}
         </ScrollView>
       </ModalSheet>
     </>
@@ -298,7 +339,24 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     marginBottom: 10,
   },
   sheetList: {
-    maxHeight: 420,
+    // Fills the fixed sheet rather than trying to size it. See the comment at
+    // the ModalSheet above for why that distinction is the whole bug.
+    flex: 1,
+  },
+  sheetContent: {
+    paddingBottom: 12,
+  },
+  retry: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 16,
+  },
+  retryText: {
+    fontSize: 13.5,
+    fontWeight: '600',
+    color: theme.colors.primary,
   },
   row: {
     flexDirection: 'row',
