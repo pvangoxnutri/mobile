@@ -1018,6 +1018,8 @@ const dictionaries: Record<AppLanguage, Record<string, string>> = {
     'gluno.functionsSubtitle': 'Plan and improve this Adventure with Gluno',
     'gluno.scope.global': 'Global',
     'gluno.scope.adventure': 'Adventure',
+    'gluno.scope.checking': 'Checking…',
+    'gluno.scope.lost': "You no longer have access to that Adventure. Open Gluno from the app header to ask about something else.",
 
     'gluno.empty.title': 'Hi, I’m Gluno.',
     'gluno.empty.body': 'I can help you plan, improve and explore your trip.',
@@ -2307,6 +2309,8 @@ const dictionaries: Record<AppLanguage, Record<string, string>> = {
     'gluno.functionsSubtitle': 'Planera och förbättra äventyret med Gluno',
     'gluno.scope.global': 'Global',
     'gluno.scope.adventure': 'Äventyr',
+    'gluno.scope.checking': 'Kontrollerar…',
+    'gluno.scope.lost': 'Du har inte längre tillgång till det äventyret. Öppna Gluno från appens header för att fråga om något annat.',
 
     'gluno.empty.title': 'Hej, jag är Gluno.',
     'gluno.empty.body': 'Jag kan hjälpa dig att planera, förbättra och utforska din resa.',

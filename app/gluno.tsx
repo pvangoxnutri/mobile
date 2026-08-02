@@ -127,6 +127,16 @@ export default function GlunoScreen() {
   const [messages, setMessages] = useState<GlunoChatMessage[]>(cached?.messages ?? []);
   const [hasMore, setHasMore] = useState(cached?.hasMore ?? false);
   const [loading, setLoading] = useState(!cached?.loaded);
+  /**
+   * The server has confirmed what scope this conversation actually has.
+   *
+   * Until it does the pill shows nothing rather than the route's claim: a pill
+   * that says "Semester 2026" and then turns out to be a global chat has
+   * already told the user something untrue.
+   */
+  const [scopeVerified, setScopeVerified] = useState(Boolean(cached?.loaded));
+  /** Membership is gone. Distinct from a failed load, and not recoverable here. */
+  const [scopeLost, setScopeLost] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [sending, setSending] = useState(false);
   const [status, setStatus] = useState<GlunoStatus | null>(null);
@@ -223,15 +233,48 @@ export default function GlunoScreen() {
     getCurrentGlunoConversation(tripId)
       .then((detail) => {
         if (cancelled) return;
-        if (detail) {
-          setConversationId(detail.conversation.id);
-          setTripName(detail.conversation.tripTitle ?? tripTitle);
-          setMessages(toChatMessages(detail.messages));
-          setHasMore(detail.hasMore);
+        if (!detail) {
+          // No conversation for this scope yet. Not an error — the first
+          // message creates one, and it will carry this tripId.
+          setScopeVerified(true);
+          return;
         }
+
+        // ── The scope the SERVER says this conversation has ───────────────
+        //
+        // Not the route parameter. A conversation is trip-scoped because its
+        // row says so, and a URL saying `?tripId=…` is a request, not a fact.
+        //
+        // The backend query is exact, so a mismatch here means something is
+        // genuinely wrong — a cached id from another Adventure, a hand-edited
+        // link. Either way the safe move is to use nothing: an empty chat that
+        // scopes correctly on the first message beats one showing another
+        // Adventure's turns under this Adventure's name.
+        const serverTripId = detail.conversation.tripId ?? null;
+
+        if (serverTripId !== tripId) {
+          setScopeVerified(true);
+          return;
+        }
+
+        setConversationId(detail.conversation.id);
+        setTripName(detail.conversation.tripTitle ?? tripTitle);
+        setMessages(toChatMessages(detail.messages));
+        setHasMore(detail.hasMore);
+        setScopeVerified(true);
       })
-      .catch(() => {
-        if (!cancelled) setLoadFailed(true);
+      .catch((error: Error & { status?: number }) => {
+        if (cancelled) return;
+
+        // Membership went while they were away. Said plainly rather than
+        // quietly reopening as a global chat — silently widening somebody's
+        // scope is how a question about a private trip gets asked in the open.
+        if (error?.status === 403 || error?.status === 404) {
+          setScopeLost(true);
+          return;
+        }
+
+        setLoadFailed(true);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -282,6 +325,10 @@ export default function GlunoScreen() {
 
       setConversationId(turn.conversation.id);
       setTripName(turn.conversation.tripTitle ?? tripTitle);
+      // The turn's conversation is authoritative about scope too. A first
+      // message into an empty Adventure chat is exactly where the pill goes
+      // from unverified to verified.
+      setScopeVerified(true);
 
       // The optimistic row is REPLACED by the server's, not joined by it —
       // same list position, real id, real timestamp, no duplicate.
@@ -634,8 +681,21 @@ export default function GlunoScreen() {
   const notConfigured = status?.reason === 'not_configured';
   // The composer is closed while we genuinely do not know yet, so a question
   // typed into it cannot be lost a moment later.
-  const composerDisabled = unavailable || (statusLoading && status == null);
-  const scopeLabel = tripId ? tripName?.trim() || t('gluno.scope.adventure') : t('gluno.scope.global');
+  // Lost access closes the composer too: a message sent from here would be
+  // answered globally, which is the widening this whole check exists to stop.
+  const composerDisabled = unavailable || scopeLost || (statusLoading && status == null);
+  // ── What the pill is allowed to claim ─────────────────────────────────
+  //
+  // Scoped only once the server has confirmed it. Before that the pill is
+  // blank rather than optimistic — naming an Adventure and then turning out to
+  // be a global chat has already misled somebody, and the pill is the only
+  // thing on screen telling them which plan Gluno can see.
+  const scoped = tripId != null && scopeVerified && !scopeLost;
+  const scopeLabel = scoped
+    ? tripName?.trim() || t('gluno.scope.adventure')
+    : tripId != null && !scopeLost
+      ? t('gluno.scope.checking')
+      : t('gluno.scope.global');
 
   // Inverted list wants newest first; the state stays chronological so every
   // merge, cursor and cache read can reason about it normally.
@@ -664,14 +724,14 @@ export default function GlunoScreen() {
 
         {/* Scope is identity here, not metadata: the same question means
             different things globally and inside an Adventure. */}
-        <View style={[styles.scopePill, tripId && styles.scopePillScoped]}>
+        <View style={[styles.scopePill, scoped && styles.scopePillScoped]}>
           <Ionicons
-            name={tripId ? 'map-outline' : 'globe-outline'}
+            name={scoped ? 'map-outline' : 'globe-outline'}
             size={11}
-            color={tripId ? theme.colors.primary : theme.colors.textMeta}
+            color={scoped ? theme.colors.primary : theme.colors.textMeta}
           />
           <Text
-            style={[styles.scopeText, tripId && styles.scopeTextScoped]}
+            style={[styles.scopeText, scoped && styles.scopeTextScoped]}
             numberOfLines={1}>
             {scopeLabel}
           </Text>
@@ -765,7 +825,15 @@ export default function GlunoScreen() {
                 inputRef.current?.focus();
               }}
             />
-            {loadFailed ? <Text style={styles.inlineError}>{t('gluno.error.generic')}</Text> : null}
+            {/* Access went while they were away. Said out loud rather than
+                quietly reopening as a global chat — silently widening
+                somebody's scope is how a question about a private trip gets
+                asked in the open. */}
+            {scopeLost ? (
+              <Text style={styles.inlineError}>{t('gluno.scope.lost')}</Text>
+            ) : loadFailed ? (
+              <Text style={styles.inlineError}>{t('gluno.error.generic')}</Text>
+            ) : null}
           </View>
         ) : (
           <FlatList

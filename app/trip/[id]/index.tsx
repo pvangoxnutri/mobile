@@ -74,6 +74,8 @@ import { normalizeTripMembers, pickVisibleMembers } from '@/lib/trip-members';
 import { MAX_HERO_AVATARS } from '@/components/big-hero-card';
 import { isSealedInLists } from '@/lib/activity-blur';
 import type { Quest, SideQuestActivity, TripInvite, LinkPreview, TripDayLocation } from '@/lib/types';
+import GlunoButton from '@/components/gluno/GlunoButton';
+import { GLUNO_SCREENS } from '@/lib/gluno-navigation';
 import { SPACING, RADIUS, TYPOGRAPHY } from '@/constants/design-tokens';
 import { useTheme } from '@/components/theme-provider';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
@@ -1862,6 +1864,23 @@ export default function TripDetailsScreen() {
               <Ionicons name="arrow-back" size={24} color={theme.isDark ? theme.colors.textPrimary : '#11131a'} />
             </TouchableOpacity>
             <Text style={styles.headerTitle}>{trip?.title ?? t('home.defaultTripName')}</Text>
+            {/* Gluno, scoped to THIS Adventure.
+
+                It sits beside settings rather than replacing anything: the
+                mascot is the same entry point the tab header uses, so Gluno
+                looks like one feature reachable from two places rather than
+                two features. Renders null when the flag is off, which is why
+                it can sit here unconditionally.
+
+                The tripId is what makes this different from the global entry.
+                Without it Gluno would open with no plan in front of it and
+                have to ask which Adventure the user meant — from inside the
+                Adventure they were already looking at. */}
+            <GlunoButton
+              onPress={() => router.push(
+                `/gluno?tripId=${encodeURIComponent(String(id))}&screen=${GLUNO_SCREENS.adventureOverview}`,
+              )}
+            />
             <TouchableOpacity style={styles.settingsButton} activeOpacity={0.88} onPress={() => router.push(`/trip/${id}/settings`)}>
               <Ionicons name="settings-outline" size={20} color={theme.isDark ? theme.colors.textPrimary : '#11131a'} />
             </TouchableOpacity>
@@ -3494,6 +3513,9 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: theme.isDark ? theme.colors.bgLight : '#f5f6f8',
+    // Clears the Gluno mascot beside it. The mascot has no chip behind it, so
+    // without this the two read as one crowded control.
+    marginLeft: 8,
   },
   heroCardSize: {
     minHeight: 270,
