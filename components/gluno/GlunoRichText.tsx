@@ -224,7 +224,7 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     marginTop: 0,
   },
   block: {
-    marginTop: 10,
+    marginTop: 7,
   },
   body: {
     fontSize: 15,

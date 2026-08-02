@@ -247,7 +247,7 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
   row: {
     flexDirection: 'row',
     gap: 4,
-    marginTop: 6,
+    marginTop: 4,
     paddingLeft: 2,
   },
   button: {

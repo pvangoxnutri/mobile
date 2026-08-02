@@ -195,7 +195,7 @@ export default function GlunoPlaceCard({ place }: { place: GlunoPlace }) {
 
 const createStyles = (theme: AppTheme) => StyleSheet.create({
   card: {
-    marginTop: 10,
+    marginTop: 8,
     borderRadius: 16,
     overflow: 'hidden',
     backgroundColor: theme.colors.surfaceElevated,

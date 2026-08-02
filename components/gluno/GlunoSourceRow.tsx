@@ -156,7 +156,7 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     flexWrap: 'wrap',
     alignItems: 'center',
     gap: 6,
-    marginTop: 8,
+    marginTop: 6,
     paddingLeft: 2,
   },
   rowLabel: {

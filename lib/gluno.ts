@@ -287,6 +287,11 @@ export type GlunoTurnResponse = {
   conversation: GlunoConversation;
   userMessage: GlunoApiMessage;
   assistantMessage: GlunoApiMessage;
+  /**
+   * A question with tappable answers, when the turn stopped to ask one.
+   * Absent on an ordinary turn.
+   */
+  clarification?: GlunoClarification | null;
 };
 
 export type GlunoConversationDetail = {
@@ -322,7 +327,35 @@ export type GlunoRequestError = Error & {
 const STATUS_CANCELLED = 499;
 
 async function glunoJson<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const response = await apiFetch(path, options, GLUNO_TIMEOUT_MS, PRIVATE);
+  let response: Response;
+
+  try {
+    response = await apiFetch(path, options, GLUNO_TIMEOUT_MS, PRIVATE);
+  } catch (transport) {
+    // The request never produced a response: a timeout, a dead radio, a
+    // backend that could not be reached at all.
+    //
+    // apiFetch throws a PLAIN Error here — no status, no code — so without
+    // this every transport failure arrived at the UI as an untyped error and
+    // rendered as "Gluno could not answer", which blames Gluno for something
+    // that never reached it. Giving it a code lets the chat say the true
+    // thing.
+    if ((transport as { name?: string })?.name === 'AbortError'
+      && (options.signal as AbortSignal | undefined)?.aborted) {
+      throw transport;   // The user pressed Stop. Not a failure.
+    }
+
+    const error = new Error('Gluno request failed.') as GlunoRequestError;
+    error.code = 'network_error';
+    error.retryable = true;
+
+    if (__DEV__) {
+      // Names and codes only — never a body, a token or message text.
+      console.log('[GLUNO] request failed before a response: network_error');
+    }
+
+    throw error;
+  }
 
   if (!response.ok) {
     const error = new Error('Gluno request failed.') as GlunoRequestError;
@@ -339,6 +372,15 @@ async function glunoJson<T>(path: string, options: RequestInit = {}): Promise<T>
       if (typeof body?.retryable === 'boolean') error.retryable = body.retryable;
     } catch {
       // Intentionally empty — the status alone is enough.
+    }
+
+    if (__DEV__) {
+      // The four things that decide what the chat shows, and nothing else:
+      // no body, no token, no conversation or trip id, no message text.
+      console.log(
+        `[GLUNO] turn failed status=${error.status} code=${error.code ?? 'none'} `
+        + `retryable=${error.retryable ?? 'unset'}`,
+      );
     }
 
     throw error;
@@ -551,4 +593,128 @@ export async function applyGlunoProposal(proposalId: string) {
 
 export async function rejectGlunoProposal(proposalId: string) {
   return proposalRequest(`/api/gluno/proposals/${proposalId}/reject`, { method: 'POST' });
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// GLUNO — clickable follow-up questions.
+//
+// When a question cannot be answered without a choice, the turn comes back
+// with one of these instead of a guess. Tapping an option resumes the ORIGINAL
+// question — the user never retypes it.
+//
+// The client holds no entity ids. An option is a key and a label; every id
+// stays server-side, which is what stops a tampered request from pointing the
+// choice at something the user may not touch.
+// ──────────────────────────────────────────────────────────────────────────
+
+export type GlunoClarificationOption = {
+  key: string;
+  label: string;
+  description?: string | null;
+  /** A stable icon name from the app's own set. Never a URL. */
+  icon?: string | null;
+  disabled?: boolean;
+  /** Already localised by the backend — never a raw status. */
+  disabledReason?: string | null;
+};
+
+export type GlunoClarification = {
+  id: string;
+  /**
+   * adventure | day | activity | place | transport_mode | pace | budget |
+   * preference_scope | proposal_conflict
+   *
+   * A type this build has never seen still renders: the question and the
+   * options are all the card actually needs.
+   */
+  type: string;
+  question: string;
+  options: GlunoClarificationOption[];
+  allowFreeText?: boolean;
+  multiSelect?: boolean;
+  /** pending | resolved | expired | cancelled | stale */
+  status: string;
+  selectedKey?: string | null;
+  expiresAt: string;
+  /** Present only on a proposal_conflict. */
+  conflict?: GlunoConflictMeta | null;
+};
+
+/**
+ * What a conflict card shows above its options.
+ *
+ * NOTE WHAT IS NOT HERE: no draft id, no version numbers, no activity ids. The
+ * app renders a sentence, a day and a time, and sends back nothing but the
+ * clarification id and the option key. Everything the server checks a tap
+ * against stays on the server, where the app cannot change it.
+ */
+export type GlunoConflictMeta = {
+  /** time_overlap | locked_booking | outside_trip_dates | … */
+  type: string;
+  /** ISO date, when the clash is about one day. */
+  date?: string | null;
+  startTime?: string | null;
+  endTime?: string | null;
+  /** True when the thing it clashes with is a booking that cannot be moved. */
+  existingIsLocked?: boolean;
+  /**
+   * Minutes the gap is short by, on a travel-time clash. Zero otherwise.
+   *
+   * A number rather than a sentence, so the app writes it in the user's own
+   * language instead of rendering one the backend picked.
+   */
+  missingTravelMinutes?: number;
+  /** Titles of what is involved, as the Adventure already shows them. */
+  affectedTitles?: string[];
+};
+
+/**
+ * Answers a clarification and returns the continuation.
+ *
+ * The response is an ordinary turn — the answer to the question the user
+ * asked before the choice was needed.
+ */
+export async function resolveGlunoClarification(
+  clarificationId: string,
+  optionKey: string,
+  idempotencyKey?: string,
+) {
+  return glunoJson<GlunoTurnResponse>(
+    `/api/gluno/clarifications/${encodeURIComponent(clarificationId)}/resolve`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ optionKey, idempotencyKey: idempotencyKey ?? null }),
+    },
+  );
+}
+
+/** Dismisses a question the user does not want to answer. */
+export async function cancelGlunoClarification(clarificationId: string) {
+  return glunoJson<void>(
+    `/api/gluno/clarifications/${encodeURIComponent(clarificationId)}/cancel`,
+    { method: 'POST' },
+  );
+}
+
+/**
+ * "Something else" — searches within the clarification's own scope.
+ *
+ * The backend decides what that scope is from the clarification's type. The
+ * client sends a string and gets back new tappable options; no id travels in
+ * either direction, and nothing external is queried.
+ */
+export async function searchGlunoClarification(
+  clarificationId: string,
+  query: string,
+  idempotencyKey?: string,
+) {
+  return glunoJson<GlunoClarification>(
+    `/api/gluno/clarifications/${encodeURIComponent(clarificationId)}/search`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, idempotencyKey: idempotencyKey ?? null }),
+    },
+  );
 }

@@ -1,4 +1,4 @@
-import type { GlunoNavigation, GlunoPlace, GlunoProposal, GlunoSource } from '@/lib/gluno';
+import type { GlunoClarification, GlunoNavigation, GlunoPlace, GlunoProposal, GlunoSource } from '@/lib/gluno';
 
 // ──────────────────────────────────────────────────────────────────────────
 // GLUNO — in-memory conversation cache.
@@ -32,6 +32,12 @@ export type GlunoChatMessage = {
   navigations?: GlunoNavigation[];
   /** Where this answer's non-place facts came from — the compact source row. */
   sources?: GlunoSource[];
+  /**
+   * A question with tappable answers attached to this turn. The card renders
+   * under the answer text and resolves in place — no navigation, and the
+   * original question is never retyped.
+   */
+  clarification?: GlunoClarification;
   /** In flight — rendered dimmed, no timestamp yet. */
   pending?: boolean;
   /** The send failed. Carries a retry action; never silently dropped. */

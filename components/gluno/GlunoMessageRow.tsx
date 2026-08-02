@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import GlunoMascot from '@/components/gluno/GlunoMascot';
 import GlunoNavigationCard from '@/components/gluno/GlunoNavigationCard';
 import GlunoFeedbackRow from '@/components/gluno/GlunoFeedbackRow';
+import GlunoClarificationCard from '@/components/gluno/GlunoClarificationCard';
 import GlunoSourceRow from '@/components/gluno/GlunoSourceRow';
 import GlunoPlaceCard from '@/components/gluno/GlunoPlaceCard';
 import GlunoProposalCard from '@/components/gluno/GlunoProposalCard';
@@ -11,7 +12,7 @@ import GlunoRichText from '@/components/gluno/GlunoRichText';
 import { useI18n } from '@/components/i18n-provider';
 import { useTheme } from '@/components/theme-provider';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
-import type { GlunoProposal } from '@/lib/gluno';
+import type { GlunoClarification, GlunoClarificationOption, GlunoProposal } from '@/lib/gluno';
 import type { GlunoChatMessage } from '@/lib/gluno-cache';
 import type { AppTheme } from '@/constants/themes';
 
@@ -41,6 +42,11 @@ type Props = {
   /** Opens the review sheet for a pending proposal. */
   onReviewProposal?: (proposal: GlunoProposal) => void;
   onDismissProposal?: (proposal: GlunoProposal) => void;
+  /** Resolves a clarification in place and appends the continuation. */
+  onResolveClarification?: (
+    clarification: GlunoClarification, option: GlunoClarificationOption) => Promise<void>;
+  /** Searches within the clarification scope. Returns the result count. */
+  onSearchClarification?: (clarification: GlunoClarification, query: string) => Promise<number>;
 };
 
 function formatTime(iso: string, locale: string) {
@@ -89,6 +95,8 @@ const FAILURE_COPY: Record<string, string> = {
   conversation_archived: 'gluno.error.conversationArchived',
   duplicate_in_flight: 'gluno.error.alreadySending',
   empty_message: 'gluno.error.emptyMessage',
+  // Never reached the backend at all — a timeout or a dead connection.
+  network_error: 'gluno.error.network',
 };
 
 /**
@@ -125,6 +133,8 @@ function GlunoMessageRow({
   onRetry,
   onReviewProposal,
   onDismissProposal,
+  onResolveClarification,
+  onSearchClarification,
 }: Props) {
   const styles = useThemedStyles(createStyles);
   const { theme } = useTheme();
@@ -145,7 +155,12 @@ function GlunoMessageRow({
               ? t('gluno.error.forbidden')
               : copyKey
                 ? t(copyKey)
-                : t('gluno.error.generic');
+                // No code at all. Since every live path now attaches one,
+                // this is a row left over from an earlier session — say so
+                // neutrally rather than describing a failure we cannot name.
+                : message.failureCode === undefined && message.errorStatus === undefined
+                  ? t('gluno.error.older')
+                  : t('gluno.error.generic');
 
             // Retry is offered only where it is honest. A missing API key
             // fails identically on every tap, and a button that never works
@@ -171,11 +186,28 @@ function GlunoMessageRow({
                     carry backend, SDK or timeout detail. */}
                 <Text style={styles.retryText}>{reason}</Text>
                 <Text style={styles.retryAction}>{t('gluno.error.retry')}</Text>
+                {/* TEMPORARY, __DEV__ only — remove once the cause is known.
+                    Codes and a status, never content. */}
+                {__DEV__ ? (
+                  <Text style={styles.devDetail}>
+                    {`HTTP:${message.errorStatus ?? '-'} `}
+                    {`Code:${message.failureCode ?? 'missing'} `}
+                    {`Retry:${message.retryable ?? 'missing'}`}
+                  </Text>
+                ) : null}
               </TouchableOpacity>
             ) : (
               <View style={styles.retryRow}>
                 <Ionicons name="information-circle-outline" size={12} color={theme.colors.textMeta} />
                 <Text style={styles.retryText}>{reason}</Text>
+                {/* TEMPORARY, __DEV__ only — see the retry branch above. */}
+                {__DEV__ ? (
+                  <Text style={styles.devDetail}>
+                    {`HTTP:${message.errorStatus ?? '-'} `}
+                    {`Code:${message.failureCode ?? 'missing'} `}
+                    {`Retry:${message.retryable ?? 'missing'}`}
+                  </Text>
+                ) : null}
               </View>
             );
           })() : message.pending ? null : (
@@ -227,6 +259,16 @@ function GlunoMessageRow({
 
         {/* Below the answer and above the timestamp: present enough to be
             found, quiet enough that the chat still reads as a conversation. */}
+        {/* Above the sources: the question is the actionable part of this
+            turn, and burying it under attribution would hide it. */}
+        {message.clarification && onResolveClarification ? (
+          <GlunoClarificationCard
+            clarification={message.clarification}
+            onSelect={onResolveClarification}
+            onSearch={onSearchClarification}
+          />
+        ) : null}
+
         <GlunoSourceRow sources={sources} />
 
         {/* Only on a finished answer that actually reasoned about something.
@@ -262,7 +304,7 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
   userRow: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    marginBottom: 18,
+    marginBottom: 12,
   },
   userColumn: {
     maxWidth: '82%',
@@ -299,6 +341,10 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     fontSize: 11.5,
     color: theme.colors.textSecondary,
   },
+  devDetail: {
+    fontSize: 9.5,
+    color: theme.colors.textMuted,
+  },
   retryAction: {
     fontSize: 11.5,
     fontWeight: '800',
@@ -310,13 +356,13 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 10,
-    marginBottom: 22,
+    marginBottom: 14,
     // Only a small inset on the right: the answer gets the width it needs.
     paddingRight: 4,
   },
   mascotSlot: {
     width: 30,
-    paddingTop: 16,
+    paddingTop: 12,
   },
   glunoColumn: {
     flex: 1,
@@ -334,7 +380,7 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     paddingRight: 4,
   },
   glunoTimestamp: {
-    marginTop: 8,
+    marginTop: 5,
     fontSize: 10.5,
     color: theme.colors.textMuted,
   },

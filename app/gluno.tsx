@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
@@ -34,9 +35,13 @@ import {
   rejectGlunoProposal,
   createGlunoIdempotencyKey,
   isGlunoCancellation,
+  resolveGlunoClarification,
+  searchGlunoClarification,
   sendGlunoMessage,
   updateGlunoProposal,
   type GlunoApiMessage,
+  type GlunoClarification,
+  type GlunoClarificationOption,
   type GlunoApplyResponse,
   type GlunoProposal,
   type GlunoRequestError,
@@ -125,6 +130,8 @@ export default function GlunoScreen() {
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [sending, setSending] = useState(false);
   const [status, setStatus] = useState<GlunoStatus | null>(null);
+  /** Drives only the composer's bottom inset — see the listener below. */
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
   /** The check is in flight. Distinct from "the answer was no". */
   const [statusLoading, setStatusLoading] = useState(true);
   /** The check could not complete AND we have nothing older to fall back on. */
@@ -151,6 +158,20 @@ export default function GlunoScreen() {
   useEffect(() => {
     mountedRef.current = true;
     return () => { mountedRef.current = false; };
+  }, []);
+
+  // Only to decide whether the home-indicator inset still applies below the
+  // composer. `Will*` on iOS so the padding changes with the keyboard's own
+  // animation rather than a frame after it; Android only emits `Did*`.
+  useEffect(() => {
+    const show = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      () => setKeyboardVisible(true));
+    const hide = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => setKeyboardVisible(false));
+
+    return () => { show.remove(); hide.remove(); };
   }, []);
 
   useEffect(() => { statusRef.current = status; }, [status]);
@@ -266,7 +287,15 @@ export default function GlunoScreen() {
       // same list position, real id, real timestamp, no duplicate.
       appendAndFollow((current) => {
         const withoutLocal = current.filter((message) => message.id !== localId);
-        return mergeGlunoMessages(withoutLocal, toChatMessages([turn.userMessage, turn.assistantMessage]));
+        const rows = toChatMessages([turn.userMessage, turn.assistantMessage]);
+
+        // The card belongs to the assistant turn that asked the question.
+        if (turn.clarification) {
+          const last = rows[rows.length - 1];
+          if (last) last.clarification = turn.clarification;
+        }
+
+        return mergeGlunoMessages(withoutLocal, rows);
       });
       return true;
     } catch (error) {
@@ -323,6 +352,76 @@ export default function GlunoScreen() {
     }
   }
 
+  /**
+   * Answers a clarification and appends the continuation.
+   *
+   * The original question is NOT resent — the backend remembers which turn it
+   * was asking about. What lands here is the answer to that question, so the
+   * card is marked resolved in place and the reply appears under it.
+   */
+  const handleResolveClarification = useCallback(
+    async (clarification: GlunoClarification, option: GlunoClarificationOption) => {
+      try {
+        const turn = await resolveGlunoClarification(
+          clarification.id,
+          option.key,
+          // Bound to the CHOICE, so a double tap or a retry after a dropped
+          // connection resolves to the same continuation rather than asking
+          // Gluno the question twice.
+          `clar-${clarification.id}-${option.key}`,
+        );
+
+        setConversationId(turn.conversation.id);
+
+        appendAndFollow((current) => {
+          // Mark the card answered in place. It stays on screen as a record of
+          // what was chosen rather than vanishing under the reply.
+          const withResolved = current.map((message) =>
+            message.clarification?.id === clarification.id
+              ? {
+                  ...message,
+                  clarification: {
+                    ...message.clarification,
+                    status: 'resolved',
+                    selectedKey: option.key,
+                  },
+                }
+              : message);
+
+          return mergeGlunoMessages(
+            withResolved, toChatMessages([turn.assistantMessage]));
+        });
+      } catch {
+        // The question stays on screen and stays answerable. Losing it would
+        // mean retyping something the user already asked.
+        setApplyNotice(t('gluno.clarify.failed'));
+      }
+    },
+    [appendAndFollow, t],
+  );
+
+  /**
+   * Searches within a clarification's own scope and swaps in the results.
+   *
+   * The question stays exactly where it is; only what can answer it changes.
+   * Returns the count so the card can say "nothing matched" without inventing
+   * an error.
+   */
+  const handleSearchClarification = useCallback(
+    async (clarification: GlunoClarification, query: string) => {
+      const updated = await searchGlunoClarification(clarification.id, query);
+
+      setMessages((current) =>
+        current.map((message) =>
+          message.clarification?.id === clarification.id
+            ? { ...message, clarification: updated }
+            : message));
+
+      return updated.options.length;
+    },
+    [],
+  );
+
   async function handleSend() {
     const text = draft.trim();
     if (!text || sending || composerDisabled) return;
@@ -361,7 +460,20 @@ export default function GlunoScreen() {
     // failed turn can never leave two copies of the same question behind.
     setMessages((current) =>
       current.map((entry) =>
-        entry.id === message.id ? { ...entry, pending: true, failed: false } : entry,
+        entry.id === message.id
+          ? {
+              ...entry,
+              pending: true,
+              failed: false,
+              // Cleared, not carried. The previous attempt's code and retry
+              // flag describe an outcome that is being replaced — leaving
+              // them meant a retry that failed differently could still be
+              // read through the old attempt's metadata.
+              failureCode: undefined,
+              errorStatus: undefined,
+              retryable: undefined,
+            }
+          : entry,
       ),
     );
 
@@ -628,9 +740,16 @@ export default function GlunoScreen() {
         </View>
       ) : null}
 
+      {/* Android is left to the OS. app.json sets
+          softwareKeyboardLayoutMode: "resize", so the window already shrinks
+          when the keyboard opens — a "height" behaviour on top of that
+          compensates twice and leaves a gap the size of the composer.
+
+          This is a PUSHED screen, so there is no tab bar underneath and the
+          offset is genuinely zero. */}
       <KeyboardAvoidingView
         style={styles.body}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={0}>
         {loading ? (
           <View style={styles.centered}>
@@ -665,6 +784,8 @@ export default function GlunoScreen() {
                   setReviewProposal(proposal);
                 }}
                 onDismissProposal={handleDismissProposal}
+                onResolveClarification={handleResolveClarification}
+                onSearchClarification={handleSearchClarification}
               />
             )}
             style={styles.list}
@@ -703,7 +824,11 @@ export default function GlunoScreen() {
           </View>
         ) : null}
 
-        <View style={{ paddingBottom: Math.max(insets.bottom, 10) }}>
+        {/* The home-indicator inset belongs BELOW the composer only while the
+            keyboard is closed. With it open the keyboard already covers that
+            strip, so keeping the inset pushes the text field a full 34pt above
+            the keyboard — the gap this screen had. */}
+        <View style={{ paddingBottom: keyboardVisible ? 6 : Math.max(insets.bottom, 10) }}>
           <GlunoComposer
             ref={inputRef}
             value={draft}
@@ -872,8 +997,8 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 16,
+    paddingTop: 10,
+    paddingBottom: 8,
   },
   thinkingRow: {
     flexDirection: 'row',
