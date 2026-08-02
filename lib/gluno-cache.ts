@@ -84,13 +84,21 @@ export type GlunoConversationCacheEntry = {
  * histories on the backend, and mixing them here would show a user the wrong
  * one — so the trip is part of the key, not a filter applied afterwards.
  */
-function scopeKey(userId: string, tripId: string | null) {
-  return `${userId}:${tripId ?? 'global'}`;
+function scopeKey(userId: string, tripId: string | null | undefined) {
+  // Normalised, so the same scope cannot produce two keys. null, undefined and
+  // an empty string all mean "all Adventures" — an empty string is not nullish,
+  // so it used to key its own entry and a scope could quietly split in two.
+  //
+  // The prefixes also stop a trip whose id happened to be the word "global"
+  // from colliding with the global conversation.
+  const trip = typeof tripId === 'string' ? tripId.trim() : '';
+
+  return trip.length > 0 ? `${userId}:adventure:${trip}` : `${userId}:all_adventures`;
 }
 
 const cache = new Map<string, GlunoConversationCacheEntry>();
 
-export function readGlunoCache(userId: string, tripId: string | null): GlunoConversationCacheEntry | null {
+export function readGlunoCache(userId: string, tripId: string | null | undefined): GlunoConversationCacheEntry | null {
   return cache.get(scopeKey(userId, tripId)) ?? null;
 }
 

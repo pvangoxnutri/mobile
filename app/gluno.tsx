@@ -135,7 +135,31 @@ export default function GlunoScreen() {
   const fromScreen = typeof params.screen === 'string' && params.screen.length > 0 ? params.screen : null;
 
   const userId = user?.id ?? 'anonymous';
+
+  /**
+   * THE authoritative scope identity. Everything else is derived from it.
+   *
+   * Before this existed the screen had several competing truths — the route
+   * param, the cached entry, the conversation's own tripId, and the header
+   * label — and switching Adventure moved them at different times.
+   */
+  const scope = tripId ? `adventure:${tripId}` : 'all_adventures';
+
   const cached = readGlunoCache(userId, tripId);
+
+  /**
+   * Which scope the state held by this component belongs to.
+   *
+   * THE BUG THIS FIXES. Choosing an Adventure calls router.replace on the same
+   * route, so the param changes and the component does NOT remount — every
+   * useState initialiser above keeps the previous Adventure's values. The
+   * cache-mirror effect below has tripId in its dependencies, so it fired
+   * immediately and wrote the OLD conversation's messages under the NEW
+   * scope's key. That entry carries loaded: true, so the loader then skipped
+   * the fetch and the new Adventure showed the old one's chat under its name,
+   * permanently and across switches.
+   */
+  const stateScope = useRef(scope);
 
   const [conversationId, setConversationId] = useState<string | null>(cached?.conversationId ?? null);
   // Route param first (instant on open), replaced by the API's value as soon
@@ -179,6 +203,33 @@ export default function GlunoScreen() {
   const [revalidating, setRevalidating] = useState(false);
   const [applyNotice, setApplyNotice] = useState<string | null>(null);
 
+  // ── The atomic scope switch ───────────────────────────────────────────
+  //
+  // Adjusted during RENDER rather than in an effect, deliberately: an effect
+  // runs after the commit, so the previous Adventure's messages would paint
+  // once under the new Adventure's name before being replaced. Setting state
+  // here makes React re-render before committing, so that frame never reaches
+  // the screen — and, critically, it happens BEFORE the cache-mirror effect
+  // below can write the old state under the new key.
+  if (stateScope.current !== scope) {
+    stateScope.current = scope;
+
+    const entry = readGlunoCache(userId, tripId);
+
+    setConversationId(entry?.conversationId ?? null);
+    setTripName(entry?.tripTitle ?? tripTitle);
+    setMessages(entry?.messages ?? []);
+    setHasMore(entry?.hasMore ?? false);
+    setLoading(!entry?.loaded);
+    setScopeVerified(Boolean(entry?.loaded));
+    // Per-scope conditions. Carrying them across would report the previous
+    // Adventure's problem as this one's.
+    setScopeLost(false);
+    setLoadFailed(false);
+    setSending(false);
+    setWaitingVisible(false);
+  }
+
   const listRef = useRef<FlatList<GlunoChatMessage>>(null);
   const inputRef = useRef<TextInput>(null);
   const nearBottomRef = useRef(true);
@@ -214,8 +265,14 @@ export default function GlunoScreen() {
   // Mirror every change into the session cache so leaving and coming back is
   // instant and does not re-fetch. In memory only — see lib/gluno-cache.ts.
   useEffect(() => {
+    // Belt to the render-phase reset's braces. The state and the key must
+    // describe the same scope; writing one Adventure's messages under
+    // another's key is the failure this whole block exists to prevent, and it
+    // is invisible once it has happened.
+    if (stateScope.current !== scope) return;
+
     writeGlunoCache(userId, tripId, { conversationId, tripTitle: tripName, messages, hasMore, loaded: !loading });
-  }, [userId, tripId, conversationId, tripName, messages, hasMore, loading]);
+  }, [scope, userId, tripId, conversationId, tripName, messages, hasMore, loading]);
 
   // Availability first: a screen that cannot answer should say so before the
   // user types a question into it.
@@ -362,6 +419,15 @@ export default function GlunoScreen() {
       // from unverified to verified.
       setScopeVerified(true);
 
+      if (__DEV__) {
+        // A fixed vocabulary value and an id. Never the answer, never the
+        // question — and never on screen.
+        console.log(
+          `[GLUNO] turn origin=${turn.responseOrigin ?? 'none'} `
+          + `messageId=${turn.assistantMessage.id}`,
+        );
+      }
+
       // The optimistic row is REPLACED by the server's, not joined by it —
       // same list position, real id, real timestamp, no duplicate.
       appendAndFollow((current) => {
@@ -506,12 +572,20 @@ export default function GlunoScreen() {
       optionKey: string,
       options?: { date?: string | null; idempotencyKey?: string | null },
     ) => {
+      // The scope this action belongs to. An add started in one Adventure must
+      // never append its answer to another — the request is already bound to a
+      // conversation server-side, so the only way it could is by landing in
+      // the wrong list here.
+      const startedIn = stateScope.current;
+
       const turn = await addGlunoRecommendedPlace(messageId, optionKey, {
         date: options?.date ?? undefined,
         // Reused across retries so a dropped connection — or a retry after a
         // provider failure — cannot add twice.
         idempotencyKey: options?.idempotencyKey ?? `place-${messageId}-${optionKey}`,
       });
+
+      if (stateScope.current !== startedIn) return;
 
       appendAndFollow((current) => {
         const rows = toChatMessages([turn.assistantMessage]);
@@ -563,6 +637,8 @@ export default function GlunoScreen() {
       }
 
       if (action.type === 'show_new_place_suggestions') {
+        const startedIn = stateScope.current;
+
         const turn = await refreshGlunoPlaceSuggestions(
           action.messageId,
           // A FRESH key per press. This is a new list each time, not a retry of
@@ -570,6 +646,8 @@ export default function GlunoScreen() {
           // reusing a key would replay the first list instead of searching.
           createGlunoIdempotencyKey(),
         );
+
+        if (stateScope.current !== startedIn) return;
 
         appendAndFollow((current) => {
           const rows = toChatMessages([turn.assistantMessage]);

@@ -321,6 +321,15 @@ export type GlunoTurnResponse = {
    * is re-verified against the caller's own conversation.
    */
   action?: GlunoTurnAction | null;
+  /**
+   * Which internal path produced this turn.
+   *
+   * DIAGNOSTIC ONLY. Logged in a development build so a report can name the
+   * branch instead of guessing between the model, the history, the cache and
+   * an idempotency replay — never rendered, because user-visible debug text is
+   * exactly what this chat had to have removed once already.
+   */
+  responseOrigin?: string | null;
 };
 
 export type GlunoTurnActionType = 'retry_place_add' | 'show_new_place_suggestions';
