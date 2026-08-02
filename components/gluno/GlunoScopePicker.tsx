@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import ModalSheet from '@/components/modal-sheet';
 import { useI18n } from '@/components/i18n-provider';
@@ -120,6 +120,22 @@ function GlunoScopePicker({ tripId, tripTitle, checking = false, onChange }: Pro
     [onChange, tripId],
   );
 
+  // Which layers are mounted right now, by fixed label.
+  //
+  // A dark empty block over the header could have been any of several things —
+  // the header itself, the modal, its backdrop, the sheet, or a loading
+  // overlay. Naming them turns the next report into a reading rather than an
+  // inspection. Labels and booleans only; no titles, no ids.
+  useEffect(() => {
+    if (!__DEV__) return;
+
+    console.log(
+      `[GLUNO] picker layers modal=${open} backdrop=${open} sheet=${open} `
+      + `list=${open && trips !== null} loading=${open && trips === null && !failed} `
+      + `failed=${open && failed}`,
+    );
+  }, [open, trips, failed]);
+
   const scoped = tripId != null && !checking;
   const label = checking
     ? t('gluno.scope.checking')
@@ -151,16 +167,43 @@ function GlunoScopePicker({ tripId, tripTitle, checking = false, onChange }: Pro
         />
       </TouchableOpacity>
 
-      {/* ── Height, and why it is fixed ──────────────────────────────────
-          NOT autoHeight. That sizes the sheet to its content, and a
-          ScrollView inside a content-sized parent collapses to nothing: the
-          parent asks the child how tall it wants to be, and a ScrollView
-          answers "however much you give me" — which is zero. The sheet
-          opened, the title rendered, and the entire list was invisible.
+      {/* ── Why this sheet needs a Modal around it ───────────────────────
+          THE BUG THIS FIXES. This component renders inside the chat header,
+          which is a `flexDirection: 'row'` box about a hundred points tall.
+          ModalSheet's own container is StyleSheet.absoluteFillObject — and in
+          React Native an absolutely positioned view fills its PARENT, not the
+          screen. So the sheet's dimming backdrop filled the header exactly:
+          a dark empty block from the status bar down over the header, with
+          the chat still visible below it and the list itself clipped out of
+          sight.
 
-          A fixed height gives the ScrollView something to fill, so the list
-          scrolls inside it instead of dictating it. */}
-      <ModalSheet visible={open} onClose={() => setOpen(false)} height={SHEET_HEIGHT}>
+          Every other ModalSheet in the app is rendered at its screen's root,
+          where absoluteFill means the screen. This one cannot be — the pill it
+          belongs to lives in the header — so it gets a real Modal, which is
+          React Native's portal: a full-screen native window above everything,
+          which is the containing block the sheet has always assumed.
+
+          transparent, so the backdrop's own dimming is the only dimming.
+          statusBarTranslucent, so the window starts at the top of the screen
+          on Android rather than below the status bar — otherwise the sheet's
+          idea of "bottom" is short by that height. */}
+      <Modal
+        visible={open}
+        transparent
+        statusBarTranslucent
+        // ModalSheet animates itself; a second animation here would fight it.
+        animationType="none"
+        onRequestClose={() => setOpen(false)}>
+        {/* ── Height, and why it is fixed ────────────────────────────────
+            NOT autoHeight. That sizes the sheet to its content, and a
+            ScrollView inside a content-sized parent collapses to nothing: the
+            parent asks the child how tall it wants to be, and a ScrollView
+            answers "however much you give me" — which is zero. The sheet
+            opened, the title rendered, and the entire list was invisible.
+
+            A fixed height gives the ScrollView something to fill, so the list
+            scrolls inside it instead of dictating it. */}
+        <ModalSheet visible={open} onClose={() => setOpen(false)} height={SHEET_HEIGHT}>
         <Text style={styles.sheetTitle}>{t('gluno.scope.pick')}</Text>
 
         <ScrollView
@@ -227,7 +270,8 @@ function GlunoScopePicker({ tripId, tripTitle, checking = false, onChange }: Pro
             </TouchableOpacity>
           ) : null}
         </ScrollView>
-      </ModalSheet>
+        </ModalSheet>
+      </Modal>
     </>
   );
 }
