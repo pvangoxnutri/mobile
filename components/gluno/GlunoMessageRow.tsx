@@ -106,6 +106,9 @@ const FAILURE_COPY: Record<string, string> = {
   empty_message: 'gluno.error.emptyMessage',
   // Never reached the backend at all — a timeout or a dead connection.
   network_error: 'gluno.error.network',
+  // The provider licensed this place for the answer, not for storage, so
+  // nothing was kept to verify the tap against.
+  place_not_retained: 'gluno.error.placeNotRetained',
 };
 
 /**

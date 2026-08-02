@@ -1026,6 +1026,7 @@ const dictionaries: Record<AppLanguage, Record<string, string>> = {
     'gluno.place.add': 'Add',
     'gluno.place.added': 'Added',
     'gluno.place.back': 'Back to options',
+    'gluno.error.placeNotRetained': "That suggestion is no longer available. Ask Gluno again and I'll find it.",
 
     'gluno.empty.title': 'Hi, I’m Gluno.',
     'gluno.empty.body': 'I can help you plan, improve and explore your trip.',
@@ -2322,6 +2323,7 @@ const dictionaries: Record<AppLanguage, Record<string, string>> = {
     'gluno.place.add': 'Lägg till',
     'gluno.place.added': 'Tillagd',
     'gluno.place.back': 'Tillbaka till alternativen',
+    'gluno.error.placeNotRetained': 'Det förslaget finns inte kvar. Fråga Gluno igen så tar jag fram det.',
 
     'gluno.empty.title': 'Hej, jag är Gluno.',
     'gluno.empty.body': 'Jag kan hjälpa dig att planera, förbättra och utforska din resa.',
