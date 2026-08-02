@@ -23,6 +23,7 @@ import GlunoEmptyState from '@/components/gluno/GlunoEmptyState';
 import GlunoMascot from '@/components/gluno/GlunoMascot';
 import GlunoMessageRow from '@/components/gluno/GlunoMessageRow';
 import GlunoProposalReview from '@/components/gluno/GlunoProposalReview';
+import GlunoScopePicker from '@/components/gluno/GlunoScopePicker';
 import { useI18n } from '@/components/i18n-provider';
 import { useTheme } from '@/components/theme-provider';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
@@ -694,11 +695,6 @@ export default function GlunoScreen() {
   // be a global chat has already misled somebody, and the pill is the only
   // thing on screen telling them which plan Gluno can see.
   const scoped = tripId != null && scopeVerified && !scopeLost;
-  const scopeLabel = scoped
-    ? tripName?.trim() || t('gluno.scope.adventure')
-    : tripId != null && !scopeLost
-      ? t('gluno.scope.checking')
-      : t('gluno.scope.global');
 
   // Inverted list wants newest first; the state stays chronological so every
   // merge, cursor and cache read can reason about it normally.
@@ -727,18 +723,28 @@ export default function GlunoScreen() {
 
         {/* Scope is identity here, not metadata: the same question means
             different things globally and inside an Adventure. */}
-        <View style={[styles.scopePill, scoped && styles.scopePillScoped]}>
-          <Ionicons
-            name={scoped ? 'map-outline' : 'globe-outline'}
-            size={11}
-            color={scoped ? theme.colors.primary : theme.colors.textMeta}
-          />
-          <Text
-            style={[styles.scopeText, scoped && styles.scopeTextScoped]}
-            numberOfLines={1}>
-            {scopeLabel}
-          </Text>
-        </View>
+        {/* A real chooser, not a label. Switching here opens the conversation
+            belonging to that Adventure — a different history, not a re-scoped
+            copy of this one. */}
+        <GlunoScopePicker
+          tripId={scoped ? tripId : null}
+          tripTitle={tripName}
+          checking={tripId != null && !scopeVerified && !scopeLost}
+          onChange={(choice) => {
+            // Any in-flight turn belongs to the scope being left. Its answer
+            // would arrive into a conversation it was never about.
+            abortRef.current?.abort();
+            abortRef.current = null;
+
+            router.replace({
+              pathname: '/gluno',
+              params: {
+                ...(choice.tripId ? { tripId: choice.tripId } : {}),
+                ...(choice.title ? { tripTitle: choice.title } : {}),
+              },
+            } as never);
+          }}
+        />
 
         {/* Quiet on purpose. This is a settings door, not a feature to
             advertise — the data behind it was always being used, and dressing
