@@ -14,7 +14,9 @@ import GlunoRichText from '@/components/gluno/GlunoRichText';
 import { useI18n } from '@/components/i18n-provider';
 import { useTheme } from '@/components/theme-provider';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
-import type { GlunoClarification, GlunoClarificationOption, GlunoPlace, GlunoProposal } from '@/lib/gluno';
+import type {
+  GlunoClarification, GlunoClarificationOption, GlunoPlace, GlunoProposal, GlunoTurnAction,
+} from '@/lib/gluno';
 import type { GlunoChatMessage } from '@/lib/gluno-cache';
 import type { AppTheme } from '@/constants/themes';
 
@@ -57,6 +59,14 @@ type Props = {
    * turn would, and the change happens only when the user applies it.
    */
   onAddPlace?: (messageId: string, place: GlunoPlace) => Promise<void>;
+  /**
+   * Resumes work the server said could be tried again.
+   *
+   * Distinct from onRetry, which re-sends a whole chat turn. This one carries
+   * the server's own ids for a specific action, so nothing goes through the
+   * composer and no second user row appears.
+   */
+  onTurnAction?: (action: GlunoTurnAction) => Promise<void>;
 };
 
 function formatTime(iso: string, locale: string) {
@@ -124,6 +134,18 @@ const FAILURE_COPY: Record<string, string> = {
  * stays retryable, so a code this build has never seen still gets a retry —
  * the safe direction when we cannot tell.
  */
+/**
+ * The button copy for each server-owned action.
+ *
+ * A type absent from here draws NO button. That is the safe direction: a
+ * backend adding an action this build cannot perform must not leave an
+ * unresponsive control in the chat.
+ */
+const ACTION_COPY: Record<string, string> = {
+  retry_place_add: 'gluno.error.retry',
+  show_new_place_suggestions: 'gluno.action.newSuggestions',
+};
+
 const NEVER_RETRYABLE = new Set([
   'ai_not_configured',
   'model_not_configured',
@@ -149,6 +171,7 @@ function GlunoMessageRow({
   onResolveClarification,
   onSearchClarification,
   onAddPlace,
+  onTurnAction,
 }: Props) {
   const styles = useThemedStyles(createStyles);
   const { theme } = useTheme();
@@ -170,6 +193,36 @@ function GlunoMessageRow({
    * disagree.
    */
   const [retrying, setRetrying] = useState(false);
+  /**
+   * A server-owned action in flight for THIS row.
+   *
+   * Same pattern as the retry above: the state that draws the spinner is the
+   * state that blocks a second press, so they cannot disagree about whether
+   * one is running.
+   */
+  const [actionBusy, setActionBusy] = useState(false);
+
+  /**
+   * The button's copy, or nothing when this build cannot act on the type.
+   *
+   * A type it does not recognise draws no button rather than a dead one — a
+   * later backend adding an action must not put an unresponsive control in the
+   * chat.
+   */
+  const actionLabel = ACTION_COPY[message.action?.type ?? ''] ?? null;
+
+  const handleAction = useCallback(async () => {
+    if (actionBusy || !message.action || !onTurnAction) return;
+
+    setActionBusy(true);
+    try {
+      await onTurnAction(message.action);
+    } finally {
+      // Usually gone by now, replaced by the day card or the proposal.
+      // Guarded anyway: a retry that fails again must leave a live button.
+      setActionBusy(false);
+    }
+  }, [actionBusy, message.action, onTurnAction]);
 
   const handleRetry = useCallback(async () => {
     if (retrying) return;
@@ -286,6 +339,41 @@ function GlunoMessageRow({
         <View style={styles.glunoBody}>
           <GlunoRichText text={message.text} />
         </View>
+
+        {/* ── A retry the server owns ─────────────────────────────────────
+            THE BUG THIS REPLACES. A failed add told the user to retype "lägg
+            till Casas de Pilatos". Every id needed to try again was already
+            known server-side, so it comes back as an action and this renders a
+            button — no composer, no second user row, no model.
+
+            Only `retry_place_add` is actionable in this build;
+            `show_new_place_suggestions` arrives but has no handler yet, so it
+            is not drawn rather than drawn dead. */}
+        {actionLabel && onTurnAction ? (
+          <View style={styles.actionRow}>
+            <TouchableOpacity
+              style={styles.actionButton}
+              activeOpacity={0.8}
+              disabled={actionBusy}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: actionBusy, busy: actionBusy }}
+              accessibilityLabel={t(actionLabel)}
+              onPress={handleAction}>
+              {actionBusy ? (
+                <ActivityIndicator size="small" color={theme.colors.primary} />
+              ) : (
+                <>
+                  <Ionicons
+                    name={message.action?.type === 'retry_place_add' ? 'refresh' : 'sparkles-outline'}
+                    size={13}
+                    color={theme.colors.primary}
+                  />
+                  <Text style={styles.actionLabel} numberOfLines={1}>{t(actionLabel)}</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        ) : null}
 
         {/* ── Places ──────────────────────────────────────────────────────
             One place is the answer, and a full card is the right size for it.
@@ -459,6 +547,28 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     lineHeight: 16,
     color: theme.colors.textSecondary,
     textAlign: 'right',
+  },
+  actionRow: {
+    marginTop: 8,
+    flexDirection: 'row',
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 14,
+    backgroundColor: theme.colors.bgLight,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.borderPrimary,
+    minWidth: 96,
+    justifyContent: 'center',
+  },
+  actionLabel: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: theme.colors.primary,
   },
   retryButton: {
     paddingHorizontal: 10,

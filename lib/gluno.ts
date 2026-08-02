@@ -308,6 +308,31 @@ export type GlunoTurnResponse = {
    * Absent on an ordinary turn.
    */
   clarification?: GlunoClarification | null;
+  /**
+   * Something the server can do again after a failure, described entirely by
+   * ids it minted.
+   *
+   * THE BUG THIS EXISTS FOR. A failed add told the user to retype "lägg till
+   * Casas de Pilatos". Everything needed to try again was already known
+   * server-side, so it comes back here and the chat renders a button.
+   *
+   * Sent back UNCHANGED to the route that produced it. Nothing in it is a
+   * place name or a coordinate, and none of it is worth forging: every field
+   * is re-verified against the caller's own conversation.
+   */
+  action?: GlunoTurnAction | null;
+};
+
+export type GlunoTurnActionType = 'retry_place_add' | 'show_new_place_suggestions';
+
+export type GlunoTurnAction = {
+  type: GlunoTurnActionType;
+  messageId?: string | null;
+  optionKey?: string | null;
+  /** A day the user already chose, so a retry does not ask again. */
+  date?: string | null;
+  /** Reused verbatim, so a retry cannot produce a second proposal. */
+  idempotencyKey?: string | null;
 };
 
 export type GlunoConversationDetail = {
@@ -746,6 +771,29 @@ export async function addGlunoRecommendedPlace(
         date: options?.date ?? null,
         idempotencyKey: options?.idempotencyKey ?? null,
       }),
+    },
+  );
+}
+
+/**
+ * Asks for a fresh shortlist from the same search.
+ *
+ * FOR THE ONE CASE RETRY CANNOT FIX: a place that is no longer in the
+ * provider's results. The body carries only an idempotency key — the
+ * destination, the category and the search words all come from what the
+ * message already stored server-side, so this cannot aim the search anywhere
+ * the user did not.
+ */
+export async function refreshGlunoPlaceSuggestions(
+  messageId: string,
+  idempotencyKey?: string,
+) {
+  return glunoJson<GlunoTurnResponse>(
+    `/api/gluno/messages/${encodeURIComponent(messageId)}/places/refresh`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idempotencyKey: idempotencyKey ?? null }),
     },
   );
 }

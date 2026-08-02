@@ -37,6 +37,7 @@ import {
   createGlunoIdempotencyKey,
   isGlunoCancellation,
   addGlunoRecommendedPlace,
+  refreshGlunoPlaceSuggestions,
   resolveGlunoClarification,
   searchGlunoClarification,
   sendGlunoMessage,
@@ -48,6 +49,7 @@ import {
   type GlunoApplyResponse,
   type GlunoProposal,
   type GlunoRequestError,
+  type GlunoTurnAction,
   type GlunoStatus,
 } from '@/lib/gluno';
 import {
@@ -367,10 +369,11 @@ export default function GlunoScreen() {
         const rows = toChatMessages([turn.userMessage, turn.assistantMessage]);
 
         // The card belongs to the assistant turn that asked the question.
-        if (turn.clarification) {
-          const last = rows[rows.length - 1];
-          if (last) last.clarification = turn.clarification;
-        }
+        const last = rows[rows.length - 1];
+        if (turn.clarification && last) last.clarification = turn.clarification;
+        // Same for a retry the server offered — it belongs to the turn that
+        // failed, not to the screen.
+        if (turn.action && last) last.action = turn.action;
 
         return mergeGlunoMessages(withoutLocal, rows);
       });
@@ -490,26 +493,104 @@ export default function GlunoScreen() {
    * Adventure or which day — and the plan changes only when the user applies
    * it.
    */
-  const handleAddPlace = useCallback(
-    async (messageId: string, place: GlunoPlace) => {
-      const turn = await addGlunoRecommendedPlace(messageId, place.optionKey, {
-        // Reused across retries so a dropped connection cannot add twice.
-        idempotencyKey: `place-${messageId}-${place.optionKey}`,
+  /**
+   * Runs an add and appends whatever came back.
+   *
+   * ONE FUNCTION FOR THE BUTTON AND THE RETRY, which is the point: a retry is
+   * the same call with the same ids, not a re-sent chat message. Nothing about
+   * the place travels — the route already identifies it.
+   */
+  const runAddPlace = useCallback(
+    async (
+      messageId: string,
+      optionKey: string,
+      options?: { date?: string | null; idempotencyKey?: string | null },
+    ) => {
+      const turn = await addGlunoRecommendedPlace(messageId, optionKey, {
+        date: options?.date ?? undefined,
+        // Reused across retries so a dropped connection — or a retry after a
+        // provider failure — cannot add twice.
+        idempotencyKey: options?.idempotencyKey ?? `place-${messageId}-${optionKey}`,
       });
 
       appendAndFollow((current) => {
         const rows = toChatMessages([turn.assistantMessage]);
+        const last = rows[rows.length - 1];
 
         // The card belongs to the turn that produced it.
-        if (turn.clarification) {
-          const last = rows[rows.length - 1];
-          if (last) last.clarification = turn.clarification;
-        }
+        if (turn.clarification && last) last.clarification = turn.clarification;
+        // And so does a retry the server offered for this same add.
+        if (turn.action && last) last.action = turn.action;
 
         return mergeGlunoMessages(current, rows);
       });
     },
     [appendAndFollow],
+  );
+
+  const handleAddPlace = useCallback(
+    (messageId: string, place: GlunoPlace) => runAddPlace(messageId, place.optionKey),
+    [runAddPlace],
+  );
+
+  /**
+   * Resumes the add the server said could be tried again.
+   *
+   * THE BUG THIS REPLACES. The user was told to retype "lägg till Casas de
+   * Pilatos". Every id needed to try again was already known server-side, so
+   * this sends those back to the same route — no new user row, nothing through
+   * the composer, no model, and the same idempotency key so a slow first
+   * attempt that eventually succeeded cannot produce a second proposal.
+   */
+  const handleTurnAction = useCallback(
+    async (action: GlunoTurnAction) => {
+      if (!action.messageId) return;
+
+      // TWO DIFFERENT THINGS, deliberately not merged into one call. One tries
+      // the SAME place again; the other asks for a whole new shortlist because
+      // that place is gone. Sharing an implementation would eventually share a
+      // bug, and the two have opposite idempotency needs.
+      if (action.type === 'retry_place_add') {
+        if (!action.optionKey) return;
+
+        await runAddPlace(action.messageId, action.optionKey, {
+          // Carries the day the user already chose, so the retry does not ask
+          // for it a second time.
+          date: action.date,
+          idempotencyKey: action.idempotencyKey,
+        });
+        return;
+      }
+
+      if (action.type === 'show_new_place_suggestions') {
+        const turn = await refreshGlunoPlaceSuggestions(
+          action.messageId,
+          // A FRESH key per press. This is a new list each time, not a retry of
+          // one attempt — two deliberate presses are two legitimate asks, and
+          // reusing a key would replay the first list instead of searching.
+          createGlunoIdempotencyKey(),
+        );
+
+        appendAndFollow((current) => {
+          const rows = toChatMessages([turn.assistantMessage]);
+          const last = rows[rows.length - 1];
+
+          if (turn.action && last) last.action = turn.action;
+
+          // The old block keeps its text but loses its button: the action it
+          // carried has been spent, and leaving it live would offer to fetch
+          // again something already on screen.
+          const spent = current.map((row) =>
+            row.action?.type === 'show_new_place_suggestions'
+              && row.action.messageId === action.messageId
+              ? { ...row, action: undefined }
+              : row);
+
+          return mergeGlunoMessages(spent, rows);
+        });
+      }
+    },
+    [appendAndFollow, runAddPlace],
   );
 
   /**
@@ -906,6 +987,7 @@ export default function GlunoScreen() {
                 onResolveClarification={handleResolveClarification}
                 onSearchClarification={handleSearchClarification}
                 onAddPlace={handleAddPlace}
+                onTurnAction={handleTurnAction}
               />
             )}
             style={styles.list}

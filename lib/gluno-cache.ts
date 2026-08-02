@@ -1,4 +1,4 @@
-import type { GlunoClarification, GlunoNavigation, GlunoPlace, GlunoProposal, GlunoSource } from '@/lib/gluno';
+import type { GlunoClarification, GlunoNavigation, GlunoPlace, GlunoProposal, GlunoSource, GlunoTurnAction } from '@/lib/gluno';
 
 // ──────────────────────────────────────────────────────────────────────────
 // GLUNO — in-memory conversation cache.
@@ -38,6 +38,14 @@ export type GlunoChatMessage = {
    * original question is never retyped.
    */
   clarification?: GlunoClarification;
+  /**
+   * A retry the server owns, attached to a failed add.
+   *
+   * NOT CACHED and not part of the history — it describes work the server can
+   * redo from ids it already has, and offering the button after a reload would
+   * offer a retry for a failure nobody remembers.
+   */
+  action?: GlunoTurnAction;
   /** In flight — rendered dimmed, no timestamp yet. */
   pending?: boolean;
   /** The send failed. Carries a retry action; never silently dropped. */
