@@ -1043,6 +1043,7 @@ const dictionaries: Record<AppLanguage, Record<string, string>> = {
     'gluno.composer.stop': 'Stop',
 
     'gluno.state.thinking': 'Gluno is thinking…',
+    'gluno.state.thinkingAbout': 'Gluno is thinking about {trip}…',
     'gluno.state.unavailable': 'Gluno is not available here yet.',
     'gluno.state.notConfigured': 'Gluno is not configured',
     'gluno.state.notConfiguredHint': 'Development only: set Gluno__ApiKey in the backend .env.local and restart it.',
@@ -2340,6 +2341,7 @@ const dictionaries: Record<AppLanguage, Record<string, string>> = {
     'gluno.composer.stop': 'Stoppa',
 
     'gluno.state.thinking': 'Gluno tänker…',
+    'gluno.state.thinkingAbout': 'Gluno tänker på {trip}…',
     'gluno.state.unavailable': 'Gluno är inte tillgänglig här ännu.',
     'gluno.state.notConfigured': 'Gluno är inte konfigurerad',
     'gluno.state.notConfiguredHint': 'Endast development: sätt Gluno__ApiKey i backendens .env.local och starta om den.',

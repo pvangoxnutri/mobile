@@ -379,16 +379,35 @@ async function glunoJson<T>(path: string, options: RequestInit = {}): Promise<T>
     error.cancelled = response.status === STATUS_CANCELLED;
 
     // Only the small typed envelope, never a message body — on this endpoint
-    // the body can echo conversation content. An unparseable body just leaves
-    // the code undefined, which the UI already handles as "something went
-    // wrong": an unknown future failure code must never crash the chat.
+    // the body can echo conversation content.
     try {
-      const body = (await response.json()) as { error?: unknown; retryable?: unknown };
-      if (typeof body?.error === 'string') error.code = body.error;
+      const body = (await response.json()) as {
+        code?: unknown; error?: unknown; retryable?: unknown;
+      };
+
+      // `code` is the current field, `error` the one earlier builds sent. Same
+      // value from a current backend; either alone is enough.
+      if (typeof body?.code === 'string') error.code = body.code;
+      else if (typeof body?.error === 'string') error.code = body.error;
+
       if (typeof body?.retryable === 'boolean') error.retryable = body.retryable;
     } catch {
-      // Intentionally empty — the status alone is enough.
+      // Intentionally empty — the fallback below covers it.
     }
+
+    // ── The contract, enforced on this side too ─────────────────────────
+    //
+    // THE BUG THIS CLOSES. A 502 arrived with no JSON at all — it came from the
+    // edge, which knows nothing about this envelope — and the chat rendered
+    // "code: missing, retry: missing" beside the message. A response that does
+    // not match the contract is not a response to describe field by field; it
+    // is a failure like any other, and it gets a code the UI has copy for.
+    //
+    // Deliberately not derived from the status: a 502 from our backend and a
+    // 502 from a proxy in front of it mean the same thing to the person
+    // waiting, and neither is worth a different sentence.
+    if (error.code === undefined) error.code = 'request_failed';
+    if (error.retryable === undefined) error.retryable = response.status >= 500;
 
     if (__DEV__) {
       // The four things that decide what the chat shows, and nothing else:

@@ -86,6 +86,15 @@ import type { AppTheme } from '@/constants/themes';
 /** How close to the newest message counts as "following along". */
 const NEAR_BOTTOM_THRESHOLD_PX = 90;
 
+/**
+ * How long a turn has to take before it says it is working.
+ *
+ * Long enough that a fast answer never flashes a status, short enough that a
+ * slow one is never a silent screen. Roughly the point where a wait stops
+ * reading as responsiveness and starts reading as nothing happening.
+ */
+const WAITING_VISIBLE_AFTER_MS = 350;
+
 function createLocalId() {
   return `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -145,6 +154,14 @@ export default function GlunoScreen() {
   const [scopeLost, setScopeLost] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [sending, setSending] = useState(false);
+  /**
+   * Whether the waiting line has earned its place on screen.
+   *
+   * SEPARATE FROM `sending` because a fast answer should not flash a status and
+   * take it away again — that reads as a glitch, not as progress. Below the
+   * threshold the turn simply completes and the answer appears.
+   */
+  const [waitingVisible, setWaitingVisible] = useState(false);
   const [status, setStatus] = useState<GlunoStatus | null>(null);
   /** Drives only the composer's bottom inset — see the listener below. */
   const [keyboardVisible, setKeyboardVisible] = useState(false);
@@ -315,6 +332,13 @@ export default function GlunoScreen() {
     abortRef.current = controller;
     setSending(true);
 
+    // ── The waiting line ──────────────────────────────────────────────────
+    //
+    // Held back briefly so a turn that answers quickly never shows one. A
+    // status that appears and vanishes inside a couple of frames reads as a
+    // flicker, and the answer arriving IS the feedback in that case.
+    const waitTimer = setTimeout(() => setWaitingVisible(true), WAITING_VISIBLE_AFTER_MS);
+
     try {
       const turn = await sendGlunoMessage({
         message: text,
@@ -398,6 +422,11 @@ export default function GlunoScreen() {
       );
       return false;
     } finally {
+      // Cleared whatever happened — answered, failed or stopped. A pending
+      // timer would otherwise reveal the status after the turn was over.
+      clearTimeout(waitTimer);
+      setWaitingVisible(false);
+
       if (abortRef.current === controller) {
         abortRef.current = null;
         setSending(false);
@@ -898,10 +927,19 @@ export default function GlunoScreen() {
             }
             // Inverted list: the header renders below the newest message.
             ListHeaderComponent={
-              sending ? (
+              sending && waitingVisible ? (
                 <View style={styles.thinkingRow}>
                   <ActivityIndicator size="small" color={theme.colors.primary} />
-                  <Text style={styles.thinkingText}>{t('gluno.state.thinking')}</Text>
+                  {/* ONE sentence for the whole wait. Rotating through several
+                      reads as a progress bar that knows something it does not,
+                      and the destination is the only detail here that is
+                      genuinely known — it comes from the user's own Adventure,
+                      never from a provider. */}
+                  <Text style={styles.thinkingText} numberOfLines={1}>
+                    {tripTitle
+                      ? t('gluno.state.thinkingAbout', { trip: tripTitle })
+                      : t('gluno.state.thinking')}
+                  </Text>
                 </View>
               ) : null
             }

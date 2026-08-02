@@ -1,5 +1,5 @@
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { memo, useState } from 'react';
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { memo, useCallback, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import GlunoMascot from '@/components/gluno/GlunoMascot';
 import GlunoNavigationCard from '@/components/gluno/GlunoNavigationCard';
@@ -40,7 +40,8 @@ type Props = {
   /** Null before the first turn creates one — feedback needs somewhere to land. */
   conversationId?: string | null;
   tripId?: string | null;
-  onRetry?: (message: GlunoChatMessage) => void;
+  /** Awaited so the row can show progress on its own button. */
+  onRetry?: (message: GlunoChatMessage) => Promise<void> | void;
   /** Opens the review sheet for a pending proposal. */
   onReviewProposal?: (proposal: GlunoProposal) => void;
   onDismissProposal?: (proposal: GlunoProposal) => void;
@@ -160,6 +161,28 @@ function GlunoMessageRow({
   const [addingKey, setAddingKey] = useState<string | null>(null);
   /** Already turned into a proposal — Add is spent for those. */
   const [addedKeys, setAddedKeys] = useState<string[]>([]);
+  /**
+   * A retry in flight for THIS row.
+   *
+   * Local so the spinner sits on the button rather than over the chat, and so
+   * a second tap while the first is running does nothing — the guard is the
+   * same state that draws the spinner, which is what makes them impossible to
+   * disagree.
+   */
+  const [retrying, setRetrying] = useState(false);
+
+  const handleRetry = useCallback(async () => {
+    if (retrying) return;
+
+    setRetrying(true);
+    try {
+      await onRetry?.(message);
+    } finally {
+      // The row is usually gone by now — replaced by the answer. Guarded
+      // anyway: a retry that fails again must leave a button that still works.
+      setRetrying(false);
+    }
+  }, [message, onRetry, retrying]);
 
   if (message.role === 'user') {
     return (
@@ -194,39 +217,46 @@ function GlunoMessageRow({
               ? message.retryable
               : !(message.failureCode && NEVER_RETRYABLE.has(message.failureCode));
 
-            return canRetry ? (
-              <TouchableOpacity
-                style={styles.retryRow}
-                activeOpacity={0.8}
-                accessibilityRole="button"
-                accessibilityLabel={t('gluno.error.retry')}
-                onPress={() => onRetry?.(message)}>
-                <Ionicons name="refresh" size={12} color={theme.colors.error} />
-                {/* A localised code — never the error's own message, which can
-                    carry backend, SDK or timeout detail. */}
-                <Text style={styles.retryText}>{reason}</Text>
-                <Text style={styles.retryAction}>{t('gluno.error.retry')}</Text>
-                {/* TEMPORARY, __DEV__ only — remove once the cause is known.
-                    Codes and a status, never content. */}
-                {__DEV__ ? (
-                  <Text style={styles.devDetail}>
-                    {`HTTP:${message.errorStatus ?? '-'} `}
-                    {`Code:${message.failureCode ?? 'missing'} `}
-                    {`Retry:${message.retryable ?? 'missing'}`}
-                  </Text>
-                ) : null}
-              </TouchableOpacity>
-            ) : (
-              <View style={styles.retryRow}>
-                <Ionicons name="information-circle-outline" size={12} color={theme.colors.textMeta} />
-                <Text style={styles.retryText}>{reason}</Text>
-                {/* TEMPORARY, __DEV__ only — see the retry branch above. */}
-                {__DEV__ ? (
-                  <Text style={styles.devDetail}>
-                    {`HTTP:${message.errorStatus ?? '-'} `}
-                    {`Code:${message.failureCode ?? 'missing'} `}
-                    {`Retry:${message.retryable ?? 'missing'}`}
-                  </Text>
+            // ── Layout ────────────────────────────────────────────────────
+            //
+            // A COLUMN, not a row. The reason is a sentence and the retry is a
+            // button, and side by side inside a right-aligned column with a max
+            // width the sentence had nowhere to go: it overflowed to the LEFT,
+            // off the edge of the screen, so the first words of every error
+            // were unreadable. Stacking gives the text the full width and takes
+            // the button out of the equation entirely.
+            //
+            // The text comes FIRST so a screen reader reads what went wrong
+            // before it offers the action.
+            return (
+              <View style={styles.errorBlock}>
+                <View style={styles.errorLine}>
+                  <Ionicons
+                    name={canRetry ? 'refresh' : 'information-circle-outline'}
+                    size={12}
+                    color={canRetry ? theme.colors.error : theme.colors.textMeta}
+                    style={styles.errorIcon}
+                  />
+                  {/* A localised code — never the error's own message, which
+                      can carry backend, SDK or timeout detail. */}
+                  <Text style={styles.errorText} accessibilityRole="text">{reason}</Text>
+                </View>
+
+                {canRetry ? (
+                  <TouchableOpacity
+                    style={styles.retryButton}
+                    activeOpacity={0.8}
+                    disabled={retrying}
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: retrying, busy: retrying }}
+                    accessibilityLabel={t('gluno.error.retry')}
+                    onPress={handleRetry}>
+                    {retrying ? (
+                      <ActivityIndicator size="small" color={theme.colors.primary} />
+                    ) : (
+                      <Text style={styles.retryAction}>{t('gluno.error.retry')}</Text>
+                    )}
+                  </TouchableOpacity>
                 ) : null}
               </View>
             );
@@ -392,19 +422,56 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     fontSize: 10.5,
     color: theme.colors.textMuted,
   },
-  retryRow: {
+  /**
+   * The failure block under a user bubble.
+   *
+   * `alignSelf: stretch` is what fixes the reported bug. The column around it
+   * is `alignItems: 'flex-end'`, which sizes a child to its content and pins it
+   * to the right — so a line wider than the column overflowed leftwards, off
+   * the screen. Stretching makes the block exactly the column's width, and the
+   * text wraps inside it instead of escaping.
+   */
+  errorBlock: {
     marginTop: 6,
+    alignSelf: 'stretch',
+    alignItems: 'flex-end',
+    gap: 4,
+  },
+  errorLine: {
     flexDirection: 'row',
-    alignItems: 'center',
+    // Not centre: with two or more lines of text the icon belongs beside the
+    // first one, not floating in the middle of the paragraph.
+    alignItems: 'flex-start',
     gap: 6,
+    // Matches the user bubble's own inset, so the text starts on the same
+    // vertical as the message above it.
+    paddingHorizontal: 2,
   },
-  retryText: {
+  errorIcon: {
+    // Optical alignment with the first line of 11.5/16 text.
+    marginTop: 2,
+  },
+  errorText: {
+    // THE OTHER HALF OF THE FIX: without this the text refuses to wrap inside a
+    // row and pushes the row wider than its parent.
+    flexShrink: 1,
     fontSize: 11.5,
+    lineHeight: 16,
     color: theme.colors.textSecondary,
+    textAlign: 'right',
   },
-  devDetail: {
-    fontSize: 9.5,
-    color: theme.colors.textMuted,
+  retryButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    backgroundColor: theme.colors.bgLight,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.borderPrimary,
+    // A separate row of its own, so a long reason can never squeeze it and it
+    // can never squeeze a long reason.
+    minWidth: 74,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   retryAction: {
     fontSize: 11.5,
