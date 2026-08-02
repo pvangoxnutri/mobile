@@ -266,6 +266,14 @@ export type GlunoApiMessage = {
    * actually means something to a reader.
    */
   sources: GlunoSource[];
+  /**
+   * The tappable question this turn asked, if any.
+   *
+   * Carried on the message so a reloaded conversation renders its cards again.
+   * Without it, reopening Gluno turns "Which Adventure is this about?" into a
+   * question with nothing under it — one the user has to answer by typing.
+   */
+  clarification?: GlunoClarification | null;
   createdAt: string;
 };
 

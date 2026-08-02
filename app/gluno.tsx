@@ -100,6 +100,9 @@ function toChatMessages(messages: GlunoApiMessage[]): GlunoChatMessage[] {
       places: message.places?.length ? message.places : undefined,
       navigations: message.navigations?.length ? message.navigations : undefined,
       sources: message.sources?.length ? message.sources : undefined,
+      // Restored from history, so reopening the chat brings the card back
+      // rather than a question with nothing to tap.
+      clarification: message.clarification ?? undefined,
     }));
 }
 
