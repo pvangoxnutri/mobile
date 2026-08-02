@@ -1023,6 +1023,9 @@ const dictionaries: Record<AppLanguage, Record<string, string>> = {
     'gluno.scope.pick': 'Which Adventure?',
     'gluno.scope.allSubtitle': 'Help across all your Adventures',
     'gluno.scope.empty': 'No Adventures yet.',
+    'gluno.place.add': 'Add',
+    'gluno.place.added': 'Added',
+    'gluno.place.back': 'Back to options',
 
     'gluno.empty.title': 'Hi, I’m Gluno.',
     'gluno.empty.body': 'I can help you plan, improve and explore your trip.',
@@ -2317,6 +2320,9 @@ const dictionaries: Record<AppLanguage, Record<string, string>> = {
     'gluno.scope.pick': 'Vilket Adventure?',
     'gluno.scope.allSubtitle': 'Hjälp över alla dina Adventures',
     'gluno.scope.empty': 'Inga Adventures än.',
+    'gluno.place.add': 'Lägg till',
+    'gluno.place.added': 'Tillagd',
+    'gluno.place.back': 'Tillbaka till alternativen',
 
     'gluno.empty.title': 'Hej, jag är Gluno.',
     'gluno.empty.body': 'Jag kan hjälpa dig att planera, förbättra och utforska din resa.',

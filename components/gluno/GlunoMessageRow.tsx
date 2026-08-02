@@ -1,5 +1,5 @@
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import GlunoMascot from '@/components/gluno/GlunoMascot';
 import GlunoNavigationCard from '@/components/gluno/GlunoNavigationCard';
@@ -7,12 +7,14 @@ import GlunoFeedbackRow from '@/components/gluno/GlunoFeedbackRow';
 import GlunoClarificationCard from '@/components/gluno/GlunoClarificationCard';
 import GlunoSourceRow from '@/components/gluno/GlunoSourceRow';
 import GlunoPlaceCard from '@/components/gluno/GlunoPlaceCard';
+import GlunoPlaceDetailCard from '@/components/gluno/GlunoPlaceDetailCard';
+import GlunoPlaceRecommendationList from '@/components/gluno/GlunoPlaceRecommendationList';
 import GlunoProposalCard from '@/components/gluno/GlunoProposalCard';
 import GlunoRichText from '@/components/gluno/GlunoRichText';
 import { useI18n } from '@/components/i18n-provider';
 import { useTheme } from '@/components/theme-provider';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
-import type { GlunoClarification, GlunoClarificationOption, GlunoProposal } from '@/lib/gluno';
+import type { GlunoClarification, GlunoClarificationOption, GlunoPlace, GlunoProposal } from '@/lib/gluno';
 import type { GlunoChatMessage } from '@/lib/gluno-cache';
 import type { AppTheme } from '@/constants/themes';
 
@@ -47,6 +49,13 @@ type Props = {
     clarification: GlunoClarification, option: GlunoClarificationOption) => Promise<void>;
   /** Searches within the clarification scope. Returns the result count. */
   onSearchClarification?: (clarification: GlunoClarification, query: string) => Promise<number>;
+  /**
+   * Turns a recommended place into a proposal.
+   *
+   * Never a direct write — the response carries the same proposal card a chat
+   * turn would, and the change happens only when the user applies it.
+   */
+  onAddPlace?: (messageId: string, place: GlunoPlace) => Promise<void>;
 };
 
 function formatTime(iso: string, locale: string) {
@@ -135,11 +144,19 @@ function GlunoMessageRow({
   onDismissProposal,
   onResolveClarification,
   onSearchClarification,
+  onAddPlace,
 }: Props) {
   const styles = useThemedStyles(createStyles);
   const { theme } = useTheme();
   const { t, language } = useI18n();
   const locale = language === 'sv' ? 'sv-SE' : 'en-GB';
+
+  /** Which recommendation's detail card is open. One at a time. */
+  const [openPlaceKey, setOpenPlaceKey] = useState<string | null>(null);
+  /** The place whose Add is in flight. Guards a double tap locally. */
+  const [addingKey, setAddingKey] = useState<string | null>(null);
+  /** Already turned into a proposal — Add is spent for those. */
+  const [addedKeys, setAddedKeys] = useState<string[]>([]);
 
   if (message.role === 'user') {
     return (
@@ -220,6 +237,7 @@ function GlunoMessageRow({
 
   const proposals = message.proposals ?? [];
   const places = message.places ?? [];
+  const openPlace = places.find((place) => place.optionKey === openPlaceKey) ?? null;
   const navigations = message.navigations ?? [];
   const sources = message.sources ?? [];
 
@@ -236,11 +254,51 @@ function GlunoMessageRow({
           <GlunoRichText text={message.text} />
         </View>
 
-        {/* Places first: they are what the answer is about, and the proposal
-            (if any) is usually what to do with one of them. */}
-        {places.map((place) => (
-          <GlunoPlaceCard key={`${message.id}-${place.externalId}`} place={place} />
-        ))}
+        {/* ── Places ──────────────────────────────────────────────────────
+            One place is the answer, and a full card is the right size for it.
+            SEVERAL are a shortlist: six full cards is a page nobody scrolls to
+            the end of, so they become tappable rows and the detail opens
+            underneath whichever one was chosen.
+
+            Before this, several recommendations arrived as prose — the
+            information was there and the action was not, and acting on one
+            meant typing its name back. */}
+        {places.length === 1 ? (
+          <GlunoPlaceCard key={`${message.id}-${places[0].externalId}`} place={places[0]} />
+        ) : places.length > 1 ? (
+          <>
+            <GlunoPlaceRecommendationList
+              places={places}
+              openKey={openPlaceKey}
+              onSelect={(place) =>
+                setOpenPlaceKey((current) =>
+                  current === place.optionKey ? null : place.optionKey)
+              }
+            />
+
+            {openPlace ? (
+              <GlunoPlaceDetailCard
+                place={openPlace}
+                adding={addingKey === openPlace.optionKey}
+                added={addedKeys.includes(openPlace.optionKey)}
+                onAdd={async (place) => {
+                  if (!onAddPlace || addingKey !== null) return;
+
+                  setAddingKey(place.optionKey);
+                  try {
+                    await onAddPlace(message.id, place);
+                    // Spent, so a second tap cannot produce a second proposal
+                    // for the same place.
+                    setAddedKeys((current) => [...current, place.optionKey]);
+                  } finally {
+                    setAddingKey(null);
+                  }
+                }}
+                onBack={() => setOpenPlaceKey(null)}
+              />
+            ) : null}
+          </>
+        ) : null}
 
         {/* Last: a proposal is the thing to decide on, a place is what the
             answer is about, and "here's where that lives" is the footnote. */}

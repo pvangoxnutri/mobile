@@ -36,6 +36,7 @@ import {
   rejectGlunoProposal,
   createGlunoIdempotencyKey,
   isGlunoCancellation,
+  addGlunoRecommendedPlace,
   resolveGlunoClarification,
   searchGlunoClarification,
   sendGlunoMessage,
@@ -43,6 +44,7 @@ import {
   type GlunoApiMessage,
   type GlunoClarification,
   type GlunoClarificationOption,
+  type GlunoPlace,
   type GlunoApplyResponse,
   type GlunoProposal,
   type GlunoRequestError,
@@ -449,6 +451,36 @@ export default function GlunoScreen() {
       }
     },
     [appendAndFollow, t],
+  );
+
+  /**
+   * Turns a recommended place into a proposal and appends the result.
+   *
+   * NEVER A DIRECT WRITE. The response carries whatever the backend decided
+   * the next step is — a proposal card to review, or a question about which
+   * Adventure or which day — and the plan changes only when the user applies
+   * it.
+   */
+  const handleAddPlace = useCallback(
+    async (messageId: string, place: GlunoPlace) => {
+      const turn = await addGlunoRecommendedPlace(messageId, place.optionKey, {
+        // Reused across retries so a dropped connection cannot add twice.
+        idempotencyKey: `place-${messageId}-${place.optionKey}`,
+      });
+
+      appendAndFollow((current) => {
+        const rows = toChatMessages([turn.assistantMessage]);
+
+        // The card belongs to the turn that produced it.
+        if (turn.clarification) {
+          const last = rows[rows.length - 1];
+          if (last) last.clarification = turn.clarification;
+        }
+
+        return mergeGlunoMessages(current, rows);
+      });
+    },
+    [appendAndFollow],
   );
 
   /**
@@ -863,6 +895,7 @@ export default function GlunoScreen() {
                 onDismissProposal={handleDismissProposal}
                 onResolveClarification={handleResolveClarification}
                 onSearchClarification={handleSearchClarification}
+                onAddPlace={handleAddPlace}
               />
             )}
             style={styles.list}

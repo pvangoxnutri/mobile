@@ -194,6 +194,14 @@ export type GlunoApplyResponse = {
  * `signals` are SideQuest's OWN ranking reasons, not the provider's ordering.
  */
 export type GlunoPlace = {
+  /**
+   * The handle sent back when this place is tapped.
+   *
+   * Server-generated and positional, scoped to the message that produced it.
+   * The app never sends a provider id, a name or a coordinate back — all three
+   * are things the server already knows and a client could otherwise change.
+   */
+  optionKey: string;
   /** Provider id, e.g. "tripadvisor". Stays per-result, never per-list. */
   provider: string;
   /** Namespaced id, e.g. "tripadvisor:12345". */
@@ -682,6 +690,47 @@ export type GlunoConflictMeta = {
  * The response is an ordinary turn — the answer to the question the user
  * asked before the choice was needed.
  */
+/**
+ * One recommended place, in full, for the detail card.
+ *
+ * Read back from the turn that recommended it rather than searched again — a
+ * second lookup could return different data, and the card would then show
+ * something the user was never recommended.
+ */
+export async function getGlunoRecommendedPlace(messageId: string, optionKey: string) {
+  return glunoJson<GlunoPlace>(
+    `/api/gluno/messages/${encodeURIComponent(messageId)}/places/${encodeURIComponent(optionKey)}`,
+  );
+}
+
+/**
+ * Turns a recommended place into a proposal awaiting approval.
+ *
+ * Never a direct write: the response carries the same proposal card a chat
+ * turn would, and the change happens only when the user applies it.
+ *
+ * The body carries no place data at all — the route already identifies it, and
+ * a name or a coordinate travelling from the app would be something the server
+ * would have to trust.
+ */
+export async function addGlunoRecommendedPlace(
+  messageId: string,
+  optionKey: string,
+  options?: { date?: string; idempotencyKey?: string },
+) {
+  return glunoJson<GlunoTurnResponse>(
+    `/api/gluno/messages/${encodeURIComponent(messageId)}/places/${encodeURIComponent(optionKey)}/add`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        date: options?.date ?? null,
+        idempotencyKey: options?.idempotencyKey ?? null,
+      }),
+    },
+  );
+}
+
 export async function resolveGlunoClarification(
   clarificationId: string,
   optionKey: string,
