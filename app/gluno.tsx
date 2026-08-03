@@ -103,11 +103,18 @@ function createLocalId() {
   return `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-/** API shape → what the list renders. System and tool turns never become rows. */
-function toChatMessages(messages: GlunoApiMessage[]): GlunoChatMessage[] {
+/**
+ * API shape → what the list renders. System and tool turns never become rows.
+ *
+ * `live` marks rows applied straight from a turn RESPONSE, as opposed to a
+ * history or page load. It describes the transport, nothing else — the
+ * producing code path is `responseOrigin`, which both kinds of row may carry.
+ */
+function toChatMessages(messages: GlunoApiMessage[], live = false): GlunoChatMessage[] {
   return messages
     .filter((message) => message.isRenderable)
     .map((message) => ({
+      live: live || undefined,
       id: message.id,
       role: message.role === 'assistant' ? ('gluno' as const) : ('user' as const),
       text: message.text,
@@ -119,6 +126,10 @@ function toChatMessages(messages: GlunoApiMessage[]): GlunoChatMessage[] {
       // Restored from history, so reopening the chat brings the card back
       // rather than a question with nothing to tap.
       clarification: message.clarification ?? undefined,
+      // The producing branch, now stored server-side — history rows carry it
+      // too. Which TRANSPORT delivered the row is `live`, set only by the
+      // handler that applied a live response; the two are separate facts.
+      responseOrigin: message.responseOrigin ?? undefined,
     }));
 }
 
@@ -436,7 +447,7 @@ export default function GlunoScreen() {
       // same list position, real id, real timestamp, no duplicate.
       appendAndFollow((current) => {
         const withoutLocal = current.filter((message) => message.id !== localId);
-        const rows = toChatMessages([turn.userMessage, turn.assistantMessage]);
+        const rows = toChatMessages([turn.userMessage, turn.assistantMessage], true);
 
         // The card belongs to the assistant turn that asked the question.
         const last = rows[rows.length - 1];
@@ -546,7 +557,7 @@ export default function GlunoScreen() {
               : message);
 
           return mergeGlunoMessages(
-            withResolved, toChatMessages([turn.assistantMessage]));
+            withResolved, toChatMessages([turn.assistantMessage], true));
         });
       } catch {
         // The question stays on screen and stays answerable. Losing it would
@@ -594,7 +605,7 @@ export default function GlunoScreen() {
       if (stateScope.current !== startedIn) return;
 
       appendAndFollow((current) => {
-        const rows = toChatMessages([turn.assistantMessage]);
+        const rows = toChatMessages([turn.assistantMessage], true);
         const last = rows[rows.length - 1];
 
         // The card belongs to the turn that produced it.
@@ -689,7 +700,7 @@ export default function GlunoScreen() {
         if (stateScope.current !== startedIn) return;
 
         appendAndFollow((current) => {
-          const rows = toChatMessages([turn.assistantMessage]);
+          const rows = toChatMessages([turn.assistantMessage], true);
           const last = rows[rows.length - 1];
 
           if (turn.action && last) last.action = turn.action;

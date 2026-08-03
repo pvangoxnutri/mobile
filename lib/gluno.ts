@@ -282,6 +282,15 @@ export type GlunoApiMessage = {
    * question with nothing under it — one the user has to answer by typing.
    */
   clarification?: GlunoClarification | null;
+  /**
+   * Which internal backend path produced this turn — a fixed vocabulary value
+   * (see GlunoResponseOrigins server-side), preserved into history.
+   *
+   * SideQuest's own diagnostic metadata: never provider content, never
+   * rendered. It exists so a debug export can name the branch after a reload
+   * instead of guessing.
+   */
+  responseOrigin?: string | null;
   createdAt: string;
 };
 

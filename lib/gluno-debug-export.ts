@@ -114,16 +114,19 @@ function metadata(message: GlunoChatMessage): string[] {
 }
 
 /**
- * Where a row came from, as far as the app can tell.
+ * Which TRANSPORT delivered a row — and nothing about which code path
+ * produced it, which is responseOrigin's job and printed separately.
  *
  * A local id means an optimistic row this device created and the server has
- * not replaced yet. Everything else came from a response or from the history
- * load — the app cannot distinguish those two after the fact, which is
- * exactly why the backend now stamps responseOrigin.
+ * not replaced yet. `live` is set only by the handler that applied a turn
+ * response in this session; everything else arrived through a history or
+ * page load. Conflating the two was a bug: history rows carry responseOrigin
+ * now, and reading origin as liveness would have relabelled every reloaded
+ * row as a live response.
  */
 function source(message: GlunoChatMessage): string {
   if (message.id.startsWith('local-')) return 'local_optimistic';
-  return message.responseOrigin ? 'live_response' : 'history_or_cache';
+  return message.live ? 'live_response' : 'history_or_cache';
 }
 
 /**

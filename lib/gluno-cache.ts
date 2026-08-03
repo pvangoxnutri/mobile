@@ -49,12 +49,19 @@ export type GlunoChatMessage = {
   /**
    * Which internal path on the server produced this turn.
    *
-   * DIAGNOSTIC ONLY, and only ever set on a live response — a row restored
-   * from history has no way to know. Never rendered; it exists so a copied
-   * transcript can name the branch instead of guessing between the model, the
-   * history, the cache and an idempotency replay.
+   * DIAGNOSTIC ONLY. Stored server-side now, so history rows carry it too —
+   * it names the producing CODE PATH, while `live` names the transport that
+   * delivered the row. Never rendered; it exists so a copied transcript can
+   * name the branch instead of guessing between the model, the history, the
+   * cache and an idempotency replay.
    */
   responseOrigin?: string;
+  /**
+   * True only on a row applied straight from a turn RESPONSE in this session.
+   * A transport fact, deliberately separate from `responseOrigin`: a reloaded
+   * row can name its origin without claiming to be live.
+   */
+  live?: boolean;
   /** In flight — rendered dimmed, no timestamp yet. */
   pending?: boolean;
   /** The send failed. Carries a retry action; never silently dropped. */
