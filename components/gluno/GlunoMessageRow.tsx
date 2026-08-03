@@ -117,8 +117,16 @@ const FAILURE_COPY: Record<string, string> = {
   conversation_archived: 'gluno.error.conversationArchived',
   duplicate_in_flight: 'gluno.error.alreadySending',
   empty_message: 'gluno.error.emptyMessage',
-  // Never reached the backend at all — a timeout or a dead connection.
+  // Never reached the backend at all — a dead connection, or our own
+  // deadline firing before any answer came.
   network_error: 'gluno.error.network',
+  request_timeout: 'gluno.error.timeout',
+  // A proxy answered INSTEAD of the backend — 502/503/504 with no Gluno
+  // envelope. Named as a broken connection, because presenting it as Gluno
+  // answering wrongly blames a service the request never reached.
+  edge_502: 'gluno.error.connectionLost',
+  edge_503: 'gluno.error.connectionLost',
+  edge_504: 'gluno.error.connectionLost',
   // The provider licensed this place for the answer, not for storage, so
   // nothing was kept to verify the tap against.
   place_not_retained: 'gluno.error.placeNotRetained',

@@ -388,16 +388,48 @@ export type GlunoRequestError = Error & {
   requestId?: string;
   /** Which backend branch produced the failure, when the body said. */
   responseOrigin?: string;
+  /**
+   * The id THIS DEVICE minted before the request left it. It exists for
+   * exactly the failure the server id cannot cover: a 502 from the edge never
+   * carries X-Gluno-Request-Id, but the client id was logged on both sides
+   * before anything could fail.
+   */
+  clientRequestId?: string;
+  /** Structure of a contractless answer: media type and declared length. */
+  contentType?: string;
+  bodyLength?: number;
 };
 
 /** HTTP 499: the conventional "client closed request". */
 const STATUS_CANCELLED = 499;
 
+/**
+ * An id minted on THIS DEVICE before the request leaves it.
+ *
+ * The server's own request id only exists when our backend answered. The one
+ * failure mode that motivated this — a 502 from the edge with no envelope and
+ * no header — is exactly the one where only a client-side id can correlate
+ * the red bubble with anything at all. Opaque, never used for authorization.
+ */
+export function createGlunoClientRequestId() {
+  return `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+}
+
+/** The statuses a proxy in front of the backend answers with on its own. */
+const EDGE_STATUSES = new Set([502, 503, 504]);
+
 async function glunoJson<T>(path: string, options: RequestInit = {}): Promise<T> {
+  // Before the fetch, so it exists whatever happens next. Sent as a header
+  // the backend echoes and logs — the join key that works even when the
+  // response never came from our backend at all.
+  const clientRequestId = createGlunoClientRequestId();
+  const headers = new Headers(options.headers);
+  headers.set('X-Gluno-Client-Request-Id', clientRequestId);
+
   let response: Response;
 
   try {
-    response = await apiFetch(path, options, GLUNO_TIMEOUT_MS, PRIVATE);
+    response = await apiFetch(path, { ...options, headers }, GLUNO_TIMEOUT_MS, PRIVATE);
   } catch (transport) {
     // The request never produced a response: a timeout, a dead radio, a
     // backend that could not be reached at all.
@@ -409,12 +441,15 @@ async function glunoJson<T>(path: string, options: RequestInit = {}): Promise<T>
     // thing.
     if ((transport as { name?: string })?.name === 'AbortError'
       && (options.signal as AbortSignal | undefined)?.aborted) {
-      throw transport;   // The user pressed Stop. Not a failure.
+      throw transport;   // The user pressed Stop, or the screen left. Not a failure.
     }
 
     const error = new Error('Gluno request failed.') as GlunoRequestError;
-    error.code = 'network_error';
+    // Our own deadline firing and a dead radio are different facts with
+    // different words — apiFetch marks the former.
+    error.code = (transport as { timedOut?: boolean })?.timedOut ? 'request_timeout' : 'network_error';
     error.retryable = true;
+    error.clientRequestId = clientRequestId;
 
     if (__DEV__) {
       // Names, codes and the endpoint path only — never a body, a token or
@@ -422,7 +457,8 @@ async function glunoJson<T>(path: string, options: RequestInit = {}): Promise<T>
       // exists to correlate with.
       console.log(
         `[GLUNO] request requestId=- endpoint=${path} httpStatus=- parsed=false `
-        + 'errorCode=network_error responseOrigin=- fallbackUsed=false',
+        + `errorCode=${error.code} responseOrigin=- fallbackUsed=false `
+        + `clientRequestId=${clientRequestId}`,
       );
     }
 
@@ -438,6 +474,12 @@ async function glunoJson<T>(path: string, options: RequestInit = {}): Promise<T>
     error.status = response.status;
     error.cancelled = response.status === STATUS_CANCELLED;
     error.requestId = requestId;
+    error.clientRequestId = clientRequestId;
+    // Structure only — a media type and a declared length say whether this
+    // was JSON that failed the contract or an HTML error page from a proxy.
+    // The body itself is never kept.
+    error.contentType = response.headers.get('content-type') ?? '-';
+    error.bodyLength = Number(response.headers.get('content-length') ?? -1);
 
     // Whether the body yielded a readable Gluno envelope — the fact that
     // separates "the backend named this failure" from "something answered
@@ -478,7 +520,15 @@ async function glunoJson<T>(path: string, options: RequestInit = {}): Promise<T>
     // 502 from a proxy in front of it mean the same thing to the person
     // waiting, and neither is worth a different sentence.
     const fallbackUsed = error.code === undefined;
-    if (error.code === undefined) error.code = 'request_failed';
+    if (error.code === undefined) {
+      // No readable contract at all. A 502/503/504 in that state is the
+      // signature of a proxy answering INSTEAD of the backend — named as
+      // such so the export can tell an edge failure from everything else.
+      // Anything else contractless stays request_failed.
+      error.code = EDGE_STATUSES.has(response.status)
+        ? `edge_${response.status}`
+        : 'request_failed';
+    }
     if (error.retryable === undefined) error.retryable = response.status >= 500;
 
     if (__DEV__) {
@@ -489,7 +539,8 @@ async function glunoJson<T>(path: string, options: RequestInit = {}): Promise<T>
         `[GLUNO] request requestId=${error.requestId ?? '-'} endpoint=${path} `
         + `httpStatus=${error.status} parsed=${parsed} errorCode=${error.code} `
         + `responseOrigin=${error.responseOrigin ?? '-'} fallbackUsed=${fallbackUsed} `
-        + `retryable=${error.retryable}`,
+        + `retryable=${error.retryable} clientRequestId=${clientRequestId} `
+        + `contentType=${error.contentType} bodyLength=${error.bodyLength}`,
       );
     }
 
@@ -503,7 +554,7 @@ async function glunoJson<T>(path: string, options: RequestInit = {}): Promise<T>
     console.log(
       `[GLUNO] request requestId=${requestId ?? '-'} endpoint=${path} `
       + `httpStatus=${response.status} parsed=true errorCode=none `
-      + 'responseOrigin=- fallbackUsed=false',
+      + `responseOrigin=- fallbackUsed=false clientRequestId=${clientRequestId}`,
     );
   }
 

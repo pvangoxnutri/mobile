@@ -89,6 +89,19 @@ export type GlunoChatMessage = {
    * Absent when the request never produced a server response.
    */
   requestId?: string;
+  /**
+   * The id THIS DEVICE minted before the request left it. Present on every
+   * failure — including the edge 502 that carries no server id at all, which
+   * is the case it exists for.
+   */
+  clientRequestId?: string;
+  /**
+   * Structure of a contractless failure response: the media type and declared
+   * length. What separates "JSON that failed the contract" from "an HTML
+   * error page from a proxy". Never the body itself.
+   */
+  errorContentType?: string;
+  errorBodyLength?: number;
 };
 
 export type GlunoConversationCacheEntry = {

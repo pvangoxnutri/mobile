@@ -509,6 +509,12 @@ export default function GlunoScreen() {
                 requestId: failure.requestId,
                 responseOrigin: failure.responseOrigin,
                 live: failure.status !== undefined,
+                // The device's own id — the one join key that exists even
+                // when the answer never came from our backend — plus the
+                // shape of a contractless answer. Structure only, never body.
+                clientRequestId: failure.clientRequestId,
+                errorContentType: failure.contentType,
+                errorBodyLength: failure.bodyLength,
               }
             : message,
         ),
@@ -764,14 +770,13 @@ export default function GlunoScreen() {
       ...current,
       { id: localId, role: 'user', text, createdAt: new Date().toISOString(), pending: true },
     ]);
-    // Cleared only now, once the message has been accepted into the list —
-    // and restored below if the call fails and the field is still empty.
+    // Cleared once the message is in the list, and it STAYS cleared whatever
+    // the request does. The failed row keeps the original text and the retry
+    // button resends from THAT state — refilling the composer here made every
+    // failure hand the user their own sentence back to deal with, twice.
     setDraft('');
 
-    const ok = await deliver(text, localId, idempotencyKey);
-    if (!ok) {
-      setDraft((current) => (current.trim().length === 0 ? text : current));
-    }
+    await deliver(text, localId, idempotencyKey);
   }
 
   /** Aborts the turn in flight. Nothing is stored server-side either. */

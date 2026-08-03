@@ -225,6 +225,20 @@ export async function apiFetch(
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   const fetchStart = Date.now();
 
+  // ── The caller's own signal is honoured ─────────────────────────────────
+  //
+  // THE BUG THIS CLOSES. The spread below REPLACES options.signal with the
+  // timeout controller's, so a caller's abort — the Gluno Stop button, a
+  // scope switch leaving the screen — never reached the network layer. The
+  // fetch ran to completion for an answer nobody wanted, and a timeout and a
+  // user cancellation were indistinguishable at the callers.
+  const callerSignal = options.signal as AbortSignal | undefined;
+  if (callerSignal?.aborted) {
+    controller.abort();
+  } else {
+    callerSignal?.addEventListener('abort', () => controller.abort(), { once: true });
+  }
+
   try {
     const response = await fetch(`${API_URL}${path}`, {
       ...options,
@@ -285,6 +299,14 @@ export async function apiFetch(
 
     return response;
   } catch (error) {
+    // The CALLER cancelled — a Stop button, a scope switch. Not a timeout
+    // and not a network failure, and it must never be reported as either.
+    // The original AbortError travels on so callers can recognise it.
+    if (callerSignal?.aborted) {
+      console.log(`[API] ${method} ${diagnosticTarget} → ABORTED by caller`);
+      throw error;
+    }
+
     if (controller.signal.aborted) {
       const timeoutMessage = `TIMEOUT after ${timeoutMs}ms`;
       markStartup(`[API] fetch ${method} ${diagnosticTarget} → TIMEOUT (${Date.now() - fetchStart}ms, getSession was ${sessionMs}ms)`);
@@ -298,7 +320,13 @@ export async function apiFetch(
           : `[API] ${method} ${diagnosticTarget} → ${timeoutMessage} (auth: ${auth})`,
       );
       logOutcome(method, path, 'TIMEOUT', Date.now() - fetchStart);
-      throw new Error(`Request timed out after ${Math.round(timeoutMs / 1000)}s. Check your connection and try again.`);
+      // Marked so callers can tell "our own deadline fired" apart from a
+      // dead socket — the two deserve different words and different codes.
+      const timeoutError = new Error(
+        `Request timed out after ${Math.round(timeoutMs / 1000)}s. Check your connection and try again.`,
+      ) as Error & { timedOut?: boolean };
+      timeoutError.timedOut = true;
+      throw timeoutError;
     }
     const message = error instanceof Error ? error.message : String(error);
     markStartup(

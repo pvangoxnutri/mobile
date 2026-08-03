@@ -93,8 +93,20 @@ function metadata(message: GlunoChatMessage): string[] {
   if (message.errorStatus !== undefined) pairs.push(`httpStatus=${message.errorStatus}`);
   if (message.retryable !== undefined) pairs.push(`retryable=${message.retryable}`);
   // The id that joins this row to the backend's own
-  // "[GLUNO] request done requestId=…" summary line.
+  // "[GLUNO] request done requestId=…" summary line. On a FAILED row its
+  // absence is printed outright: requestId=- beside a clientRequestId is the
+  // signature of an answer that never came from our backend.
   if (message.requestId) pairs.push(`requestId=${message.requestId}`);
+  else if (message.failed) pairs.push('requestId=-');
+  if (message.clientRequestId) pairs.push(`clientRequestId=${message.clientRequestId}`);
+  // Shape of a contractless answer — media type and declared length, never
+  // the body.
+  if (message.failed && message.errorContentType !== undefined) {
+    pairs.push(`contentType=${message.errorContentType}`);
+  }
+  if (message.failed && message.errorBodyLength !== undefined) {
+    pairs.push(`bodyLength=${message.errorBodyLength}`);
+  }
   if (message.action?.type) pairs.push(`action=${message.action.type}`);
 
   if (message.clarification) {
