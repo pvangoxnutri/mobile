@@ -547,6 +547,42 @@ async function glunoJson<T>(path: string, options: RequestInit = {}): Promise<T>
     throw error;
   }
 
+  const payload = (await response.json()) as T;
+
+  // ── A handled turn failure, delivered with HTTP 200 ───────────────────
+  //
+  // WHY 200. The backend used to send provider failures as 502 — and
+  // Cloudflare, in front of the origin, replaced that response with its own
+  // HTML page. Envelope, code, retry flag and both ids all vanished. A
+  // failure the backend has handled now travels as 200 with the same error
+  // envelope, and is recognised here BY SHAPE: `code` + `retryable` exist on
+  // no successful Gluno payload. It throws the same GlunoRequestError the
+  // non-2xx path throws, so every caller renders it as the failed turn it
+  // is — never as a transport or edge problem.
+  const contract = payload as { code?: unknown; retryable?: unknown } | null;
+  if (typeof contract?.code === 'string' && typeof contract?.retryable === 'boolean') {
+    const error = new Error('Gluno request failed.') as GlunoRequestError;
+    error.status = response.status;
+    error.code = contract.code;
+    error.retryable = contract.retryable;
+    error.clientRequestId = clientRequestId;
+
+    const envelope = payload as { responseOrigin?: unknown; requestId?: unknown };
+    if (typeof envelope.responseOrigin === 'string') error.responseOrigin = envelope.responseOrigin;
+    error.requestId = typeof envelope.requestId === 'string' ? envelope.requestId : requestId;
+
+    if (__DEV__) {
+      console.log(
+        `[GLUNO] request requestId=${error.requestId ?? '-'} endpoint=${path} `
+        + `httpStatus=${response.status} parsed=true errorCode=${error.code} `
+        + `responseOrigin=${error.responseOrigin ?? '-'} fallbackUsed=false `
+        + `retryable=${error.retryable} clientRequestId=${clientRequestId}`,
+      );
+    }
+
+    throw error;
+  }
+
   if (__DEV__) {
     // The success line of the same shape, so every request logs exactly once.
     // The origin is a turn-body fact this transport layer does not read — the
@@ -558,7 +594,7 @@ async function glunoJson<T>(path: string, options: RequestInit = {}): Promise<T>
     );
   }
 
-  return (await response.json()) as T;
+  return payload;
 }
 
 /**
