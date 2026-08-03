@@ -1,3 +1,4 @@
+import * as Clipboard from 'expo-clipboard';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -52,6 +53,7 @@ import {
   type GlunoTurnAction,
   type GlunoStatus,
 } from '@/lib/gluno';
+import { buildGlunoDebugExport } from '@/lib/gluno-debug-export';
 import {
   mergeGlunoMessages,
   readGlunoCache,
@@ -202,6 +204,8 @@ export default function GlunoScreen() {
   /** A day plan being re-laid by the schedule engine after an edit. */
   const [revalidating, setRevalidating] = useState(false);
   const [applyNotice, setApplyNotice] = useState<string | null>(null);
+  /** A transcript copy in flight. Blocks a second press. */
+  const [copying, setCopying] = useState(false);
 
   // ── The atomic scope switch ───────────────────────────────────────────
   //
@@ -437,6 +441,8 @@ export default function GlunoScreen() {
         // The card belongs to the assistant turn that asked the question.
         const last = rows[rows.length - 1];
         if (turn.clarification && last) last.clarification = turn.clarification;
+        // Kept on the row so a copied transcript can say which path wrote it.
+        if (turn.responseOrigin && last) last.responseOrigin = turn.responseOrigin;
         // Same for a retry the server offered — it belongs to the turn that
         // failed, not to the screen.
         if (turn.action && last) last.action = turn.action;
@@ -601,6 +607,39 @@ export default function GlunoScreen() {
     },
     [appendAndFollow],
   );
+
+  /**
+   * Copies the conversation as plain text for a bug report.
+   *
+   * DEVELOPMENT ONLY — the button that calls this is behind __DEV__, so no
+   * store build ever renders it.
+   *
+   * The transcript is built by a pure function that names every field it
+   * includes, so nothing can arrive in an export by being added to the message
+   * type later. See lib/gluno-debug-export.ts.
+   */
+  const handleCopyTranscript = useCallback(async () => {
+    if (copying) return;
+
+    setCopying(true);
+    try {
+      await Clipboard.setStringAsync(buildGlunoDebugExport({
+        scope,
+        scopeLabel: tripName ?? t('gluno.scope.global'),
+        conversationId,
+        tripId,
+        messages,
+      }));
+
+      setApplyNotice(t('gluno.debug.copied'));
+    } catch {
+      // Neutral, and never the clipboard's own error — it says nothing a
+      // person can act on.
+      setApplyNotice(t('gluno.debug.copyFailed'));
+    } finally {
+      setCopying(false);
+    }
+  }, [copying, scope, tripName, conversationId, tripId, messages, t]);
 
   const handleAddPlace = useCallback(
     (messageId: string, place: GlunoPlace) => runAddPlace(messageId, place.optionKey),
@@ -965,6 +1004,26 @@ export default function GlunoScreen() {
             } as never);
           }}
         />
+
+        {/* ── Copy transcript ─────────────────────────────────────────────
+            DEVELOPMENT ONLY. Placed after the scope picker so it cannot get
+            between the pill and its sheet, and rendered as a bare icon so it
+            takes no width from the Adventure name beside it. */}
+        {__DEV__ ? (
+          <TouchableOpacity
+            style={styles.headerButton}
+            activeOpacity={0.75}
+            disabled={copying}
+            accessibilityRole="button"
+            accessibilityLabel={t('gluno.debug.copy')}
+            onPress={handleCopyTranscript}>
+            {copying ? (
+              <ActivityIndicator size="small" color={theme.colors.textMeta} />
+            ) : (
+              <Ionicons name="copy-outline" size={17} color={theme.colors.textMeta} />
+            )}
+          </TouchableOpacity>
+        ) : null}
 
         {/* The header ends at the scope picker. The preferences door that used
             to sit here is gone; the screen and the backend behind it are

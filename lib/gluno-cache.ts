@@ -46,6 +46,15 @@ export type GlunoChatMessage = {
    * offer a retry for a failure nobody remembers.
    */
   action?: GlunoTurnAction;
+  /**
+   * Which internal path on the server produced this turn.
+   *
+   * DIAGNOSTIC ONLY, and only ever set on a live response — a row restored
+   * from history has no way to know. Never rendered; it exists so a copied
+   * transcript can name the branch instead of guessing between the model, the
+   * history, the cache and an idempotency replay.
+   */
+  responseOrigin?: string;
   /** In flight — rendered dimmed, no timestamp yet. */
   pending?: boolean;
   /** The send failed. Carries a retry action; never silently dropped. */
