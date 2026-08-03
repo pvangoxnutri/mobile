@@ -380,6 +380,14 @@ export type GlunoRequestError = Error & {
   retryable?: boolean;
   /** The user pressed stop. Never rendered as a failure. */
   cancelled?: boolean;
+  /**
+   * The backend's correlation id for this request, from the X-Gluno-Request-Id
+   * header or the error body. An id and nothing else — it is what joins a red
+   * bubble in the debug export to the backend's own log lines.
+   */
+  requestId?: string;
+  /** Which backend branch produced the failure, when the body said. */
+  responseOrigin?: string;
 };
 
 /** HTTP 499: the conventional "client closed request". */
@@ -409,23 +417,39 @@ async function glunoJson<T>(path: string, options: RequestInit = {}): Promise<T>
     error.retryable = true;
 
     if (__DEV__) {
-      // Names and codes only — never a body, a token or message text.
-      console.log('[GLUNO] request failed before a response: network_error');
+      // Names, codes and the endpoint path only — never a body, a token or
+      // message text. requestId=- says outright that no server response
+      // exists to correlate with.
+      console.log(
+        `[GLUNO] request requestId=- endpoint=${path} httpStatus=- parsed=false `
+        + 'errorCode=network_error responseOrigin=- fallbackUsed=false',
+      );
     }
 
     throw error;
   }
 
+  // Stamped by the backend's Gluno middleware on every response, success or
+  // failure. An opaque id minted by our own backend — safe to read and log.
+  const requestId = response.headers.get('X-Gluno-Request-Id') ?? undefined;
+
   if (!response.ok) {
     const error = new Error('Gluno request failed.') as GlunoRequestError;
     error.status = response.status;
     error.cancelled = response.status === STATUS_CANCELLED;
+    error.requestId = requestId;
+
+    // Whether the body yielded a readable Gluno envelope — the fact that
+    // separates "the backend named this failure" from "something answered
+    // with no contract at all".
+    let parsed = false;
 
     // Only the small typed envelope, never a message body — on this endpoint
     // the body can echo conversation content.
     try {
       const body = (await response.json()) as {
         code?: unknown; error?: unknown; retryable?: unknown;
+        responseOrigin?: unknown; requestId?: unknown;
       };
 
       // `code` is the current field, `error` the one earlier builds sent. Same
@@ -434,6 +458,10 @@ async function glunoJson<T>(path: string, options: RequestInit = {}): Promise<T>
       else if (typeof body?.error === 'string') error.code = body.error;
 
       if (typeof body?.retryable === 'boolean') error.retryable = body.retryable;
+      if (typeof body?.responseOrigin === 'string') error.responseOrigin = body.responseOrigin;
+      if (typeof body?.requestId === 'string' && !error.requestId) error.requestId = body.requestId;
+
+      parsed = error.code !== undefined;
     } catch {
       // Intentionally empty — the fallback below covers it.
     }
@@ -449,19 +477,34 @@ async function glunoJson<T>(path: string, options: RequestInit = {}): Promise<T>
     // Deliberately not derived from the status: a 502 from our backend and a
     // 502 from a proxy in front of it mean the same thing to the person
     // waiting, and neither is worth a different sentence.
+    const fallbackUsed = error.code === undefined;
     if (error.code === undefined) error.code = 'request_failed';
     if (error.retryable === undefined) error.retryable = response.status >= 500;
 
     if (__DEV__) {
-      // The four things that decide what the chat shows, and nothing else:
-      // no body, no token, no conversation or trip id, no message text.
+      // The facts that decide what the chat shows and how to find this
+      // request in the backend log, and nothing else: no body, no token, no
+      // message text.
       console.log(
-        `[GLUNO] turn failed status=${error.status} code=${error.code ?? 'none'} `
-        + `retryable=${error.retryable ?? 'unset'}`,
+        `[GLUNO] request requestId=${error.requestId ?? '-'} endpoint=${path} `
+        + `httpStatus=${error.status} parsed=${parsed} errorCode=${error.code} `
+        + `responseOrigin=${error.responseOrigin ?? '-'} fallbackUsed=${fallbackUsed} `
+        + `retryable=${error.retryable}`,
       );
     }
 
     throw error;
+  }
+
+  if (__DEV__) {
+    // The success line of the same shape, so every request logs exactly once.
+    // The origin is a turn-body fact this transport layer does not read — the
+    // screen's own "[GLUNO] turn origin=…" line carries it.
+    console.log(
+      `[GLUNO] request requestId=${requestId ?? '-'} endpoint=${path} `
+      + `httpStatus=${response.status} parsed=true errorCode=none `
+      + 'responseOrigin=- fallbackUsed=false',
+    );
   }
 
   return (await response.json()) as T;

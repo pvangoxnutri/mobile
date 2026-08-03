@@ -83,11 +83,18 @@ function metadata(message: GlunoChatMessage): string[] {
   const pairs: string[] = [`messageId=${message.id}`];
 
   if (message.responseOrigin) pairs.push(`responseOrigin=${message.responseOrigin}`);
+  // A FAILED row without an origin prints the absence explicitly. This is
+  // what separates "the backend named the failing branch" from "no server
+  // response existed at all" — the distinction the whole export exists for.
+  else if (message.failed) pairs.push('responseOrigin=-');
   if (message.pending) pairs.push('pending=true');
   if (message.failed) pairs.push('failed=true');
   if (message.failureCode) pairs.push(`errorCode=${message.failureCode}`);
   if (message.errorStatus !== undefined) pairs.push(`httpStatus=${message.errorStatus}`);
   if (message.retryable !== undefined) pairs.push(`retryable=${message.retryable}`);
+  // The id that joins this row to the backend's own
+  // "[GLUNO] request done requestId=…" summary line.
+  if (message.requestId) pairs.push(`requestId=${message.requestId}`);
   if (message.action?.type) pairs.push(`action=${message.action.type}`);
 
   if (message.clarification) {
@@ -125,8 +132,13 @@ function metadata(message: GlunoChatMessage): string[] {
  * row as a live response.
  */
 function source(message: GlunoChatMessage): string {
+  // `live` wins over the local id: a FAILED turn keeps its optimistic row id,
+  // but when a server response actually arrived (any status, any code) the
+  // transport fact is live_response — that is what separates "the backend
+  // answered with an error" from "this never got an answer" in an export.
+  if (message.live) return 'live_response';
   if (message.id.startsWith('local-')) return 'local_optimistic';
-  return message.live ? 'live_response' : 'history_or_cache';
+  return 'history_or_cache';
 }
 
 /**

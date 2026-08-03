@@ -82,6 +82,13 @@ export type GlunoChatMessage = {
    * whether a missing key (never retryable) or a timeout (often) caused this.
    */
   retryable?: boolean;
+  /**
+   * The backend's correlation id for the request that failed. An opaque id
+   * minted by our own backend and nothing else — it joins this row in a debug
+   * export to the backend's `[GLUNO] request done requestId=…` summary line.
+   * Absent when the request never produced a server response.
+   */
+  requestId?: string;
 };
 
 export type GlunoConversationCacheEntry = {

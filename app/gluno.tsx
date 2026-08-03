@@ -502,6 +502,13 @@ export default function GlunoScreen() {
                 // before the row could see it, so the row's own knowledge of
                 // which codes are terminal never got a chance to apply.
                 retryable: failure.retryable,
+                // The join key to the backend log, and the branch that failed.
+                // A status means a server actually answered, so the export can
+                // say live_response for a failure too — a network error keeps
+                // no id and no origin, which is what tells the two apart.
+                requestId: failure.requestId,
+                responseOrigin: failure.responseOrigin,
+                live: failure.status !== undefined,
               }
             : message,
         ),
