@@ -103,7 +103,9 @@ const FAILURE_COPY: Record<string, string> = {
   grounding_failed: 'gluno.error.grounding',
   proposal_validation_failed: 'gluno.error.proposalInvalid',
   authorization_changed: 'gluno.error.accessChanged',
-  tripadvisor_unavailable: 'gluno.error.providerUnavailable',
+  // Its own line: a failed place search should say WHAT could not be
+  // fetched — verified place suggestions — not a generic "couldn't check".
+  tripadvisor_unavailable: 'gluno.error.placesUnavailable',
   routing_unavailable: 'gluno.error.providerUnavailable',
   weather_unavailable: 'gluno.error.providerUnavailable',
   // Turn-level refusals from the endpoint itself, not from the model. These
