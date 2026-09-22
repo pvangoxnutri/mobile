@@ -359,6 +359,28 @@ function GlunoMessageRow({
             Only `retry_place_add` is actionable in this build;
             `show_new_place_suggestions` arrives but has no handler yet, so it
             is not drawn rather than drawn dead. */}
+        {/* An action that FAILED, named on the assistant row that offered it.
+            Failure copy used to exist only in the user branch above, so a
+            failed "show new suggestions" had nowhere to render and the press
+            looked like a no-op. The button itself stays live when the server
+            said the failure is retryable — and stays gone when it is not. */}
+        {message.failed ? (
+          <View style={styles.actionErrorRow}>
+            <Ionicons
+              name="alert-circle-outline"
+              size={13}
+              color={theme.colors.textMeta}
+            />
+            <Text style={styles.actionErrorText}>
+              {message.errorStatus === 403
+                ? t('gluno.error.forbidden')
+                : message.failureCode && FAILURE_COPY[message.failureCode]
+                  ? t(FAILURE_COPY[message.failureCode])
+                  : t('gluno.error.generic')}
+            </Text>
+          </View>
+        ) : null}
+
         {actionLabel && onTurnAction ? (
           <View style={styles.actionRow}>
             <TouchableOpacity
@@ -557,6 +579,17 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     lineHeight: 16,
     color: theme.colors.textSecondary,
     textAlign: 'right',
+  },
+  actionErrorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+  },
+  actionErrorText: {
+    flex: 1,
+    fontSize: 13,
+    color: theme.colors.textMeta,
   },
   actionRow: {
     marginTop: 8,

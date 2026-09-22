@@ -50,6 +50,7 @@ import {
   type GlunoApplyResponse,
   type GlunoProposal,
   type GlunoRequestError,
+  type GlunoTurnResponse,
   type GlunoTurnAction,
   type GlunoStatus,
 } from '@/lib/gluno';
@@ -701,14 +702,48 @@ export default function GlunoScreen() {
 
       if (action.type === 'show_new_place_suggestions') {
         const startedIn = stateScope.current;
+        let turn: GlunoTurnResponse;
 
-        const turn = await refreshGlunoPlaceSuggestions(
-          action.messageId,
-          // A FRESH key per press. This is a new list each time, not a retry of
-          // one attempt — two deliberate presses are two legitimate asks, and
-          // reusing a key would replay the first list instead of searching.
-          createGlunoIdempotencyKey(),
-        );
+        // THE SILENT NO-OP THIS CLOSES. Every failure here — 409 when the turn
+        // kept no search context, 503, a timeout, a dead radio — threw straight
+        // through this handler. The row's own finally cleared its spinner, the
+        // rejection went unhandled, and the screen showed exactly nothing: the
+        // button appeared to do nothing at all. A failure has to be NAMED.
+        try {
+          turn = await refreshGlunoPlaceSuggestions(
+            action.messageId,
+            // A FRESH key per press. This is a new list each time, not a retry
+            // of one attempt — two deliberate presses are two legitimate asks,
+            // and reusing a key would replay the first list instead of
+            // searching.
+            createGlunoIdempotencyKey(),
+          );
+        } catch (error) {
+          if (stateScope.current !== startedIn) return;
+
+          const failure = error as GlunoRequestError;
+
+          // Same re-ask as the send path: 503 is also what a restarting
+          // backend answers, and latching the screen to "unavailable" over one
+          // request would outlive the cause.
+          if (failure.status === 503) void checkStatus();
+
+          setMessages((current) =>
+            current.map((row) =>
+              row.action?.type === 'show_new_place_suggestions'
+                && row.action.messageId === action.messageId
+                ? {
+                    ...row,
+                    failed: true,
+                    errorStatus: failure.status,
+                    failureCode: failure.code,
+                    // The SERVER decides whether pressing again is honest.
+                    retryable: failure.retryable,
+                    requestId: failure.requestId,
+                  }
+                : row));
+          return;
+        }
 
         if (stateScope.current !== startedIn) return;
 
@@ -724,14 +759,17 @@ export default function GlunoScreen() {
           const spent = current.map((row) =>
             row.action?.type === 'show_new_place_suggestions'
               && row.action.messageId === action.messageId
-              ? { ...row, action: undefined }
+              // The failure fields go with it: this press succeeded, and a
+              // stale error line under a spent button describes nothing.
+              ? { ...row, action: undefined, failed: false, failureCode: undefined,
+                  errorStatus: undefined, retryable: undefined }
               : row);
 
           return mergeGlunoMessages(spent, rows);
         });
       }
     },
-    [appendAndFollow, runAddPlace],
+    [appendAndFollow, runAddPlace, checkStatus],
   );
 
   /**
