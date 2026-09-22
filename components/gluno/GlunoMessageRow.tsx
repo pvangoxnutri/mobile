@@ -67,6 +67,14 @@ type Props = {
    * composer and no second user row appears.
    */
   onTurnAction?: (action: GlunoTurnAction) => Promise<void>;
+  /**
+   * True when the suggestion stack is showing this turn's places one at a
+   * time. The row then renders its text and nothing else: the same six places
+   * as a list underneath would make the stack a decoration on top of the
+   * interface it replaced, and give the user two different ways to pick with
+   * two different sets of actions.
+   */
+  stackOwnsPlaces?: boolean;
 };
 
 function formatTime(iso: string, locale: string) {
@@ -86,7 +94,7 @@ function formatTime(iso: string, locale: string) {
  * adding a code this build has never seen must render as "something went
  * wrong" — never as a crash and never as a raw code on screen.
  */
-const FAILURE_COPY: Record<string, string> = {
+export const FAILURE_COPY: Record<string, string> = {
   ai_not_configured: 'gluno.error.notConfigured',
   model_not_configured: 'gluno.error.modelNotConfigured',
   user_usage_limit: 'gluno.error.usageLimit',
@@ -182,6 +190,7 @@ function GlunoMessageRow({
   onSearchClarification,
   onAddPlace,
   onTurnAction,
+  stackOwnsPlaces = false,
 }: Props) {
   const styles = useThemedStyles(createStyles);
   const { theme } = useTheme();
@@ -418,7 +427,7 @@ function GlunoMessageRow({
             meant typing its name back. */}
         {places.length === 1 ? (
           <GlunoPlaceCard key={`${message.id}-${places[0].externalId}`} place={places[0]} />
-        ) : places.length > 1 ? (
+        ) : places.length > 1 && !stackOwnsPlaces ? (
           <>
             <GlunoPlaceRecommendationList
               places={places}

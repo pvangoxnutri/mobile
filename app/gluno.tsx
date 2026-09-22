@@ -22,12 +22,15 @@ import { useAuth } from '@/components/auth-provider';
 import GlunoComposer from '@/components/gluno/GlunoComposer';
 import GlunoEmptyState from '@/components/gluno/GlunoEmptyState';
 import GlunoMascot from '@/components/gluno/GlunoMascot';
-import GlunoMessageRow from '@/components/gluno/GlunoMessageRow';
+import GlunoMessageRow, { FAILURE_COPY } from '@/components/gluno/GlunoMessageRow';
 import GlunoProposalReview from '@/components/gluno/GlunoProposalReview';
 import GlunoScopePicker from '@/components/gluno/GlunoScopePicker';
+import GlunoSuggestionStack from '@/components/gluno/GlunoSuggestionStack';
 import { useI18n } from '@/components/i18n-provider';
 import { useTheme } from '@/components/theme-provider';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
+import { apiJson } from '@/lib/api';
+import type { Quest } from '@/lib/types';
 import { invalidateTripCache } from '@/lib/cache';
 import {
   applyGlunoProposal,
@@ -134,6 +137,26 @@ function toChatMessages(messages: GlunoApiMessage[], live = false): GlunoChatMes
     }));
 }
 
+/**
+ * One run through a batch of suggestions, for one Adventure.
+ *
+ * RUNTIME ONLY — see the state it backs. `places` carries provider content
+ * that may be shown and not stored; the three id sets carry bare provider ids,
+ * which may be kept and are what later exclusions are built from.
+ */
+type SuggestionSession = {
+  /** The assistant turn the cards belong to. Adds post back against this. */
+  messageId: string;
+  places: GlunoPlace[];
+  currentIndex: number;
+  shownIds: string[];
+  declinedIds: string[];
+  addedIds: string[];
+};
+
+/** Verbs that turn a sentence about a card into an instruction about it. */
+const ADD_WORDS = ['add', 'lägg till', 'lagg till', 'boka', 'book', 'want', 'vill ha'];
+
 export default function GlunoScreen() {
   const styles = useThemedStyles(createStyles);
   const { theme } = useTheme();
@@ -192,6 +215,35 @@ export default function GlunoScreen() {
   const [scopeVerified, setScopeVerified] = useState(Boolean(cached?.loaded));
   /** Membership is gone. Distinct from a failed load, and not recoverable here. */
   const [scopeLost, setScopeLost] = useState(false);
+
+  /**
+   * How Gluno STARTS when nobody has said which Adventure.
+   *
+   * It used to open the global conversation and leave the scope pill for the
+   * user to discover. But suggestions and adds are always ABOUT an Adventure —
+   * a day to place something on, a trip to persist it to — so starting
+   * unscoped meant the first useful thing the user asked for had nowhere to go.
+   *
+   * null while the trips are being counted; the count then decides.
+   */
+  const [startupTrips, setStartupTrips] = useState<Quest[] | null>(null);
+  const [startupFailed, setStartupFailed] = useState(false);
+
+  /**
+   * The suggestion stack, and the only place the full places live.
+   *
+   * IN MEMORY, DELIBERATELY. The provider licences this content for the
+   * response and not for storage, so it is never written to the cache, to
+   * AsyncStorage, or to the backend. It exists for as long as the screen shows
+   * this Adventure and goes when that changes.
+   *
+   * The id sets are what CAN leave: bare provider ids are the one thing the
+   * terms allow keeping, and they are what makes "show new suggestions"
+   * actually new.
+   */
+  const [session, setSession] = useState<SuggestionSession | null>(null);
+  const [addBusy, setAddBusy] = useState(false);
+  const [addFailure, setAddFailure] = useState<string | null>(null);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [sending, setSending] = useState(false);
   /**
@@ -244,6 +296,12 @@ export default function GlunoScreen() {
     setLoadFailed(false);
     setSending(false);
     setWaitingVisible(false);
+    // The full place data goes with the Adventure it belonged to. Carrying it
+    // across would both show Trip A's suggestions under Trip B and keep
+    // provider content alive past the session that was allowed to show it.
+    setSession(null);
+    setAddBusy(false);
+    setAddFailure(null);
   }
 
   const listRef = useRef<FlatList<GlunoChatMessage>>(null);
@@ -680,6 +738,151 @@ export default function GlunoScreen() {
    * the composer, no model, and the same idempotency key so a slow first
    * attempt that eventually succeeded cannot produce a second proposal.
    */
+  /**
+   * Opens a stack whenever a turn brings back more than one verified place.
+   *
+   * MORE THAN ONE, not one: a single recommendation is an answer and the card
+   * under it already says everything. Several are a CHOICE, and a row list
+   * asks the user to compare six things before doing anything.
+   *
+   * Called with the places exactly as the turn delivered them, so the stack
+   * order is the order the option keys were minted in — place-0 is the first
+   * card, which is what makes "add the first one" mean the same thing whether
+   * it is tapped or typed.
+   */
+  const openSuggestions = useCallback((messageId: string, places: GlunoPlace[]) => {
+    if (places.length < 2) return;
+
+    setAddFailure(null);
+    setAddBusy(false);
+
+    setSession((current) => ({
+      messageId,
+      places,
+      currentIndex: 0,
+      // Carried across batches: what the session has shown is what the next
+      // one must not repeat, and a new batch does not undo the last one.
+      shownIds: [...(current?.shownIds ?? []), ...places.map((place) => place.externalId)],
+      declinedIds: current?.declinedIds ?? [],
+      addedIds: current?.addedIds ?? [],
+    }));
+  }, []);
+
+  const currentSuggestion = session && session.currentIndex < session.places.length
+    ? session.places[session.currentIndex]
+    : null;
+
+  /**
+   * No thank you. Local, immediate, and nothing upstream.
+   *
+   * The id joins the declined set so a later "show new suggestions" cannot
+   * hand the same place back — the whole reason declining is worth recording
+   * rather than just advancing past.
+   */
+  const handleDecline = useCallback(() => {
+    setAddFailure(null);
+
+    setSession((current) => {
+      if (!current) return current;
+
+      const place = current.places[current.currentIndex];
+      if (!place) return current;
+
+      return {
+        ...current,
+        currentIndex: current.currentIndex + 1,
+        declinedIds: [...current.declinedIds, place.externalId],
+      };
+    });
+  }, []);
+
+  /**
+   * Yes. Straight into the ordinary add, by the key this card was shown under.
+   *
+   * NO SEARCH FOR IDENTITY. The message id and the option key are both already
+   * known, which is the entire point of holding the stack — the backend looks
+   * the place up by its own id from there.
+   *
+   * ON FAILURE THE CARD STAYS. Advancing past a place the user asked for and
+   * did not get is how a trip quietly ends up missing something.
+   */
+  const handleAddSuggestion = useCallback(async () => {
+    if (!session || addBusy) return;
+
+    const place = session.places[session.currentIndex];
+    if (!place) return;
+
+    const startedIn = stateScope.current;
+
+    setAddBusy(true);
+    setAddFailure(null);
+
+    try {
+      await runAddPlace(session.messageId, place.optionKey);
+
+      if (stateScope.current !== startedIn) return;
+
+      setSession((current) => current && {
+        ...current,
+        currentIndex: current.currentIndex + 1,
+        addedIds: [...current.addedIds, place.externalId],
+      });
+    } catch (error) {
+      if (stateScope.current !== startedIn) return;
+
+      const failure = error as GlunoRequestError;
+
+      setAddFailure(
+        failure.code && FAILURE_COPY[failure.code]
+          ? t(FAILURE_COPY[failure.code])
+          : t('gluno.error.generic'));
+    } finally {
+      if (stateScope.current === startedIn) setAddBusy(false);
+    }
+  }, [session, addBusy, runAddPlace, t]);
+
+  // Every arrival path at once - a first answer, an add, a refresh - rather
+  // than three call sites that must each remember. The newest assistant turn
+  // carrying a shortlist owns the stack; anything older has been answered.
+  useEffect(() => {
+    for (let index = messages.length - 1; index >= 0; index--) {
+      const row = messages[index];
+      if (row.role !== 'gluno' || (row.places?.length ?? 0) < 2) continue;
+
+      if (row.id !== session?.messageId) openSuggestions(row.id, row.places ?? []);
+      return;
+    }
+  }, [messages, session?.messageId, openSuggestions]);
+
+  // Only when the screen was opened without one. Arriving from an Adventure
+  // already answers the question, and re-asking would be a modal between the
+  // user and the thing they just tapped.
+  useEffect(() => {
+    if (tripId || startupTrips) return;
+
+    let cancelled = false;
+    setStartupFailed(false);
+
+    apiJson<Quest[]>('/api/trips')
+      .then((all) => { if (!cancelled) setStartupTrips(all ?? []); })
+      .catch(() => { if (!cancelled) setStartupFailed(true); });
+
+    return () => { cancelled = true; };
+  }, [tripId, startupTrips]);
+
+  // Exactly one Adventure is not a choice. Chosen here rather than rendered as
+  // a one-row sheet the user has to confirm.
+  useEffect(() => {
+    if (tripId || startupTrips?.length !== 1) return;
+
+    const only = startupTrips[0];
+
+    router.replace({
+      pathname: '/gluno',
+      params: { tripId: only.id, tripTitle: only.title ?? '' },
+    });
+  }, [tripId, startupTrips]);
+
   const handleTurnAction = useCallback(
     async (action: GlunoTurnAction) => {
       if (!action.messageId) return;
@@ -794,9 +997,59 @@ export default function GlunoScreen() {
     [],
   );
 
+  /**
+   * Which cards in the live stack a sentence names.
+   *
+   * LOCAL, BECAUSE THE NAMES ARE LOCAL. The backend cannot do this: the
+   * provider's terms let it keep the id and not the name, so asking it "which
+   * one is the cathedral" would mean fetching five places again purely to read
+   * their names back. The stack already has them in memory.
+   *
+   * Word-boundary on every significant word of the name, so "the cathedral"
+   * finds "Cathedral and Giralda" and "de" finds nothing. Deliberately the
+   * same rule the backend applies to stored cards.
+   */
+  const matchSuggestionsByName = useCallback((text: string): GlunoPlace[] => {
+    if (!session) return [];
+
+    const words = new Set(
+      text.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+        .split(/[^a-z0-9]+/).filter((word) => word.length >= 4));
+
+    if (words.size === 0) return [];
+
+    return session.places
+      .filter((_, index) => index >= session.currentIndex)
+      .filter((place) => place.name.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+        .split(/[^a-z0-9]+/)
+        .some((word) => word.length >= 4 && words.has(word)));
+  }, [session]);
+
   async function handleSend() {
     const text = draft.trim();
     if (!text || sending || composerDisabled) return;
+
+    // ── A card the user named, answered without a model ──────────────────
+    //
+    // Only for an ADD, and only when exactly one card matches. Anything else
+    // — no match, several matches, a sentence that is not an add — goes to
+    // Gluno exactly as before, because the stack knowing some names is no
+    // reason for it to start intercepting ordinary conversation.
+    if (session && ADD_WORDS.some((word) => text.toLowerCase().includes(word))) {
+      const named = matchSuggestionsByName(text);
+
+      if (named.length === 1) {
+        setDraft('');
+
+        const index = session.places.indexOf(named[0]);
+        // Answering about a card further down is also choosing it: the ones
+        // skipped past were not declined, so they keep their place.
+        setSession((current) => current && { ...current, currentIndex: index });
+
+        await handleAddSuggestion();
+        return;
+      }
+    }
 
     const localId = createLocalId();
     // Generated once here and carried through every retry of THIS message, so
@@ -1048,6 +1301,9 @@ export default function GlunoScreen() {
             copy of this one. */}
         <GlunoScopePicker
           tripId={scoped ? tripId : null}
+          // More than one Adventure and nobody has said which: the sheet is
+          // the screen, not a control on it.
+          startOpen={!tripId && (startupTrips?.length ?? 0) > 1}
           tripTitle={tripName}
           checking={tripId != null && !scopeVerified && !scopeLost}
           onChange={(choice) => {
@@ -1141,7 +1397,37 @@ export default function GlunoScreen() {
         style={styles.body}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={0}>
-        {loading ? (
+        {/* ── Gluno starts inside an Adventure ─────────────────────────
+            Nothing loads behind these. A chat opened as "all Adventures" while
+            the user is being asked which one is the default this replaces: it
+            answers the question for them, quietly, with the wrong answer. */}
+        {!tripId && startupTrips?.length === 0 ? (
+          <View style={styles.emptyWrapper}>
+            <Text style={styles.startupTitle}>{t('gluno.trip.noneTitle')}</Text>
+            <Text style={styles.startupBody}>{t('gluno.trip.noneBody')}</Text>
+            <TouchableOpacity
+              style={styles.startupCta}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              onPress={() => router.push('/create-trip')}>
+              <Ionicons name="add" size={17} color={theme.colors.white} />
+              <Text style={styles.startupCtaLabel}>{t('gluno.trip.noneCta')}</Text>
+            </TouchableOpacity>
+          </View>
+        ) : !tripId && (startupTrips == null || startupTrips.length > 1) ? (
+          <View style={styles.emptyWrapper}>
+            {startupFailed ? (
+              <Text style={styles.inlineError}>{t('gluno.error.generic')}</Text>
+            ) : startupTrips == null ? (
+              <ActivityIndicator size="large" color={theme.colors.primary} />
+            ) : (
+              <>
+                <Text style={styles.startupTitle}>{t('gluno.trip.chooseTitle')}</Text>
+                <Text style={styles.startupBody}>{t('gluno.trip.chooseBody')}</Text>
+              </>
+            )}
+          </View>
+        ) : loading ? (
           <View style={styles.centered}>
             <ActivityIndicator size="large" color={theme.colors.primary} />
           </View>
@@ -1186,6 +1472,7 @@ export default function GlunoScreen() {
                 onSearchClarification={handleSearchClarification}
                 onAddPlace={handleAddPlace}
                 onTurnAction={handleTurnAction}
+                stackOwnsPlaces={item.id === session?.messageId && currentSuggestion != null}
               />
             )}
             style={styles.list}
@@ -1238,6 +1525,22 @@ export default function GlunoScreen() {
             strip, so keeping the inset pushes the text field a full 34pt above
             the keyboard — the gap this screen had. */}
         <View style={{ paddingBottom: keyboardVisible ? 6 : Math.max(insets.bottom, 10) }}>
+          {/* THE PRIMARY INTERFACE when a shortlist exists. Held above the
+              composer rather than inside the transcript so the current card
+              stays put while the chat scrolls behind it - a stack the user has
+              to hunt for is a list with extra steps. */}
+          {currentSuggestion && session ? (
+            <GlunoSuggestionStack
+              place={currentSuggestion}
+              position={session.currentIndex}
+              total={session.places.length}
+              busy={addBusy}
+              failureText={addFailure}
+              onDecline={handleDecline}
+              onAdd={() => void handleAddSuggestion()}
+            />
+          ) : null}
+
           <GlunoComposer
             ref={inputRef}
             value={draft}
@@ -1389,6 +1692,33 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  startupTitle: {
+    fontSize: 19,
+    fontWeight: '800',
+    color: theme.colors.textPrimary,
+    textAlign: 'center',
+  },
+  startupBody: {
+    marginTop: 6,
+    fontSize: 14.5,
+    color: theme.colors.textMeta,
+    textAlign: 'center',
+  },
+  startupCta: {
+    marginTop: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 14,
+    backgroundColor: theme.colors.primary,
+  },
+  startupCtaLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: theme.colors.white,
   },
   emptyWrapper: {
     flex: 1,

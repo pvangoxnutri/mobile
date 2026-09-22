@@ -47,15 +47,21 @@ type Props = {
   tripTitle: string | null;
   /** True while the backend has not yet confirmed the scope. */
   checking?: boolean;
+  /**
+   * Opens the sheet on mount, for the start of a Gluno session where the user
+   * has more than one Adventure and has not said which. The pill behaves
+   * normally afterwards — this decides the FIRST frame, not the mode.
+   */
+  startOpen?: boolean;
   onChange: (choice: GlunoScopeChoice) => void;
 };
 
-function GlunoScopePicker({ tripId, tripTitle, checking = false, onChange }: Props) {
+function GlunoScopePicker({ tripId, tripTitle, checking = false, startOpen = false, onChange }: Props) {
   const styles = useThemedStyles(createStyles);
   const { theme } = useTheme();
   const { t } = useI18n();
 
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(startOpen);
   const [trips, setTrips] = useState<Quest[] | null>(null);
   const [failed, setFailed] = useState(false);
 
