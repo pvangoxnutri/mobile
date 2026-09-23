@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import ModalSheet from '@/components/modal-sheet';
@@ -53,16 +53,47 @@ type Props = {
    * normally afterwards — this decides the FIRST frame, not the mode.
    */
   startOpen?: boolean;
+  /**
+   * Adventures the caller has ALREADY loaded.
+   *
+   * Given, the sheet renders them immediately and makes no request of its own.
+   * Omitted, it loads its own list when it opens, which is what the pill on an
+   * ordinary turn still does.
+   */
+  trips?: Quest[] | null;
   onChange: (choice: GlunoScopeChoice) => void;
 };
 
-function GlunoScopePicker({ tripId, tripTitle, checking = false, startOpen = false, onChange }: Props) {
+function GlunoScopePicker({
+  tripId, tripTitle, checking = false, startOpen = false, trips: providedTrips = null, onChange,
+}: Props) {
   const styles = useThemedStyles(createStyles);
   const { theme } = useTheme();
   const { t } = useI18n();
 
   const [open, setOpen] = useState(startOpen);
-  const [trips, setTrips] = useState<Quest[] | null>(null);
+
+  // THE BUG THIS CLOSES. useState reads its argument on the FIRST render only.
+  // The caller computes startOpen from a trip list it is still loading, so the
+  // first render always said false — and when the trips arrived and it turned
+  // true, the sheet had already decided. The screen showed "Which Adventure?"
+  // with nothing under it, permanently.
+  // ONCE, EVER. Keyed on startOpen alone it would also fire if the flag ever
+  // went true again - after a choice, after a remount - and reopening a sheet
+  // the user has just answered is worse than never opening it.
+  const autoOpened = useRef(false);
+
+  useEffect(() => {
+    if (!startOpen || autoOpened.current) return;
+
+    autoOpened.current = true;
+    setOpen(true);
+  }, [startOpen]);
+  const [ownTrips, setOwnTrips] = useState<Quest[] | null>(null);
+
+  // What the caller gave us wins: it is the same list, already fetched, and
+  // asking for it twice is a second request for an answer we have.
+  const trips = providedTrips ?? ownTrips;
   const [failed, setFailed] = useState(false);
 
   // Loaded when the sheet opens, not on mount. The pill is on screen for every
@@ -76,7 +107,7 @@ function GlunoScopePicker({ tripId, tripTitle, checking = false, startOpen = fal
 
     apiJson<Quest[]>('/api/trips')
       .then((rows) => {
-        if (!cancelled) setTrips(rows);
+        if (!cancelled) setOwnTrips(rows);
       })
       .catch(() => {
         if (!cancelled) setFailed(true);
@@ -269,7 +300,7 @@ function GlunoScopePicker({ tripId, tripTitle, checking = false, startOpen = fal
               accessibilityRole="button"
               onPress={() => {
                 setFailed(false);
-                setTrips(null);
+                setOwnTrips(null);
               }}>
               <Ionicons name="refresh" size={15} color={theme.colors.primary} />
               <Text style={styles.retryText}>{t('gluno.error.retry')}</Text>

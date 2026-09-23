@@ -714,7 +714,10 @@ export default function GlunoScreen() {
         messages,
       }));
 
-      setApplyNotice(t('gluno.debug.copied'));
+      // NO NOTICE ON SUCCESS. This is a development-only export button, and
+      // Its confirmation was surfacing in the same place real answers about
+      // the trip appear — a debug tool talking over the product. Failure still
+      // says so, because a silent failure looks identical to a silent success.
     } catch {
       // Neutral, and never the clipboard's own error — it says nothing a
       // person can act on.
@@ -1304,6 +1307,10 @@ export default function GlunoScreen() {
           // More than one Adventure and nobody has said which: the sheet is
           // the screen, not a control on it.
           startOpen={!tripId && (startupTrips?.length ?? 0) > 1}
+          // The list the startup gate already loaded. Without it the sheet
+          // fetches the same Adventures a second time to render the choice we
+          // opened it to make.
+          trips={!tripId ? startupTrips : null}
           tripTitle={tripName}
           checking={tripId != null && !scopeVerified && !scopeLost}
           onChange={(choice) => {

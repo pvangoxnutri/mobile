@@ -113,6 +113,11 @@ export const FAILURE_COPY: Record<string, string> = {
   authorization_changed: 'gluno.error.accessChanged',
   // Its own line: a failed place search should say WHAT could not be
   // fetched — verified place suggestions — not a generic "couldn't check".
+  // The by-id lookup behind a card, which the backend reports separately from
+  // discovery. Unmapped, both rendered as the generic "could not answer" line
+  // -- advice that says nothing about what failed or whether waiting helps.
+  place_lookup_failed: 'gluno.error.placesUnavailable',
+  place_lookup_busy: 'gluno.error.busy',
   tripadvisor_unavailable: 'gluno.error.placesUnavailable',
   routing_unavailable: 'gluno.error.providerUnavailable',
   weather_unavailable: 'gluno.error.providerUnavailable',
