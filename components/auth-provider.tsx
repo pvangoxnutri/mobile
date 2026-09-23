@@ -7,6 +7,7 @@ import { getEmailAuthRedirectUrl } from '@/lib/auth-redirect';
 import { disablePushNotifications } from '@/lib/push-notifications';
 import { clearChatImageAccessCache } from '@/lib/chat-image-access';
 import { clearGlunoCache } from '@/lib/gluno-cache';
+import { clearLastGlunoTripId } from '@/lib/gluno-last-trip';
 import { clearAllCaches, hydratePersistedCache } from '@/lib/cache';
 import { clearCachedProfile, loadCachedProfile, saveCachedProfile } from '@/lib/profile-cache';
 import { supabase } from '@/lib/supabase';
@@ -375,6 +376,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Same reasoning for Gluno: conversations are private, held in memory for
     // the session, and must not survive into the next account's.
     clearGlunoCache();
+    await clearLastGlunoTripId(user?.id ?? '');
     // Drops every cached trip, member list and avatar URL — in memory AND on
     // disk. Without the disk half, the next account's first launch would
     // hydrate the previous user's adventures.
@@ -414,6 +416,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     clearChatImageAccessCache();
     clearGlunoCache();
+    await clearLastGlunoTripId(user?.id ?? '');
     await clearCachedProfile(user?.id);
     await clearAllCaches();
     await supabase.auth.signOut({ scope: 'local' }).catch(() => {});

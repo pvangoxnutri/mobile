@@ -32,6 +32,7 @@ import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { apiJson } from '@/lib/api';
 import type { Quest } from '@/lib/types';
 import { invalidateTripCache } from '@/lib/cache';
+import { clearLastGlunoTripId, readLastGlunoTripId, writeLastGlunoTripId } from '@/lib/gluno-last-trip';
 import {
   applyGlunoProposal,
   getCurrentGlunoConversation,
@@ -876,15 +877,62 @@ export default function GlunoScreen() {
   // Exactly one Adventure is not a choice. Chosen here rather than rendered as
   // a one-row sheet the user has to confirm.
   useEffect(() => {
-    if (tripId || startupTrips?.length !== 1) return;
+    if (tripId || !startupTrips) return;
 
-    const only = startupTrips[0];
+    let cancelled = false;
 
-    router.replace({
-      pathname: '/gluno',
-      params: { tripId: only.id, tripTitle: only.title ?? '' },
-    });
-  }, [tripId, startupTrips]);
+    (async () => {
+      // ── A. The Adventure this user was last in ───────────────────────
+      //
+      // A HINT, NEVER AN AUTHORITY. The trip may have been deleted or access
+      // revoked since it was stored, so it only counts when it is still in
+      // the list the server just returned — which is also what stops a stale
+      // id from looping or blanking the screen.
+      const remembered = await readLastGlunoTripId(userId);
+      if (cancelled) return;
+
+      const match = remembered
+        ? startupTrips.find((trip) => trip.id === remembered)
+        : undefined;
+
+      if (match) {
+        router.replace({
+          pathname: '/gluno',
+          params: { tripId: match.id, tripTitle: match.title ?? '' },
+        });
+        return;
+      }
+
+      // ── B. It is gone ────────────────────────────────────────────────
+      //
+      // Forgotten rather than retried. Leaving it would re-check a trip that
+      // will never come back on every single open.
+      if (remembered) await clearLastGlunoTripId(userId);
+      if (cancelled) return;
+
+      // Then the ordinary rule. One Adventure is not a choice; none and
+      // several are both handled by the gate this effect does not touch.
+      if (startupTrips.length !== 1) return;
+
+      const only = startupTrips[0];
+
+      router.replace({
+        pathname: '/gluno',
+        params: { tripId: only.id, tripTitle: only.title ?? '' },
+      });
+    })();
+
+    return () => { cancelled = true; };
+  }, [tripId, startupTrips, userId]);
+
+  // ── C. Whatever scope is actually in use becomes the hint ────────────
+  //
+  // Written from the RESOLVED scope rather than from the picker's callback, so
+  // arriving from an Adventure screen counts too — the next Gluno open should
+  // follow the user, not only their last use of the pill.
+  useEffect(() => {
+    if (tripId) void writeLastGlunoTripId(userId, tripId);
+  }, [tripId, userId]);
 
   const handleTurnAction = useCallback(
     async (action: GlunoTurnAction) => {
